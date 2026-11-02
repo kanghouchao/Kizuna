@@ -42,6 +42,7 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.Replays;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import java.time.LocalDate;
@@ -333,12 +334,7 @@ public class OrderController {
             orderAttributionCorrectionService.status(storeId, id, attributionId)));
   }
 
-  /**
-   * 誤帰属で付いたポイントを、名指された帰属記録が持つ会員から差し引く（訂正の二段目。ADR 0012）。
-   *
-   * <p>同時再送で冪等キーの一意制約に敗れた場合だけ、初回の結果を読み直す再送処理へ回す（ADR 0007）。この分岐はサービスの トランザクション境界の外に置かなければならない —
-   * 制約違反の時点で敗者のトランザクションは作廃されており、内側で catch しても読み直せない。他の整合性違反は実装欠陥なのでそのまま上げ、全域ハンドラの分類に委ねる。
-   */
+  /** 誤帰属で付いたポイントを、名指された帰属記録が持つ会員から差し引く（訂正の二段目。ADR 0012）。 */
   @PostMapping("/{id}/attribution/correction")
   @PreAuthorize("hasAuthority('PERM_POINT_ADJUST')")
   public ResponseEntity<OrderAttributionCorrectionResponse> correctAttribution(
@@ -346,20 +342,17 @@ public class OrderController {
       @PathVariable String id,
       @Valid @RequestBody OrderAttributionCorrectionRequest request,
       Principal principal) {
-    try {
-      return ResponseEntity.ok(
-          orderMapper.toResponse(
-              orderAttributionCorrectionService.correct(
-                  storeId, id, orderMapper.toCommand(request), principal.getName())));
-    } catch (DataIntegrityViolationException ex) {
-      if (!IntegrityViolations.violates(ex, DbConstraint.UQ_T_POINT_ENTRIES_IDEMPOTENCY_KEY)) {
-        throw ex;
-      }
-      return ResponseEntity.ok(
-          orderMapper.toResponse(
-              orderAttributionCorrectionService.replayCorrect(
-                  storeId, id, orderMapper.toCommand(request), principal.getName())));
-    }
+    var command = orderMapper.toCommand(request);
+    return ResponseEntity.ok(
+        orderMapper.toResponse(
+            Replays.write(
+                DbConstraint.UQ_T_POINT_ENTRIES_IDEMPOTENCY_KEY,
+                () ->
+                    orderAttributionCorrectionService.correct(
+                        storeId, id, command, principal.getName()),
+                () ->
+                    orderAttributionCorrectionService.replayCorrect(
+                        storeId, id, command, principal.getName()))));
   }
 
   /** ポイント巻き戻しの下見（実行前に動く量を示す）。既に巻き戻し済みなら、その旨だけが真で量は 0 になる。 */

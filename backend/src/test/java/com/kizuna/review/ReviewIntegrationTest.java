@@ -12,6 +12,7 @@ import com.kizuna.order.domain.OrderCourse;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.revieworigin.ReviewOriginLookup;
+import com.kizuna.receipt.once.OperationReceipts;
 import com.kizuna.review.api.ReviewController;
 import com.kizuna.review.application.ReviewService;
 import com.kizuna.service.domain.ServiceItem;
@@ -1096,6 +1097,7 @@ class ReviewIntegrationTest {
   @Import({
     AuditWriter.class,
     BusinessAudit.class,
+    OperationReceipts.class,
     ReviewController.class,
     ReviewOriginLookup.class
   })

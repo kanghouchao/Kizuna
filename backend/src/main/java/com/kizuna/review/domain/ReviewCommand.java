@@ -1,5 +1,6 @@
 package com.kizuna.review.domain;
 
+import com.kizuna.receipt.once.Fingerprint;
 import com.kizuna.review.domain.ReviewValues.Basis;
 import com.kizuna.review.domain.ReviewValues.Operation;
 import com.kizuna.shared.exception.ServiceException;
@@ -22,7 +23,7 @@ public sealed interface ReviewCommand {
     }
 
     public String fingerprint() {
-      return ReviewFingerprint.receipt(input);
+      return received(input);
     }
 
     public List<PermissionCode> permissions() {
@@ -42,7 +43,7 @@ public sealed interface ReviewCommand {
     }
 
     public String fingerprint() {
-      return ReviewFingerprint.of(type, reviewId, version, reason);
+      return Fingerprint.of(type, reviewId, version, reason);
     }
 
     public List<PermissionCode> permissions() {
@@ -60,7 +61,7 @@ public sealed interface ReviewCommand {
     }
 
     public String fingerprint() {
-      return ReviewFingerprint.of(Operation.WITHDRAWN, reviewId, version, reason);
+      return Fingerprint.of(Operation.WITHDRAWN, reviewId, version, reason);
     }
 
     public List<PermissionCode> permissions() {
@@ -86,7 +87,7 @@ public sealed interface ReviewCommand {
     }
 
     public String fingerprint() {
-      return ReviewFingerprint.of(
+      return Fingerprint.of(
           Operation.PERMISSION_GRANTED, reviewId, version, basis, grantedAt, evidence);
     }
 
@@ -106,8 +107,7 @@ public sealed interface ReviewCommand {
     }
 
     public String fingerprint() {
-      return ReviewFingerprint.of(
-          Operation.PERMISSION_REVOKED, reviewId, version, receivedAt, reason);
+      return Fingerprint.of(Operation.PERMISSION_REVOKED, reviewId, version, receivedAt, reason);
     }
 
     public List<PermissionCode> permissions() {
@@ -125,7 +125,7 @@ public sealed interface ReviewCommand {
     }
 
     public String fingerprint() {
-      return ReviewFingerprint.of(
+      return Fingerprint.of(
           Operation.PUBLICATION_CHANGED,
           reviewId,
           version,
@@ -151,17 +151,18 @@ public sealed interface ReviewCommand {
     }
 
     public String fingerprint() {
-      return ReviewFingerprint.of(
-          Operation.CORRECTION_RECEIVED,
-          reviewId,
-          version,
-          reason,
-          ReviewFingerprint.receipt(input));
+      return Fingerprint.of(
+          Operation.CORRECTION_RECEIVED, reviewId, version, reason, received(input));
     }
 
     public List<PermissionCode> permissions() {
       return intake(input);
     }
+  }
+
+  private static String received(ReviewInput i) {
+    return Fingerprint.of(
+        "RECEIVED", i.body(), i.displayName(), i.receivedVia(), i.receivedAt(), i.originOrderId());
   }
 
   /** 関連受注を結ぶ受付は、受注を操作できる人にだけ許す。再送でも同じ権限を求める。 */

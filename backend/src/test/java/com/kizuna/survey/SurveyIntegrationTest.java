@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.audit.recording.AuditWriter;
+import com.kizuna.receipt.once.OperationReceipts;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
@@ -583,6 +584,7 @@ class SurveyIntegrationTest {
   @Import({
     AuditWriter.class,
     BusinessAudit.class,
+    OperationReceipts.class,
     SurveyController.class,
     SurveyResponseController.class
   })

@@ -13,10 +13,13 @@ import com.kizuna.review.api.dto.ReviewResponse;
 import com.kizuna.review.api.dto.ReviewSummaryResponse;
 import com.kizuna.review.api.dto.ReviewWriteResponse;
 import com.kizuna.review.application.ReviewService;
+import com.kizuna.review.domain.ReviewCommand;
 import com.kizuna.review.domain.ReviewSearch;
 import com.kizuna.review.domain.ReviewValues.PermissionStatus;
 import com.kizuna.review.domain.ReviewValues.Status;
+import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.Replays;
 import jakarta.annotation.security.PermitAll;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -45,7 +48,7 @@ public class ReviewController {
   @PreAuthorize("hasAuthority('PERM_REVIEW_VIEW') and hasAuthority('PERM_REVIEW_MANAGE')")
   public ResponseEntity<ReviewWriteResponse> create(
       @CurrentStore Long storeId, Authentication auth, @RequestBody ReviewCreateRequest request) {
-    return ReviewWrites.write(reviews, storeId, auth, request.receipt(), true);
+    return write(storeId, auth, request.receipt(), true);
   }
 
   @PostMapping("/{id}/decisions")
@@ -55,7 +58,7 @@ public class ReviewController {
       Authentication auth,
       @PathVariable String id,
       @RequestBody ReviewDecisionRequest request) {
-    return ReviewWrites.write(reviews, storeId, auth, request.decide(id), false);
+    return write(storeId, auth, request.decide(id), false);
   }
 
   @PostMapping("/{id}/withdrawals")
@@ -65,7 +68,7 @@ public class ReviewController {
       Authentication auth,
       @PathVariable String id,
       @RequestBody ReviewActionRequest request) {
-    return ReviewWrites.write(reviews, storeId, auth, request.withdrawal(id), false);
+    return write(storeId, auth, request.withdrawal(id), false);
   }
 
   @PostMapping("/{id}/permissions")
@@ -75,7 +78,7 @@ public class ReviewController {
       Authentication auth,
       @PathVariable String id,
       @RequestBody ReviewPermissionRequest request) {
-    return ReviewWrites.write(reviews, storeId, auth, request.grant(id), true);
+    return write(storeId, auth, request.grant(id), true);
   }
 
   @PostMapping("/{id}/permission-revocations")
@@ -85,7 +88,7 @@ public class ReviewController {
       Authentication auth,
       @PathVariable String id,
       @RequestBody ReviewPermissionRevocationRequest request) {
-    return ReviewWrites.write(reviews, storeId, auth, request.revoke(id), false);
+    return write(storeId, auth, request.revoke(id), false);
   }
 
   @PutMapping("/{id}/publication")
@@ -95,7 +98,7 @@ public class ReviewController {
       Authentication auth,
       @PathVariable String id,
       @RequestBody ReviewPublicationRequest request) {
-    return ReviewWrites.write(reviews, storeId, auth, request.publish(id), false);
+    return write(storeId, auth, request.publish(id), false);
   }
 
   @PostMapping("/{id}/corrections")
@@ -105,7 +108,7 @@ public class ReviewController {
       Authentication auth,
       @PathVariable String id,
       @RequestBody ReviewCorrectionRequest request) {
-    return ReviewWrites.write(reviews, storeId, auth, request.correction(id), true);
+    return write(storeId, auth, request.correction(id), true);
   }
 
   @GetMapping
@@ -154,5 +157,15 @@ public class ReviewController {
       @PathVariable String id,
       @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
     return reviews.history(storeId, auth.getName(), id, pageable);
+  }
+
+  private ResponseEntity<ReviewWriteResponse> write(
+      Long storeId, Authentication auth, ReviewCommand command, boolean create) {
+    var result =
+        Replays.write(
+            DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
+            () -> reviews.write(storeId, auth.getName(), command),
+            () -> reviews.replayOnly(storeId, auth.getName(), command));
+    return ResponseEntity.status(create && !result.operation().replayed() ? 201 : 200).body(result);
   }
 }
