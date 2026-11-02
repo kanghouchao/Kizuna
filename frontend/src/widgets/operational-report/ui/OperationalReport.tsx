@@ -214,7 +214,8 @@ export function ReportSearch({ model }: { model: ReportModel }) {
       {result && (
         <section aria-label="集計結果" className="space-y-3">
           <p className="text-sm">
-            対象: {result.from} 〜 {result.to} / 生成: {result.generated_at}
+            対象: {result.from} 〜 {result.to} / 生成:{' '}
+            {new Date(result.generated_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}
           </p>
           {access.remuneration && (
             <p className="text-sm">

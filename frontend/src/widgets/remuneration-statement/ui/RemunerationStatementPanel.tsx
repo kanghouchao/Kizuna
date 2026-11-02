@@ -127,7 +127,10 @@ function Statement({
               {yen(data.known_guarantee_total)} です。
             </p>
           )}
-          <p className="text-sm text-muted-foreground">生成日時：{data.generated_at}</p>
+          <p className="text-sm text-muted-foreground">
+            生成日時：
+            {new Date(data.generated_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}
+          </p>
           <TableCard>
             <Table>
               <TableHeader>

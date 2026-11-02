@@ -78,6 +78,7 @@ it('未終了時は既知小計を示し完全合計を捏造しない', async (
   );
   fireEvent.click(await screen.findByRole('button', { name: '保証・ボーナスを含む月次明細' }));
   expect(await screen.findByText('退勤記録待ち')).toBeInTheDocument();
+  expect(screen.getByText('生成日時：2026/10/1 9:00:00')).toBeInTheDocument();
   expect(screen.getByText(/現在計算できる保証の小計/)).toBeInTheDocument();
   expect(screen.queryByText('¥8,000')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'ボーナスを記録' })).not.toBeInTheDocument();
