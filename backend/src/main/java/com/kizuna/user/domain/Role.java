@@ -67,7 +67,7 @@ public class Role extends BaseEntity {
     this.name = name;
   }
 
-  /** 権限集合を置き換える。既定ロールも編集できる。 */
+  /** 権限集合を置き換える。既定ロールも編集できる。保持者の版を進める操作と対にするため {@code CredentialOperations} だけが呼ぶ。 */
   public void replacePermissions(Set<Long> permissionIds) {
     validatePermissions(permissionIds);
     this.permissionIds = new HashSet<>(permissionIds);

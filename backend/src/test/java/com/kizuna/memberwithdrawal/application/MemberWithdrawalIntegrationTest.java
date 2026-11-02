@@ -41,6 +41,7 @@ import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.store.StoreShortNames;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.application.CredentialOperations;
+import com.kizuna.user.application.RoleManageHolderGuard;
 import com.kizuna.user.domain.UserRepository;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Clock;
@@ -694,6 +695,7 @@ class MemberWithdrawalIntegrationTest {
     MemberLookupService.class,
     MemberRegistrationService.class,
     CredentialOperations.class,
+    RoleManageHolderGuard.class,
     PointLedgerService.class,
     CustomerMemberLinkWithdrawal.class,
     CustomerMemberLinkService.class,

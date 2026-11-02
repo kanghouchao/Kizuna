@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -81,7 +82,12 @@ class AdminStaffServiceTest {
   @Mock private RoleManageHolderGuard roleManageHolderGuard;
   @Mock private PasswordEncoder encoder;
   private final List<Object> events = new ArrayList<>();
-  @Spy private CredentialOperations credentialOperations = new CredentialOperations(events::add);
+
+  @Spy
+  private CredentialOperations credentialOperations =
+      new CredentialOperations(
+          events::add, mock(RoleManageHolderGuard.class), mock(UserRepository.class));
+
   private final StoreScopeHolder holder = new StoreScopeHolder();
 
   private AdminStaffService service;

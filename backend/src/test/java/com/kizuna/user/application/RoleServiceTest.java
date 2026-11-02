@@ -37,13 +37,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import org.hibernate.exception.ConstraintViolationException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -67,11 +66,21 @@ class RoleServiceTest {
 
   @Mock private RoleManageHolderGuard roleManageHolderGuard;
   private final List<Object> events = new ArrayList<>();
-  @Spy private CredentialOperations credentialOperations = new CredentialOperations(events::add);
-
-  @InjectMocks private RoleService service;
+  private RoleService service;
 
   @Captor private ArgumentCaptor<Role> roleCaptor;
+
+  @BeforeEach
+  void setUp() {
+    service =
+        new RoleService(
+            businessAudit,
+            roleRepository,
+            permissionRepository,
+            userRepository,
+            roleManageHolderGuard,
+            new CredentialOperations(events::add, roleManageHolderGuard, userRepository));
+  }
 
   private Permission permission(long id, PermissionCode code) {
     Permission permission = Permission.builder().code(code.name()).build();

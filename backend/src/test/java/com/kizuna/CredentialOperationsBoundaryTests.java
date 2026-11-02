@@ -3,6 +3,7 @@ package com.kizuna;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.kizuna.user.application.CredentialOperations;
+import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserCredentialsChanged;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
@@ -24,6 +25,7 @@ class CredentialOperationsBoundaryTests {
                     "invalidateSessions",
                     "markWithdrawn",
                     "reassignGrants"),
+            Role.class.getName(), Set.of("replacePermissions"),
             UserCredentialsChanged.class.getName(), Set.of("<init>"));
     var classes =
         new ClassFileImporter()

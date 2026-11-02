@@ -2,11 +2,17 @@ package com.kizuna.user.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import com.kizuna.user.domain.InvalidCredentialAssignmentException;
+import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserCredentialsChanged;
+import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -18,7 +24,10 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 class CredentialOperationsTest {
   private final List<Object> events = new ArrayList<>();
-  private final CredentialOperations operations = new CredentialOperations(events::add);
+  private final RoleManageHolderGuard holderGuard = mock(RoleManageHolderGuard.class);
+  private final UserRepository userRepository = mock(UserRepository.class);
+  private final CredentialOperations operations =
+      new CredentialOperations(events::add, holderGuard, userRepository);
 
   @ParameterizedTest
   @EnumSource(
@@ -99,6 +108,42 @@ class CredentialOperationsTest {
     assertThat(user.getWithdrawnAt()).isEqualTo(at);
     assertThat(user.getCredentialVersion()).isEqualTo(1L);
     assertThat(events).containsExactly(new UserCredentialsChanged(user.getId(), 1L));
+  }
+
+  @Test
+  void rolePermissionChangeLocksHoldersAndAdvancesEveryHolderBeforeReplacing() {
+    Role role = role(Set.of(1L));
+    User staff = user(UserType.STAFF);
+    User serviceIdentity = user(UserType.SERVICE);
+    serviceIdentity.setId(43L);
+    when(holderGuard.lockRoleHolders(7L)).thenReturn(List.of(staff, serviceIdentity));
+
+    operations.replaceRolePermissions(role, Set.of(2L));
+
+    assertThat(role.getPermissionIds()).containsExactly(2L);
+    assertThat(staff.getCredentialVersion()).isEqualTo(1L);
+    assertThat(serviceIdentity.getCredentialVersion()).isEqualTo(1L);
+    assertThat(events).containsExactly(new UserCredentialsChanged(42L, 1L));
+    var order = inOrder(holderGuard, userRepository);
+    order.verify(holderGuard).lockRoleHolders(7L);
+    order.verify(userRepository).saveAllAndFlush(List.of(staff, serviceIdentity));
+  }
+
+  @Test
+  void unchangedRolePermissionsLeaveHoldersUntouched() {
+    Role role = role(Set.of(1L, 2L));
+
+    operations.replaceRolePermissions(role, Set.of(2L, 1L));
+
+    assertThat(role.getPermissionIds()).containsExactlyInAnyOrder(1L, 2L);
+    verifyNoInteractions(holderGuard, userRepository);
+    assertThat(events).isEmpty();
+  }
+
+  private static Role role(Set<Long> permissionIds) {
+    Role role = Role.builder().name("検証").systemRole(false).permissionIds(permissionIds).build();
+    role.setId(7L);
+    return role;
   }
 
   private User user(UserType type) {
