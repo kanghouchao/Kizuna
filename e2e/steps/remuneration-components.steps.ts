@@ -428,12 +428,8 @@ Then(
     const [a, b] = await Promise.all([create(), create()]);
     expect(a.status(), await a.text()).toBe(201);
     expect(b.status(), await b.text()).toBe(201);
-    // 一方は初回、他方は受領の再送。再送は読み直した現在の状態で、時刻の精度だけが初回応答と異なりうる。
-    const withoutTimes = (r: { bonus: Record<string, unknown> }) => {
-      const { created_at: _created, updated_at: _updated, ...bonus } = r.bonus;
-      return { ...r, bonus };
-    };
-    expect(withoutTimes(await a.json())).toEqual(withoutTimes(await b.json()));
+    // 一方は初回、他方は受領の再送。再送は読み直した現在の状態で、初回応答と同じになる。
+    expect(await a.json()).toEqual(await b.json());
     expect((await statement(request)).bonus_total).toBe(1234);
     const conflict = await request.post("/api/bonus-awards", {
       headers: headers(),

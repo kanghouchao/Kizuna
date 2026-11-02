@@ -38,13 +38,13 @@ public abstract class BaseEntity {
 
   @PrePersist
   protected void onCreate() {
-    var now = OffsetDateTime.now();
+    var now = RowTimestamps.now();
     this.createdAt = now;
     this.updatedAt = now;
   }
 
   @PreUpdate
   protected void onUpdate() {
-    this.updatedAt = OffsetDateTime.now();
+    this.updatedAt = RowTimestamps.now();
   }
 }
