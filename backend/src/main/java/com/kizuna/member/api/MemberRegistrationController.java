@@ -25,6 +25,7 @@ public class MemberRegistrationController {
   @PermitAll
   public ResponseEntity<MemberRegistrationResponse> register(
       @Valid @RequestBody MemberRegistrationRequest request) {
-    return ResponseEntity.status(HttpStatus.CREATED).body(registrationService.register(request));
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(new MemberRegistrationResponse(registrationService.register(request.command())));
   }
 }

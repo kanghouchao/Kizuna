@@ -1,7 +1,5 @@
 package com.kizuna.member.application;
 
-import com.kizuna.member.api.dto.MemberRegistrationRequest;
-import com.kizuna.member.api.dto.MemberRegistrationResponse;
 import com.kizuna.member.domain.Member;
 import com.kizuna.member.domain.MemberCodes;
 import com.kizuna.member.domain.MemberRepository;
@@ -46,16 +44,16 @@ public class MemberRegistrationService {
   private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
   @Transactional
-  public MemberRegistrationResponse register(MemberRegistrationRequest request) {
-    if (userRepository.findByEmail(request.getEmail().toLowerCase(Locale.ROOT)).isPresent()) {
+  public String register(MemberRegistrationCommand command) {
+    if (userRepository.findByEmail(command.email().toLowerCase(Locale.ROOT)).isPresent()) {
       throw new ServiceException(DUPLICATE_EMAIL_MESSAGE);
     }
     User user =
         saveUser(
             User.builder()
-                .email(request.getEmail())
-                .password(passwordEncoder.encode(request.getPassword()))
-                .displayName(request.getDisplayName())
+                .email(command.email())
+                .password(passwordEncoder.encode(command.password()))
+                .displayName(command.displayName())
                 .enabled(true)
                 .userType(UserType.MEMBER)
                 .storeScopeType(StoreScopeType.SPECIFIC_STORES)
@@ -64,7 +62,7 @@ public class MemberRegistrationService {
     Member member =
         memberRepository.save(
             Member.builder().memberCode(issueCode()).userId(user.getId()).build());
-    return new MemberRegistrationResponse(member.getMemberCode());
+    return member.getMemberCode();
   }
 
   /**

@@ -9,8 +9,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.member.api.dto.MemberRegistrationRequest;
-import com.kizuna.member.api.dto.MemberRegistrationResponse;
 import com.kizuna.member.domain.Member;
 import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.shared.exception.ConflictException;
@@ -42,12 +40,8 @@ class MemberRegistrationServiceTest {
 
   @InjectMocks private MemberRegistrationService service;
 
-  private MemberRegistrationRequest request() {
-    MemberRegistrationRequest request = new MemberRegistrationRequest();
-    request.setEmail("member@example.com");
-    request.setPassword("password123");
-    request.setDisplayName("会員 花子");
-    return request;
+  private MemberRegistrationCommand request() {
+    return new MemberRegistrationCommand("member@example.com", "password123", "会員 花子");
   }
 
   private User savedUser(long id) {
@@ -77,7 +71,7 @@ class MemberRegistrationServiceTest {
     when(memberRepository.save(memberCaptor.capture()))
         .thenAnswer(invocation -> invocation.getArgument(0));
 
-    MemberRegistrationResponse response = service.register(request());
+    String memberCode = service.register(request());
 
     User user = userCaptor.getValue();
     assertThat(user.getUserType()).isEqualTo(UserType.MEMBER);
@@ -88,7 +82,7 @@ class MemberRegistrationServiceTest {
     Member member = memberCaptor.getValue();
     assertThat(member.getUserId()).isEqualTo(10L);
     assertThat(member.getMemberCode()).matches("\\d{12}");
-    assertThat(response.memberCode()).isEqualTo(member.getMemberCode());
+    assertThat(memberCode).isEqualTo(member.getMemberCode());
   }
 
   @Test
@@ -221,9 +215,9 @@ class MemberRegistrationServiceTest {
     when(memberRepository.existsByMemberCode(anyString())).thenReturn(true, false);
     when(memberRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-    MemberRegistrationResponse response = service.register(request());
+    String memberCode = service.register(request());
 
-    assertThat(response.memberCode()).matches("\\d{12}");
+    assertThat(memberCode).matches("\\d{12}");
     verify(memberRepository, times(2)).existsByMemberCode(anyString());
   }
 }
