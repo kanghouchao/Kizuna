@@ -48,6 +48,7 @@ import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
+import org.springframework.data.core.TypedPropertyPath;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -122,7 +123,8 @@ class ReviewWriteTest {
         .when(reviews)
         .findBy(ArgumentMatchers.<Specification<ReviewRecord>>any(), any());
 
-    service.listPublic(1L, PageRequest.of(2, 10, Sort.by(ReviewRecord::getUpdatedAt)));
+    TypedPropertyPath<ReviewRecord, ?> callerKey = ReviewRecord::getUpdatedAt;
+    service.listPublic(1L, PageRequest.of(2, 10, Sort.by(callerKey)));
 
     var sort = pages.captured().getSort().toList();
     assertThat(sort)
@@ -130,7 +132,7 @@ class ReviewWriteTest {
         .extracting(Sort.Order::getProperty)
         .isEqualTo("publication.displayOrder");
     assertThat(sort).last().isEqualTo(Sort.Order.asc(ReviewRecord::getId));
-    assertThat(sort).extracting(Sort.Order::getProperty).doesNotContain("updatedAt");
+    assertThat(sort).extracting(Sort.Order::getProperty).doesNotContain(callerKey.toDotPath());
     assertThat(pages.captured().getPageNumber()).isEqualTo(2);
   }
 
