@@ -28,15 +28,20 @@ public class SystemConfigController {
   public ResponseEntity<List<SystemConfigResponse>> list(
       @RequestParam(required = false) String category) {
     if (category != null && !category.isBlank()) {
-      return ResponseEntity.ok(systemConfigService.getConfigsByCategory(category));
+      return ResponseEntity.ok(
+          systemConfigService.getConfigsByCategory(category).stream()
+              .map(SystemConfigResponse::of)
+              .toList());
     }
-    return ResponseEntity.ok(systemConfigService.getAllConfigs());
+    return ResponseEntity.ok(
+        systemConfigService.getAllConfigs().stream().map(SystemConfigResponse::of).toList());
   }
 
   @PutMapping("/{key}")
   @PreAuthorize("hasAuthority('PERM_SYSTEM_CONFIG_MANAGE')")
   public ResponseEntity<SystemConfigResponse> update(
       @PathVariable String key, @Valid @RequestBody SystemConfigUpdateRequest request) {
-    return ResponseEntity.ok(systemConfigService.updateConfig(key, request));
+    return ResponseEntity.ok(
+        SystemConfigResponse.of(systemConfigService.updateConfig(key, request.getConfigValue())));
   }
 }

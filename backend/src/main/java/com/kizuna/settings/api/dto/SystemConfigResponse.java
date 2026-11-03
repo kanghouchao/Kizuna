@@ -1,23 +1,29 @@
 package com.kizuna.settings.api.dto;
 
+import com.kizuna.settings.application.SystemConfigView;
 import java.time.OffsetDateTime;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class SystemConfigResponse {
-  private Long id;
-  private String configKey;
-  private String configValue;
-  private String category;
-  private String description;
-  private String valueType;
-  private Boolean secret;
-  private OffsetDateTime createdAt;
-  private OffsetDateTime updatedAt;
+public record SystemConfigResponse(
+    Long id,
+    String configKey,
+    String configValue,
+    String category,
+    String description,
+    String valueType,
+    Boolean secret,
+    OffsetDateTime createdAt,
+    OffsetDateTime updatedAt) {
+
+  public static SystemConfigResponse of(SystemConfigView view) {
+    return new SystemConfigResponse(
+        view.id(),
+        view.configKey(),
+        view.configValue(),
+        view.category(),
+        view.description(),
+        view.valueType(),
+        view.secret(),
+        view.createdAt(),
+        view.updatedAt());
+  }
 }
