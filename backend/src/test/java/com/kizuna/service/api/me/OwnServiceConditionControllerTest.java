@@ -8,10 +8,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kizuna.service.api.dto.OwnConsentRequest;
+import com.kizuna.service.application.OwnConsentCommand;
+import com.kizuna.service.application.OwnServiceCondition;
 import com.kizuna.service.application.OwnServiceConditionService;
 import com.kizuna.service.domain.ConsentDecision;
+import com.kizuna.service.domain.ConsentStatus;
 import com.kizuna.service.domain.ServiceItem;
+import com.kizuna.service.domain.ServiceKind;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
@@ -74,6 +77,20 @@ class OwnServiceConditionControllerTest {
   @Test
   @DisplayName("受諾の決定は store_id の店舗で service を呼ぶこと")
   void decidePassesTheNamedStore() throws Exception {
+    when(service.decide(eq(STORE_ID), eq("cast@example.test"), eq("s1"), any()))
+        .thenReturn(
+            new OwnServiceCondition(
+                "s1",
+                STORE_ID,
+                ServiceKind.SPECIAL_SERVICE,
+                "特殊",
+                null,
+                null,
+                0,
+                0,
+                1L,
+                ConsentStatus.ACCEPTED,
+                1L));
     mockMvc
         .perform(
             put("/me/service-conditions/s1/consent")
@@ -91,6 +108,6 @@ class OwnServiceConditionControllerTest {
             STORE_ID,
             "cast@example.test",
             "s1",
-            new OwnConsentRequest(1L, 0L, ConsentDecision.ACCEPTED));
+            new OwnConsentCommand(1L, 0L, ConsentDecision.ACCEPTED));
   }
 }

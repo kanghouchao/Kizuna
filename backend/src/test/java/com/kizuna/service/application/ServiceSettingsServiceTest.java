@@ -6,7 +6,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.service.api.dto.ServiceMapper;
 import com.kizuna.service.domain.ServiceItem;
 import com.kizuna.service.domain.ServiceItemRepository;
 import com.kizuna.service.domain.ServiceRevisionRepository;
@@ -14,7 +13,6 @@ import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import org.junit.jupiter.api.Test;
-import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.springframework.data.domain.Page;
@@ -29,7 +27,6 @@ class ServiceSettingsServiceTest {
       new ServiceSettingsService(
           items,
           mock(ServiceRevisionRepository.class),
-          Mappers.getMapper(ServiceMapper.class),
           mock(ActorIdentityService.class),
           mock(StoreRepository.class),
           mock(BusinessAudit.class));

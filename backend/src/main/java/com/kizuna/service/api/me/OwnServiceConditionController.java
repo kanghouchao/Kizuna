@@ -36,7 +36,9 @@ public class OwnServiceConditionController {
               sort = {"id"})
           Pageable pageable,
       Principal principal) {
-    return service.list(storeId, principal.getName(), kind, pageable);
+    return service
+        .list(storeId, principal.getName(), kind, pageable)
+        .map(OwnServiceConditionSummary::of);
   }
 
   @PutMapping("/{id}/consent")
@@ -46,6 +48,7 @@ public class OwnServiceConditionController {
       @RequestParam("store_id") Long storeId,
       @Valid @RequestBody OwnConsentRequest request,
       Principal principal) {
-    return service.decide(storeId, principal.getName(), id, request);
+    return OwnServiceConditionSummary.of(
+        service.decide(storeId, principal.getName(), id, request.command()));
   }
 }

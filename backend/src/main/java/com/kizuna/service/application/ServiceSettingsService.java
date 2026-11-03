@@ -1,11 +1,5 @@
 package com.kizuna.service.application;
 
-import com.kizuna.service.api.dto.ServiceCreateRequest;
-import com.kizuna.service.api.dto.ServiceMapper;
-import com.kizuna.service.api.dto.ServiceResponse;
-import com.kizuna.service.api.dto.ServiceRevisionResponse;
-import com.kizuna.service.api.dto.ServiceSummary;
-import com.kizuna.service.api.dto.ServiceUpdateRequest;
 import com.kizuna.service.domain.ServiceItem;
 import com.kizuna.service.domain.ServiceItemRepository;
 import com.kizuna.service.domain.ServiceKind;
@@ -33,41 +27,40 @@ import org.springframework.transaction.annotation.Transactional;
 public class ServiceSettingsService {
   private final ServiceItemRepository items;
   private final ServiceRevisionRepository revisions;
-  private final ServiceMapper mapper;
   private final ActorIdentityService actors;
   private final StoreRepository stores;
   private final BusinessAudit audit;
 
   @Transactional(readOnly = true)
-  public Page<ServiceSummary> list(
+  public Page<ServiceItem> list(
       Long storeId, ServiceKind kind, boolean deleted, Pageable pageable) {
     Specification<ServiceItem> filter =
         (root, query, cb) ->
             cb.and(cb.equal(root.get("storeId"), storeId), cb.equal(root.get("deleted"), deleted));
     if (kind != null)
       filter = filter.and((root, query, cb) -> cb.equal(root.get("terms").get("kind"), kind));
-    return items.findAll(filter, pageable).map(mapper::summary);
+    return items.findAll(filter, pageable);
   }
 
   @Transactional(readOnly = true)
-  public ServiceResponse get(Long storeId, String id) {
-    return mapper.response(require(storeId, id));
+  public ServiceItem get(Long storeId, String id) {
+    return require(storeId, id);
   }
 
   @Transactional
-  public String create(Long storeId, ServiceCreateRequest request, String actor) {
+  public String create(Long storeId, ServiceSettingsCommand.Create command, String actor) {
     stores.lockCastFields(storeId);
     var actorId = actors.requireUserId(actor);
     var item =
         ServiceItem.create(
             storeId,
             new ServiceTerms(
-                request.kind(),
-                request.name(),
-                request.durationMinutes(),
-                request.chargeType(),
-                request.price(),
-                request.remuneration()));
+                command.kind(),
+                command.name(),
+                command.durationMinutes(),
+                command.chargeType(),
+                command.price(),
+                command.remuneration()));
     items.saveAndFlush(item);
     var revision = revisions.save(ServiceRevision.record(item, null, actorId));
     audit.recordById(
@@ -84,8 +77,8 @@ public class ServiceSettingsService {
   }
 
   @Transactional
-  public ServiceResponse update(
-      Long storeId, String id, ServiceUpdateRequest request, String actor) {
+  public ServiceItem update(
+      Long storeId, String id, ServiceSettingsCommand.Update command, String actor) {
     stores.lockCastFields(storeId);
     var actorId = actors.requireUserId(actor);
     var item = lock(storeId, id);
@@ -94,12 +87,12 @@ public class ServiceSettingsService {
     var next =
         new ServiceTerms(
             before.getKind(),
-            request.name(),
-            request.durationMinutes(),
-            request.chargeType(),
-            request.price(),
-            request.remuneration());
-    if (item.replace(next, request.expectedVersion())) {
+            command.name(),
+            command.durationMinutes(),
+            command.chargeType(),
+            command.price(),
+            command.remuneration());
+    if (item.replace(next, command.expectedVersion())) {
       var revision = revisions.save(ServiceRevision.record(item, before, actorId));
       items.flush();
       var after = new HashMap<>(auditValues(item));
@@ -115,7 +108,7 @@ public class ServiceSettingsService {
           beforeValues,
           after);
     }
-    return mapper.response(item);
+    return item;
   }
 
   @Transactional
@@ -142,9 +135,9 @@ public class ServiceSettingsService {
   }
 
   @Transactional(readOnly = true)
-  public Page<ServiceRevisionResponse> history(Long storeId, String id, Pageable pageable) {
+  public Page<ServiceRevision> history(Long storeId, String id, Pageable pageable) {
     require(storeId, id);
-    return revisions.findByStoreIdAndServiceId(storeId, id, pageable).map(mapper::revision);
+    return revisions.findByStoreIdAndServiceId(storeId, id, pageable);
   }
 
   private static String changedFields(ServiceTerms before, ServiceTerms after) {

@@ -1,8 +1,6 @@
 package com.kizuna.service.application;
 
 import com.kizuna.cast.domain.CastEnrollmentRepository;
-import com.kizuna.service.api.dto.OwnConsentRequest;
-import com.kizuna.service.api.dto.OwnServiceConditionSummary;
 import com.kizuna.service.domain.ConsentDecision;
 import com.kizuna.service.domain.ConsentStatus;
 import com.kizuna.service.domain.ServiceConsent;
@@ -43,7 +41,7 @@ public class OwnServiceConditionService {
   private final BusinessAudit audit;
 
   @Transactional(readOnly = true)
-  public Page<OwnServiceConditionSummary> list(
+  public Page<OwnServiceCondition> list(
       Long storeId, String actor, ServiceKind kind, Pageable pageable) {
     String enrollment = requireEnrollment(storeId, actors.requireUserId(actor));
     Specification<ServiceItem> filter =
@@ -62,8 +60,8 @@ public class OwnServiceConditionService {
   }
 
   @Transactional
-  public OwnServiceConditionSummary decide(
-      Long storeId, String actor, String id, OwnConsentRequest request) {
+  public OwnServiceCondition decide(
+      Long storeId, String actor, String id, OwnConsentCommand command) {
     stores.lockCastFields(storeId);
     Long actorId = actors.requireUserId(actor);
     String enrollment = requireEnrollment(storeId, actorId);
@@ -74,7 +72,7 @@ public class OwnServiceConditionService {
             .orElseThrow(() -> new NotFoundException("サービスが見つかりません"));
     if (item.getTerms().getKind() != ServiceKind.SPECIAL_SERVICE)
       throw new ServiceException("特殊サービスのみ受諾・拒否できます");
-    if (request.termsVersion() != item.getTermsVersion())
+    if (command.termsVersion() != item.getTermsVersion())
       throw new ConflictException("条件が変更されています。最新の内容を再取得して確認してください");
     var consent =
         consents
@@ -86,10 +84,10 @@ public class OwnServiceConditionService {
             .findByStoreIdAndServiceIdAndRevisionNumber(storeId, id, item.getRevisionNumber())
             .orElseThrow();
     if (consent.decide(
-        request.decision(), item.getTermsVersion(), revision.getId(), request.consentVersion())) {
+        command.decision(), item.getTermsVersion(), revision.getId(), command.consentVersion())) {
       consents.saveAndFlush(consent);
       var event = events.saveAndFlush(ServiceConsentEvent.record(consent, actorId));
-      if (request.decision() == ConsentDecision.REJECTED)
+      if (command.decision() == ConsentDecision.REJECTED)
         rejectionHandler.applyRejection(
             new SpecialServiceRejection(
                 storeId, enrollment, id, event.getId(), actorId, event.getOccurredAt()));
@@ -134,12 +132,12 @@ public class OwnServiceConditionService {
         .orElseThrow(() -> new NotFoundException("本人の有効な在籍が見つかりません"));
   }
 
-  private OwnServiceConditionSummary summary(ServiceItem item, ServiceConsent consent) {
+  private OwnServiceCondition summary(ServiceItem item, ServiceConsent consent) {
     var terms = item.getTerms();
     boolean special = terms.getKind() == ServiceKind.SPECIAL_SERVICE;
-    return new OwnServiceConditionSummary(
+    return new OwnServiceCondition(
         item.getId(),
-        item.getStoreId().toString(),
+        item.getStoreId(),
         terms.getKind(),
         terms.getName(),
         terms.getDurationMinutes(),

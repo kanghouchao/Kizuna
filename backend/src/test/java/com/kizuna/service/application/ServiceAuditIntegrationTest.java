@@ -16,10 +16,6 @@ import com.kizuna.order.domain.OrderCourse;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.domain.SpecialServiceSnapshot;
-import com.kizuna.service.api.dto.OwnConsentRequest;
-import com.kizuna.service.api.dto.ServiceCreateRequest;
-import com.kizuna.service.api.dto.ServiceMapper;
-import com.kizuna.service.api.dto.ServiceUpdateRequest;
 import com.kizuna.service.domain.ChargeType;
 import com.kizuna.service.domain.ConsentDecision;
 import com.kizuna.service.domain.ServiceItemRepository;
@@ -61,7 +57,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mapstruct.factory.Mappers;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -216,17 +211,17 @@ class ServiceAuditIntegrationTest {
   private String special() {
     return settings.create(
         currentStore(),
-        new ServiceCreateRequest(
+        new ServiceSettingsCommand.Create(
             ServiceKind.SPECIAL_SERVICE, "複写しない秘密", null, ChargeType.PAID, 2000, 1000),
         STAFF);
   }
 
-  private ServiceUpdateRequest changed(long revision) {
-    return new ServiceUpdateRequest("変えた秘密", null, ChargeType.PAID, 3000, 1500, revision);
+  private ServiceSettingsCommand.Update changed(long revision) {
+    return new ServiceSettingsCommand.Update("変えた秘密", null, ChargeType.PAID, 3000, 1500, revision);
   }
 
   private void decide(String id, long terms, long revision, ConsentDecision decision) {
-    own.decide(currentStore(), CAST, id, new OwnConsentRequest(terms, revision, decision));
+    own.decide(currentStore(), CAST, id, new OwnConsentCommand(terms, revision, decision));
   }
 
   private List<AuditEvent> audits() {
@@ -309,13 +304,13 @@ class ServiceAuditIntegrationTest {
     settings.update(
         currentStore(),
         id,
-        new ServiceUpdateRequest("複写しない秘密", null, ChargeType.PAID, 2000, 1000, 1L),
+        new ServiceSettingsCommand.Update("複写しない秘密", null, ChargeType.PAID, 2000, 1000, 1L),
         STAFF);
     assertThat(audits()).hasSize(1);
     settings.update(
         currentStore(),
         id,
-        new ServiceUpdateRequest("名称だけの秘密", null, ChargeType.PAID, 2000, 1000, 1L),
+        new ServiceSettingsCommand.Update("名称だけの秘密", null, ChargeType.PAID, 2000, 1000, 1L),
         STAFF);
     assertThat(audits().getLast().getAfterValues())
         .containsEntry("version", "1")
@@ -502,14 +497,14 @@ class ServiceAuditIntegrationTest {
                     currentStore(),
                     STAFF,
                     id,
-                    new OwnConsentRequest(1L, 0L, ConsentDecision.ACCEPTED)))
+                    new OwnConsentCommand(1L, 0L, ConsentDecision.ACCEPTED)))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
             () ->
                 settings.update(
                     currentStore(),
                     id,
-                    new ServiceUpdateRequest("秘密", null, ChargeType.FREE, 1, 0, 1L),
+                    new ServiceSettingsCommand.Update("秘密", null, ChargeType.FREE, 1, 0, 1L),
                     STAFF))
         .isInstanceOf(ServiceException.class);
     Long foreign = store();
@@ -682,11 +677,6 @@ class ServiceAuditIntegrationTest {
     @Bean
     Clock clock() {
       return Clock.systemUTC();
-    }
-
-    @Bean
-    ServiceMapper mapper() {
-      return Mappers.getMapper(ServiceMapper.class);
     }
 
     @Bean

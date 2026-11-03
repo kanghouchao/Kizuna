@@ -2,6 +2,7 @@ package com.kizuna.service.api;
 
 import com.kizuna.service.api.dto.ServiceCreateRequest;
 import com.kizuna.service.api.dto.ServiceCreatedResponse;
+import com.kizuna.service.api.dto.ServiceMapper;
 import com.kizuna.service.api.dto.ServiceResponse;
 import com.kizuna.service.api.dto.ServiceRevisionResponse;
 import com.kizuna.service.api.dto.ServiceSummary;
@@ -33,6 +34,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ServiceSettingsController {
   private final ServiceSettingsService service;
+  private final ServiceMapper mapper;
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_SERVICE_MANAGE')")
@@ -47,7 +49,7 @@ public class ServiceSettingsController {
               sort = {"createdAt", "id"},
               direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return service.list(storeId, kind, deleted, pageable);
+    return service.list(storeId, kind, deleted, pageable).map(mapper::summary);
   }
 
   @PostMapping
@@ -57,13 +59,15 @@ public class ServiceSettingsController {
       @Valid @RequestBody ServiceCreateRequest request,
       Principal principal) {
     return ResponseEntity.status(201)
-        .body(new ServiceCreatedResponse(service.create(storeId, request, principal.getName())));
+        .body(
+            new ServiceCreatedResponse(
+                service.create(storeId, request.command(), principal.getName())));
   }
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_SERVICE_MANAGE')")
   public ServiceResponse get(@CurrentStore Long storeId, @PathVariable String id) {
-    return service.get(storeId, id);
+    return mapper.response(service.get(storeId, id));
   }
 
   @PutMapping("/{id}")
@@ -73,7 +77,7 @@ public class ServiceSettingsController {
       @PathVariable String id,
       @Valid @RequestBody ServiceUpdateRequest request,
       Principal principal) {
-    return service.update(storeId, id, request, principal.getName());
+    return mapper.response(service.update(storeId, id, request.command(), principal.getName()));
   }
 
   @DeleteMapping("/{id}")
@@ -97,6 +101,6 @@ public class ServiceSettingsController {
               sort = {"revisionNumber", "id"},
               direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return service.history(storeId, id, pageable);
+    return service.history(storeId, id, pageable).map(mapper::revision);
   }
 }

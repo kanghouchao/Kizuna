@@ -1,5 +1,6 @@
 package com.kizuna.service.api.dto;
 
+import com.kizuna.service.application.ServiceSettingsCommand;
 import com.kizuna.service.domain.ChargeType;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -13,4 +14,9 @@ public record ServiceUpdateRequest(
     @NotNull(message = "必須項目を指定してください") @Min(value = 0, message = "零以上の整数円を指定してください")
         Integer remuneration,
     @NotNull(message = "必須項目を指定してください") @Min(value = 1, message = "版本は 1 以上で指定してください")
-        Long expectedVersion) {}
+        Long expectedVersion) {
+  public ServiceSettingsCommand.Update command() {
+    return new ServiceSettingsCommand.Update(
+        name, durationMinutes, chargeType, price, remuneration, expectedVersion);
+  }
+}
