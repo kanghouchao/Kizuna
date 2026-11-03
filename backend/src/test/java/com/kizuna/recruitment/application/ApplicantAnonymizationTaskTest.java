@@ -15,8 +15,6 @@ import com.kizuna.audit.recording.AuditActor;
 import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.recruitment.domain.ApplicantRepository;
 import com.kizuna.recruitment.domain.ApplicantStatus;
-import com.kizuna.recruitment.domain.AttachmentUploadRepository;
-import com.kizuna.recruitment.infrastructure.PrivateAttachmentStorage;
 import com.kizuna.settings.application.ApplicantRetentionSettings;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
@@ -47,8 +45,7 @@ class ApplicantAnonymizationTaskTest {
   private final ApplicantAnonymizationTask task =
       new ApplicantAnonymizationTask(
           applicants,
-          mock(AttachmentUploadRepository.class),
-          mock(PrivateAttachmentStorage.class),
+          mock(ApplicantAttachmentStore.class),
           systemConfigs,
           identities,
           mock(AuditWriter.class),

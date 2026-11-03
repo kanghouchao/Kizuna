@@ -1,5 +1,6 @@
 package com.kizuna.recruitment.infrastructure;
 
+import com.kizuna.recruitment.domain.AttachmentObject;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ResourceBusyException;

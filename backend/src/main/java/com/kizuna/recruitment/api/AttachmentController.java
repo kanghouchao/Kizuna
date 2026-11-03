@@ -124,19 +124,11 @@ public class AttachmentController {
             () -> {
               try (var _ = CloseableThreadContext.putAll(loggingContext);
                   admission) {
-                var received = admission.receive(request);
-                var completed =
-                    attachments.upload(
-                        storeId,
-                        id,
-                        uploadId,
-                        key,
-                        received.path(),
-                        received.originalSha256(),
-                        received.mediaType(),
-                        actorEmail);
-                int status = uploadId == null && completed.created() ? 201 : 200;
-                return ResponseEntity.status(status).body(completed.attachment());
+                var receipt =
+                    attachments.receive(
+                        storeId, id, uploadId, key, admission.receive(request), actorEmail);
+                int status = uploadId == null && receipt.created() ? 201 : 200;
+                return ResponseEntity.status(status).body(receipt.attachment());
               }
             });
     var task =

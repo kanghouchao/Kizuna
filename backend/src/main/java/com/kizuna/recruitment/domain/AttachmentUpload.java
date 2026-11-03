@@ -112,6 +112,10 @@ public class AttachmentUpload extends StoreScopedEntity {
     }
   }
 
+  public AttachmentObject object() {
+    return new AttachmentObject(objectId, mediaType, sizeBytes, canonicalSha256);
+  }
+
   public boolean complete(Long actorId, OffsetDateTime now) {
     if (status == Status.READY) return false;
     completedBy = Objects.requireNonNull(actorId);

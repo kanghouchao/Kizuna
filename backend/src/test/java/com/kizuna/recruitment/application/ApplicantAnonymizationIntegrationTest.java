@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -15,8 +14,9 @@ import static org.mockito.Mockito.when;
 import com.kizuna.audit.recording.AuditActor;
 import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.recruitment.domain.Applicant;
-import com.kizuna.recruitment.infrastructure.AttachmentObject;
+import com.kizuna.recruitment.domain.AttachmentObject;
 import com.kizuna.recruitment.infrastructure.PrivateAttachmentStorage;
+import com.kizuna.recruitment.infrastructure.RasterImageNormalizer;
 import com.kizuna.settings.application.ApplicantRetentionSettings;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
@@ -27,17 +27,14 @@ import com.kizuna.task.application.TaskLifecycle;
 import com.kizuna.task.application.TaskRegistry;
 import com.kizuna.task.execution.TaskCommand;
 import com.kizuna.task.execution.TaskExecutor;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
-import java.sql.Connection;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -287,55 +284,6 @@ class ApplicantAnonymizationIntegrationTest {
     }
   }
 
-  @Test
-  void waitsForAnInFlightAttachmentWriteWithoutHoldingTheApplicantLock() throws Exception {
-    String due = applicant("REJECTED", TODAY.minusYears(1), null);
-    attachment(due);
-    var source = context.getBean(DataSource.class);
-    try (Connection upload = source.getConnection();
-        var pool = Executors.newSingleThreadExecutor()) {
-      upload.setAutoCommit(false);
-      try (var statement = upload.createStatement()) {
-        statement.execute("set local lock_timeout = '3s'");
-      }
-      // 保存完了処理と同じく、添付行を握ったまま実体を書いている最中を再現する。
-      lock(
-          upload,
-          "select id from t_applicant_attachment_uploads where applicant_id=? for no key update",
-          due);
-      var run = pool.submit(() -> executor.executeScheduled(command()).execution());
-      awaitLockWait();
-      // 匿名化が応募者を先に握っていれば、ここで待ち合いになり lock_timeout で失敗する。
-      lock(upload, "select id from t_applicants where id=? for update", due);
-      verify(storage, never()).delete(any(AttachmentObject.class));
-      upload.commit();
-      assertThat(run.get(20, TimeUnit.SECONDS).status()).isEqualTo("SUCCEEDED");
-    }
-    assertThat(row(due).get("anonymized_at")).isNotNull();
-    assertThat(count("t_applicant_attachment_uploads")).isZero();
-    verify(storage).delete(any(AttachmentObject.class));
-  }
-
-  private static void lock(Connection connection, String sql, String id) throws Exception {
-    try (var statement = connection.prepareStatement(sql)) {
-      statement.setString(1, id);
-      statement.executeQuery().close();
-    }
-  }
-
-  private void awaitLockWait() throws InterruptedException {
-    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
-    while (System.nanoTime() < deadline) {
-      Long waiting =
-          jdbc.queryForObject(
-              "select count(*) from pg_stat_activity where datname=current_database() and wait_event_type='Lock'",
-              Long.class);
-      if (waiting != null && waiting > 0) return;
-      Thread.sleep(20);
-    }
-    throw new AssertionError("匿名化が添付行のロックを待っていません");
-  }
-
   private TaskCommand command() {
     return new TaskCommand(
         "APPLICANT_ANONYMIZATION", UUID.randomUUID().toString(), serviceId, null, TODAY, TODAY);
@@ -427,6 +375,8 @@ class ApplicantAnonymizationIntegrationTest {
   @EnableJpaRepositories("com.kizuna")
   @Import({
     ApplicantAnonymizationTask.class,
+    ApplicantAttachmentStore.class,
+    BusinessAudit.class,
     TaskExecutor.class,
     TaskLifecycle.class,
     TaskRegistry.class,
@@ -447,6 +397,11 @@ class ApplicantAnonymizationIntegrationTest {
     @Bean
     SystemConfigService systemConfigs() {
       return mock(SystemConfigService.class);
+    }
+
+    @Bean
+    RasterImageNormalizer normalizer() {
+      return mock(RasterImageNormalizer.class);
     }
 
     @Bean

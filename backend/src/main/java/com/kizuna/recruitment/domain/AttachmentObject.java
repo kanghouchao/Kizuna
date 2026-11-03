@@ -1,4 +1,4 @@
-package com.kizuna.recruitment.infrastructure;
+package com.kizuna.recruitment.domain;
 
 import java.util.Objects;
 import java.util.UUID;
