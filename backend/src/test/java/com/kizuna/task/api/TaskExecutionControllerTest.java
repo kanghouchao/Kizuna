@@ -16,11 +16,13 @@ import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.task.application.TaskLifecycle;
 import com.kizuna.task.application.TaskOptions;
 import com.kizuna.task.application.TaskQuery;
+import com.kizuna.task.execution.ExecutionResult;
 import com.kizuna.task.execution.TaskCommand;
 import com.kizuna.task.execution.TaskExecutor;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
 import com.kizuna.user.application.StoreScopeResolver;
 import com.kizuna.user.domain.PermissionCode;
+import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -123,11 +125,40 @@ class TaskExecutionControllerTest {
         "{\"task_name\":\"NOTIFICATION_DELIVER\",\"logical_key\":\"k\",\"service_user_id\":10,"
             + "\"store_id\":%s,\"period_start\":\"2026-10-07\",\"period_end\":\"2026-10-07\"}";
 
-    mockMvc.perform(
-        post("/task-executions")
-            .principal(auth)
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(body.formatted("\"9007199254740993\"")));
+    var day = LocalDate.of(2026, 10, 7);
+    var execution =
+        new ExecutionResult(
+            1L,
+            2L,
+            1,
+            null,
+            "NOTIFICATION_DELIVER",
+            "k",
+            10L,
+            "通知主体",
+            9007199254740993L,
+            "通知店舗",
+            day,
+            day,
+            "MANUAL",
+            null,
+            null,
+            "SUCCEEDED",
+            null,
+            null,
+            null,
+            null);
+    when(executor.execute(any(), any())).thenReturn(new TaskExecutor.Submission(execution, true));
+
+    mockMvc
+        .perform(
+            post("/task-executions")
+                .principal(auth)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body.formatted("\"9007199254740993\"")))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.execution.id").value(1))
+        .andExpect(jsonPath("$.execution.task_name").value("NOTIFICATION_DELIVER"));
     verify(executor).execute(command.capture(), any());
     assertThat(command.getValue().storeId()).isEqualTo(9007199254740993L);
 
