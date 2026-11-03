@@ -48,7 +48,7 @@ class StoreActivationServiceTest {
   void activate_preparingStore_transitionsAndEvictsCache() {
     Store store = preparingStore();
     when(storeRepository.findById(STORE_ID)).thenReturn(Optional.of(store));
-    when(cacheManager.getCache("storeByDomain")).thenReturn(cache);
+    when(cacheManager.getCache(StoreRegistryService.DOMAIN_CACHE)).thenReturn(cache);
 
     storeActivationService.activate(STORE_ID);
 

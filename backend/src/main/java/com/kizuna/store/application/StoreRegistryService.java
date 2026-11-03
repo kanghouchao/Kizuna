@@ -37,6 +37,12 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class StoreRegistryService {
 
+  /**
+   * ドメイン照会のキャッシュ名。値は {@link StoreView} の JDK 直列化で、永続化された Redis に残る旧型の写しは復元できず照会が 500
+   * になる。値の型を変えるときは名前も変え、旧い写しは TTL で消えるに任せる。
+   */
+  static final String DOMAIN_CACHE = "storeViewByDomain";
+
   private final StoreRepository storeRepository;
   private final StoreProfileRepository storeProfileRepository;
   private final CompletedOrderCheck completedOrderCheck;
@@ -77,7 +83,7 @@ public class StoreRegistryService {
   @Transactional(readOnly = true)
   // Optional は unwrap されるため未登録ドメインは null。cache-null-values=false の Redis に
   // null を書くと IllegalArgumentException → 500 になるのでキャッシュ対象外にする
-  @Cacheable(value = "storeByDomain", key = "#domain", unless = "#result == null")
+  @Cacheable(value = DOMAIN_CACHE, key = "#domain", unless = "#result == null")
   public Optional<StoreView> getByDomain(String domain) {
     log.debug("店舗をデータベースから検索 domain: {}", domain);
     return storeRepository.findByDomain(domain).map(StoreView::of);
@@ -109,10 +115,10 @@ public class StoreRegistryService {
     return saved.getId();
   }
 
-  // storeByDomain のキーは domain。だが注釈の式から見えるのは引数の id と戻り値（void）だけで、
+  // ドメイン照会のキャッシュのキーは domain。だが注釈の式から見えるのは引数の id と戻り値（void）だけで、
   // domain はメソッド本体のローカルにしか現れずキーとして書けない。delete と同じ全件失効に揃える。
   @Transactional
-  @CacheEvict(value = "storeByDomain", allEntries = true)
+  @CacheEvict(value = DOMAIN_CACHE, allEntries = true)
   public void update(String id, StorePatch patch) {
     var store = storeRepository.findById(parseId(id)).orElseThrow(() -> notFound(id));
     String versionBefore = String.valueOf(store.getVersion());
@@ -157,7 +163,7 @@ public class StoreRegistryService {
    * 0014）。断りの文言を分けるのは、次の一手が「記録が読めなくなる」側と違うためである。
    */
   @Transactional
-  @CacheEvict(value = "storeByDomain", allEntries = true)
+  @CacheEvict(value = DOMAIN_CACHE, allEntries = true)
   public void delete(String id) {
     Long storeId = parseId(id);
     Store store = storeRepository.findByIdForUpdate(storeId).orElseThrow(() -> notFound(id));
