@@ -53,7 +53,9 @@ class AdvertisingRendererTest {
             new ByteArrayInputStream(
                 renderer.render(
                     report, "xlsx", new DocumentBudget(new AppProperties.OperationalReport()))))) {
-      assertThat(book.getSheet("広告費明細").getLastRowNum()).isEqualTo(2001);
+      var sheet = book.getSheet("広告費明細");
+      assertThat(sheet.getLastRowNum()).isEqualTo(2001);
+      assertThat(sheet.getRow(2001).getCell(9).getStringCellValue()).isEqualTo("02000");
     }
   }
 }

@@ -68,7 +68,11 @@ class AdvertisingMediaRendererTest {
     assertThat(ExportCells.letterRuns(csv)).containsExactly("ID");
     try (var book =
         new XSSFWorkbook(new ByteArrayInputStream(renderer.render(report, "xlsx", budget())))) {
-      assertThat(book.getSheet("媒体別集計").getLastRowNum()).isEqualTo(2001);
+      var sheet = book.getSheet("媒体別集計");
+      assertThat(sheet.getLastRowNum()).isEqualTo(2001);
+      assertThat(sheet.getRow(1001).getCell(9).getStringCellValue()).isEqualTo("01000");
+      assertThat(sheet.getRow(2001).getCell(9).getStringCellValue()).isEqualTo("02000");
+      assertThat(sheet.getRow(2001).getCell(14).getNumericCellValue()).isZero();
     }
   }
 }
