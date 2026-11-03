@@ -1,4 +1,4 @@
-sheet	条件と総計	frozen-rows=1
+sheet	条件と総計	frozen-rows=1	rows=3
 0,0	STRING	行種別
 0,1	STRING	生成日時
 0,2	STRING	計算根拠
@@ -53,7 +53,7 @@ sheet	条件と総計	frozen-rows=1
 2,15	STRING	
 2,16	STRING	
 2,17	STRING	リピート・紹介・その他の経路で知った有効完了受注の件数で、有効完了受注件数の内数です。媒体への割当てと単価算出から除外しています。
-sheet	受注あたり記録広告費	frozen-rows=1
+sheet	受注あたり記録広告費	frozen-rows=1	rows=5
 0,0	STRING	行種別
 0,1	STRING	生成日時
 0,2	STRING	計算根拠

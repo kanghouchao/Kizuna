@@ -1,4 +1,4 @@
-sheet	条件と総計	frozen-rows=1
+sheet	条件と総計	frozen-rows=1	rows=2
 0,0	STRING	行種別
 0,1	STRING	生成日時
 0,2	STRING	計算根拠
@@ -33,7 +33,7 @@ sheet	条件と総計	frozen-rows=1
 1,14	STRING	
 1,15	STRING	
 1,16	STRING	
-sheet	広告費明細	frozen-rows=1
+sheet	広告費明細	frozen-rows=1	rows=1
 0,0	STRING	行種別
 0,1	STRING	生成日時
 0,2	STRING	計算根拠
