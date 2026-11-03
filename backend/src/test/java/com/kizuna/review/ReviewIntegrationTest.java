@@ -28,6 +28,7 @@ import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.shared.publication.Publication;
 import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
 import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.shared.web.StrictScalarJsonModule;
 import com.kizuna.shared.web.WebBindingConfig;
 import com.kizuna.store.StoreShortNames;
 import com.kizuna.user.application.BusinessAudit;
@@ -78,6 +79,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
+import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.json.JsonMapper;
@@ -90,7 +92,11 @@ class ReviewIntegrationTest {
   private Long currentStore;
   private MockMvc mvc;
   private final JsonMapper json =
-      JsonMapper.builder().propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE).build();
+      JsonMapper.builder()
+          .propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
+          .disable(DeserializationFeature.ACCEPT_FLOAT_AS_INT)
+          .addModule(new StrictScalarJsonModule())
+          .build();
   private Long storeId, otherStore, actorId, roleId;
   private String email;
   private Authentication auth;

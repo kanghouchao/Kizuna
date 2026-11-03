@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -95,6 +96,25 @@ class ReviewControllerTest {
         .andExpect(status().isOk());
 
     verify(reviews).write(eq(STORE_ID), eq("user"), any(ReviewCommand.Decide.class));
+  }
+
+  @Test
+  @DisplayName("版を文字列で送った審査は全体の厳格な型照合で 400 になり service に届かないこと")
+  @WithMockUser(authorities = {"PERM_REVIEW_VIEW", "PERM_REVIEW_MODERATE"})
+  void decisionRejectsVersionSentAsString() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    mockMvc
+        .perform(
+            post("/reviews/101/decisions")
+                .header("X-Store-ID", STORE_ID.toString())
+                .principal(currentUser())
+                .contentType("application/json")
+                .content(
+                    "{\"version\":\"0\",\"decision\":\"APPROVE\",\"reason\":\"確認\",\"dedupe_key\":\"k\"}"))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(reviews);
   }
 
   @Test

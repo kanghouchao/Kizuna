@@ -161,6 +161,29 @@ class CustomerMergeControllerTest {
     verify(customerMergeService, never()).merge(any(), anyString(), any(), anyString());
   }
 
+  @Test
+  @DisplayName("優先指定のキーを欠いた統合は 400 で、null の明示と区別されること")
+  @WithMockUser(authorities = {"PERM_CUSTOMER_MANAGE", "PERM_CUSTOMER_MERGE"})
+  void rejectsPreferredContactsMissingAKey() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    var body =
+        json.createObjectNode()
+            .put("merged_customer_id", "c2")
+            .put("preview_token", "proof")
+            .put("warnings_acknowledged", true)
+            .put("operation_reason", "理由");
+    body.putObject("preferred_contacts").putNull("phone").putNull("email");
+    mockMvc
+        .perform(
+            post("/customers/c1/merges")
+                .principal(() -> "tanaka.hanako@kizuna.test")
+                .header("X-Store-ID", STORE_ID.toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body.toString()))
+        .andExpect(status().isBadRequest());
+    verify(customerMergeService, never()).merge(any(), anyString(), any(), anyString());
+  }
+
   private MockHttpServletRequestBuilder mergeRequest(String reason) {
     var body =
         json.createObjectNode()

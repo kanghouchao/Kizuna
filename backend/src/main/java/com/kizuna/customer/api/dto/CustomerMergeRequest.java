@@ -7,14 +7,12 @@ import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import tools.jackson.databind.annotation.JsonDeserialize;
 
 public record CustomerMergeRequest(
     @NotBlank @Size(max = 64) String mergedCustomerId,
     @NotBlank String previewToken,
-    @Valid @JsonDeserialize(using = MergeInputDeserializer.Profile.class) MergeProfile profile,
-    @NotNull @Valid @JsonDeserialize(using = MergeInputDeserializer.Preferences.class)
-        MergePreferences preferredContacts,
+    @Valid MergeProfile profile,
+    @NotNull @Valid MergePreferences preferredContacts,
     @NotNull @AssertTrue Boolean warningsAcknowledged,
     @NotBlank @Size(max = 500) String operationReason) {
   public CustomerMergeRequest {
