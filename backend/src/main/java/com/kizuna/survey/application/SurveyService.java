@@ -9,22 +9,21 @@ import com.kizuna.receipt.once.ReceiptKey;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.persistence.StoreScopedEntity;
-import com.kizuna.survey.api.dto.SurveyAnswerResponse;
-import com.kizuna.survey.api.dto.SurveyAnswerWriteResponse;
-import com.kizuna.survey.api.dto.SurveyOperationResponse;
-import com.kizuna.survey.api.dto.SurveyResponseCountsResponse;
-import com.kizuna.survey.api.dto.SurveyRevisionResponse;
-import com.kizuna.survey.api.dto.SurveyRevisionWriteResponse;
-import com.kizuna.survey.api.dto.SurveyWriteResponse;
+import com.kizuna.survey.application.SurveyViews.AnswerWritten;
+import com.kizuna.survey.application.SurveyViews.RevisionWritten;
+import com.kizuna.survey.application.SurveyViews.Written;
 import com.kizuna.survey.domain.SurveyAnswer;
+import com.kizuna.survey.domain.SurveyAnswerDetailView;
 import com.kizuna.survey.domain.SurveyAnswerRepository;
 import com.kizuna.survey.domain.SurveyAnswers;
 import com.kizuna.survey.domain.SurveyCommand;
+import com.kizuna.survey.domain.SurveyCountsView;
 import com.kizuna.survey.domain.SurveyDefinition;
 import com.kizuna.survey.domain.SurveyHistory;
 import com.kizuna.survey.domain.SurveyHistoryRepository;
 import com.kizuna.survey.domain.SurveyInput;
 import com.kizuna.survey.domain.SurveyRevision;
+import com.kizuna.survey.domain.SurveyRevisionDetailView;
 import com.kizuna.survey.domain.SurveyRevisionRepository;
 import com.kizuna.survey.domain.SurveySeries;
 import com.kizuna.survey.domain.SurveySeriesRepository;
@@ -55,7 +54,7 @@ public class SurveyService {
   private final Clock clock;
 
   @Transactional
-  public SurveyWriteResponse write(Long storeId, String email, SurveyCommand command) {
+  public Written write(Long storeId, String email, SurveyCommand command) {
     var actor = actors.require(storeId, email, permission(command));
     return receipts.once(
         new ReceiptKey(storeId, actor.id(), command.key()),
@@ -82,7 +81,7 @@ public class SurveyService {
   }
 
   @Transactional(readOnly = true)
-  public SurveyWriteResponse replayOnly(Long storeId, String email, SurveyCommand command) {
+  public Written replayOnly(Long storeId, String email, SurveyCommand command) {
     var actor = actors.require(storeId, email, permission(command));
     return receipts.replayOnly(
         new ReceiptKey(storeId, actor.id(), command.key()),
@@ -91,37 +90,28 @@ public class SurveyService {
   }
 
   @Transactional(readOnly = true)
-  public SurveyRevisionResponse revision(Long storeId, String email, String surveyId, String id) {
+  public SurveyRevisionDetailView revision(Long storeId, String email, String surveyId, String id) {
     actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
-    return SurveyRevisionResponse.of(
-        revisions
-            .findProjectedByIdAndStoreIdAndSurveyId(
-                SurveyInput.id(id), storeId, SurveyInput.id(surveyId))
-            .orElseThrow(SurveyService::missing));
+    return revisions
+        .findProjectedByIdAndStoreIdAndSurveyId(
+            SurveyInput.id(id), storeId, SurveyInput.id(surveyId))
+        .orElseThrow(SurveyService::missing);
   }
 
   @Transactional(readOnly = true)
-  public SurveyAnswerResponse answer(Long storeId, String email, String id) {
+  public SurveyAnswerDetailView answer(Long storeId, String email, String id) {
     actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
-    return SurveyAnswerResponse.of(
-        answers
-            .findProjectedByIdAndStoreId(SurveyInput.id(id), storeId)
-            .orElseThrow(SurveyService::missing));
+    return answers
+        .findProjectedByIdAndStoreId(SurveyInput.id(id), storeId)
+        .orElseThrow(SurveyService::missing);
   }
 
   @Transactional(readOnly = true)
-  public SurveyResponseCountsResponse counts(
-      Long storeId, String email, String surveyId, String id) {
+  public SurveyCountsView counts(Long storeId, String email, String surveyId, String id) {
     actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
     if (!revisions.existsByIdAndStoreIdAndSurveyId(
         SurveyInput.id(id), storeId, SurveyInput.id(surveyId))) throw missing();
-    var count = answers.counts(storeId, id);
-    return new SurveyResponseCountsResponse(
-        surveyId,
-        id,
-        count.getTotalRecords(),
-        count.getActiveRecords(),
-        count.getWithdrawnRecords());
+    return answers.counts(storeId, id);
   }
 
   private record Result(SurveyRevision revision, SurveyAnswer answer, Operation type) {}
@@ -337,21 +327,18 @@ public class SurveyService {
   }
 
   // 受領を持つ設問版・回答は物理削除しないので、対象が無いのは不変条件の破れであって業務拒否ではない。
-  private SurveyWriteResponse respond(Long storeId, Receipt receipt) {
-    var operation = SurveyOperationResponse.of(receipt);
-    if (operation.type().targetsAnswer())
-      return new SurveyAnswerWriteResponse(
-          SurveyAnswerResponse.of(
-              answers
-                  .findByIdAndStoreId(receipt.targetId(), storeId)
-                  .orElseThrow(SurveyService::broken)),
-          operation);
-    return new SurveyRevisionWriteResponse(
-        SurveyRevisionResponse.of(
-            revisions
-                .findByIdAndStoreId(receipt.targetId(), storeId)
-                .orElseThrow(SurveyService::broken)),
-        operation);
+  private Written respond(Long storeId, Receipt receipt) {
+    if (Operation.ofReceipt(receipt.operation()).targetsAnswer())
+      return new AnswerWritten(
+          answers
+              .findByIdAndStoreId(receipt.targetId(), storeId)
+              .orElseThrow(SurveyService::broken),
+          receipt);
+    return new RevisionWritten(
+        revisions
+            .findByIdAndStoreId(receipt.targetId(), storeId)
+            .orElseThrow(SurveyService::broken),
+        receipt);
   }
 
   private SurveyRevision revisionRow(Long storeId, String surveyId, String id) {

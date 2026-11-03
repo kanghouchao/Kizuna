@@ -2,13 +2,8 @@ package com.kizuna.survey.application;
 
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.persistence.Paging;
-import com.kizuna.survey.api.dto.SurveyActorResponse;
-import com.kizuna.survey.api.dto.SurveyAnswerHistoryResponse;
-import com.kizuna.survey.api.dto.SurveyAnswerSummaryResponse;
-import com.kizuna.survey.api.dto.SurveyResponse;
-import com.kizuna.survey.api.dto.SurveyRevisionHistoryResponse;
-import com.kizuna.survey.api.dto.SurveyRevisionSummaryResponse;
-import com.kizuna.survey.api.dto.SurveySummaryResponse;
+import com.kizuna.survey.application.SurveyViews.Detail;
+import com.kizuna.survey.application.SurveyViews.Summary;
 import com.kizuna.survey.domain.SurveyAnswer;
 import com.kizuna.survey.domain.SurveyAnswerRepository;
 import com.kizuna.survey.domain.SurveyAnswerSummaryView;
@@ -50,7 +45,7 @@ public class SurveyReadService {
   private final SurveyActors actors;
 
   @Transactional(readOnly = true)
-  public Page<SurveySummaryResponse> list(
+  public Page<Summary> list(
       Long storeId,
       String email,
       Pageable pageable,
@@ -106,44 +101,33 @@ public class SurveyReadService {
   }
 
   @Transactional(readOnly = true)
-  public SurveyResponse detail(Long storeId, String email, String id) {
+  public Detail detail(Long storeId, String email, String id) {
     actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
     var row =
         surveys
             .findProjectedByIdAndStoreId(SurveyInput.id(id), storeId)
             .orElseThrow(SurveyReadService::missing);
-    var summary =
+    return new Detail(
         summary(
             row,
             latest(storeId, List.of(row)).get(row.getLatestRevisionId()),
-            current(storeId, List.of(row)));
-    return new SurveyResponse(
-        summary.id(),
-        summary.latestRevisionId(),
-        summary.latestRevisionNumber(),
-        summary.latestTitle(),
-        summary.latestStatus(),
-        summary.openRevisionId(),
-        summary.draftRevisionId(),
-        summary.createdAt(),
-        new SurveyActorResponse(row.getRecordedBy().toString(), row.getRecorderName()),
-        "NOT_CONFIGURED");
+            current(storeId, List.of(row))),
+        row.getRecordedBy(),
+        row.getRecorderName());
   }
 
   @Transactional(readOnly = true)
-  public Page<SurveyRevisionSummaryResponse> revisions(
+  public Page<SurveyRevisionSummaryView> revisions(
       Long storeId, String email, String sid, Pageable pageable) {
     actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
     requireSurvey(storeId, sid);
     Specification<SurveyRevision> spec =
         (r, q, cb) -> cb.and(cb.equal(r.get("storeId"), storeId), cb.equal(r.get("surveyId"), sid));
-    return revisions
-        .findBy(spec, f -> f.as(SurveyRevisionSummaryView.class).page(pageable))
-        .map(SurveyRevisionSummaryResponse::of);
+    return revisions.findBy(spec, f -> f.as(SurveyRevisionSummaryView.class).page(pageable));
   }
 
   @Transactional(readOnly = true)
-  public Page<SurveyAnswerSummaryResponse> answers(
+  public Page<SurveyAnswerSummaryView> answers(
       Long storeId,
       String email,
       String sid,
@@ -169,25 +153,23 @@ public class SurveyReadService {
       spec = spec.and((r, q, cb) -> cb.equal(r.get("id"), target));
     }
     if (status != null) spec = spec.and((r, q, cb) -> cb.equal(r.get("status"), status));
-    return answers
-        .findBy(spec, f -> f.as(SurveyAnswerSummaryView.class).page(paging))
-        .map(SurveyAnswerSummaryResponse::of);
+    return answers.findBy(spec, f -> f.as(SurveyAnswerSummaryView.class).page(paging));
   }
 
   @Transactional(readOnly = true)
-  public Page<SurveyRevisionHistoryResponse> revisionHistory(
+  public Page<SurveyHistoryView> revisionHistory(
       Long storeId, String email, String sid, String rid, Pageable pageable) {
     actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
     requireRevision(storeId, sid, rid);
-    return history(storeId, "revisionId", rid, pageable).map(SurveyRevisionHistoryResponse::of);
+    return history(storeId, "revisionId", rid, pageable);
   }
 
   @Transactional(readOnly = true)
-  public Page<SurveyAnswerHistoryResponse> answerHistory(
+  public Page<SurveyHistoryView> answerHistory(
       Long storeId, String email, String aid, Pageable pageable) {
     actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
     if (!answers.existsByIdAndStoreId(SurveyInput.id(aid), storeId)) throw missing();
-    return history(storeId, "responseId", aid, pageable).map(SurveyAnswerHistoryResponse::of);
+    return history(storeId, "responseId", aid, pageable);
   }
 
   private Page<SurveyHistoryView> history(
@@ -212,7 +194,7 @@ public class SurveyReadService {
         List.of(RevisionStatus.DRAFT, RevisionStatus.OPEN));
   }
 
-  private SurveySummaryResponse summary(
+  private Summary summary(
       SurveySeriesView row,
       SurveyRevisionSummaryView latest,
       List<SurveyRevisionSummaryView> current) {
@@ -222,7 +204,7 @@ public class SurveyReadService {
         if (r.getStatus() == RevisionStatus.OPEN) open = r.getId();
         else draft = r.getId();
       }
-    return new SurveySummaryResponse(
+    return new Summary(
         row.getId(),
         latest.getId(),
         latest.getRevisionNumber(),
