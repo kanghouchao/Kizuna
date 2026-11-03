@@ -11,6 +11,7 @@ import com.kizuna.advertising.api.dto.AdvertisingRequests.DeleteRequest;
 import com.kizuna.advertising.api.dto.AdvertisingRequests.ReplaceRequest;
 import com.kizuna.advertising.api.dto.AdvertisingResponses.CostResponse;
 import com.kizuna.advertising.api.dto.AdvertisingResponses.MediumResponse;
+import com.kizuna.advertising.application.AdvertisingMediaComparison;
 import com.kizuna.advertising.application.AdvertisingMediaService;
 import com.kizuna.advertising.application.AdvertisingService;
 import com.kizuna.advertising.domain.AdvertisingCategory;
@@ -216,6 +217,7 @@ class AdvertisingMediumIntegrationTest {
   @Import({
     AdvertisingService.class,
     AdvertisingRecords.class,
+    AdvertisingMediaComparison.class,
     AdvertisingMediaService.class,
     MediumService.class,
     MediumLookup.class,

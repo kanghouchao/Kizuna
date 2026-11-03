@@ -1,18 +1,12 @@
 package com.kizuna.advertising.application;
 
+import com.kizuna.advertising.application.AdvertisingMediaComparison.Basis;
 import com.kizuna.advertising.domain.AdvertisingCategory;
-import com.kizuna.advertising.domain.AdvertisingMediaReport;
-import com.kizuna.advertising.domain.AdvertisingMedium;
 import com.kizuna.advertising.domain.AdvertisingOrderCostReport;
-import com.kizuna.medium.lookup.MediumLookup;
-import com.kizuna.medium.lookup.MediumReference;
 import com.kizuna.order.reporting.AdvertisingOrderReader;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.export.DocumentBudget;
 import java.time.OffsetDateTime;
-import java.time.YearMonth;
-import java.util.Objects;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -25,9 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
     isolation = Isolation.REPEATABLE_READ,
     timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
 public class AdvertisingOrderCostService {
-  private final AdvertisingService costs;
+  private final AdvertisingMediaComparison comparison;
   private final AdvertisingOrderReader orders;
-  private final MediumLookup mediumLookup;
   private final AppProperties properties;
 
   public record Snapshot(
@@ -39,62 +32,33 @@ public class AdvertisingOrderCostService {
 
   public Snapshot view(Long storeId, String month) {
     return AdvertisingFailures.run(
-        () -> read(storeId, month, new DocumentBudget(properties.getAdvertisingCost())));
+        () -> snapshot(storeId, month, new DocumentBudget(properties.getAdvertisingCost())));
   }
 
   public Snapshot snapshot(Long storeId, String month, DocumentBudget budget) {
-    return read(storeId, month, budget);
-  }
-
-  private Snapshot read(Long storeId, String month, DocumentBudget budget) {
-    var period = YearMonth.parse(AdvertisingInput.month(month));
-    var source = costs.snapshot(storeId, month);
-    budget.check();
-    var sales =
-        source.costs().stream()
-            .filter(c -> c.category() == AdvertisingCategory.SALES)
-            .map(
-                c -> {
-                  budget.text(c.medium().name());
-                  return new AdvertisingOrderCostReport.Cost(
-                      new AdvertisingMedium(c.medium().id(), c.medium().name()), c.amount());
-                })
-            .toList();
-    var read =
-        orders.read(
+    var compared =
+        comparison.compare(
             storeId,
-            period.atDay(1),
-            period.atEndOfMonth(),
-            properties.getAdvertisingCost().getMaxOrders());
-    var media =
-        mediumLookup.findAll(
-            storeId,
-            read.stream()
-                .map(AdvertisingOrderReader.Order::mediumId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet()));
-    media.values().forEach(m -> budget.text(m.name()));
-    var validOrders =
-        read.stream()
-            .map(
-                o ->
-                    new AdvertisingOrderCostReport.Order(
-                        medium(MediumLookup.referenced(media, o.mediumId())),
-                        o.otherRoute(),
-                        o.zeroAmount()))
-            .toList();
-    var report = AdvertisingOrderCostReport.aggregate(sales, validOrders);
-    budget.check();
-    var summary = source.summary();
+            month,
+            new Basis<>(
+                AdvertisingCategory.SALES, orders::read, AdvertisingOrderReader.Order::mediumId),
+            budget,
+            (costs, facts) ->
+                AdvertisingOrderCostReport.aggregate(
+                    costs.stream()
+                        .map(c -> new AdvertisingOrderCostReport.Cost(c.medium(), c.amount()))
+                        .toList(),
+                    facts.stream()
+                        .map(
+                            f ->
+                                new AdvertisingOrderCostReport.Order(
+                                    f.medium(), f.fact().otherRoute(), f.fact().zeroAmount()))
+                        .toList()));
     return new Snapshot(
-        AdvertisingMediaReport.safeAdd(0, summary.storeId()),
-        month,
-        AdvertisingMediaReport.safeAdd(0, summary.version()),
-        summary.generatedAt(),
-        report);
-  }
-
-  private static AdvertisingMedium medium(MediumReference medium) {
-    return medium == null ? null : new AdvertisingMedium(medium.id(), medium.name());
+        compared.storeId(),
+        compared.month(),
+        compared.monthVersion(),
+        compared.generatedAt(),
+        compared.report());
   }
 }

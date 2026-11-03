@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.advertising.api.dto.AdvertisingRequests.CreateRequest;
+import com.kizuna.advertising.application.AdvertisingMediaComparison;
 import com.kizuna.advertising.application.AdvertisingRecruitmentEffectService;
 import com.kizuna.advertising.application.AdvertisingService;
 import com.kizuna.advertising.domain.AdvertisingCategory;
@@ -247,6 +248,7 @@ class AdvertisingRecruitmentEffectIntegrationTest {
     AdvertisingService.class,
     AdvertisingRecords.class,
     MediumLookup.class,
+    AdvertisingMediaComparison.class,
     AdvertisingRecruitmentEffectService.class,
     RecruitmentHireReader.class,
     OperationReceipts.class

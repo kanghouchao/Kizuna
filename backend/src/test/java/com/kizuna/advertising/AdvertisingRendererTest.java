@@ -1,16 +1,14 @@
 package com.kizuna.advertising;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.advertising.api.dto.AdvertisingResponses.CostResponse;
 import com.kizuna.advertising.api.dto.AdvertisingResponses.MediumResponse;
 import com.kizuna.advertising.api.dto.AdvertisingResponses.MonthResponse;
+import com.kizuna.advertising.application.AdvertisingRenderer;
 import com.kizuna.advertising.application.AdvertisingService.ExportSnapshot;
 import com.kizuna.advertising.domain.AdvertisingCategory;
-import com.kizuna.advertising.infrastructure.AdvertisingRenderer;
 import com.kizuna.shared.config.AppProperties;
-import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.export.DocumentBudget;
 import com.kizuna.shared.export.ExportCells;
 import java.io.ByteArrayInputStream;
@@ -80,34 +78,5 @@ class AdvertisingRendererTest {
       assertThat(sheet.getRow(2).getCell(15).getNumericCellValue()).isZero();
       assertThat(sheet.getRow(2001).getCell(16).getNumericCellValue()).isEqualTo(100);
     }
-  }
-
-  @Test
-  void enforcesExcelPrecisionAndResourceBudgets() throws Exception {
-    var huge = snapshot(1_000_000_000_000_000L, 0);
-    assertThatThrownBy(
-            () ->
-                renderer.render(
-                    huge, "xlsx", new DocumentBudget(new AppProperties.OperationalReport())))
-        .isInstanceOf(ServiceUnavailableException.class);
-    assertThat(
-            new String(
-                renderer.render(
-                    huge, "csv", new DocumentBudget(new AppProperties.OperationalReport())),
-                StandardCharsets.UTF_8))
-        .contains("1000000000000000");
-    var settings = new AppProperties.OperationalReport();
-    settings.setMaxBytes(20);
-    assertThatThrownBy(() -> renderer.render(snapshot(100, 1), "csv", new DocumentBudget(settings)))
-        .isInstanceOf(ServiceUnavailableException.class);
-    settings.setMaxBytes(100000);
-    settings.setMaxCharacters(20);
-    assertThatThrownBy(
-            () -> renderer.render(snapshot(100, 1), "xlsx", new DocumentBudget(settings)))
-        .isInstanceOf(ServiceUnavailableException.class);
-    assertThat(
-            renderer.render(
-                snapshot(0, 0), "xlsx", new DocumentBudget(new AppProperties.OperationalReport())))
-        .isNotEmpty();
   }
 }

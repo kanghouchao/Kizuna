@@ -1,15 +1,14 @@
-package com.kizuna.advertising.infrastructure;
-
-import static com.kizuna.shared.export.TabularCells.writeCsv;
-import static com.kizuna.shared.export.TabularCells.writeXlsx;
+package com.kizuna.advertising.application;
 
 import com.kizuna.advertising.api.dto.AdvertisingResponses.CostResponse;
 import com.kizuna.advertising.application.AdvertisingService.ExportSnapshot;
 import com.kizuna.shared.export.DocumentBudget;
+import com.kizuna.shared.export.TabularDocument;
+import com.kizuna.shared.export.TabularDocument.Sheet;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.poi.xssf.streaming.SXSSFWorkbook;
+import java.util.stream.Stream;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -37,29 +36,13 @@ public class AdvertisingRenderer {
 
   public byte[] render(ExportSnapshot report, String format, DocumentBudget budget)
       throws IOException {
-    var output = budget.output();
-    if (format.equals("csv")) {
-      output.write(new byte[] {(byte) 0xef, (byte) 0xbb, (byte) 0xbf});
-      writeCsv(output, HEADER, budget);
-      writeCsv(output, row(report, null), budget);
-      for (var cost : report.costs()) writeCsv(output, row(report, cost), budget);
-    } else {
-      try (var book = new SXSSFWorkbook(100)) {
-        book.setCompressTempFiles(true);
-        var totals = book.createSheet(AdvertisingLabels.CRITERIA);
-        var costs = book.createSheet(COSTS);
-        writeXlsx(totals, HEADER, budget);
-        writeXlsx(costs, HEADER, budget);
-        totals.createFreezePane(0, 1);
-        costs.createFreezePane(0, 1);
-        writeXlsx(totals, row(report, null), budget);
-        for (var cost : report.costs()) writeXlsx(costs, row(report, cost), budget);
-        budget.check();
-        book.write(output);
-      }
-    }
-    budget.check();
-    return output.toByteArray();
+    return TabularDocument.write(
+        format,
+        HEADER,
+        List.of(
+            new Sheet(AdvertisingLabels.CRITERIA, Stream.of(row(report, null))),
+            new Sheet(COSTS, report.costs().stream().map(cost -> row(report, cost)))),
+        budget);
   }
 
   private List<Object> row(ExportSnapshot report, CostResponse cost) {

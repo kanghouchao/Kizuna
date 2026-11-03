@@ -1,20 +1,14 @@
 package com.kizuna.advertising.application;
 
+import com.kizuna.advertising.application.AdvertisingMediaComparison.Basis;
 import com.kizuna.advertising.domain.AdvertisingCategory;
-import com.kizuna.advertising.domain.AdvertisingMediaReport;
-import com.kizuna.advertising.domain.AdvertisingMedium;
 import com.kizuna.advertising.domain.AdvertisingRecruitmentEffectReport;
-import com.kizuna.medium.lookup.MediumLookup;
-import com.kizuna.medium.lookup.MediumReference;
 import com.kizuna.recruitment.reporting.RecruitmentHireReader;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.export.DocumentBudget;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.YearMonth;
-import java.util.Objects;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -27,9 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
     isolation = Isolation.REPEATABLE_READ,
     timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
 public class AdvertisingRecruitmentEffectService {
-  private final AdvertisingService costs;
+  private final AdvertisingMediaComparison comparison;
   private final RecruitmentHireReader hires;
-  private final MediumLookup mediumLookup;
   private final AppProperties properties;
   private final Clock clock;
 
@@ -47,57 +40,35 @@ public class AdvertisingRecruitmentEffectService {
   }
 
   private Snapshot read(Long storeId, String month, DocumentBudget budget) {
-    var period = YearMonth.parse(AdvertisingInput.month(month));
-    var source = costs.snapshot(storeId, month);
-    budget.check();
-    var recruitment =
-        source.costs().stream()
-            .filter(c -> c.category() == AdvertisingCategory.RECRUITMENT)
-            .map(
-                c -> {
-                  budget.text(c.medium().name());
-                  return new AdvertisingRecruitmentEffectReport.Cost(
-                      new AdvertisingMedium(c.medium().id(), c.medium().name()), c.amount());
-                })
-            .toList();
-    var read =
-        hires.read(
-            storeId,
-            period.atDay(1),
-            period.atEndOfMonth(),
-            properties.getAdvertisingCost().getMaxOrders());
-    var media =
-        mediumLookup.findAll(
-            storeId,
-            read.stream()
-                .map(RecruitmentHireReader.Hire::mediumId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet()));
-    media.values().forEach(m -> budget.text(m.name()));
-    var hired =
-        read.stream()
-            .map(
-                h ->
-                    new AdvertisingRecruitmentEffectReport.Hire(
-                        medium(MediumLookup.referenced(media, h.mediumId())),
-                        h.startedOn(),
-                        h.endedAt()))
-            .toList();
     var today = LocalDate.now(clock);
-    var report =
-        AdvertisingRecruitmentEffectReport.aggregate(recruitment, hired, today, clock.getZone());
-    budget.check();
-    var summary = source.summary();
+    var compared =
+        comparison.compare(
+            storeId,
+            month,
+            new Basis<>(
+                AdvertisingCategory.RECRUITMENT, hires::read, RecruitmentHireReader.Hire::mediumId),
+            budget,
+            (costs, facts) ->
+                AdvertisingRecruitmentEffectReport.aggregate(
+                    costs.stream()
+                        .map(
+                            c ->
+                                new AdvertisingRecruitmentEffectReport.Cost(c.medium(), c.amount()))
+                        .toList(),
+                    facts.stream()
+                        .map(
+                            f ->
+                                new AdvertisingRecruitmentEffectReport.Hire(
+                                    f.medium(), f.fact().startedOn(), f.fact().endedAt()))
+                        .toList(),
+                    today,
+                    clock.getZone()));
     return new Snapshot(
-        AdvertisingMediaReport.safeAdd(0, summary.storeId()),
-        month,
-        AdvertisingMediaReport.safeAdd(0, summary.version()),
-        summary.generatedAt(),
+        compared.storeId(),
+        compared.month(),
+        compared.monthVersion(),
+        compared.generatedAt(),
         today,
-        report);
-  }
-
-  private static AdvertisingMedium medium(MediumReference medium) {
-    return medium == null ? null : new AdvertisingMedium(medium.id(), medium.name());
+        compared.report());
   }
 }

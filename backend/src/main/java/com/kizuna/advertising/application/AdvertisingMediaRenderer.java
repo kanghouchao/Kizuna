@@ -1,15 +1,13 @@
-package com.kizuna.advertising.infrastructure;
-
-import static com.kizuna.shared.export.TabularCells.writeCsv;
-import static com.kizuna.shared.export.TabularCells.writeXlsx;
+package com.kizuna.advertising.application;
 
 import com.kizuna.advertising.application.AdvertisingMediaService.Snapshot;
 import com.kizuna.advertising.domain.AdvertisingMediaReport;
 import com.kizuna.shared.export.DocumentBudget;
+import com.kizuna.shared.export.TabularDocument;
+import com.kizuna.shared.export.TabularDocument.Sheet;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.poi.xssf.streaming.SXSSFWorkbook;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -35,7 +33,6 @@ public class AdvertisingMediaRenderer {
   private static final String MEDIA = "媒体別集計";
 
   public byte[] render(Snapshot source, String format, DocumentBudget budget) throws IOException {
-    var output = budget.output();
     var metadata = new ArrayList<List<Object>>();
     var criteria = common(source, AdvertisingLabels.CRITERIA);
     criteria.addAll(
@@ -63,28 +60,13 @@ public class AdvertisingMediaRenderer {
               ""));
       metadata.add(row);
     }
-    if (format.equals("csv")) {
-      output.write(new byte[] {(byte) 0xef, (byte) 0xbb, (byte) 0xbf});
-      writeCsv(output, HEADER, budget);
-      for (var row : metadata) writeCsv(output, row, budget);
-      for (var row : source.report().rows()) writeCsv(output, media(source, row), budget);
-    } else {
-      try (var book = new SXSSFWorkbook(100)) {
-        book.setCompressTempFiles(true);
-        var totals = book.createSheet(AdvertisingLabels.CRITERIA);
-        var media = book.createSheet(MEDIA);
-        writeXlsx(totals, HEADER, budget);
-        writeXlsx(media, HEADER, budget);
-        totals.createFreezePane(0, 1);
-        media.createFreezePane(0, 1);
-        for (var row : metadata) writeXlsx(totals, row, budget);
-        for (var row : source.report().rows()) writeXlsx(media, media(source, row), budget);
-        budget.check();
-        book.write(output);
-      }
-    }
-    budget.check();
-    return output.toByteArray();
+    return TabularDocument.write(
+        format,
+        HEADER,
+        List.of(
+            new Sheet(AdvertisingLabels.CRITERIA, metadata.stream()),
+            new Sheet(MEDIA, source.report().rows().stream().map(row -> media(source, row)))),
+        budget);
   }
 
   private ArrayList<Object> common(Snapshot source, String type) {

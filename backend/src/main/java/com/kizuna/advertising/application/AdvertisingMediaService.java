@@ -1,7 +1,6 @@
 package com.kizuna.advertising.application;
 
 import com.kizuna.advertising.domain.AdvertisingMediaReport;
-import com.kizuna.advertising.domain.AdvertisingMedium;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.export.DocumentBudget;
 import java.time.OffsetDateTime;
@@ -11,7 +10,7 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class AdvertisingMediaService {
-  private final AdvertisingService costs;
+  private final AdvertisingMediaComparison comparison;
   private final AppProperties properties;
 
   public record Snapshot(
@@ -22,29 +21,28 @@ public class AdvertisingMediaService {
       AdvertisingMediaReport report) {}
 
   public Snapshot snapshot(Long storeId, String month, DocumentBudget budget) {
-    var source = costs.snapshot(storeId, month);
-    budget.check();
-    var entries =
-        source.costs().stream()
-            .map(
-                cost -> {
-                  budget.text(cost.medium().name());
-                  return new AdvertisingMediaReport.Entry(
-                      cost.category(),
-                      new AdvertisingMedium(cost.medium().id(), cost.medium().name()),
-                      cost.amount(),
-                      cost.inquiryCount() == null ? null : cost.inquiryCount().longValue());
-                })
-            .toList();
-    var report = AdvertisingMediaReport.aggregate(entries);
-    budget.check();
-    var summary = source.summary();
+    var compared =
+        comparison.costs(
+            storeId,
+            month,
+            budget,
+            costs ->
+                AdvertisingMediaReport.aggregate(
+                    costs.stream()
+                        .map(
+                            c ->
+                                new AdvertisingMediaReport.Entry(
+                                    c.category(),
+                                    c.medium(),
+                                    c.amount(),
+                                    c.inquiryCount() == null ? null : c.inquiryCount().longValue()))
+                        .toList()));
     return new Snapshot(
-        AdvertisingMediaReport.safeAdd(0, summary.storeId()),
-        summary.month(),
-        AdvertisingMediaReport.safeAdd(0, summary.version()),
-        summary.generatedAt(),
-        report);
+        compared.storeId(),
+        compared.month(),
+        compared.monthVersion(),
+        compared.generatedAt(),
+        compared.report());
   }
 
   public Snapshot view(Long storeId, String month) {
