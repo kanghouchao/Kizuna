@@ -61,7 +61,7 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface OrderMapper {
 
-  /** 読み側 projection をレスポンスDTOに変換します。明細は集約から別に載せます。 */
+  /** 読み側 projection を応答の土台に写す。明細と媒体は {@link #toResponse(OrderDetail)} が詳細から載せる。 */
   @Mapping(target = "businessContactPermissions", ignore = true)
   @Mapping(target = "feeLines", ignore = true)
   @Mapping(target = "totalDurationMinutes", ignore = true)
