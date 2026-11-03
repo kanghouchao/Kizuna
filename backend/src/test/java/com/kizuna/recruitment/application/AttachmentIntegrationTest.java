@@ -43,6 +43,7 @@ import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -573,6 +574,7 @@ class AttachmentIntegrationTest {
     "保存先が既存実体の不一致を報告, RECOVERY_MISMATCH, RECOVERY_REQUIRED, CONTENT_MISMATCH",
     "保存先が書き込みで不一致を報告, WRITE_MISMATCH, RECOVERY_REQUIRED, CONTENT_MISMATCH",
     "保存先を利用できない, WRITE_UNAVAILABLE, RECOVERY_REQUIRED, STORAGE_UNAVAILABLE",
+    "既存実体の一時ファイルの後始末に失敗, CLEANUP, RECOVERY_REQUIRED, STORAGE_UNAVAILABLE",
     "受信と正規化のハッシュ不一致, RECEIVED_HASH, PENDING, ",
     "完了時に応募者が終端, TERMINAL, PENDING, ",
     "監査の書き込み失敗, AUDIT, RECOVERY_REQUIRED, STORAGE_UNAVAILABLE"
@@ -599,6 +601,12 @@ class AttachmentIntegrationTest {
               doThrow(new ServiceUnavailableException("合成の障害"))
                   .when(storage)
                   .ensureStored(any(), any());
+              yield ServiceUnavailableException.class;
+            }
+            case "CLEANUP" -> {
+              var file = mock(PrivateAttachmentFile.class);
+              doThrow(new IOException("合成の後始末失敗")).when(file).close();
+              doReturn(file).when(storage).readVerified(any());
               yield ServiceUnavailableException.class;
             }
             case "RECEIVED_HASH" -> {
@@ -635,6 +643,37 @@ class AttachmentIntegrationTest {
       assertThat(status(upload.getId())).isEqualTo(status);
       assertThat(failure(upload.getId())).isEqualTo(recorded);
       assertThat(auditCount(upload.getId())).isZero();
+    }
+  }
+
+  @Test
+  void receiveOnARowHeldByAnotherRequestFailsNowaitWithoutRecording() throws Exception {
+    var applicant = applicant();
+    try (var image = content();
+        var executor = Executors.newSingleThreadExecutor();
+        var holder = new DatabaseTransaction()) {
+      var upload =
+          store.reserve(STORE_ID, applicant, UUID.randomUUID(), image, "operator@example.test");
+      var held =
+          holder.submit(
+              executor,
+              () -> {
+                em.createNativeQuery(
+                        "select id from t_applicant_attachment_uploads where id = :id for update")
+                    .setParameter("id", upload.getId())
+                    .getResultList();
+                holder.hold();
+                return null;
+              });
+      holder.awaitHeld();
+      assertThatThrownBy(() -> receive(applicant, upload, image))
+          .isInstanceOf(ConflictException.class)
+          .hasMessage("同じアップロードを処理中です。時間をおいて再試行してください");
+      holder.close();
+      held.get(5, TimeUnit.SECONDS);
+      assertThat(status(upload.getId())).isEqualTo("PENDING");
+      assertThat(failure(upload.getId())).isNull();
+      verifyNoInteractions(normalizer);
     }
   }
 
