@@ -1,7 +1,5 @@
 package com.kizuna.medium.application;
 
-import com.kizuna.medium.api.dto.MediumResponses.MediumOptionResponse;
-import com.kizuna.medium.api.dto.MediumResponses.MediumSummary;
 import com.kizuna.medium.domain.Medium;
 import com.kizuna.medium.domain.MediumRepository;
 import com.kizuna.medium.domain.MediumStatus;
@@ -25,19 +23,15 @@ public class MediumService {
   private final BusinessAudit audit;
 
   @Transactional(readOnly = true)
-  public List<MediumSummary> list(Long storeId, MediumStatus status) {
-    var rows =
-        status == null
-            ? media.findAllByStoreIdOrderByNameAscIdAsc(storeId)
-            : media.findAllByStoreIdAndStatusOrderByNameAscIdAsc(storeId, status);
-    return rows.stream().map(MediumSummary::of).toList();
+  public List<Medium> list(Long storeId, MediumStatus status) {
+    return status == null
+        ? media.findAllByStoreIdOrderByNameAscIdAsc(storeId)
+        : media.findAllByStoreIdAndStatusOrderByNameAscIdAsc(storeId, status);
   }
 
   @Transactional(readOnly = true)
-  public List<MediumOptionResponse> options(Long storeId) {
-    return media.findAllByStoreIdAndStatusOrderByNameAscIdAsc(storeId, MediumStatus.ACTIVE).stream()
-        .map(MediumOptionResponse::of)
-        .toList();
+  public List<Medium> options(Long storeId) {
+    return media.findAllByStoreIdAndStatusOrderByNameAscIdAsc(storeId, MediumStatus.ACTIVE);
   }
 
   @Transactional
@@ -53,10 +47,10 @@ public class MediumService {
   }
 
   @Transactional
-  public MediumSummary rename(Long storeId, String id, String name, long version) {
+  public Medium rename(Long storeId, String id, String name, long version) {
     var medium = find(storeId, id, version);
     String normalized = Medium.normalizeName(name);
-    if (normalized.equals(medium.getName())) return MediumSummary.of(medium);
+    if (normalized.equals(medium.getName())) return medium;
     requireUnique(storeId, normalized);
     var before = snapshot(medium);
     medium.rename(normalized);
@@ -64,27 +58,27 @@ public class MediumService {
     var after = new HashMap<>(snapshot(medium));
     after.put("redacted_fields_changed", "name");
     audit.recordCurrent(storeId, "MEDIUM_RENAMED", TARGET, id, before, after);
-    return MediumSummary.of(medium);
+    return medium;
   }
 
   @Transactional
-  public MediumSummary stop(Long storeId, String id, long version) {
+  public Medium stop(Long storeId, String id, long version) {
     var medium = find(storeId, id, version);
     var before = snapshot(medium);
     medium.stop();
     media.flush();
     audit.recordCurrent(storeId, "MEDIUM_STOPPED", TARGET, id, before, snapshot(medium));
-    return MediumSummary.of(medium);
+    return medium;
   }
 
   @Transactional
-  public MediumSummary resume(Long storeId, String id, long version) {
+  public Medium resume(Long storeId, String id, long version) {
     var medium = find(storeId, id, version);
     var before = snapshot(medium);
     medium.resume();
     media.flush();
     audit.recordCurrent(storeId, "MEDIUM_RESUMED", TARGET, id, before, snapshot(medium));
-    return MediumSummary.of(medium);
+    return medium;
   }
 
   @Transactional

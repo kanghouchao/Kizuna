@@ -139,7 +139,7 @@ class AdvertisingMediumIntegrationTest {
         .hasMessage("記録から参照されている媒体は削除できません。使わない場合は停止してください");
     assertThat(media.list(store, null))
         .singleElement()
-        .satisfies(m -> assertThat(m.id()).isEqualTo(id));
+        .satisfies(m -> assertThat(m.getId()).isEqualTo(id));
   }
 
   @Test

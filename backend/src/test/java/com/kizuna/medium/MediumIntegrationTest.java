@@ -2,12 +2,12 @@ package com.kizuna.medium;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
-import com.kizuna.medium.api.dto.MediumResponses.MediumOptionResponse;
-import com.kizuna.medium.api.dto.MediumResponses.MediumSummary;
 import com.kizuna.medium.application.MediumService;
+import com.kizuna.medium.domain.Medium;
 import com.kizuna.medium.domain.MediumRepository;
 import com.kizuna.medium.domain.MediumStatus;
 import com.kizuna.medium.lookup.MediumLookup;
@@ -104,10 +104,10 @@ class MediumIntegrationTest {
 
     assertThat(media.list(store, null))
         .singleElement()
-        .returns(id, MediumSummary::id)
-        .returns("シティヘブン", MediumSummary::name)
-        .returns(MediumStatus.ACTIVE, MediumSummary::status)
-        .returns(0L, MediumSummary::version);
+        .returns(id, Medium::getId)
+        .returns("シティヘブン", Medium::getName)
+        .returns(MediumStatus.ACTIVE, Medium::getStatus)
+        .returns(0L, Medium::getVersion);
     assertThat(audits(id)).containsExactly("MEDIUM_CREATED");
   }
 
@@ -121,7 +121,7 @@ class MediumIntegrationTest {
     media.create(store, "ﾍﾌﾞﾝ");
     media.create(other, "ヘブン");
 
-    assertThat(media.list(store, null)).extracting(MediumSummary::name).hasSize(2);
+    assertThat(media.list(store, null)).extracting(Medium::getName).hasSize(2);
   }
 
   @Test
@@ -163,7 +163,7 @@ class MediumIntegrationTest {
       release.countDown();
       executor.shutdownNow();
     }
-    assertThat(media.list(store, null)).singleElement().returns("同時", MediumSummary::name);
+    assertThat(media.list(store, null)).singleElement().returns("同時", Medium::getName);
   }
 
   @Test
@@ -178,7 +178,7 @@ class MediumIntegrationTest {
         .isInstanceOf(ConflictException.class);
     var renamed = media.rename(store, id, " 新名 ", 0L);
 
-    assertThat(renamed).returns("新名", MediumSummary::name).returns(1L, MediumSummary::version);
+    assertThat(renamed).returns("新名", Medium::getName).returns(1L, Medium::getVersion);
     assertThat(audits(id)).containsExactly("MEDIUM_CREATED", "MEDIUM_RENAMED");
     assertThat(
             jdbc.queryForObject(
@@ -201,11 +201,11 @@ class MediumIntegrationTest {
 
     assertThatThrownBy(() -> media.resume(store, id, 0L)).isInstanceOf(ConflictException.class);
     assertThatThrownBy(() -> media.stop(store, id, 3L)).isInstanceOf(ConflictException.class);
-    assertThat(media.stop(store, id, 0L)).returns(MediumStatus.STOPPED, MediumSummary::status);
+    assertThat(media.stop(store, id, 0L)).returns(MediumStatus.STOPPED, Medium::getStatus);
     assertThatThrownBy(() -> media.stop(store, id, 1L)).isInstanceOf(ConflictException.class);
     assertThat(media.resume(store, id, 1L))
-        .returns(MediumStatus.ACTIVE, MediumSummary::status)
-        .returns(2L, MediumSummary::version);
+        .returns(MediumStatus.ACTIVE, Medium::getStatus)
+        .returns(2L, Medium::getVersion);
 
     assertThat(audits(id)).containsExactly("MEDIUM_CREATED", "MEDIUM_STOPPED", "MEDIUM_RESUMED");
   }
@@ -248,12 +248,11 @@ class MediumIntegrationTest {
     media.stop(store, stopped, 0L);
 
     assertThat(media.options(store))
-        .containsExactly(new MediumOptionResponse(a, "A媒体"), new MediumOptionResponse(b, "B媒体"));
-    assertThat(media.list(store, null))
-        .extracting(MediumSummary::id)
-        .containsExactly(a, b, stopped);
+        .extracting(Medium::getId, Medium::getName)
+        .containsExactly(tuple(a, "A媒体"), tuple(b, "B媒体"));
+    assertThat(media.list(store, null)).extracting(Medium::getId).containsExactly(a, b, stopped);
     assertThat(media.list(store, MediumStatus.STOPPED))
-        .extracting(MediumSummary::id)
+        .extracting(Medium::getId)
         .containsExactly(stopped);
   }
 
