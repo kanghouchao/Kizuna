@@ -44,7 +44,7 @@ public class BonusController {
               size = 20,
               sort = {})
           Pageable pageable) {
-    return service.bonuses(storeId, personId, month, pageable);
+    return service.bonuses(storeId, personId, month, pageable).map(BonusResponse::of);
   }
 
   @PostMapping
@@ -56,10 +56,11 @@ public class BonusController {
       @Valid @RequestBody BonusCreateRequest request,
       Principal principal) {
     var command = request.command();
-    return Replays.write(
-        DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-        () -> service.createBonus(storeId, command, principal.getName()),
-        () -> service.replayBonus(storeId, command, principal.getName()));
+    return BonusMutationResponse.of(
+        Replays.write(
+            DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
+            () -> service.createBonus(storeId, command, principal.getName()),
+            () -> service.replayBonus(storeId, command, principal.getName())));
   }
 
   @PostMapping("/{id}/corrections")
@@ -72,10 +73,11 @@ public class BonusController {
       @Valid @RequestBody BonusCorrectionRequest request,
       Principal principal) {
     var command = request.command(id);
-    return Replays.write(
-        DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-        () -> service.correctBonus(storeId, command, principal.getName()),
-        () -> service.replayBonus(storeId, command, principal.getName()));
+    return BonusMutationResponse.of(
+        Replays.write(
+            DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
+            () -> service.correctBonus(storeId, command, principal.getName()),
+            () -> service.replayBonus(storeId, command, principal.getName())));
   }
 
   @PostMapping("/{id}/cancellation")
@@ -87,10 +89,11 @@ public class BonusController {
       @Valid @RequestBody CancellationRequest request,
       Principal principal) {
     var command = request.bonusCommand(id);
-    return Replays.write(
-        DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-        () -> service.cancelBonus(storeId, command, principal.getName()),
-        () -> service.replayBonus(storeId, command, principal.getName()));
+    return BonusMutationResponse.of(
+        Replays.write(
+            DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
+            () -> service.cancelBonus(storeId, command, principal.getName()),
+            () -> service.replayBonus(storeId, command, principal.getName())));
   }
 
   @GetMapping("/{id}/changes")
@@ -103,6 +106,6 @@ public class BonusController {
               sort = {"createdAt", "id"},
               direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return service.bonusChanges(storeId, id, pageable);
+    return service.bonusChanges(storeId, id, pageable).map(RemunerationChangeResponse::of);
   }
 }

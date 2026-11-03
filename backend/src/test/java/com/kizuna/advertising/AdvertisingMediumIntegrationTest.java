@@ -9,11 +9,10 @@ import static org.mockito.Mockito.when;
 import com.kizuna.advertising.api.dto.AdvertisingRequests.CreateRequest;
 import com.kizuna.advertising.api.dto.AdvertisingRequests.DeleteRequest;
 import com.kizuna.advertising.api.dto.AdvertisingRequests.ReplaceRequest;
-import com.kizuna.advertising.api.dto.AdvertisingResponses.CostResponse;
-import com.kizuna.advertising.api.dto.AdvertisingResponses.MediumResponse;
 import com.kizuna.advertising.application.AdvertisingMediaComparison;
 import com.kizuna.advertising.application.AdvertisingMediaService;
 import com.kizuna.advertising.application.AdvertisingService;
+import com.kizuna.advertising.application.AdvertisingViews.CostView;
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingChangeRepository;
 import com.kizuna.advertising.domain.AdvertisingMedium;
@@ -186,12 +185,12 @@ class AdvertisingMediumIntegrationTest {
             store,
             "2026-09",
             PageRequest.of(0, 1, Sort.by(Sort.Direction.DESC, "createdAt", "id")));
-    var updated = costs.changeDetail(store, "2026-09", history.getContent().getFirst().id());
-    assertThat(updated.before().medium()).isEqualTo(new MediumResponse(id, "旧名"));
-    assertThat(updated.after().medium()).isEqualTo(new MediumResponse(id, "旧名"));
+    var updated = costs.changeDetail(store, "2026-09", history.getContent().getFirst().getId());
+    assertThat(updated.before().medium()).isEqualTo(new AdvertisingMedium(id, "旧名"));
+    assertThat(updated.after().medium()).isEqualTo(new AdvertisingMedium(id, "旧名"));
   }
 
-  private CostResponse create(long store, String mediumId) {
+  private CostView create(long store, String mediumId) {
     return costs.create(
         store,
         new CreateRequest(

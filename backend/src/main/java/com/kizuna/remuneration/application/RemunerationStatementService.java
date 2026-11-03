@@ -2,9 +2,8 @@ package com.kizuna.remuneration.application;
 
 import com.kizuna.cast.remuneration.RemunerationPersonLookup;
 import com.kizuna.order.remuneration.OrderRemunerationFacts;
-import com.kizuna.remuneration.api.dto.RemunerationStatementResponse;
-import com.kizuna.remuneration.api.dto.RemunerationStatementResponse.BonusItem;
-import com.kizuna.remuneration.api.dto.RemunerationStatementResponse.Day;
+import com.kizuna.remuneration.application.RemunerationStatement.BonusItem;
+import com.kizuna.remuneration.application.RemunerationStatement.Day;
 import com.kizuna.remuneration.domain.AttendanceDuration;
 import com.kizuna.remuneration.domain.DailyGuarantee;
 import com.kizuna.remuneration.domain.GuaranteeTerm;
@@ -33,20 +32,20 @@ public class RemunerationStatementService {
   private final ActorIdentityService actors;
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public RemunerationStatementResponse store(
+  public RemunerationStatement store(
       Long storeId, Long person, String month, Pageable orderPageable, Pageable bonusPageable) {
     return read(storeId, person, month, orderPageable, bonusPageable);
   }
 
   /** 本人の明細。認証主体の本人と店舗の在籍の歴史を照合し（無ければ 404）、全照会を明示した本人・店舗に限る。 */
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public RemunerationStatementResponse self(
+  public RemunerationStatement self(
       String actor, Long store, String month, Pageable orderPageable, Pageable bonusPageable) {
     return read(
         store, people.self(actors.requireUserId(actor)), month, orderPageable, bonusPageable);
   }
 
-  private RemunerationStatementResponse read(
+  private RemunerationStatement read(
       Long store, Long person, String month, Pageable orderPageable, Pageable bonusPageable) {
     RemunerationInput.person(store);
     RemunerationInput.person(person);
@@ -99,7 +98,7 @@ public class RemunerationStatementService {
             ? RemunerationAmounts.add(
                 RemunerationAmounts.add(orderTotal, guaranteeKnown), bonusTotal)
             : null;
-    return new RemunerationStatementResponse(
+    return new RemunerationStatement(
         store,
         identity.storeName(),
         person,

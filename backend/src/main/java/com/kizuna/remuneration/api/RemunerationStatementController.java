@@ -36,6 +36,7 @@ public class RemunerationStatementController {
               size = 20,
               sort = {})
           Pageable bonusPageable) {
-    return service.store(storeId, personId, month, orderPageable, bonusPageable);
+    return RemunerationStatementResponse.of(
+        service.store(storeId, personId, month, orderPageable, bonusPageable));
   }
 }

@@ -43,7 +43,7 @@ public class GuaranteeController {
               size = 20,
               sort = {})
           Pageable pageable) {
-    return service.guarantees(storeId, personId, pageable);
+    return GuaranteeListResponse.of(service.guarantees(storeId, personId, pageable));
   }
 
   @PostMapping
@@ -55,10 +55,11 @@ public class GuaranteeController {
       @Valid @RequestBody GuaranteeCreateRequest request,
       Principal principal) {
     var command = request.command();
-    return Replays.write(
-        DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-        () -> service.createGuarantee(storeId, command, principal.getName()),
-        () -> service.replayGuarantee(storeId, command, principal.getName()));
+    return GuaranteeMutationResponse.of(
+        Replays.write(
+            DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
+            () -> service.createGuarantee(storeId, command, principal.getName()),
+            () -> service.replayGuarantee(storeId, command, principal.getName())));
   }
 
   @PostMapping("/{id}/corrections")
@@ -71,10 +72,11 @@ public class GuaranteeController {
       @Valid @RequestBody GuaranteeCorrectionRequest request,
       Principal principal) {
     var command = request.command(id);
-    return Replays.write(
-        DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-        () -> service.correctGuarantee(storeId, command, principal.getName()),
-        () -> service.replayGuarantee(storeId, command, principal.getName()));
+    return GuaranteeMutationResponse.of(
+        Replays.write(
+            DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
+            () -> service.correctGuarantee(storeId, command, principal.getName()),
+            () -> service.replayGuarantee(storeId, command, principal.getName())));
   }
 
   @PostMapping("/{id}/cancellation")
@@ -86,10 +88,11 @@ public class GuaranteeController {
       @Valid @RequestBody CancellationRequest request,
       Principal principal) {
     var command = request.guaranteeCommand(id);
-    return Replays.write(
-        DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-        () -> service.cancelGuarantee(storeId, command, principal.getName()),
-        () -> service.replayGuarantee(storeId, command, principal.getName()));
+    return GuaranteeMutationResponse.of(
+        Replays.write(
+            DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
+            () -> service.cancelGuarantee(storeId, command, principal.getName()),
+            () -> service.replayGuarantee(storeId, command, principal.getName())));
   }
 
   @GetMapping("/{id}/changes")
@@ -102,6 +105,6 @@ public class GuaranteeController {
               sort = {"createdAt", "id"},
               direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return service.guaranteeChanges(storeId, id, pageable);
+    return service.guaranteeChanges(storeId, id, pageable).map(RemunerationChangeResponse::of);
   }
 }

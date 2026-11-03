@@ -5,12 +5,12 @@ import com.kizuna.receipt.once.Committed;
 import com.kizuna.receipt.once.OperationReceipts;
 import com.kizuna.receipt.once.Receipt;
 import com.kizuna.receipt.once.ReceiptKey;
-import com.kizuna.remuneration.api.dto.BonusMutationResponse;
-import com.kizuna.remuneration.api.dto.BonusResponse;
-import com.kizuna.remuneration.api.dto.GuaranteeListResponse;
-import com.kizuna.remuneration.api.dto.GuaranteeMutationResponse;
-import com.kizuna.remuneration.api.dto.GuaranteeResponse;
-import com.kizuna.remuneration.api.dto.RemunerationChangeResponse;
+import com.kizuna.remuneration.application.RemunerationViews.BonusMutation;
+import com.kizuna.remuneration.application.RemunerationViews.BonusView;
+import com.kizuna.remuneration.application.RemunerationViews.ChangeView;
+import com.kizuna.remuneration.application.RemunerationViews.GuaranteeList;
+import com.kizuna.remuneration.application.RemunerationViews.GuaranteeMutation;
+import com.kizuna.remuneration.application.RemunerationViews.GuaranteeView;
 import com.kizuna.remuneration.domain.BonusAward;
 import com.kizuna.remuneration.domain.GuaranteeTerm;
 import com.kizuna.remuneration.domain.GuaranteeTimeline;
@@ -47,24 +47,24 @@ public class RemunerationManagementService {
   private final ObjectMapper json;
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public GuaranteeListResponse guarantees(Long storeId, Long personId, Pageable pageable) {
+  public GuaranteeList guarantees(Long storeId, Long personId, Pageable pageable) {
     requirePerson(storeId, personId);
-    return new GuaranteeListResponse(
+    return new GuaranteeList(
         records.timeline(storeId, personId).map(t -> t.getRevision()).orElse(0L),
-        records.terms(storeId, personId, pageable).map(GuaranteeResponse::of));
+        records.terms(storeId, personId, pageable).map(GuaranteeView::of));
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public Page<BonusResponse> bonuses(Long storeId, Long personId, String month, Pageable pageable) {
+  public Page<BonusView> bonuses(Long storeId, Long personId, String month, Pageable pageable) {
     requirePerson(storeId, personId);
     var target = RemunerationInput.month(month);
     return records
         .bonuses(storeId, personId, target.atDay(1), target.atEndOfMonth(), pageable)
-        .map(BonusResponse::of);
+        .map(BonusView::of);
   }
 
   @Transactional
-  public GuaranteeMutationResponse createGuarantee(
+  public GuaranteeMutation createGuarantee(
       Long storeId, RemunerationCommand.CreateGuarantee command, String actor) {
     return receipts.once(
         key(storeId, actor, command.requestId()),
@@ -99,14 +99,14 @@ public class RemunerationManagementService {
                   "CREATED",
                   command.reason(),
                   null,
-                  GuaranteeResponse.of(term));
+                  GuaranteeView.of(term));
           return guaranteeCommitted("CREATED", term, timeline, change);
         },
         receipt -> guarantee(storeId, receipt));
   }
 
   @Transactional
-  public GuaranteeMutationResponse correctGuarantee(
+  public GuaranteeMutation correctGuarantee(
       Long storeId, RemunerationCommand.CorrectGuarantee command, String actor) {
     var id = command.id();
     return receipts.once(
@@ -118,7 +118,7 @@ public class RemunerationManagementService {
           var timeline = records.lockedTimeline(storeId, term.getPersonId());
           timeline.advance(command.expectedVersion());
           records.refreshForWrite(term);
-          var before = GuaranteeResponse.of(term);
+          var before = GuaranteeView.of(term);
           for (var other : records.activeTerms(storeId, term.getPersonId())) {
             if (other.getId().equals(id)) continue;
             boolean previous = other.getEffectiveFrom().isBefore(term.getEffectiveFrom());
@@ -139,14 +139,14 @@ public class RemunerationManagementService {
                   "CORRECTED",
                   command.correctionReason(),
                   before,
-                  GuaranteeResponse.of(term));
+                  GuaranteeView.of(term));
           return guaranteeCommitted("CORRECTED", term, timeline, change);
         },
         receipt -> guarantee(storeId, receipt));
   }
 
   @Transactional
-  public GuaranteeMutationResponse cancelGuarantee(
+  public GuaranteeMutation cancelGuarantee(
       Long storeId, RemunerationCommand.CancelGuarantee command, String actor) {
     var id = command.id();
     return receipts.once(
@@ -158,7 +158,7 @@ public class RemunerationManagementService {
           var timeline = records.lockedTimeline(storeId, term.getPersonId());
           timeline.advance(command.expectedVersion());
           records.refreshForWrite(term);
-          var before = GuaranteeResponse.of(term);
+          var before = GuaranteeView.of(term);
           term.cancel();
           records.flush();
           var change =
@@ -171,7 +171,7 @@ public class RemunerationManagementService {
                   "CANCELLED",
                   command.reason(),
                   before,
-                  GuaranteeResponse.of(term));
+                  GuaranteeView.of(term));
           return guaranteeCommitted("CANCELLED", term, timeline, change);
         },
         receipt -> guarantee(storeId, receipt));
@@ -179,7 +179,7 @@ public class RemunerationManagementService {
 
   /** 保証条件の操作の要求キーの一意制約に敗れた要求を、成立済みの受領から解決する。 */
   @Transactional(readOnly = true)
-  public GuaranteeMutationResponse replayGuarantee(
+  public GuaranteeMutation replayGuarantee(
       Long storeId, RemunerationCommand command, String actor) {
     return receipts.replayOnly(
         key(storeId, actor, command.requestId()),
@@ -188,7 +188,7 @@ public class RemunerationManagementService {
   }
 
   @Transactional
-  public BonusMutationResponse createBonus(
+  public BonusMutation createBonus(
       Long storeId, RemunerationCommand.CreateBonus command, String actor) {
     return receipts.once(
         key(storeId, actor, command.requestId()),
@@ -215,14 +215,14 @@ public class RemunerationManagementService {
                   "CREATED",
                   command.reason(),
                   null,
-                  BonusResponse.of(bonus));
+                  BonusView.of(bonus));
           return bonusCommitted("CREATED", bonus, change);
         },
         receipt -> bonus(storeId, receipt));
   }
 
   @Transactional
-  public BonusMutationResponse correctBonus(
+  public BonusMutation correctBonus(
       Long storeId, RemunerationCommand.CorrectBonus command, String actor) {
     var id = command.id();
     return receipts.once(
@@ -233,7 +233,7 @@ public class RemunerationManagementService {
           requirePerson(storeId, bonus.getPersonId());
           records.refreshForWrite(bonus);
           bonus.requireVersion(command.expectedVersion());
-          var before = BonusResponse.of(bonus);
+          var before = BonusView.of(bonus);
           bonus.replace(command.awardDate(), command.amount(), command.reason());
           records.flush();
           var change =
@@ -246,14 +246,14 @@ public class RemunerationManagementService {
                   "CORRECTED",
                   command.correctionReason(),
                   before,
-                  BonusResponse.of(bonus));
+                  BonusView.of(bonus));
           return bonusCommitted("CORRECTED", bonus, change);
         },
         receipt -> bonus(storeId, receipt));
   }
 
   @Transactional
-  public BonusMutationResponse cancelBonus(
+  public BonusMutation cancelBonus(
       Long storeId, RemunerationCommand.CancelBonus command, String actor) {
     var id = command.id();
     return receipts.once(
@@ -264,7 +264,7 @@ public class RemunerationManagementService {
           requirePerson(storeId, bonus.getPersonId());
           records.refreshForWrite(bonus);
           bonus.requireVersion(command.expectedVersion());
-          var before = BonusResponse.of(bonus);
+          var before = BonusView.of(bonus);
           bonus.cancel();
           records.flush();
           var change =
@@ -277,7 +277,7 @@ public class RemunerationManagementService {
                   "CANCELLED",
                   command.reason(),
                   before,
-                  BonusResponse.of(bonus));
+                  BonusView.of(bonus));
           return bonusCommitted("CANCELLED", bonus, change);
         },
         receipt -> bonus(storeId, receipt));
@@ -285,8 +285,7 @@ public class RemunerationManagementService {
 
   /** ボーナスの操作の要求キーの一意制約に敗れた要求を、成立済みの受領から解決する。 */
   @Transactional(readOnly = true)
-  public BonusMutationResponse replayBonus(
-      Long storeId, RemunerationCommand command, String actor) {
+  public BonusMutation replayBonus(Long storeId, RemunerationCommand command, String actor) {
     return receipts.replayOnly(
         key(storeId, actor, command.requestId()),
         command.fingerprint(),
@@ -294,25 +293,23 @@ public class RemunerationManagementService {
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public Page<RemunerationChangeResponse> guaranteeChanges(
-      Long storeId, String id, Pageable pageable) {
+  public Page<ChangeView> guaranteeChanges(Long storeId, String id, Pageable pageable) {
     requirePerson(storeId, records.term(storeId, id).getPersonId());
     return history(storeId, "GUARANTEE", id, pageable);
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public Page<RemunerationChangeResponse> bonusChanges(Long storeId, String id, Pageable pageable) {
+  public Page<ChangeView> bonusChanges(Long storeId, String id, Pageable pageable) {
     requirePerson(storeId, records.bonus(storeId, id).getPersonId());
     return history(storeId, "BONUS", id, pageable);
   }
 
-  private Page<RemunerationChangeResponse> history(
-      Long storeId, String type, String id, Pageable pageable) {
+  private Page<ChangeView> history(Long storeId, String type, String id, Pageable pageable) {
     return changes
         .findByStoreIdAndResourceTypeAndResourceId(storeId, type, id, pageable)
         .map(
             c ->
-                new RemunerationChangeResponse(
+                new ChangeView(
                     c.getId(),
                     c.getActorId(),
                     c.getAction(),
@@ -342,23 +339,23 @@ public class RemunerationManagementService {
   }
 
   // 受領を持つ保証条件とボーナスは取消で終わるので、行が無いのは不変条件の破れであって業務拒否ではない。
-  private GuaranteeMutationResponse guarantee(Long storeId, Receipt receipt) {
+  private GuaranteeMutation guarantee(Long storeId, Receipt receipt) {
     var term =
         records
             .findTerm(storeId, receipt.targetId())
             .orElseThrow(() -> new IllegalStateException("受領の対象の保証条件が見つかりません"));
-    return new GuaranteeMutationResponse(
-        GuaranteeResponse.of(term),
+    return new GuaranteeMutation(
+        GuaranteeView.of(term),
         receipt.longFact("timeline_version"),
         receipt.textFact("change_id"));
   }
 
-  private BonusMutationResponse bonus(Long storeId, Receipt receipt) {
+  private BonusMutation bonus(Long storeId, Receipt receipt) {
     var bonus =
         records
             .findBonus(storeId, receipt.targetId())
             .orElseThrow(() -> new IllegalStateException("受領の対象のボーナスが見つかりません"));
-    return new BonusMutationResponse(BonusResponse.of(bonus), receipt.textFact("change_id"));
+    return new BonusMutation(BonusView.of(bonus), receipt.textFact("change_id"));
   }
 
   private RemunerationChange change(

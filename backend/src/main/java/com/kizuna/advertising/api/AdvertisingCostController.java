@@ -56,13 +56,17 @@ public class AdvertisingCostController {
           Pageable pageable) {
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
-        .body(AdvertisingFailures.run(() -> service.list(storeId, month, pageable)));
+        .body(
+            AdvertisingFailures.run(
+                () -> service.list(storeId, month, pageable).map(CostSummary::of)));
   }
 
   @GetMapping("/advertising-costs/{id}")
   @PreAuthorize("hasAuthority('PERM_ADVERTISING_COST_VIEW')")
   public ResponseEntity<CostResponse> get(@CurrentStore Long storeId, @PathVariable String id) {
-    return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(service.get(storeId, id));
+    return ResponseEntity.ok()
+        .cacheControl(CacheControl.noStore())
+        .body(CostResponse.of(service.get(storeId, id)));
   }
 
   @PostMapping("/advertising-costs")
@@ -72,12 +76,13 @@ public class AdvertisingCostController {
   public CostResponse create(
       @CurrentStore Long storeId, @Valid @RequestBody CreateRequest request, Principal actor) {
     var command = request.command();
-    return AdvertisingFailures.run(
-        () ->
-            Replays.write(
-                DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-                () -> service.create(storeId, command, actor.getName()),
-                () -> service.replayCost(storeId, command, actor.getName())));
+    return CostResponse.of(
+        AdvertisingFailures.run(
+            () ->
+                Replays.write(
+                    DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
+                    () -> service.create(storeId, command, actor.getName()),
+                    () -> service.replayCost(storeId, command, actor.getName()))));
   }
 
   @PutMapping("/advertising-costs/{id}")
@@ -89,12 +94,13 @@ public class AdvertisingCostController {
       @Valid @RequestBody ReplaceRequest request,
       Principal actor) {
     var command = request.command(id);
-    return AdvertisingFailures.run(
-        () ->
-            Replays.write(
-                DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-                () -> service.replace(storeId, command, actor.getName()),
-                () -> service.replayCost(storeId, command, actor.getName())));
+    return CostResponse.of(
+        AdvertisingFailures.run(
+            () ->
+                Replays.write(
+                    DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
+                    () -> service.replace(storeId, command, actor.getName()),
+                    () -> service.replayCost(storeId, command, actor.getName()))));
   }
 
   @DeleteMapping("/advertising-costs/{id}")
@@ -140,12 +146,13 @@ public class AdvertisingCostController {
       @Valid @RequestBody CopyRequest request,
       Principal actor) {
     var command = request.command(month);
-    return AdvertisingFailures.run(
-        () ->
-            Replays.write(
-                DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-                () -> service.copy(storeId, command, actor.getName()),
-                () -> service.replayCopy(storeId, command, actor.getName())));
+    return CopyResponse.of(
+        AdvertisingFailures.run(
+            () ->
+                Replays.write(
+                    DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
+                    () -> service.copy(storeId, command, actor.getName()),
+                    () -> service.replayCopy(storeId, command, actor.getName()))));
   }
 
   @GetMapping("/advertising-cost-months/{month}/changes")
@@ -160,7 +167,7 @@ public class AdvertisingCostController {
           Pageable pageable) {
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
-        .body(service.changes(storeId, month, pageable));
+        .body(service.changes(storeId, month, pageable).map(ChangeSummary::of));
   }
 
   @GetMapping("/advertising-cost-months/{month}/changes/{id}")
@@ -169,7 +176,7 @@ public class AdvertisingCostController {
       @CurrentStore Long storeId, @PathVariable String month, @PathVariable String id) {
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
-        .body(service.changeDetail(storeId, month, id));
+        .body(ChangeResponse.of(service.changeDetail(storeId, month, id)));
   }
 
   @GetMapping("/advertising-costs/exports")
