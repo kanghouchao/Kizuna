@@ -575,9 +575,9 @@ class AttachmentIntegrationTest {
     "保存先を利用できない, WRITE_UNAVAILABLE, RECOVERY_REQUIRED, STORAGE_UNAVAILABLE",
     "受信と正規化のハッシュ不一致, RECEIVED_HASH, PENDING, ",
     "完了時に応募者が終端, TERMINAL, PENDING, ",
-    "監査の書き込み失敗, AUDIT, PENDING, "
+    "監査の書き込み失敗, AUDIT, RECOVERY_REQUIRED, STORAGE_UNAVAILABLE"
   })
-  void receiveRecordsOnlyFailuresReportedByTheNormalizerOrTheStorage(
+  void receiveRecordsFailureCodesByTheSiteThatFailed(
       String scenario, String site, String status, String recorded) throws Exception {
     var applicant = applicant();
     try (var image = content()) {
