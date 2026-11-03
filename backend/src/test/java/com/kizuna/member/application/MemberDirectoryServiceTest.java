@@ -121,7 +121,9 @@ class MemberDirectoryServiceTest {
     ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
 
     service.search(
-        MemberStatusFilter.WITHDRAWN, "hanako", PageRequest.of(2, 10, Sort.by("displayName")));
+        MemberStatusFilter.WITHDRAWN,
+        "hanako",
+        PageRequest.of(2, 10, Sort.by(MemberSearchView::getDisplayName)));
     service.search(MemberStatusFilter.ALL, "hanako", PageRequest.of(0, 10));
 
     verify(memberRepository).searchWithdrawn(eq("%hanako%"), pageable.capture());

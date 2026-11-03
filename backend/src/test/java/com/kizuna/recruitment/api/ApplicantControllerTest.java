@@ -23,6 +23,7 @@ import com.kizuna.recruitment.api.dto.RecruitmentPolicyResponse;
 import com.kizuna.recruitment.application.ApplicantService;
 import com.kizuna.recruitment.domain.ApplicantSourceType;
 import com.kizuna.recruitment.domain.ApplicantStatus;
+import com.kizuna.recruitment.domain.ApplicantStatusHistory;
 import com.kizuna.recruitment.domain.ReceptionChannel;
 import com.kizuna.settings.application.ApplicantRetentionSettings;
 import com.kizuna.settings.application.SystemConfigService;
@@ -104,7 +105,11 @@ class ApplicantControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
     assertThat(pageable.getValue().getSort())
-        .isEqualTo(Sort.by(Sort.Direction.DESC, "createdAt", "id"));
+        .isEqualTo(
+            Sort.by(
+                Sort.Direction.DESC,
+                ApplicantStatusHistory::getCreatedAt,
+                ApplicantStatusHistory::getId));
   }
 
   @Test

@@ -27,6 +27,7 @@ import com.kizuna.order.application.OrderPreview;
 import com.kizuna.order.application.OrderQueryService;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.order.domain.Order;
+import com.kizuna.order.domain.OrderApplication;
 import com.kizuna.order.domain.OrderApplicationStatus;
 import com.kizuna.order.domain.OrderApplicationView;
 import com.kizuna.order.domain.OrderCourses;
@@ -111,7 +112,8 @@ class OrderApplicationControllerTest {
     assertThat(statusesCaptor.getValue()).containsExactly(OrderApplicationStatus.PENDING);
     assertThat(pageableCaptor.getValue().getPageNumber()).isEqualTo(1);
     assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(5);
-    assertThat(pageableCaptor.getValue().getSort()).isEqualTo(Sort.by("businessDate", "id"));
+    assertThat(pageableCaptor.getValue().getSort())
+        .isEqualTo(Sort.by(OrderApplication::getBusinessDate, OrderApplication::getId));
   }
 
   @Test

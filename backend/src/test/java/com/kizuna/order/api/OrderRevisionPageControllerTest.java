@@ -13,9 +13,12 @@ import com.kizuna.order.api.dto.OrderMapperImpl;
 import com.kizuna.order.application.OrderQueryService;
 import com.kizuna.order.application.OrderService;
 import com.kizuna.order.application.OrderSpecialServices;
+import com.kizuna.order.domain.OrderSpecialServiceEvent;
 import com.kizuna.service.application.OrderServiceCatalog;
 import com.kizuna.service.application.OrderServiceCatalog.SelectionKind;
 import com.kizuna.service.application.OrderSpecialServiceCatalog;
+import com.kizuna.service.domain.ServiceRevision;
+import com.kizuna.service.domain.ServiceTerms;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
@@ -27,6 +30,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.core.TypedPropertyPath;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -48,7 +52,8 @@ import org.springframework.test.web.servlet.MockMvc;
 })
 @WithMockUser(authorities = {"PERM_ORDER_MANAGE", "PERM_ORDER_CORRECT"})
 class OrderRevisionPageControllerTest {
-  private static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "occurredAt", "id");
+  private static final Sort NEWEST_FIRST =
+      Sort.by(Sort.Direction.DESC, ServiceRevision::getOccurredAt, ServiceRevision::getId);
 
   @TestConfiguration
   @EnableMethodSecurity
@@ -99,12 +104,21 @@ class OrderRevisionPageControllerTest {
         .andExpect(jsonPath("$.total_elements").value(0));
 
     assertThat(revisions.getValue().getSort()).isEqualTo(NEWEST_FIRST);
-    assertThat(events.getValue().getSort()).isEqualTo(NEWEST_FIRST);
+    assertThat(events.getValue().getSort())
+        .isEqualTo(
+            Sort.by(
+                Sort.Direction.DESC,
+                OrderSpecialServiceEvent::getOccurredAt,
+                OrderSpecialServiceEvent::getId));
   }
 
   @Test
   void currentCandidatesArePagesInNameOrder() throws Exception {
-    var byName = Sort.by("afterTerms.name", "serviceId", "id");
+    var byName =
+        Sort.by(
+            TypedPropertyPath.of(ServiceRevision::getAfterTerms).then(ServiceTerms::getName),
+            ServiceRevision::getServiceId,
+            ServiceRevision::getId);
     var selections = ArgumentCaptor.forClass(Pageable.class);
     when(catalog.candidates(eq(1L), any(SelectionKind.class), eq("基本"), selections.capture()))
         .thenReturn(new PageImpl<>(List.of()));

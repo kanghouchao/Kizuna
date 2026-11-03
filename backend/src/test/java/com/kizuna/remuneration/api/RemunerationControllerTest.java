@@ -386,6 +386,11 @@ class RemunerationControllerTest {
     assertThat(pageable.getAllValues())
         .allSatisfy(
             p ->
-                assertThat(p.getSort()).isEqualTo(Sort.by(Sort.Direction.DESC, "createdAt", "id")));
+                assertThat(p.getSort())
+                    .isEqualTo(
+                        Sort.by(
+                            Sort.Direction.DESC,
+                            RemunerationChange::getCreatedAt,
+                            RemunerationChange::getId)));
   }
 }

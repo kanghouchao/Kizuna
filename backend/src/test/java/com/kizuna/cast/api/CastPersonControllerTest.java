@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.cast.application.AdminCastService;
+import com.kizuna.cast.domain.Cast;
+import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
@@ -49,7 +51,7 @@ class CastPersonControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content").isEmpty())
         .andExpect(jsonPath("$.total_elements").value(0));
-    assertThat(pageable.getValue()).isEqualTo(PageRequest.of(0, 20, Sort.by("id")));
+    assertThat(pageable.getValue()).isEqualTo(PageRequest.of(0, 20, Sort.by(Cast::getId)));
   }
 
   @Test
@@ -61,7 +63,11 @@ class CastPersonControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
     assertThat(pageable.getValue())
-        .isEqualTo(PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt", "id")));
+        .isEqualTo(
+            PageRequest.of(
+                0,
+                20,
+                Sort.by(Sort.Direction.DESC, CastEnrollment::getCreatedAt, CastEnrollment::getId)));
     mvc.perform(get("/cast-persons/1/enrollments").param("page", "99999999").param("size", "100"))
         .andExpect(status().isBadRequest());
   }

@@ -14,6 +14,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.review.application.ReviewService;
 import com.kizuna.review.domain.ReviewCommand;
+import com.kizuna.review.domain.ReviewHistory;
+import com.kizuna.review.domain.ReviewRecord;
 import com.kizuna.review.domain.ReviewSearch;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
@@ -134,7 +136,8 @@ class ReviewControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 
-    assertThat(pageable.getValue().getSort()).isEqualTo(Sort.by(Sort.Direction.DESC, "id"));
+    assertThat(pageable.getValue().getSort())
+        .isEqualTo(Sort.by(Sort.Direction.DESC, ReviewHistory::getId));
   }
 
   @Test
@@ -158,7 +161,11 @@ class ReviewControllerTest {
         .andExpect(jsonPath("$.total_elements").value(0));
 
     assertThat(search.getValue().pageable())
-        .isEqualTo(PageRequest.of(1, 20, Sort.by(Sort.Direction.ASC, "createdAt", "id")));
+        .isEqualTo(
+            PageRequest.of(
+                1,
+                20,
+                Sort.by(Sort.Direction.ASC, ReviewRecord::getCreatedAt, ReviewRecord::getId)));
 
     mockMvc
         .perform(

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.customer.domain.Customer;
+import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.member.application.MemberLookupService;
@@ -77,7 +78,10 @@ class CustomerMemberLinkAuditIntegrationTest {
   private static final AtomicLong MEMBERS = new AtomicLong(100);
   private static final Long STORE_ID = 1L;
   private static final PageRequest HISTORY_PAGE =
-      PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "linkedAt", "id"));
+      PageRequest.of(
+          0,
+          20,
+          Sort.by(Sort.Direction.DESC, CustomerMemberLink::getLinkedAt, CustomerMemberLink::getId));
   private AnnotationConfigApplicationContext context;
   private JdbcTemplate jdbc;
   private CustomerMemberLinkService links;

@@ -84,7 +84,8 @@ class AttachmentControllerTest {
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.total_elements").value(0));
     }
-    var newestFirst = Sort.by(Sort.Direction.DESC, "createdAt", "id");
+    var newestFirst =
+        Sort.by(Sort.Direction.DESC, AttachmentUpload::getCreatedAt, AttachmentUpload::getId);
     assertThat(listed.getValue().getSort()).isEqualTo(newestFirst);
     assertThat(uploading.getValue().getSort()).isEqualTo(newestFirst);
   }

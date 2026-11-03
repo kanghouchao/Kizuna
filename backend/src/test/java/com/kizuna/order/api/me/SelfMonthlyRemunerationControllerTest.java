@@ -21,6 +21,7 @@ import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.store.domain.Store;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.time.LocalDate;
@@ -148,7 +149,7 @@ class SelfMonthlyRemunerationControllerTest {
   @CsvSource({"0,20", "-4,20", "3000,100"})
   @DisplayName("店舗候補の取得件数は束縛の時点で既定値と上限へ正規化される")
   void normalizesStorePage(int size, int effective) throws Exception {
-    var page = PageRequest.of(0, effective, Sort.by("id"));
+    var page = PageRequest.of(0, effective, Sort.by(Store::getId));
     when(selfQuery.stores(34L, page))
         .thenReturn(new PageImpl<>(List.of(new RemunerationStoreRow(1L, "歴史店舗")), page, 1));
     mvc.perform(request(BASE + "/stores").param("size", String.valueOf(size)))
@@ -170,7 +171,7 @@ class SelfMonthlyRemunerationControllerTest {
   @Test
   @DisplayName("候補ページの offset 超過は400にし、負のページは先頭へ正規化する")
   void storePageBounds() throws Exception {
-    var first = PageRequest.of(0, 20, Sort.by("id"));
+    var first = PageRequest.of(0, 20, Sort.by(Store::getId));
     when(selfQuery.stores(34L, first)).thenReturn(new PageImpl<>(List.of(), first, 0));
     mvc.perform(request(BASE + "/stores").param("page", "2147483647"))
         .andExpect(status().isBadRequest());

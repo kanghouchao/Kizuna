@@ -22,7 +22,9 @@ import com.kizuna.cast.application.CastEnrollmentService;
 import com.kizuna.cast.application.CastInvitationService;
 import com.kizuna.cast.application.CastService;
 import com.kizuna.cast.domain.CastEnrollment;
+import com.kizuna.cast.domain.CastEnrollmentSnapshot;
 import com.kizuna.cast.domain.CastEnrollmentStatus;
+import com.kizuna.cast.domain.CastEnrollmentStatusHistory;
 import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastPublicationStatus;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
@@ -138,9 +140,18 @@ class CastControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 
-    Sort newestFirst = Sort.by(Sort.Direction.DESC, "recordedAt", "id");
-    assertThat(histories.getValue().getSort()).isEqualTo(newestFirst);
-    assertThat(snapshots.getValue().getSort()).isEqualTo(newestFirst);
+    assertThat(histories.getValue().getSort())
+        .isEqualTo(
+            Sort.by(
+                Sort.Direction.DESC,
+                CastEnrollmentStatusHistory::getRecordedAt,
+                CastEnrollmentStatusHistory::getId));
+    assertThat(snapshots.getValue().getSort())
+        .isEqualTo(
+            Sort.by(
+                Sort.Direction.DESC,
+                CastEnrollmentSnapshot::getRecordedAt,
+                CastEnrollmentSnapshot::getId));
   }
 
   @Test

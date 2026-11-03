@@ -78,6 +78,7 @@ public class CastService {
 
   @Transactional(readOnly = true)
   public Page<CastSummaryResponse> list(Long storeId, String search, Pageable pageable) {
+    // 並びは JPQL の別名（p. / e.）付きで渡す。別名は実体のプロパティではないので、型付きの参照にできず文字列で組む。
     Sort sort =
         Sort.by(
             pageable.getSort().stream()

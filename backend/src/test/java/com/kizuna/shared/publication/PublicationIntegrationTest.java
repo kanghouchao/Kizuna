@@ -90,7 +90,7 @@ class PublicationIntegrationTest {
 
   @Test
   void listingIgnoresTheCallersSort() {
-    assertThat(list(PageRequest.of(0, 3, Sort.by(Sort.Direction.DESC, "id"))).getContent())
+    assertThat(list(PageRequest.of(0, 3, Sort.by(Sort.Direction.DESC, Poster::getId))).getContent())
         .extracting(Poster::getId)
         .containsExactly(8L, 5L, 6L);
   }

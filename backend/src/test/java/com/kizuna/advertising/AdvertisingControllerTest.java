@@ -28,6 +28,7 @@ import com.kizuna.advertising.application.AdvertisingRecruitmentEffectService;
 import com.kizuna.advertising.application.AdvertisingService;
 import com.kizuna.advertising.application.AdvertisingViews.CostView;
 import com.kizuna.advertising.domain.AdvertisingCategory;
+import com.kizuna.advertising.domain.AdvertisingChange;
 import com.kizuna.advertising.domain.AdvertisingCommand;
 import com.kizuna.advertising.domain.AdvertisingMediaReport;
 import com.kizuna.advertising.domain.AdvertisingMedium;
@@ -132,7 +133,9 @@ class AdvertisingControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
     assertThat(pageable.getValue().getSort())
-        .isEqualTo(Sort.by(Sort.Direction.DESC, "createdAt", "id"));
+        .isEqualTo(
+            Sort.by(
+                Sort.Direction.DESC, AdvertisingChange::getCreatedAt, AdvertisingChange::getId));
 
     mvc.perform(
             get("/advertising-cost-months/2026-09/changes")

@@ -14,6 +14,7 @@ import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shift.application.ShiftLineageService;
 import com.kizuna.shift.application.ShiftService;
+import com.kizuna.shift.domain.ShiftRequest;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.time.LocalDate;
 import java.util.List;
@@ -113,7 +114,7 @@ class ShiftControllerTest {
         .andExpect(jsonPath("$.total_elements").value(0));
 
     assertThat(pageable.getValue().getSort())
-        .isEqualTo(Sort.by(Sort.Direction.DESC, "createdAt", "id"));
+        .isEqualTo(Sort.by(Sort.Direction.DESC, ShiftRequest::getCreatedAt, ShiftRequest::getId));
     assertThat(pageable.getValue().getPageSize()).isEqualTo(50);
   }
 }

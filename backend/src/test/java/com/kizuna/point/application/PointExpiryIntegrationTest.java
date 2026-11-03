@@ -29,6 +29,7 @@ import com.kizuna.task.execution.TaskExecutor;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
 import com.kizuna.user.domain.PermissionCode;
+import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.zaxxer.hikari.HikariDataSource;
 import jakarta.persistence.EntityManagerFactory;
@@ -571,7 +572,7 @@ class PointExpiryIntegrationTest {
         first
             .getBean(ServiceExecutionIdentityService.class)
             .candidates(
-                PageRequest.of(0, 1, Sort.by("displayName", "id")),
+                PageRequest.of(0, 1, Sort.by(User::getDisplayName, User::getId)),
                 PermissionCode.POINT_EXPIRE,
                 null);
     assertThat(page.getTotalElements()).isEqualTo(1);
@@ -580,7 +581,7 @@ class PointExpiryIntegrationTest {
             first
                 .getBean(ServiceExecutionIdentityService.class)
                 .candidates(
-                    PageRequest.of(1, 1, Sort.by("displayName", "id")),
+                    PageRequest.of(1, 1, Sort.by(User::getDisplayName, User::getId)),
                     PermissionCode.POINT_EXPIRE,
                     null)
                 .getContent())

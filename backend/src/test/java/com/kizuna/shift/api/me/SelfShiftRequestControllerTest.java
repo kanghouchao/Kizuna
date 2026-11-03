@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shift.application.CastShiftRequestService;
+import com.kizuna.shift.domain.ShiftRequest;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -55,6 +56,6 @@ class SelfShiftRequestControllerTest {
         .andExpect(jsonPath("$.total_elements").value(0));
 
     assertThat(pageable.getValue().getSort())
-        .isEqualTo(Sort.by(Sort.Direction.DESC, "createdAt", "id"));
+        .isEqualTo(Sort.by(Sort.Direction.DESC, ShiftRequest::getCreatedAt, ShiftRequest::getId));
   }
 }

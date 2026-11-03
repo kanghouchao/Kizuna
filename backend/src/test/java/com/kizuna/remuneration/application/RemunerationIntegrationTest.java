@@ -25,6 +25,7 @@ import com.kizuna.remuneration.api.dto.RemunerationRequests.GuaranteeCorrectionR
 import com.kizuna.remuneration.api.dto.RemunerationRequests.GuaranteeCreateRequest;
 import com.kizuna.remuneration.domain.DailyGuarantee.Status;
 import com.kizuna.remuneration.domain.GuaranteeState;
+import com.kizuna.remuneration.domain.RemunerationChange;
 import com.kizuna.remuneration.domain.RemunerationChangeRepository;
 import com.kizuna.remuneration.infrastructure.RemunerationRecords;
 import com.kizuna.settings.application.BusinessDateService;
@@ -98,7 +99,11 @@ import tools.jackson.databind.json.JsonMapper;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class RemunerationIntegrationTest {
   private static final PageRequest NEWEST_FIRST =
-      PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt", "id"));
+      PageRequest.of(
+          0,
+          20,
+          Sort.by(
+              Sort.Direction.DESC, RemunerationChange::getCreatedAt, RemunerationChange::getId));
   private AnnotationConfigApplicationContext context;
   private EntityManager em;
   private JdbcTemplate jdbc;

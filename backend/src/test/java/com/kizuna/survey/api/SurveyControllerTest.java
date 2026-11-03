@@ -18,6 +18,9 @@ import com.kizuna.survey.api.dto.SurveyRevisionWriteResponse;
 import com.kizuna.survey.application.SurveyReadService;
 import com.kizuna.survey.application.SurveyService;
 import com.kizuna.survey.domain.SurveyCommand;
+import com.kizuna.survey.domain.SurveyHistory;
+import com.kizuna.survey.domain.SurveyRevision;
+import com.kizuna.survey.domain.SurveySeries;
 import com.kizuna.survey.domain.SurveyValues.Operation;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.util.List;
@@ -80,7 +83,7 @@ class SurveyControllerTest {
         .list(
             STORE_ID,
             "user",
-            PageRequest.of(0, 20, Sort.by("id")),
+            PageRequest.of(0, 20, Sort.by(SurveySeries::getId)),
             null,
             null,
             null,
@@ -155,7 +158,7 @@ class SurveyControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 
-    Sort newestFirst = Sort.by(Sort.Direction.DESC, "id");
+    Sort newestFirst = Sort.by(Sort.Direction.DESC, SurveyHistory::getId);
     assertThat(revisions.getValue().getSort()).isEqualTo(newestFirst);
     assertThat(answers.getValue().getSort()).isEqualTo(newestFirst);
   }
@@ -206,7 +209,14 @@ class SurveyControllerTest {
         .andExpect(status().isBadRequest());
 
     assertThat(revisions.getValue())
-        .isEqualTo(PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "revisionNumber", "id")));
+        .isEqualTo(
+            PageRequest.of(
+                0,
+                20,
+                Sort.by(
+                    Sort.Direction.DESC,
+                    SurveyRevision::getRevisionNumber,
+                    SurveyRevision::getId)));
     assertThat(answers.getValue().getPageNumber()).isEqualTo(2);
     assertThat(answers.getValue().getPageSize()).isEqualTo(20);
   }

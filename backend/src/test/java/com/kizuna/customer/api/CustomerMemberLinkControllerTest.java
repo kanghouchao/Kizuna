@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.customer.api.dto.CustomerMemberLinkResponse;
 import com.kizuna.customer.application.CustomerMemberLinkService;
+import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
@@ -122,7 +123,9 @@ class CustomerMemberLinkControllerTest {
         .andExpect(jsonPath("$.total_elements").value(0));
 
     assertThat(pageable.getValue().getSort())
-        .isEqualTo(Sort.by(Sort.Direction.DESC, "linkedAt", "id"));
+        .isEqualTo(
+            Sort.by(
+                Sort.Direction.DESC, CustomerMemberLink::getLinkedAt, CustomerMemberLink::getId));
   }
 
   @Test

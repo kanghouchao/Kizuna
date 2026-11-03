@@ -12,20 +12,27 @@ class ReviewSearchTest {
 
   private static Pageable pageable(Order order) {
     return new ReviewSearch(
-            PageRequest.of(1, 10, Sort.by("ignored")), null, null, null, null, order)
+            PageRequest.of(1, 10, Sort.by(ReviewRecord::getUpdatedAt)),
+            null,
+            null,
+            null,
+            null,
+            order)
         .pageable();
   }
 
   @Test
   void descendingOrderEndsInDescendingId() {
     assertThat(pageable(Order.RECEIVED_DESC).getSort())
-        .containsExactly(Sort.Order.desc("receivedAt"), Sort.Order.desc("id"));
+        .containsExactly(
+            Sort.Order.desc(ReviewRecord::getReceivedAt), Sort.Order.desc(ReviewRecord::getId));
     assertThat(pageable(Order.RECEIVED_DESC).getPageNumber()).isEqualTo(1);
   }
 
   @Test
   void ascendingOrderEndsInAscendingId() {
     assertThat(pageable(Order.CREATED_ASC).getSort())
-        .containsExactly(Sort.Order.asc("createdAt"), Sort.Order.asc("id"));
+        .containsExactly(
+            Sort.Order.asc(ReviewRecord::getCreatedAt), Sort.Order.asc(ReviewRecord::getId));
   }
 }

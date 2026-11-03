@@ -7,9 +7,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.order.api.dto.OrderMapperImpl;
 import com.kizuna.order.application.MemberVisitService;
 import com.kizuna.order.application.SelfRemunerationService;
+import com.kizuna.order.domain.Order;
+import com.kizuna.order.domain.OrderAttribution;
+import com.kizuna.order.domain.OrderCorrection;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
@@ -57,7 +61,8 @@ class MemberPagedHistoryControllerTest {
         .andExpect(jsonPath("$.total_elements").value(0));
 
     assertThat(pageable.getValue().getSort())
-        .isEqualTo(Sort.by(Sort.Direction.DESC, "createdAt", "id"));
+        .isEqualTo(
+            Sort.by(Sort.Direction.DESC, OrderAttribution::getCreatedAt, OrderAttribution::getId));
   }
 
   @Test
@@ -72,7 +77,8 @@ class MemberPagedHistoryControllerTest {
         .andExpect(jsonPath("$.total_elements").value(0));
 
     assertThat(pageable.getValue().getSort())
-        .isEqualTo(Sort.by(Sort.Direction.DESC, "afterVersion", "id"));
+        .isEqualTo(
+            Sort.by(Sort.Direction.DESC, OrderCorrection::getAfterVersion, OrderCorrection::getId));
   }
 
   @Test
@@ -93,8 +99,9 @@ class MemberPagedHistoryControllerTest {
         .andExpect(jsonPath("$.total_elements").value(0));
 
     assertThat(enrollments.getValue().getSort())
-        .isEqualTo(Sort.by(Sort.Direction.DESC, "createdAt", "id"));
+        .isEqualTo(
+            Sort.by(Sort.Direction.DESC, CastEnrollment::getCreatedAt, CastEnrollment::getId));
     assertThat(orders.getValue().getSort())
-        .isEqualTo(Sort.by(Sort.Direction.DESC, "businessDate", "id"));
+        .isEqualTo(Sort.by(Sort.Direction.DESC, Order::getBusinessDate, Order::getId));
   }
 }

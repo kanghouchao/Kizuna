@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.order.domain.AdminOrderView;
+import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.shared.storescope.StoreScope;
 import java.util.List;
@@ -62,10 +63,11 @@ class AdminOrderServiceTest {
     var captor = ArgumentCaptor.forClass(Pageable.class);
     when(orderRepository.findGroupWideViews(captor.capture())).thenReturn(Page.empty());
 
-    service.list(new StoreScope(true, Set.of()), PageRequest.of(1, 10, Sort.by("createdAt")));
+    service.list(
+        new StoreScope(true, Set.of()), PageRequest.of(1, 10, Sort.by(Order::getCreatedAt)));
 
     assertThat(captor.getValue().getSort())
-        .containsExactly(Sort.Order.asc("createdAt"), Sort.Order.asc("id"));
+        .containsExactly(Sort.Order.asc(Order::getCreatedAt), Sort.Order.asc(Order::getId));
     assertThat(captor.getValue().getPageNumber()).isEqualTo(1);
   }
 

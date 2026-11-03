@@ -12,6 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.notificationdelivery.application.NotificationService;
+import com.kizuna.notificationdelivery.domain.DeliveryAttempt;
+import com.kizuna.notificationdelivery.domain.NotificationDelivery;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
@@ -148,7 +150,8 @@ class NotificationDeliveryControllerTest {
         .andExpect(jsonPath("$.total_elements").value(0));
 
     assertThat(pageable.getValue().getPageSize()).isEqualTo(50);
-    assertThat(pageable.getValue().getSort()).isEqualTo(Sort.by(Sort.Direction.DESC, "id"));
+    assertThat(pageable.getValue().getSort())
+        .isEqualTo(Sort.by(Sort.Direction.DESC, NotificationDelivery::getId));
   }
 
   @Test
@@ -168,6 +171,7 @@ class NotificationDeliveryControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 
-    assertThat(pageable.getValue().getSort()).isEqualTo(Sort.by(Sort.Direction.DESC, "id"));
+    assertThat(pageable.getValue().getSort())
+        .isEqualTo(Sort.by(Sort.Direction.DESC, DeliveryAttempt::getId));
   }
 }
