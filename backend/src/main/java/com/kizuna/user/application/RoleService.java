@@ -97,8 +97,8 @@ public class RoleService {
       roleManageHolderGuard.requireAfterRolePermissionRemoval(role.getId());
     }
     var before = snapshot(role);
-    // 改名の保存は一意列の更新でロール行を FOR UPDATE に上げ、外部キー検査の KEY SHARE を締め出すが、
-    // 付与はその前の FOR SHARE で既に待っている。
+    // 先の行ロックは PG では FOR NO KEY UPDATE。改名の保存は一意列の更新でそれを FOR UPDATE に上げ、
+    // 外部キー検査の KEY SHARE を締め出すが、付与はその前の FOR SHARE で既に待っている。
     credentialOperations.replaceRolePermissions(role, codesById.keySet());
     role.rename(req.getName());
     save(role);
