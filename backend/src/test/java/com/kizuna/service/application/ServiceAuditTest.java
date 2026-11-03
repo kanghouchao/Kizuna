@@ -12,10 +12,6 @@ import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.order.application.OrderSpecialServices;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderSpecialServiceEventRepository;
-import com.kizuna.service.api.dto.OwnConsentRequest;
-import com.kizuna.service.api.dto.ServiceCreateRequest;
-import com.kizuna.service.api.dto.ServiceMapper;
-import com.kizuna.service.api.dto.ServiceUpdateRequest;
 import com.kizuna.service.domain.ChargeType;
 import com.kizuna.service.domain.ConsentDecision;
 import com.kizuna.service.domain.ServiceConsent;
@@ -43,7 +39,6 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mapstruct.factory.Mappers;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class ServiceAuditTest {
@@ -61,12 +56,7 @@ class ServiceAuditTest {
   void setup() {
     settings =
         new ServiceSettingsService(
-            items,
-            revisions,
-            Mappers.getMapper(ServiceMapper.class),
-            new ActorIdentityService(users),
-            mock(StoreRepository.class),
-            audit);
+            items, revisions, new ActorIdentityService(users), mock(StoreRepository.class), audit);
     var actor =
         User.builder()
             .email("operator@example.test")
@@ -108,7 +98,8 @@ class ServiceAuditTest {
     assertThat(
             settings.create(
                 STORE_ID,
-                new ServiceCreateRequest(ServiceKind.COURSE, "秘密の名称", 60, null, 12000, 6000),
+                new ServiceSettingsCommand.Create(
+                    ServiceKind.COURSE, "秘密の名称", 60, null, 12000, 6000),
                 "operator@example.test"))
         .isEqualTo("service");
     assertThat(recorded)
@@ -145,13 +136,13 @@ class ServiceAuditTest {
     settings.update(
         STORE_ID,
         "service",
-        new ServiceUpdateRequest("旧い秘密", 60, null, 12000, 6000, 1L),
+        new ServiceSettingsCommand.Update("旧い秘密", 60, null, 12000, 6000, 1L),
         "operator@example.test");
     assertThat(recorded).isEmpty();
     settings.update(
         STORE_ID,
         "service",
-        new ServiceUpdateRequest("新しい秘密", 60, null, 12000, 6000, 1L),
+        new ServiceSettingsCommand.Update("新しい秘密", 60, null, 12000, 6000, 1L),
         "operator@example.test");
     assertThat(recorded)
         .singleElement()
@@ -241,7 +232,7 @@ class ServiceAuditTest {
         STORE_ID,
         "operator@example.test",
         "service",
-        new OwnConsentRequest(1L, 0L, ConsentDecision.ACCEPTED));
+        new OwnConsentCommand(1L, 0L, ConsentDecision.ACCEPTED));
     assertThat(recorded)
         .singleElement()
         .satisfies(
@@ -270,13 +261,13 @@ class ServiceAuditTest {
         STORE_ID,
         "operator@example.test",
         "service",
-        new OwnConsentRequest(1L, 1L, ConsentDecision.ACCEPTED));
+        new OwnConsentCommand(1L, 1L, ConsentDecision.ACCEPTED));
     assertThat(recorded).hasSize(1);
     own.decide(
         STORE_ID,
         "operator@example.test",
         "service",
-        new OwnConsentRequest(1L, 1L, ConsentDecision.REJECTED));
+        new OwnConsentCommand(1L, 1L, ConsentDecision.REJECTED));
     assertThat(recorded).hasSize(2);
     assertThat(recorded.getLast().getBeforeValues()).containsEntry("decision", "ACCEPTED");
     assertThat(recorded.getLast().getAfterValues()).containsEntry("decision", "REJECTED");

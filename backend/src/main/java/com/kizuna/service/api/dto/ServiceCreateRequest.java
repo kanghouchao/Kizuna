@@ -1,5 +1,6 @@
 package com.kizuna.service.api.dto;
 
+import com.kizuna.service.application.ServiceSettingsCommand;
 import com.kizuna.service.domain.ChargeType;
 import com.kizuna.service.domain.ServiceKind;
 import jakarta.validation.constraints.Min;
@@ -13,4 +14,9 @@ public record ServiceCreateRequest(
     ChargeType chargeType,
     @NotNull(message = "必須項目を指定してください") @Min(value = 0, message = "零以上の整数円を指定してください") Integer price,
     @NotNull(message = "必須項目を指定してください") @Min(value = 0, message = "零以上の整数円を指定してください")
-        Integer remuneration) {}
+        Integer remuneration) {
+  public ServiceSettingsCommand.Create command() {
+    return new ServiceSettingsCommand.Create(
+        kind, name, durationMinutes, chargeType, price, remuneration);
+  }
+}

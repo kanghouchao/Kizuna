@@ -1,6 +1,8 @@
 package com.kizuna.service.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -10,6 +12,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kizuna.service.api.dto.ServiceMapperImpl;
 import com.kizuna.service.application.ServiceSettingsService;
 import com.kizuna.service.domain.ServiceItem;
 import com.kizuna.service.domain.ServiceRevision;
@@ -24,6 +27,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -35,7 +39,11 @@ import org.springframework.test.web.servlet.MockMvc;
 
 /** handler が X-Store-ID で名乗られた店舗をそのまま service へ渡すことの単体テスト。 */
 @WebMvcTest(ServiceSettingsController.class)
-@Import({ServiceSettingsControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
+@Import({
+  ServiceSettingsControllerTest.MethodSecurityConfig.class,
+  StoreScopeHolder.class,
+  ServiceMapperImpl.class
+})
 class ServiceSettingsControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -59,6 +67,7 @@ class ServiceSettingsControllerTest {
   @WithMockUser(authorities = "PERM_SERVICE_MANAGE")
   void listPassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(service.list(any(), any(), anyBoolean(), any())).thenReturn(Page.empty());
 
     mockMvc
         .perform(get("/services").header("X-Store-ID", STORE_ID.toString()))
