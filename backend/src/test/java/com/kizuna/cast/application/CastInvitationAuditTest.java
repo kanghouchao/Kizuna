@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 import com.kizuna.audit.domain.AuditEvent;
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
-import com.kizuna.cast.api.dto.CastInvitationAcceptRequest;
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
@@ -154,7 +153,7 @@ class CastInvitationAuditTest {
     assertThat(event.getAfterValues()).containsEntry("status", "PENDING").containsKey("expires_at");
     assertThat(event.getAfterValues().keySet())
         .containsExactlyInAnyOrder("status", "expires_at", "version");
-    assertThat(event.toString() + event.getAfterValues()).doesNotContain(response.token());
+    assertThat(event.toString() + event.getAfterValues()).doesNotContain(response.getToken());
   }
 
   @Test
@@ -177,11 +176,7 @@ class CastInvitationAuditTest {
               when(users.findById(42L)).thenReturn(Optional.of(saved));
               return saved;
             });
-    var request = new CastInvitationAcceptRequest();
-    request.setToken(SECRET);
-    request.setEmail("New@Example.test");
-    request.setPassword("password-123");
-    request.setDisplayName("新規の本人");
+    var request = new CastNewUserAcceptCommand("New@Example.test", "password-123", "新規の本人");
 
     accepting.acceptAsNewUser(SECRET, request);
 

@@ -5,14 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
-import com.kizuna.cast.api.dto.CastFieldDefinitionCreateRequest;
-import com.kizuna.cast.api.dto.CastFieldDefinitionMapper;
-import com.kizuna.cast.api.dto.CastFieldDefinitionUpdateRequest;
-import com.kizuna.cast.api.dto.CastMapper;
-import com.kizuna.cast.api.dto.CastUpdateRequest;
 import com.kizuna.cast.domain.ApplicantReferenceCheck;
 import com.kizuna.cast.domain.AttendanceReferenceCheck;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
+import com.kizuna.cast.domain.CastFieldDefinitionPatch;
+import com.kizuna.cast.domain.CastProfilePatch;
 import com.kizuna.cast.domain.OrderReferenceCheck;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
@@ -46,7 +43,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mapstruct.factory.Mappers;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -181,11 +177,8 @@ class CastFieldAuditIntegrationTest {
   }
 
   private String definition(String key, boolean isPublic) {
-    var request = new CastFieldDefinitionCreateRequest();
-    request.setKey(key);
-    request.setLabel("秘密のラベル");
-    request.setIsPublic(isPublic);
-    return fields.create(currentStore(), request).getId();
+    var command = new CastFieldDefinitionCreateCommand(key, "秘密のラベル", isPublic);
+    return fields.create(currentStore(), command).getId();
   }
 
   private String cast(Map<String, String> values) {
@@ -213,9 +206,12 @@ class CastFieldAuditIntegrationTest {
   }
 
   private void write(String id, Map<String, String> values) {
-    var request = new CastUpdateRequest();
-    request.setCustomFields(values);
-    casts.update(currentStore(), id, request, ORDINARY);
+    casts.update(currentStore(), id, customFields(values), ORDINARY);
+  }
+
+  private static CastUpdateCommand customFields(Map<String, String> values) {
+    return new CastUpdateCommand(
+        new CastProfilePatch(null, null, null, null, null, null, null, null, null), values);
   }
 
   private long count(String table) {
@@ -249,11 +245,10 @@ class CastFieldAuditIntegrationTest {
     String first = cast(Map.of("private-key", "秘密の内部値", "public-key", "秘密の公開値"));
     String second = cast(Map.of("private-key", "二人目の秘密"));
     String untouched = cast(Map.of());
-    var edit = new CastFieldDefinitionUpdateRequest();
-    edit.setLabel("変更した秘密");
+    var edit = new CastFieldDefinitionPatch("変更した秘密", null, null);
     fields.update(storeId, internal, edit);
     fields.update(storeId, internal, edit);
-    fields.update(storeId, internal, new CastFieldDefinitionUpdateRequest());
+    fields.update(storeId, internal, new CastFieldDefinitionPatch(null, null, null));
     assertThat(
             jdbc.queryForObject(
                 "select version from t_cast_field_definitions where id=?", Long.class, internal))
@@ -357,10 +352,8 @@ class CastFieldAuditIntegrationTest {
               () -> {
                 if (rejected.endsWith("CREATED")) definition("new-key", false);
                 else if (rejected.endsWith("UPDATED")) {
-                  var request = new CastFieldDefinitionUpdateRequest();
-                  request.setLabel("rollbackする秘密");
-                  request.setDisplayOrder(10);
-                  fields.update(storeId, internal, request);
+                  fields.update(
+                      storeId, internal, new CastFieldDefinitionPatch("rollbackする秘密", 10, null));
                 } else
                   fields.delete(
                       storeId,
@@ -391,9 +384,8 @@ class CastFieldAuditIntegrationTest {
             "select * from t_cast_field_definitions where store_id=? order by id", storeId);
     transactions.executeWithoutResult(
         status -> {
-          var request = new CastFieldDefinitionUpdateRequest();
-          request.setLabel("rollbackする秘密");
-          fields.update(storeId, internal, request);
+          fields.update(
+              storeId, internal, new CastFieldDefinitionPatch("rollbackする秘密", null, null));
           fields.delete(storeId, internal, ORDINARY);
           fields.delete(storeId, external, ORDINARY);
           definition("private-key", true);
@@ -436,12 +428,8 @@ class CastFieldAuditIntegrationTest {
                 SECOND)
             .enrollment()
             .getId();
-    var write = new CastUpdateRequest();
-    write.setCustomFields(Map.of("private-key", "秘密の値"));
-    casts.update(storeId, id, write, SECOND);
-    var edit = new CastFieldDefinitionUpdateRequest();
-    edit.setDisplayOrder(4);
-    fields.update(storeId, definition, edit);
+    casts.update(storeId, id, customFields(Map.of("private-key", "秘密の値")), SECOND);
+    fields.update(storeId, definition, new CastFieldDefinitionPatch(null, 4, null));
     fields.delete(storeId, definition, SECOND);
     var rows =
         jdbc.queryForList(
@@ -458,7 +446,7 @@ class CastFieldAuditIntegrationTest {
                     .containsEntry("originating_store_id", storeId));
     assertThat(lifecycle.snapshots(storeId, id, PageRequest.of(0, 20)).getContent())
         .hasSize(2)
-        .allSatisfy(snapshot -> assertThat(snapshot.actorId()).isEqualTo(secondId));
+        .allSatisfy(snapshot -> assertThat(snapshot.getActorId()).isEqualTo(secondId));
     assertNoSecrets();
   }
 
@@ -478,7 +466,9 @@ class CastFieldAuditIntegrationTest {
             otherStore);
     authenticate(storeId, ORDINARY);
     assertThatThrownBy(
-            () -> fields.update(storeId, foreignDefinition, new CastFieldDefinitionUpdateRequest()))
+            () ->
+                fields.update(
+                    storeId, foreignDefinition, new CastFieldDefinitionPatch(null, null, null)))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(() -> fields.delete(storeId, foreignDefinition, ORDINARY))
         .isInstanceOf(NotFoundException.class);
@@ -506,8 +496,7 @@ class CastFieldAuditIntegrationTest {
     assertThatThrownBy(() -> definition("private-key", false))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("既に登録");
-    var request = new CastFieldDefinitionUpdateRequest();
-    request.setIsPublic(true);
+    var request = new CastFieldDefinitionPatch(null, null, true);
     assertThatThrownBy(() -> fields.update(storeId, id, request))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("公開区分");
@@ -577,7 +566,9 @@ class CastFieldAuditIntegrationTest {
         .containsEntry("public_values", "{}");
     String rebuilt = definition("private-key", true);
     assertThat(rebuilt).isNotEqualTo(definition);
-    assertThat(casts.get(storeId, id).getCustomFields()).isEmpty();
+    var detail = casts.get(storeId, id);
+    assertThat(detail.enrollment().getCustomFields()).isEmpty();
+    assertThat(detail.profile().getCustomFields()).isEmpty();
     assertThat(stored(id))
         .containsEntry("internal_values", "{}")
         .containsEntry("public_values", "{}");
@@ -713,16 +704,6 @@ class CastFieldAuditIntegrationTest {
     @Bean
     Clock clock() {
       return Clock.systemUTC();
-    }
-
-    @Bean
-    CastFieldDefinitionMapper fieldMapper() {
-      return Mappers.getMapper(CastFieldDefinitionMapper.class);
-    }
-
-    @Bean
-    CastMapper mapper() {
-      return Mappers.getMapper(CastMapper.class);
     }
 
     @Bean

@@ -54,7 +54,7 @@ class CastSelfServiceTest {
   }
 
   @Test
-  void myStores_mapsRepositoryViewsToResponses() {
+  void myStores_returnsRepositoryViewsInOrder() {
     User user = userWithId(42L);
     CastStoreView storeA = storeView(1L, "店舗A");
     CastStoreView storeB = storeView(2L, "店舗B");
@@ -64,9 +64,9 @@ class CastSelfServiceTest {
     var result = service.myStores(EMAIL);
 
     assertThat(result).hasSize(2);
-    assertThat(result.get(0).storeId()).isEqualTo(1L);
-    assertThat(result.get(0).storeName()).isEqualTo("店舗A");
-    assertThat(result.get(1).storeId()).isEqualTo(2L);
-    assertThat(result.get(1).storeName()).isEqualTo("店舗B");
+    assertThat(result.get(0).getStoreId()).isEqualTo(1L);
+    assertThat(result.get(0).getStoreName()).isEqualTo("店舗A");
+    assertThat(result.get(1).getStoreId()).isEqualTo(2L);
+    assertThat(result.get(1).getStoreName()).isEqualTo("店舗B");
   }
 }

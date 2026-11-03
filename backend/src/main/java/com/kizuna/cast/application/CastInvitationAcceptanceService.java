@@ -1,8 +1,5 @@
 package com.kizuna.cast.application;
 
-import com.kizuna.cast.api.dto.CastAcceptanceResponse;
-import com.kizuna.cast.api.dto.CastInvitationAcceptRequest;
-import com.kizuna.cast.api.dto.CastInvitationDetailResponse;
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
@@ -65,10 +62,10 @@ public class CastInvitationAcceptanceService {
 
   /** 招待を照会する。受諾可否のビュー状態と店舗名・档案名を返す。 */
   @Transactional(readOnly = true)
-  public CastInvitationDetailResponse view(String token) {
+  public CastInvitationDetail view(String token) {
     CastInvitation invitation = findByToken(token);
     CastEnrollment cast = requireCast(invitation);
-    return new CastInvitationDetailResponse(
+    return new CastInvitationDetail(
         storeName(invitation.getStoreId()),
         profileRepository
             .findByEnrollmentIdAndStoreId(cast.getId(), invitation.getStoreId())
@@ -78,13 +75,13 @@ public class CastInvitationAcceptanceService {
         invitation.getExpiresAt());
   }
 
-  /** 新規登録で受諾する。CAST・SPECIFIC_STORES{招待店舗} の身分を作成し、档案へ紐づけて招待を受諾済みにする。 */
+  /** 新規登録で受諾する。CAST・SPECIFIC_STORES{招待店舗} の身分を作成し、档案へ紐づけて招待を受諾済みにする。 招待店舗の名前を返す。 */
   @Transactional
-  public CastAcceptanceResponse acceptAsNewUser(String token, CastInvitationAcceptRequest request) {
+  public String acceptAsNewUser(String token, CastNewUserAcceptCommand command) {
     CastInvitation invitation = findByToken(token);
     storeRepository.lockAgainstDeletion(invitation.getStoreId());
     CastEnrollment cast = requireCastForUpdate(invitation);
-    if (userRepository.findByEmail(request.getEmail().toLowerCase(Locale.ROOT)).isPresent()) {
+    if (userRepository.findByEmail(command.email().toLowerCase(Locale.ROOT)).isPresent()) {
       throw new ServiceException(DUPLICATE_EMAIL_MESSAGE);
     }
     claim(invitation);
@@ -92,9 +89,9 @@ public class CastInvitationAcceptanceService {
     User user =
         saveUser(
             User.builder()
-                .email(request.getEmail())
-                .password(passwordEncoder.encode(request.getPassword()))
-                .displayName(request.getDisplayName())
+                .email(command.email())
+                .password(passwordEncoder.encode(command.password()))
+                .displayName(command.displayName())
                 .enabled(true)
                 .userType(UserType.CAST)
                 .storeScopeType(StoreScopeType.SPECIFIC_STORES)
@@ -102,15 +99,15 @@ public class CastInvitationAcceptanceService {
                 .build());
     link(cast, user.getId());
     recordAcceptance(invitation, cast, user, "NEW_USER", null);
-    return new CastAcceptanceResponse(storeName(invitation.getStoreId()));
+    return storeName(invitation.getStoreId());
   }
 
   /**
    * 資格情報を照合済みの既存の CAST アカウントで受諾する。SPECIFIC_STORES は所属店舗集合に招待店舗を冪等 union し、ALL_STORES
-   * は全店アクセス権をそのまま保持する（降格しない）。 いずれも档案へ紐づけて招待を受諾済みにする。
+   * は全店アクセス権をそのまま保持する（降格しない）。 いずれも档案へ紐づけて招待を受諾済みにし、招待店舗の名前を返す。
    */
   @Transactional
-  public CastAcceptanceResponse acceptAsExistingUser(String token, String email, String password) {
+  public String acceptAsExistingUser(String token, String email, String password) {
     CastInvitation invitation = findByToken(token);
     storeRepository.lockAgainstDeletion(invitation.getStoreId());
     CastEnrollment cast = requireCastForUpdate(invitation);
@@ -151,7 +148,7 @@ public class CastInvitationAcceptanceService {
     }
     link(cast, user.getId());
     recordAcceptance(invitation, cast, user, "EXISTING_USER", membershipAdded);
-    return new CastAcceptanceResponse(storeName(invitation.getStoreId()));
+    return storeName(invitation.getStoreId());
   }
 
   /**

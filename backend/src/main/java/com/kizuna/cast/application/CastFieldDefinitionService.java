@@ -1,12 +1,9 @@
 package com.kizuna.cast.application;
 
-import com.kizuna.cast.api.dto.CastFieldDefinitionCreateRequest;
-import com.kizuna.cast.api.dto.CastFieldDefinitionMapper;
-import com.kizuna.cast.api.dto.CastFieldDefinitionResponse;
-import com.kizuna.cast.api.dto.CastFieldDefinitionUpdateRequest;
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastFieldDefinition;
+import com.kizuna.cast.domain.CastFieldDefinitionPatch;
 import com.kizuna.cast.domain.CastFieldDefinitionRepository;
 import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastProfileRepository;
@@ -32,25 +29,21 @@ public class CastFieldDefinitionService {
 
   private final CastFieldDefinitionRepository repository;
   private final CastEnrollmentService enrollmentService;
-  private final CastFieldDefinitionMapper mapper;
   private final StoreRepository storeRepository;
   private final CastEnrollmentRepository enrollmentRepository;
   private final CastProfileRepository profileRepository;
   private final BusinessAudit audit;
 
   @Transactional(readOnly = true)
-  public List<CastFieldDefinitionResponse> list(Long storeId) {
-    return repository.findAllByStoreIdOrderByDisplayOrderAsc(storeId).stream()
-        .map(mapper::toResponse)
-        .toList();
+  public List<CastFieldDefinition> list(Long storeId) {
+    return repository.findAllByStoreIdOrderByDisplayOrderAsc(storeId);
   }
 
   @Transactional
-  public CastFieldDefinitionResponse create(
-      Long storeId, CastFieldDefinitionCreateRequest request) {
+  public CastFieldDefinition create(Long storeId, CastFieldDefinitionCreateCommand command) {
     storeRepository.lockCastFields(storeId);
-    if (repository.existsByStoreIdAndKey(storeId, request.getKey())) {
-      throw new ServiceException("このキーは既に登録されています: " + request.getKey());
+    if (repository.existsByStoreIdAndKey(storeId, command.key())) {
+      throw new ServiceException("このキーは既に登録されています: " + command.key());
     }
     if (repository.countByStoreId(storeId) >= MAX_DEFINITIONS) {
       throw new ServiceException("カスタムフィールド定義は最大" + MAX_DEFINITIONS + "件までです");
@@ -59,10 +52,10 @@ public class CastFieldDefinitionService {
     int nextOrder = max == null ? 0 : max + 1;
     CastFieldDefinition definition =
         CastFieldDefinition.builder()
-            .key(request.getKey())
-            .label(request.getLabel())
+            .key(command.key())
+            .label(command.label())
             .displayOrder(nextOrder)
-            .isPublic(Boolean.TRUE.equals(request.getIsPublic()))
+            .isPublic(Boolean.TRUE.equals(command.isPublic()))
             .build();
     definition.setStoreId(storeId);
     repository.saveAndFlush(definition);
@@ -73,7 +66,7 @@ public class CastFieldDefinitionService {
         definition.getId(),
         Map.of(),
         snapshot(definition));
-    return mapper.toResponse(definition);
+    return definition;
   }
 
   private static Map<String, String> snapshot(CastFieldDefinition definition) {
@@ -89,8 +82,7 @@ public class CastFieldDefinitionService {
   }
 
   @Transactional
-  public CastFieldDefinitionResponse update(
-      Long storeId, String id, CastFieldDefinitionUpdateRequest request) {
+  public CastFieldDefinition update(Long storeId, String id, CastFieldDefinitionPatch patch) {
     storeRepository.lockCastFields(storeId);
     CastFieldDefinition definition =
         repository
@@ -98,7 +90,7 @@ public class CastFieldDefinitionService {
             .orElseThrow(() -> new NotFoundException("カスタムフィールド定義が見つかりません"));
     var before = snapshot(definition);
     String previousLabel = definition.getLabel();
-    definition.apply(mapper.toPatch(request));
+    definition.apply(patch);
     boolean labelChanged = !Objects.equals(previousLabel, definition.getLabel());
     if (labelChanged || !before.equals(snapshot(definition))) {
       repository.save(definition);
@@ -113,7 +105,7 @@ public class CastFieldDefinitionService {
           before,
           after);
     }
-    return mapper.toResponse(definition);
+    return definition;
   }
 
   @Transactional

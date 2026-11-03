@@ -1,7 +1,7 @@
 package com.kizuna.cast.application;
 
-import com.kizuna.cast.api.dto.CastStoreResponse;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
+import com.kizuna.cast.domain.CastStoreView;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.domain.UserRepository;
 import java.util.List;
@@ -23,14 +23,12 @@ public class CastSelfService {
   private final CastEnrollmentRepository castRepository;
 
   @Transactional(readOnly = true)
-  public List<CastStoreResponse> myStores(String email) {
+  public List<CastStoreView> myStores(String email) {
     Long userId =
         userRepository
             .findByEmail(email)
             .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
             .getId();
-    return castRepository.findStoresByUserId(userId).stream()
-        .map(view -> new CastStoreResponse(view.getStoreId(), view.getStoreName()))
-        .toList();
+    return castRepository.findStoresByUserId(userId);
   }
 }

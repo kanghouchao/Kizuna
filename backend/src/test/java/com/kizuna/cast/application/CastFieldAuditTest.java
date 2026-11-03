@@ -8,15 +8,13 @@ import static org.mockito.Mockito.when;
 import com.kizuna.audit.domain.AuditEvent;
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
-import com.kizuna.cast.api.dto.CastFieldDefinitionCreateRequest;
-import com.kizuna.cast.api.dto.CastFieldDefinitionMapper;
-import com.kizuna.cast.api.dto.CastFieldDefinitionUpdateRequest;
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastEnrollmentSnapshot;
 import com.kizuna.cast.domain.CastEnrollmentSnapshotRepository;
 import com.kizuna.cast.domain.CastEnrollmentStatusHistoryRepository;
 import com.kizuna.cast.domain.CastFieldDefinition;
+import com.kizuna.cast.domain.CastFieldDefinitionPatch;
 import com.kizuna.cast.domain.CastFieldDefinitionRepository;
 import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastProfileRepository;
@@ -36,7 +34,6 @@ import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mapstruct.factory.Mappers;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -68,13 +65,7 @@ class CastFieldAuditTest {
             audit);
     service =
         new CastFieldDefinitionService(
-            definitions,
-            lifecycle,
-            Mappers.getMapper(CastFieldDefinitionMapper.class),
-            stores,
-            enrollments,
-            profiles,
-            audit);
+            definitions, lifecycle, stores, enrollments, profiles, audit);
     var actor =
         User.builder()
             .email("operator@example.test")
@@ -114,10 +105,7 @@ class CastFieldAuditTest {
 
   @Test
   void creationRecordsSafeDefinitionWithoutCustomKeyOrLabel() {
-    var request = new CastFieldDefinitionCreateRequest();
-    request.setKey("private-key");
-    request.setLabel("秘密の項目");
-    request.setIsPublic(true);
+    var request = new CastFieldDefinitionCreateCommand("private-key", "秘密の項目", true);
     assertThat(service.create(STORE_ID, request).getId()).isEqualTo("definition");
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
@@ -150,14 +138,10 @@ class CastFieldAuditTest {
     when(definitions.findByIdAndStoreId("definition", STORE_ID))
         .thenReturn(Optional.of(definition));
     when(definitions.save(any())).thenAnswer(call -> call.getArgument(0));
-    var same = new CastFieldDefinitionUpdateRequest();
-    same.setLabel("旧い秘密");
-    same.setDisplayOrder(3);
-    same.setIsPublic(false);
+    var same = new CastFieldDefinitionPatch("旧い秘密", 3, false);
     service.update(STORE_ID, "definition", same);
     assertThat(recorded).isEmpty();
-    var changed = new CastFieldDefinitionUpdateRequest();
-    changed.setLabel("新しい秘密");
+    var changed = new CastFieldDefinitionPatch("新しい秘密", null, null);
     service.update(STORE_ID, "definition", changed);
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();

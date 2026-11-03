@@ -22,6 +22,7 @@ public class SelfStoreController {
   @GetMapping
   @PreAuthorize("hasRole('CAST')")
   public ResponseEntity<List<CastStoreResponse>> myStores(Principal principal) {
-    return ResponseEntity.ok(castSelfService.myStores(principal.getName()));
+    return ResponseEntity.ok(
+        castSelfService.myStores(principal.getName()).stream().map(CastStoreResponse::of).toList());
   }
 }

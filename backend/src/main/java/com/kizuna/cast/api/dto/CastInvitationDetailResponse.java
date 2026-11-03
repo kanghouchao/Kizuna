@@ -1,5 +1,6 @@
 package com.kizuna.cast.api.dto;
 
+import com.kizuna.cast.application.CastInvitationDetail;
 import java.time.OffsetDateTime;
 
 /**
@@ -7,4 +8,10 @@ import java.time.OffsetDateTime;
  * は新規登録の表示名初期値に使う。
  */
 public record CastInvitationDetailResponse(
-    String storeName, String castName, String status, OffsetDateTime expiresAt) {}
+    String storeName, String castName, String status, OffsetDateTime expiresAt) {
+
+  public static CastInvitationDetailResponse of(CastInvitationDetail detail) {
+    return new CastInvitationDetailResponse(
+        detail.storeName(), detail.castName(), detail.status(), detail.expiresAt());
+  }
+}

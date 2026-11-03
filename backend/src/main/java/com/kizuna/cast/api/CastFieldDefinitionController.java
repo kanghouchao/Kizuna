@@ -1,6 +1,7 @@
 package com.kizuna.cast.api;
 
 import com.kizuna.cast.api.dto.CastFieldDefinitionCreateRequest;
+import com.kizuna.cast.api.dto.CastFieldDefinitionMapper;
 import com.kizuna.cast.api.dto.CastFieldDefinitionResponse;
 import com.kizuna.cast.api.dto.CastFieldDefinitionUpdateRequest;
 import com.kizuna.cast.application.CastFieldDefinitionService;
@@ -27,6 +28,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class CastFieldDefinitionController {
 
   private final CastFieldDefinitionService service;
+  private final CastFieldDefinitionMapper mapper;
 
   // 一覧(読み取り)は値入力担当（CAST_MANAGE 保持者）がキャスト編集フォームで活きた定義を描画するために必要なので
   // 閲覧能力（CAST_FIELD_DEF_VIEW）で許可する。定義そのものの作成・更新・削除は構造変更のため
@@ -34,14 +36,15 @@ public class CastFieldDefinitionController {
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_CAST_FIELD_DEF_VIEW')")
   public ResponseEntity<List<CastFieldDefinitionResponse>> list(@CurrentStore Long storeId) {
-    return ResponseEntity.ok(service.list(storeId));
+    return ResponseEntity.ok(service.list(storeId).stream().map(mapper::toResponse).toList());
   }
 
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_CAST_FIELD_DEF_MANAGE')")
   public ResponseEntity<CastFieldDefinitionResponse> create(
       @CurrentStore Long storeId, @Valid @RequestBody CastFieldDefinitionCreateRequest request) {
-    return ResponseEntity.status(HttpStatus.CREATED).body(service.create(storeId, request));
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(mapper.toResponse(service.create(storeId, mapper.toCommand(request))));
   }
 
   @PutMapping("/{id}")
@@ -50,7 +53,8 @@ public class CastFieldDefinitionController {
       @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody CastFieldDefinitionUpdateRequest request) {
-    return ResponseEntity.ok(service.update(storeId, id, request));
+    return ResponseEntity.ok(
+        mapper.toResponse(service.update(storeId, id, mapper.toPatch(request))));
   }
 
   @DeleteMapping("/{id}")

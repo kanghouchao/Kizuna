@@ -14,7 +14,6 @@ import com.kizuna.auth.infrastructure.ExemptingBearerTokenResolver;
 import com.kizuna.auth.infrastructure.JwtAuthenticationEntryPoint;
 import com.kizuna.auth.infrastructure.JwtAuthoritiesConverter;
 import com.kizuna.auth.infrastructure.SecurityConfig;
-import com.kizuna.cast.api.dto.CastAcceptanceResponse;
 import com.kizuna.cast.application.CastInvitationAcceptanceService;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
@@ -97,8 +96,7 @@ class CastInvitationControllerTest {
   @DisplayName("正しい資格情報なら匿名要求で受諾でき、トークンも cookie も発行しないこと")
   void acceptsWithCredentialsAndIssuesNoCookie() throws Exception {
     givenAccount(true);
-    when(acceptanceService.acceptAsExistingUser("invite-token", EMAIL, PASSWORD))
-        .thenReturn(new CastAcceptanceResponse("渋谷店"));
+    when(acceptanceService.acceptAsExistingUser("invite-token", EMAIL, PASSWORD)).thenReturn("渋谷店");
 
     mockMvc
         .perform(acceptExisting(EMAIL, PASSWORD))
@@ -112,8 +110,7 @@ class CastInvitationControllerTest {
   @DisplayName("期限切れの Bearer が付いていても資格情報で受諾できること")
   void acceptsDespiteStaleBearer() throws Exception {
     givenAccount(true);
-    when(acceptanceService.acceptAsExistingUser("invite-token", EMAIL, PASSWORD))
-        .thenReturn(new CastAcceptanceResponse("渋谷店"));
+    when(acceptanceService.acceptAsExistingUser("invite-token", EMAIL, PASSWORD)).thenReturn("渋谷店");
 
     mockMvc
         .perform(

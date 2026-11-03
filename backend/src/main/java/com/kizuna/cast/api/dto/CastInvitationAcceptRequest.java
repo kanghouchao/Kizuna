@@ -1,5 +1,6 @@
 package com.kizuna.cast.api.dto;
 
+import com.kizuna.cast.application.CastNewUserAcceptCommand;
 import com.kizuna.shared.validation.Password;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -29,4 +30,8 @@ public class CastInvitationAcceptRequest {
   @NotBlank(message = "display_name is required")
   @Size(max = 150)
   private String displayName;
+
+  public CastNewUserAcceptCommand command() {
+    return new CastNewUserAcceptCommand(email, password, displayName);
+  }
 }
