@@ -34,6 +34,7 @@ import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserCredentialsChanged;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
+import jakarta.persistence.EntityManager;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -86,7 +87,10 @@ class AdminStaffServiceTest {
   @Spy
   private CredentialOperations credentialOperations =
       new CredentialOperations(
-          events::add, mock(RoleManageHolderGuard.class), mock(UserRepository.class));
+          events::add,
+          mock(RoleManageHolderGuard.class),
+          mock(UserRepository.class),
+          mock(EntityManager.class));
 
   private final StoreScopeHolder holder = new StoreScopeHolder();
 

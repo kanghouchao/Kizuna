@@ -14,6 +14,8 @@ import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserCredentialsChanged;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,8 +28,9 @@ class CredentialOperationsTest {
   private final List<Object> events = new ArrayList<>();
   private final RoleManageHolderGuard holderGuard = mock(RoleManageHolderGuard.class);
   private final UserRepository userRepository = mock(UserRepository.class);
+  private final EntityManager entityManager = mock(EntityManager.class);
   private final CredentialOperations operations =
-      new CredentialOperations(events::add, holderGuard, userRepository);
+      new CredentialOperations(events::add, holderGuard, userRepository, entityManager);
 
   @ParameterizedTest
   @EnumSource(
@@ -112,7 +115,7 @@ class CredentialOperationsTest {
 
   @Test
   void rolePermissionChangeLocksHoldersAndAdvancesEveryHolderBeforeReplacing() {
-    Role role = role(Set.of(1L));
+    Role role = locked(role(Set.of(1L)));
     User staff = user(UserType.STAFF);
     User serviceIdentity = user(UserType.SERVICE);
     serviceIdentity.setId(43L);
@@ -131,13 +134,32 @@ class CredentialOperationsTest {
 
   @Test
   void unchangedRolePermissionsLeaveHoldersUntouched() {
-    Role role = role(Set.of(1L, 2L));
+    Role role = locked(role(Set.of(1L, 2L)));
 
     operations.replaceRolePermissions(role, Set.of(2L, 1L));
 
     assertThat(role.getPermissionIds()).containsExactlyInAnyOrder(1L, 2L);
     verifyNoInteractions(holderGuard, userRepository);
     assertThat(events).isEmpty();
+  }
+
+  @ParameterizedTest
+  @EnumSource(
+      value = LockModeType.class,
+      names = {"NONE", "OPTIMISTIC", "PESSIMISTIC_READ"})
+  void replacingPermissionsOfARoleNotWriteLockedIsRejected(LockModeType lock) {
+    Role role = role(Set.of(1L));
+    when(entityManager.getLockMode(role)).thenReturn(lock);
+
+    assertThatThrownBy(() -> operations.replaceRolePermissions(role, Set.of(2L)))
+        .isInstanceOf(IllegalStateException.class);
+    assertThat(role.getPermissionIds()).containsExactly(1L);
+    verifyNoInteractions(holderGuard, userRepository);
+  }
+
+  private Role locked(Role role) {
+    when(entityManager.getLockMode(role)).thenReturn(LockModeType.PESSIMISTIC_WRITE);
+    return role;
   }
 
   private static Role role(Set<Long> permissionIds) {
