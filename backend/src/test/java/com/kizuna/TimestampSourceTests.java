@@ -60,6 +60,11 @@ class TimestampSourceTests {
   private static final Pattern JUDGEMENT_CALL =
       Pattern.compile("\\b(?:isExpired|isWithin\\w*|is\\w+At|is\\w+On)\\(");
 
+  // 静的 import は呼び出し側に Timestamps の名が残らず、判定の引数を見ても拾えないため宣言ごと拒否する。
+  private static final Pattern RECORD_TIME_STATIC_IMPORT =
+      Pattern.compile(
+          "import static com\\.kizuna\\.shared\\.persistence\\.Timestamps\\.(?:now|\\*);");
+
   private static final Pattern TIME_PARAMETER =
       Pattern.compile(
           "\\b(?:OffsetDateTime|Instant|LocalDate|LocalDateTime|ZonedDateTime)\\s+\\w+");
@@ -123,6 +128,10 @@ class TimestampSourceTests {
     List<String> offenders = new ArrayList<>();
     for (Path file : mainSources()) {
       var source = Files.readString(file);
+      if (RECORD_TIME_STATIC_IMPORT.matcher(source).find()) {
+        offenders.add(MAIN_SOURCES.relativize(file).toString());
+        continue;
+      }
       var call = JUDGEMENT_CALL.matcher(source);
       while (call.find()) {
         if (argumentsOf(source, call.end()).contains("Timestamps.now()")) {
@@ -132,7 +141,7 @@ class TimestampSourceTests {
       }
     }
 
-    assertThat(offenders).as("期限判定に Timestamps.now() を渡すソース").isEmpty();
+    assertThat(offenders).as("期限判定に Timestamps.now() を渡す、または静的 import するソース").isEmpty();
   }
 
   // 開き括弧の直後から、対応する閉じ括弧の手前まで。文字列中の括弧は数えないが、主コードの判定呼び出しには現れない。

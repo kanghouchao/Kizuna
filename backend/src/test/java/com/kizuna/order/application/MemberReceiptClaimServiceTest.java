@@ -20,6 +20,7 @@ import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.StoreScopeType;
@@ -42,6 +43,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.Spy;
@@ -152,9 +154,24 @@ class MemberReceiptClaimServiceTest {
     givenToken(token);
     Instant justBefore = token.getExpiresAt().toInstant().minus(1, ChronoUnit.MICROS);
 
+    OffsetDateTime before = Timestamps.now();
     serviceAt(Clock.fixed(justBefore, ZoneOffset.UTC)).claim(EMAIL, RAW_TOKEN);
+    OffsetDateTime after = Timestamps.now();
 
     assertThat(token.getStatus()).isEqualTo(OrderReceiptTokenStatus.CLAIMED);
+    // 帰属時刻は判定の時計ではなく、行に書く時刻（実時間）で記録する。
+    var attributedAt = ArgumentCaptor.forClass(OffsetDateTime.class);
+    Mockito.verify(materializer)
+        .materialize(
+            Mockito.anyLong(),
+            Mockito.any(),
+            Mockito.any(),
+            Mockito.any(),
+            Mockito.any(),
+            attributedAt.capture(),
+            Mockito.any(),
+            Mockito.any());
+    assertThat(attributedAt.getValue()).isBetween(before, after);
   }
 
   @Test
