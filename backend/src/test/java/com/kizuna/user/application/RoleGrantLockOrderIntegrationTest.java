@@ -138,7 +138,7 @@ class RoleGrantLockOrderIntegrationTest {
   private long grant(GrantPath path, User target, long kept, long granted) {
     return switch (path) {
       case STAFF_CREATE -> {
-        var request =
+        var command =
             new StaffCommand.Create(
                 UUID.randomUUID() + "@lock-order.test",
                 UUID.randomUUID().toString(),
@@ -146,28 +146,28 @@ class RoleGrantLockOrderIntegrationTest {
                 Set.of(granted),
                 StoreScopeType.ALL_STORES,
                 Set.of());
-        yield context.getBean(AdminStaffService.class).create(request, actorEmail).id();
+        yield context.getBean(AdminStaffService.class).create(command, actorEmail).id();
       }
       case STAFF_UPDATE -> {
-        var request =
+        var command =
             new StaffCommand.UpdateGrants(
                 Set.of(kept, granted), StoreScopeType.ALL_STORES, Set.of(), target.getVersion());
         yield context
             .getBean(AdminStaffService.class)
-            .update(target.getId(), request, actorEmail)
+            .update(target.getId(), command, actorEmail)
             .id();
       }
       case SERVICE_CREATE -> {
-        var request =
+        var command =
             new ServiceIdentityCommand.Create(
                 "付与検証", Set.of(granted), StoreScopeType.ALL_STORES, Set.of());
-        yield context.getBean(ServiceIdentityService.class).create(request).id();
+        yield context.getBean(ServiceIdentityService.class).create(command).id();
       }
       case SERVICE_UPDATE -> {
-        var request =
+        var command =
             new ServiceIdentityCommand.UpdateGrants(
                 Set.of(kept, granted), StoreScopeType.ALL_STORES, Set.of(), target.getVersion());
-        yield context.getBean(ServiceIdentityService.class).update(target.getId(), request).id();
+        yield context.getBean(ServiceIdentityService.class).update(target.getId(), command).id();
       }
     };
   }

@@ -56,7 +56,7 @@ class InitialSetupServiceTest {
             userRepository, roleRepository, passwordEncoder, businessAudit, appProperties);
   }
 
-  private static InitialSetupCommand request() {
+  private static InitialSetupCommand command() {
     return new InitialSetupCommand("Owner@Kizuna.test", "password123", "管理者 太郎");
   }
 
@@ -91,7 +91,7 @@ class InitialSetupServiceTest {
               return saved;
             });
 
-    Long id = service.register(request());
+    Long id = service.register(command());
 
     User user = userCaptor.getValue();
     assertThat(id).isEqualTo(42L);
@@ -121,7 +121,7 @@ class InitialSetupServiceTest {
   void registerIsNotFoundOnceStaffExists() {
     when(userRepository.existsByUserType(UserType.STAFF)).thenReturn(true);
 
-    assertThatThrownBy(() -> service.register(request()))
+    assertThatThrownBy(() -> service.register(command()))
         .isInstanceOf(NotFoundException.class)
         .hasMessage("初期設定は完了しています");
 
@@ -144,7 +144,7 @@ class InitialSetupServiceTest {
                     new SQLException("duplicate key value violates unique constraint"),
                     "uq_t_users_email")));
 
-    assertThatThrownBy(() -> service.register(request()))
+    assertThatThrownBy(() -> service.register(command()))
         .isInstanceOf(DuplicateStaffEmailException.class)
         .hasMessage("このメールアドレスは既に登録されています");
   }

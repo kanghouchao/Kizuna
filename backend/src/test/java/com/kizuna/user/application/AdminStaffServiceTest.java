@@ -181,13 +181,13 @@ class AdminStaffServiceTest {
     return target;
   }
 
-  private static StaffCommand.Create createRequest(
+  private static StaffCommand.Create createCommand(
       Set<Long> roleIds, StoreScopeType scopeType, Set<Long> storeIds) {
     return new StaffCommand.Create(
         "new@kizuna.test", "rawpass", "表示名", roleIds, scopeType, storeIds);
   }
 
-  private static StaffCommand.UpdateGrants updateRequest(
+  private static StaffCommand.UpdateGrants updateCommand(
       Set<Long> roleIds, StoreScopeType scopeType, Set<Long> storeIds) {
     return new StaffCommand.UpdateGrants(roleIds, scopeType, storeIds, 0L);
   }
@@ -252,7 +252,7 @@ class AdminStaffServiceTest {
     assertThatThrownBy(
             () ->
                 service.create(
-                    createRequest(Set.of(ADMIN_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)),
+                    createCommand(Set.of(ADMIN_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)),
                     ACTOR))
         .isInstanceOf(InvalidRoleGrantException.class);
     verify(repository, never()).saveAndFlush(any());
@@ -266,14 +266,14 @@ class AdminStaffServiceTest {
     assertThatThrownBy(
             () ->
                 service.create(
-                    createRequest(
+                    createCommand(
                         Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L, 2L)),
                     ACTOR))
         .isInstanceOf(InvalidStoreScopeException.class);
     assertThatThrownBy(
             () ->
                 service.create(
-                    createRequest(Set.of(STAFF_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR))
+                    createCommand(Set.of(STAFF_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR))
         .isInstanceOf(InvalidStoreScopeException.class);
     verify(repository, never()).saveAndFlush(any());
   }
@@ -287,7 +287,7 @@ class AdminStaffServiceTest {
 
     StaffView res =
         service.create(
-            createRequest(Set.of(MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)), ACTOR);
+            createCommand(Set.of(MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)), ACTOR);
 
     var order = inOrder(roleRepository, repository);
     order.verify(roleRepository).lockIdsForGrant(Set.of(MANAGER_ROLE));
@@ -307,7 +307,7 @@ class AdminStaffServiceTest {
 
     StaffView res =
         service.create(
-            createRequest(Set.of(ADMIN_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR);
+            createCommand(Set.of(ADMIN_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR);
 
     assertThat(res.storeScopeType()).isEqualTo(StoreScopeType.ALL_STORES);
     assertThat(res.editable()).isTrue();
@@ -336,7 +336,7 @@ class AdminStaffServiceTest {
         .containsExactlyInAnyOrder(ADMIN_ROLE, MANAGER_ROLE, STAFF_ROLE);
     StaffView res =
         service.create(
-            createRequest(Set.of(MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)), ACTOR);
+            createCommand(Set.of(MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)), ACTOR);
     assertThat(res.roles()).extracting(RoleViews.Ref::id).containsExactly(MANAGER_ROLE);
     assertThat(res.editable()).isTrue();
   }
@@ -349,14 +349,14 @@ class AdminStaffServiceTest {
     assertThatThrownBy(
             () ->
                 service.create(
-                    createRequest(
+                    createCommand(
                         Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L, 2L)),
                     ACTOR))
         .isInstanceOf(InvalidStoreScopeException.class);
     assertThatThrownBy(
             () ->
                 service.create(
-                    createRequest(Set.of(STAFF_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR))
+                    createCommand(Set.of(STAFF_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR))
         .isInstanceOf(InvalidStoreScopeException.class);
     verify(repository, never()).saveAndFlush(any());
   }
@@ -377,13 +377,13 @@ class AdminStaffServiceTest {
     assertThatThrownBy(
             () ->
                 service.create(
-                    createRequest(Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)),
+                    createCommand(Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)),
                     ACTOR))
         .isInstanceOf(DuplicateStaffEmailException.class);
     assertThatThrownBy(
             () ->
                 service.create(
-                    createRequest(Set.of(999L), StoreScopeType.SPECIFIC_STORES, Set.of(1L)), ACTOR))
+                    createCommand(Set.of(999L), StoreScopeType.SPECIFIC_STORES, Set.of(1L)), ACTOR))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("ロール");
   }
@@ -412,7 +412,7 @@ class AdminStaffServiceTest {
               () ->
                   service.update(
                       id,
-                      updateRequest(Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)),
+                      updateCommand(Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)),
                       ACTOR))
           .isInstanceOf(StaffOutOfDelegationScopeException.class);
       assertThatThrownBy(() -> service.suspend(id, ACTOR))
@@ -437,7 +437,7 @@ class AdminStaffServiceTest {
 
     service.update(
         2L,
-        updateRequest(Set.of(MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L, 2L)),
+        updateCommand(Set.of(MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L, 2L)),
         ACTOR);
 
     assertThat(target.getRoleIds()).containsExactly(MANAGER_ROLE);
@@ -456,7 +456,7 @@ class AdminStaffServiceTest {
     User target = target(2L, Set.of(ADMIN_ROLE), StoreScopeType.ALL_STORES, Set.of());
 
     service.update(
-        2L, updateRequest(Set.of(MANAGER_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR);
+        2L, updateCommand(Set.of(MANAGER_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR);
 
     var order = inOrder(roleRepository, roleManageHolderGuard, repository);
     order.verify(roleRepository).lockIdsForGrant(Set.of(MANAGER_ROLE));

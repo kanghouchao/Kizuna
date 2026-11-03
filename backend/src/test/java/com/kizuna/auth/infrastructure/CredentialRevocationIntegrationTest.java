@@ -376,13 +376,13 @@ class CredentialRevocationIntegrationTest {
                         users.saveAndFlush(user);
                       }));
       assertThat(shared.await(10, TimeUnit.SECONDS)).isTrue();
-      var request =
+      var command =
           new RoleCommand.Update(
               "失効検証-" + UUID.randomUUID(),
               Set.of(PermissionCode.CUSTOMER_MANAGE.name()),
               roleVersion);
       Future<?> change =
-          executor.submit(() -> context.getBean(RoleService.class).update(changed, request));
+          executor.submit(() -> context.getBean(RoleService.class).update(changed, command));
       awaitLockWait();
       proceed.countDown();
       grant.get(10, TimeUnit.SECONDS);

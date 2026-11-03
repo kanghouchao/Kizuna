@@ -100,7 +100,7 @@ class RoleRowLockPremiseIntegrationTest {
               () ->
                   context
                       .getBean(RoleService.class)
-                      .update(role, request(role, PermissionCode.CUSTOMER_MANAGE)));
+                      .update(role, command(role, PermissionCode.CUSTOMER_MANAGE)));
       assertThat(paused.await(10, TimeUnit.SECONDS)).isTrue();
       try {
         assertThat(probe(role)).isEqualTo("55P03");
@@ -142,7 +142,7 @@ class RoleRowLockPremiseIntegrationTest {
     }
   }
 
-  private RoleCommand.Update request(long role, PermissionCode permission) {
+  private RoleCommand.Update command(long role, PermissionCode permission) {
     return new RoleCommand.Update(
         jdbc.queryForObject("select name from t_roles where id = ?", String.class, role),
         Set.of(permission.name()),
