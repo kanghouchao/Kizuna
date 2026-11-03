@@ -1,6 +1,7 @@
 package com.kizuna.advertising;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
 
 import com.kizuna.advertising.application.AdvertisingMediaRenderer;
 import com.kizuna.advertising.application.AdvertisingMediaService;
@@ -35,8 +36,8 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 /**
  * 三つの帳票の出力を固定入力の golden と比べる（CSV は字節、XLSX はシート名・固定行・全セルの型と値）。 作り直しは backend/ で
- * KIZUNA_WRITE_GOLDEN=1 ./gradlew test --tests '*AdvertisingRendererGoldenTest' を流して
- * src/test/resources/advertising/golden/ を上書きし、差分を読んでからコミットする。出力を変える意図の無い変更では作り直さない。
+ * KIZUNA_WRITE_GOLDEN=1 ./gradlew test --tests '*AdvertisingRendererGoldenTest' を流して（上書きした回は失敗する）
+ * src/test/resources/advertising/golden/ の差分を読み、変数なしで通してからコミットする。出力を変える意図の無い変更では作り直さない。
  */
 class AdvertisingRendererGoldenTest {
   private static final Path SOURCE = Path.of("src/test/resources/advertising/golden");
@@ -77,7 +78,7 @@ class AdvertisingRendererGoldenTest {
     if ("1".equals(System.getenv("KIZUNA_WRITE_GOLDEN"))) {
       Files.createDirectories(SOURCE);
       Files.write(SOURCE.resolve(file), actual);
-      return;
+      fail("golden を上書きした: " + file);
     }
     byte[] golden;
     try (InputStream in =
