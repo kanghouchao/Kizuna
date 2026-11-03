@@ -7,6 +7,7 @@ import com.kizuna.receipt.once.Committed;
 import com.kizuna.receipt.once.OperationReceipts;
 import com.kizuna.receipt.once.Receipt;
 import com.kizuna.receipt.once.ReceiptKey;
+import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ResourceBusyException;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
@@ -288,6 +289,6 @@ class OperationReceiptsIntegrationTest {
   @EnableAutoConfiguration
   @EntityScan("com.kizuna.receipt")
   @EnableJpaRepositories("com.kizuna.receipt")
-  @Import(OperationReceipts.class)
+  @Import({OperationReceipts.class, AppProperties.class})
   static class Config {}
 }

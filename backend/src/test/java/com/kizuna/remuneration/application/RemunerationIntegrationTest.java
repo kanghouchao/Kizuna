@@ -29,6 +29,7 @@ import com.kizuna.remuneration.domain.RemunerationChangeRepository;
 import com.kizuna.remuneration.infrastructure.RemunerationRecords;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.settings.application.SystemConfigService;
+import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
@@ -607,7 +608,8 @@ class RemunerationIntegrationTest {
     BusinessDateService.class,
     ActorIdentityService.class,
     StoreScopeHolder.class,
-    OperationReceipts.class
+    OperationReceipts.class,
+    AppProperties.class
   })
   static class Config {
     @Bean
