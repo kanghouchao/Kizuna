@@ -43,6 +43,6 @@ public class TiebreakerPageableArgumentResolver implements PageableArgumentResol
       @Nullable WebDataBinderFactory binderFactory) {
     Pageable pageable =
         delegate.resolveArgument(parameter, mavContainer, webRequest, binderFactory);
-    return Paging.totalOrder(pageable, pageable.getSort(), TIEBREAKER);
+    return Paging.totalOrder(pageable, TIEBREAKER);
   }
 }

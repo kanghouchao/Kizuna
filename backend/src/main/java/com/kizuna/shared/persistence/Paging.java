@@ -13,6 +13,10 @@ public final class Paging {
 
   private Paging() {}
 
+  public static Pageable totalOrder(Pageable requested, Sort.Order uniqueKey) {
+    return totalOrder(requested, requested.getSort(), uniqueKey);
+  }
+
   public static Pageable totalOrder(Pageable window, Sort sort, Sort.Order uniqueKey) {
     return totalOrder(window.getPageNumber(), window.getPageSize(), sort, uniqueKey);
   }

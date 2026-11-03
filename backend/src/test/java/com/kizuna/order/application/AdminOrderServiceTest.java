@@ -65,7 +65,7 @@ class AdminOrderServiceTest {
     service.list(new StoreScope(true, Set.of()), PageRequest.of(1, 10, Sort.by("createdAt")));
 
     assertThat(captor.getValue().getSort())
-        .containsExactly(Sort.Order.asc("createdAt"), Sort.Order.desc("id"));
+        .containsExactly(Sort.Order.asc("createdAt"), Sort.Order.asc("id"));
     assertThat(captor.getValue().getPageNumber()).isEqualTo(1);
   }
 

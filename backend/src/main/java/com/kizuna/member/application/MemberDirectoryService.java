@@ -67,7 +67,7 @@ public class MemberDirectoryService {
       List<RankTransition> rankHistory) {}
 
   /**
-   * 会員コード・電子メール・表示名の部分一致で検索する。並びは照会文が「登録の新しい順、同値は id 降順」で一意に決め、 Pageable は位置だけを運ぶ。呼出側の sort は受けない —
+   * 会員コード・電子メール・表示名の部分一致で検索する。並びは照会文が「登録の新しい順、同値は id 降順」で一意に決め、Pageable は位置だけを運ぶ。呼出側の sort は受けない —
    * 並びの列は利用者行に跨るため、Pageable の sort をそのまま JPQL に足すと存在しない属性で落ちる。
    */
   @Transactional(readOnly = true)
