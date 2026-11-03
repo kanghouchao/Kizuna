@@ -224,11 +224,12 @@ class NotificationIntegrationTest {
 
   private DeliveryResponse draft() {
     var source = guest();
-    return notifications.create(storeId, email, content(source)).delivery();
+    return DeliveryResponse.of(notifications.create(storeId, email, content(source)).delivery());
   }
 
   private DeliveryResponse queue(DeliveryResponse row) {
-    return notifications.queue(storeId, email, row.id(), row.version(), "内容確認済み", false);
+    return DeliveryResponse.of(
+        notifications.queue(storeId, email, row.id(), row.version(), "内容確認済み", false));
   }
 
   private void submitTask() {
@@ -254,7 +255,7 @@ class NotificationIntegrationTest {
   }
 
   private DeliveryResponse get(String id) {
-    return notifications.get(storeId, email, id);
+    return DeliveryResponse.of(notifications.get(storeId, email, id));
   }
 
   private DeliveryResponse await(String id, String status) throws Exception {
@@ -277,7 +278,7 @@ class NotificationIntegrationTest {
     assertThat(transport.results).containsExactly("permitted@example.invalid");
     var history = notifications.history(storeId, email, row.id(), PageRequest.of(0, 10));
     assertThat(history.getContent()).hasSize(1);
-    assertThat(history.getContent().getFirst().status()).isEqualTo("SENT");
+    assertThat(history.getContent().getFirst().getStatus().name()).isEqualTo("SENT");
     assertThat(
             jdbc.queryForObject(
                 "select after_values::text from t_audit_events where target_id=? and action='NOTIFICATION_RESULT'",
@@ -336,7 +337,7 @@ class NotificationIntegrationTest {
                 .history(storeId, email, row.id(), PageRequest.of(0, 10))
                 .getContent()
                 .getFirst()
-                .failureCode())
+                .getFailureCode())
         .isEqualTo("UNAVAILABLE");
     transport.outcome = EmailTransport.Result.UNKNOWN;
     var next = queue(draft());
@@ -424,7 +425,7 @@ class NotificationIntegrationTest {
     var input = content(source);
     var a = notifications.create(storeId, email, input);
     var b = notifications.create(storeId, email, input);
-    assertThat(a.delivery().id()).isEqualTo(b.delivery().id());
+    assertThat(a.delivery().row().getId()).isEqualTo(b.delivery().row().getId());
     assertThat(b.created()).isFalse();
   }
 
@@ -459,7 +460,7 @@ class NotificationIntegrationTest {
                 .history(storeId, email, row.id(), PageRequest.of(0, 10))
                 .getContent()
                 .getFirst()
-                .failureCode())
+                .getFailureCode())
         .isEqualTo("AUTHORIZATION_DENIED");
   }
 
@@ -510,7 +511,7 @@ class NotificationIntegrationTest {
             c.body(),
             OffsetDateTime.now().plusDays(1),
             c.dedupeKey());
-    var row = notifications.create(storeId, email, future).delivery();
+    var row = DeliveryResponse.of(notifications.create(storeId, email, future).delivery());
     queue(row);
     runTask();
     assertThat(get(row.id()).status()).isEqualTo("QUEUED");
@@ -583,7 +584,7 @@ class NotificationIntegrationTest {
             "本文",
             OffsetDateTime.now().minusMinutes(1),
             UUID.randomUUID().toString());
-    var row = notifications.create(storeId, email, input).delivery();
+    var row = DeliveryResponse.of(notifications.create(storeId, email, input).delivery());
     queue(row);
     runTask();
     await(row.id(), "SENT");
@@ -613,7 +614,7 @@ class NotificationIntegrationTest {
             "本文",
             OffsetDateTime.now().minusMinutes(1),
             UUID.randomUUID().toString());
-    var next = notifications.create(storeId, email, nextInput).delivery();
+    var next = DeliveryResponse.of(notifications.create(storeId, email, nextInput).delivery());
     queue(next);
     runTask();
     await(next.id(), "BLOCKED");

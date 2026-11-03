@@ -1,5 +1,6 @@
 package com.kizuna.notificationdelivery.api.dto;
 
+import com.kizuna.notificationdelivery.application.DeliveryView;
 import com.kizuna.notificationdelivery.domain.NotificationDelivery;
 import java.time.OffsetDateTime;
 
@@ -20,7 +21,8 @@ public record DeliveryResponse(
     String contactDecision,
     String transportAvailability,
     String schedulingAvailability) {
-  public static DeliveryResponse of(NotificationDelivery d, String decision, boolean available) {
+  public static DeliveryResponse of(DeliveryView view) {
+    NotificationDelivery d = view.row();
     return new DeliveryResponse(
         d.getId(),
         d.getSourceType().name(),
@@ -35,8 +37,8 @@ public record DeliveryResponse(
         d.getAttemptCount(),
         d.getCreatedAt(),
         d.getVersion(),
-        decision,
-        available ? "AVAILABLE" : "UNAVAILABLE",
+        view.contactDecision().name(),
+        view.transportAvailable() ? "AVAILABLE" : "UNAVAILABLE",
         "MANUAL_TASK_ONLY");
   }
 }

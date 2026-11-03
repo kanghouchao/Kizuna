@@ -102,9 +102,9 @@ class NotificationApplicationTest {
     var row = row();
     when(deliveries.findByIdAndStoreId("101", STORE_ID)).thenReturn(Optional.of(row));
     when(deliveries.findByIdAndStoreIdForUpdate("101", STORE_ID)).thenReturn(Optional.of(row));
-    assertThat(service.get(STORE_ID, "actor", "101").id()).isEqualTo("101");
-    assertThat(service.queue(STORE_ID, "actor", "101", null, "確認済み", false).status())
-        .isEqualTo("QUEUED");
+    assertThat(service.get(STORE_ID, "actor", "101").row().getId()).isEqualTo("101");
+    assertThat(service.queue(STORE_ID, "actor", "101", null, "確認済み", false).row().getStatus())
+        .isEqualTo(DeliveryStatus.QUEUED);
     var pageable = PageRequest.of(0, 10);
     when(attempts.findByStoreIdAndDeliveryId(STORE_ID, "101", pageable))
         .thenReturn(new PageImpl<>(List.of()));
