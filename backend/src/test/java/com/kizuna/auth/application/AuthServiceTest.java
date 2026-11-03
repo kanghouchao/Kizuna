@@ -36,6 +36,7 @@ import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
+import jakarta.persistence.EntityManager;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -77,7 +78,10 @@ class AuthServiceTest {
   @Spy
   private CredentialOperations credentialOperations =
       new CredentialOperations(
-          event -> {}, mock(RoleManageHolderGuard.class), mock(UserRepository.class));
+          event -> {},
+          mock(RoleManageHolderGuard.class),
+          mock(UserRepository.class),
+          mock(EntityManager.class));
 
   @Mock private AuthenticationManager authenticationManager;
   @Mock private Authentication authentication;

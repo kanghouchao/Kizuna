@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -31,6 +33,8 @@ import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserCredentialsChanged;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
@@ -79,7 +83,15 @@ class RoleServiceTest {
             permissionRepository,
             userRepository,
             roleManageHolderGuard,
-            new CredentialOperations(events::add, roleManageHolderGuard, userRepository));
+            new CredentialOperations(
+                events::add, roleManageHolderGuard, userRepository, lockedRows()));
+  }
+
+  /** 実装はロール行を findByIdForUpdate で押さえる。その結果だけを写す。 */
+  private static EntityManager lockedRows() {
+    EntityManager entityManager = mock(EntityManager.class);
+    lenient().when(entityManager.getLockMode(any())).thenReturn(LockModeType.PESSIMISTIC_WRITE);
+    return entityManager;
   }
 
   private Permission permission(long id, PermissionCode code) {

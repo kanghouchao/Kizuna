@@ -6,6 +6,8 @@ import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserCredentialsChanged;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Set;
@@ -24,6 +26,7 @@ public class CredentialOperations {
   private final ApplicationEventPublisher eventPublisher;
   private final RoleManageHolderGuard roleManageHolderGuard;
   private final UserRepository userRepository;
+  private final EntityManager entityManager;
 
   public void stop(User user) {
     user.stop();
@@ -49,9 +52,12 @@ public class CredentialOperations {
 
   /**
    * ロールの権限集合を置き換え、保持者全員の版を進める（操作者本人も含む）— トークンの権限は発行時にロールから写したものだから。
-   * ロール行は呼出元が先に押さえている前提で、保持者の確定と保存をロール行の保存より先に行う。集合が変わらない編集は保持者に触れない。
+   * ロール行は呼出元が先に書き込みロックで押さえていること（押さえていなければ例外）。保持者の確定と保存をロール行の保存より先に行い、集合が変わらない編集は保持者に触れない。
    */
   public void replaceRolePermissions(Role role, Set<Long> permissionIds) {
+    var lock = entityManager.getLockMode(role);
+    if (lock != LockModeType.PESSIMISTIC_WRITE && lock != LockModeType.PESSIMISTIC_FORCE_INCREMENT)
+      throw new IllegalStateException("ロール行を書き込みロックで押さえてから権限集合を置き換えてください");
     if (!role.getPermissionIds().equals(permissionIds)) {
       List<User> holders = roleManageHolderGuard.lockRoleHolders(role.getId());
       holders.forEach(this::invalidateSessions);

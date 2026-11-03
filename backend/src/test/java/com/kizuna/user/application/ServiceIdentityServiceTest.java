@@ -26,6 +26,7 @@ import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
+import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -54,7 +55,10 @@ class ServiceIdentityServiceTest {
   @Spy
   private CredentialOperations credentialOperations =
       new CredentialOperations(
-          event -> {}, mock(RoleManageHolderGuard.class), mock(UserRepository.class));
+          event -> {},
+          mock(RoleManageHolderGuard.class),
+          mock(UserRepository.class),
+          mock(EntityManager.class));
 
   @InjectMocks private ServiceIdentityService service;
 
