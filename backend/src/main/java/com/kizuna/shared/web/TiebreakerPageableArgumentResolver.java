@@ -12,12 +12,10 @@ import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.method.support.ModelAndViewContainer;
 
 /**
- * 一覧 API の {@link Pageable} を解決した直後に、並びへ一意な副キーを補う解決器。
+ * 一覧 API の {@link Pageable} の並びへ、束縛の時点で一意な副キーを補う。
  *
- * <p>表示名などの重複しうる列だけで並べると、ページ境界を跨いだ相対順序が未定義になり、offset ページングで行の重複・取りこぼしを招く。 {@code @PageableDefault}
- * の既定値は呼出側の {@code ?sort=} で丸ごと置き換わるため、既定に副キーを書くだけでは足りない。
- *
- * <p>補完を controller 側の呼出に委ねると、呼び忘れた端点だけがこの問題を起こす。束縛の時点で補うことで、一覧を追加する側が 全順序という不変量を知らなくても壊せない。
+ * <p>重複しうる列だけの並びは offset ページングで行の重複・取りこぼしを招く。{@code ?sort=} は {@code @PageableDefault}
+ * の既定を丸ごと置き換えるので、端点ごとに書く対策では漏れる。
  */
 public class TiebreakerPageableArgumentResolver implements PageableArgumentResolver {
 

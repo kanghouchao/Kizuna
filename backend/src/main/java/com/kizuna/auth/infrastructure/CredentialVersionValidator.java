@@ -9,11 +9,10 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 
 /**
- * 発行時に搭載された資格情報の版（{@link TokenClaims#CREDENTIAL_VERSION}）を現在の版と相等比較する {@code
- * OAuth2TokenValidator}（ADR 0022）。版の鍵は利用者 ID の claim（{@link JwtClaims#USER_ID}）で、 どちらの claim
- * も欠落・型不正は拒否する（移行期なしの fail-closed）。
+ * トークンが搭載した資格情報の版（{@link TokenClaims#CREDENTIAL_VERSION}）を現在の版と照合する（ADR 0022）。
  *
- * <p>失敗時の {@link OAuth2Error} には内部理由を含めない。Redis 断連の例外は貫通して 500 になる（fail-closed）。
+ * <p>版か利用者 ID（{@link JwtClaims#USER_ID}）の claim が欠落・型不正なら拒否し、Redis 断連は 500
+ * に貫通させる（fail-closed）。失敗の内部理由は応答に載せない。
  */
 @Component
 @RequiredArgsConstructor

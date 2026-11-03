@@ -194,9 +194,8 @@ public class CommonExceptionHandler {
   /**
    * 解釈失敗の原因からワイヤ上のフィールド名を取り出す。取り出せなければ {@code null}。
    *
-   * <p>{@link JacksonException#getPath()} は Jackson の命名戦略適用後の名前（本アプリでは snake_case）を返すため、 そのまま
-   * {@code details} のキーに使える。型の不一致だけでなく数値の範囲外（{@code InputCoercionException}）も経路を持つ。
-   * 配列添字の要素は名前を持たないので除く。
+   * <p>{@link JacksonException#getPath()} は命名戦略の適用後の名前を返すので、そのまま {@code details}
+   * のキーになる。数値の範囲外も経路を持ち、名前の無い配列添字は除く。
    */
   private static String wireFieldOf(HttpMessageNotReadableException ex) {
     if (!(ex.getCause() instanceof JacksonException cause)) {
