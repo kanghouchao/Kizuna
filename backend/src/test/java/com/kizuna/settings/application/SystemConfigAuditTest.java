@@ -10,8 +10,6 @@ import static org.mockito.Mockito.when;
 import com.kizuna.audit.domain.AuditEvent;
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
-import com.kizuna.settings.api.dto.SystemConfigMapperImpl;
-import com.kizuna.settings.api.dto.SystemConfigUpdateRequest;
 import com.kizuna.settings.domain.SystemConfig;
 import com.kizuna.settings.domain.SystemConfigRepository;
 import com.kizuna.shared.exception.NotFoundException;
@@ -50,9 +48,7 @@ class SystemConfigAuditTest {
             new UsernamePasswordAuthenticationToken("operator@example.test", null, List.of()));
     service =
         new SystemConfigServiceImpl(
-            configs,
-            new SystemConfigMapperImpl(),
-            new BusinessAudit(users, new AuditWriter(events, Clock.systemUTC())));
+            configs, new BusinessAudit(users, new AuditWriter(events, Clock.systemUTC())));
     var actor =
         User.builder()
             .email("operator@example.test")
@@ -94,7 +90,7 @@ class SystemConfigAuditTest {
   void whitelistedKeysRecordBeforeAndAfter(String key) {
     stored(key, "10", false);
 
-    service.updateConfig(key, request("20"));
+    service.updateConfig(key, "20");
 
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
@@ -111,7 +107,7 @@ class SystemConfigAuditTest {
   void secretAndUnknownKeysRecordChangedFlagOnly(String key) {
     stored(key, "old-secret-value", false);
 
-    service.updateConfig(key, request("new-secret-value"));
+    service.updateConfig(key, "new-secret-value");
 
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
@@ -124,7 +120,7 @@ class SystemConfigAuditTest {
   void flaggedSecretNeverRecordsValueEvenIfKeyIsListed() {
     stored("smtp_host", "old-secret-value", true);
 
-    service.updateConfig("smtp_host", request("new-secret-value"));
+    service.updateConfig("smtp_host", "new-secret-value");
 
     var event = recorded.getFirst();
     assertThat(event.getAfterValues()).containsOnly(Map.entry("changed", "true"));
@@ -134,10 +130,10 @@ class SystemConfigAuditTest {
   @Test
   void identicalOrBlankToBlankUpdateLeavesNoAudit() {
     stored("smtp_host", "same", false);
-    service.updateConfig("smtp_host", request("same"));
-    service.updateConfig("smtp_host", request(null));
+    service.updateConfig("smtp_host", "same");
+    service.updateConfig("smtp_host", null);
     stored("smtp_from", null, false);
-    service.updateConfig("smtp_from", request(""));
+    service.updateConfig("smtp_from", "");
     assertThat(recorded).isEmpty();
   }
 
@@ -152,11 +148,11 @@ class SystemConfigAuditTest {
                     .configValue("25")
                     .valueType("NUMBER")
                     .build()));
-    assertThatThrownBy(() -> service.updateConfig("smtp_port", request("leaky-abc")))
+    assertThatThrownBy(() -> service.updateConfig("smtp_port", "leaky-abc"))
         .isInstanceOf(ServiceException.class)
         .hasMessageNotContaining("leaky-abc");
     when(configs.findByConfigKey("missing")).thenReturn(Optional.empty());
-    assertThatThrownBy(() -> service.updateConfig("missing", request("x")))
+    assertThatThrownBy(() -> service.updateConfig("missing", "x"))
         .isInstanceOf(NotFoundException.class);
     assertThat(recorded).isEmpty();
   }
@@ -166,9 +162,5 @@ class SystemConfigAuditTest {
         .thenReturn(
             Optional.of(
                 SystemConfig.builder().configKey(key).configValue(value).secret(secret).build()));
-  }
-
-  private static SystemConfigUpdateRequest request(String value) {
-    return SystemConfigUpdateRequest.builder().configValue(value).build();
   }
 }

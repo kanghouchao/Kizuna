@@ -6,16 +6,18 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kizuna.settings.api.dto.SystemConfigResponse;
-import com.kizuna.settings.api.dto.SystemConfigUpdateRequest;
 import com.kizuna.settings.application.SystemConfigService;
+import com.kizuna.settings.application.SystemConfigView;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +30,7 @@ import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(SystemConfigController.class)
@@ -53,15 +56,44 @@ class SystemConfigControllerTest {
   @WithMockUser(authorities = "PERM_SYSTEM_CONFIG_MANAGE")
   void listWithAuthority() throws Exception {
     // 準備
-    SystemConfigResponse response =
-        SystemConfigResponse.builder().configKey("site_name").configValue("Kizuna").build();
-    when(systemConfigService.getAllConfigs()).thenReturn(List.of(response));
+    when(systemConfigService.getAllConfigs()).thenReturn(List.of(view("site_name", "Kizuna")));
 
     // 実行・検証
     mockMvc
         .perform(get("/system-configs"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].config_key").value("site_name"));
+  }
+
+  // 秘匿設定は値を null で受け取り、応答は null の項目を書かないため config_value そのものが現れない。
+  @Test
+  @DisplayName("設定一覧の要素は snake_case の全項目を返し、秘匿設定の値を出さないこと")
+  @WithMockUser(authorities = "PERM_SYSTEM_CONFIG_MANAGE")
+  void listWritesEveryFieldAndOmitsMaskedValue() throws Exception {
+    OffsetDateTime at = OffsetDateTime.of(2026, 1, 2, 3, 4, 5, 0, ZoneOffset.UTC);
+    when(systemConfigService.getAllConfigs())
+        .thenReturn(
+            List.of(
+                new SystemConfigView(
+                    1L, "smtp_host", "smtp.example.test", "SMTP", "ホスト", "STRING", false, at, at),
+                new SystemConfigView(
+                    2L, "smtp_password", null, "SMTP", "パスワード", "STRING", true, at, at)));
+
+    mockMvc
+        .perform(get("/system-configs"))
+        .andExpect(status().isOk())
+        .andExpect(
+            content()
+                .json(
+                    """
+                    [{"id":1,"config_key":"smtp_host","config_value":"smtp.example.test",
+                      "category":"SMTP","description":"ホスト","value_type":"STRING","secret":false,
+                      "created_at":"2026-01-02T03:04:05Z","updated_at":"2026-01-02T03:04:05Z"},
+                     {"id":2,"config_key":"smtp_password",
+                      "category":"SMTP","description":"パスワード","value_type":"STRING","secret":true,
+                      "created_at":"2026-01-02T03:04:05Z","updated_at":"2026-01-02T03:04:05Z"}]
+                    """,
+                    JsonCompareMode.STRICT));
   }
 
   @Test
@@ -90,7 +122,7 @@ class SystemConfigControllerTest {
   @WithMockUser(authorities = "PERM_SYSTEM_CONFIG_MANAGE")
   void updateUnknownKey() throws Exception {
     // 準備
-    when(systemConfigService.updateConfig(any(String.class), any(SystemConfigUpdateRequest.class)))
+    when(systemConfigService.updateConfig(any(String.class), any(String.class)))
         .thenThrow(new ServiceException("設定キーが見つかりません: unknown_key"));
 
     // 実行・検証
@@ -108,12 +140,8 @@ class SystemConfigControllerTest {
   @DisplayName("更新の宛先は path の設定キーで、値だけを本体で受けること")
   @WithMockUser(authorities = "PERM_SYSTEM_CONFIG_MANAGE")
   void updateAddressesTheKeyInThePath() throws Exception {
-    when(systemConfigService.updateConfig(any(String.class), any(SystemConfigUpdateRequest.class)))
-        .thenReturn(
-            SystemConfigResponse.builder()
-                .configKey("line_channel_id")
-                .configValue("1234567890")
-                .build());
+    when(systemConfigService.updateConfig(any(String.class), any(String.class)))
+        .thenReturn(view("line_channel_id", "1234567890"));
 
     mockMvc
         .perform(
@@ -124,10 +152,13 @@ class SystemConfigControllerTest {
         .andExpect(jsonPath("$.config_key").value("line_channel_id"));
 
     ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
-    ArgumentCaptor<SystemConfigUpdateRequest> request =
-        ArgumentCaptor.forClass(SystemConfigUpdateRequest.class);
-    verify(systemConfigService).updateConfig(key.capture(), request.capture());
+    ArgumentCaptor<String> value = ArgumentCaptor.forClass(String.class);
+    verify(systemConfigService).updateConfig(key.capture(), value.capture());
     assertThat(key.getValue()).isEqualTo("line_channel_id");
-    assertThat(request.getValue().getConfigValue()).isEqualTo("1234567890");
+    assertThat(value.getValue()).isEqualTo("1234567890");
+  }
+
+  private static SystemConfigView view(String key, String value) {
+    return new SystemConfigView(null, key, value, null, null, null, null, null, null);
   }
 }

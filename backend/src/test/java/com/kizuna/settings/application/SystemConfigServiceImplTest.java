@@ -10,9 +10,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.settings.api.dto.SystemConfigMapper;
-import com.kizuna.settings.api.dto.SystemConfigResponse;
-import com.kizuna.settings.api.dto.SystemConfigUpdateRequest;
 import com.kizuna.settings.domain.SystemConfig;
 import com.kizuna.settings.domain.SystemConfigRepository;
 import com.kizuna.shared.exception.NotFoundException;
@@ -33,7 +30,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class SystemConfigServiceImplTest {
 
   @Mock private SystemConfigRepository systemConfigRepository;
-  @Mock private SystemConfigMapper systemConfigMapper;
   @Mock private BusinessAudit businessAudit;
 
   @InjectMocks private SystemConfigServiceImpl systemConfigService;
@@ -43,18 +39,15 @@ class SystemConfigServiceImplTest {
   void getAllConfigs() {
     // 準備
     SystemConfig config = SystemConfig.builder().configKey("key1").configValue("value1").build();
-    SystemConfigResponse response =
-        SystemConfigResponse.builder().configKey("key1").configValue("value1").build();
 
     when(systemConfigRepository.findAll()).thenReturn(List.of(config));
-    when(systemConfigMapper.toResponse(config)).thenReturn(response);
 
     // 実行
-    List<SystemConfigResponse> result = systemConfigService.getAllConfigs();
+    List<SystemConfigView> result = systemConfigService.getAllConfigs();
 
     // 検証
     assertEquals(1, result.size());
-    assertEquals("key1", result.get(0).getConfigKey());
+    assertEquals("key1", result.get(0).configKey());
     verify(systemConfigRepository, times(1)).findAll();
   }
 
@@ -64,18 +57,15 @@ class SystemConfigServiceImplTest {
     // 準備
     String category = "SMTP";
     SystemConfig config = SystemConfig.builder().configKey("smtp_host").category(category).build();
-    SystemConfigResponse response =
-        SystemConfigResponse.builder().configKey("smtp_host").category(category).build();
 
     when(systemConfigRepository.findByCategory(category)).thenReturn(List.of(config));
-    when(systemConfigMapper.toResponse(config)).thenReturn(response);
 
     // 実行
-    List<SystemConfigResponse> result = systemConfigService.getConfigsByCategory(category);
+    List<SystemConfigView> result = systemConfigService.getConfigsByCategory(category);
 
     // 検証
     assertEquals(1, result.size());
-    assertEquals(category, result.get(0).getCategory());
+    assertEquals(category, result.get(0).category());
     verify(systemConfigRepository, times(1)).findByCategory(category);
   }
 
@@ -85,48 +75,42 @@ class SystemConfigServiceImplTest {
     // 準備
     String key = "smtp_host";
     String newValue = "smtp.example.com";
-    SystemConfigUpdateRequest request =
-        SystemConfigUpdateRequest.builder().configValue(newValue).build();
+    String configValue = newValue;
 
     SystemConfig existingConfig = SystemConfig.builder().configKey(key).configValue("").build();
     existingConfig.setId(1L);
     SystemConfig updatedConfig =
         SystemConfig.builder().configKey(key).configValue(newValue).build();
     updatedConfig.setId(1L);
-    SystemConfigResponse response =
-        SystemConfigResponse.builder().configKey(key).configValue(newValue).build();
 
     when(systemConfigRepository.findByConfigKey(key)).thenReturn(Optional.of(existingConfig));
     when(systemConfigRepository.save(existingConfig)).thenReturn(updatedConfig);
-    when(systemConfigMapper.toResponse(updatedConfig)).thenReturn(response);
 
     // 実行
-    SystemConfigResponse result = systemConfigService.updateConfig(key, request);
+    SystemConfigView result = systemConfigService.updateConfig(key, configValue);
 
     // 検証
     assertNotNull(result);
-    assertEquals(newValue, result.getConfigValue());
-    verify(systemConfigMapper, times(1)).updateEntityFromRequest(request, existingConfig);
+    assertEquals(newValue, result.configValue());
+    assertEquals(newValue, existingConfig.getConfigValue());
     verify(systemConfigRepository, times(1)).save(existingConfig);
   }
 
   @Test
   @DisplayName("数値型の設定に不正な値を指定すると例外が発生すること")
   void updateConfig_invalidNumber() {
-    SystemConfigUpdateRequest request =
-        SystemConfigUpdateRequest.builder().configValue("abc").build();
+    String configValue = "abc";
     SystemConfig config = SystemConfig.builder().configKey("smtp_port").valueType("NUMBER").build();
     when(systemConfigRepository.findByConfigKey("smtp_port")).thenReturn(Optional.of(config));
 
     assertThrows(
-        ServiceException.class, () -> systemConfigService.updateConfig("smtp_port", request));
+        ServiceException.class, () -> systemConfigService.updateConfig("smtp_port", configValue));
   }
 
   @Test
   @DisplayName("数値型の設定に int の範囲を超える値を指定すると例外が発生すること")
   void updateConfig_numberBeyondIntRange() {
-    SystemConfigUpdateRequest request =
-        SystemConfigUpdateRequest.builder().configValue("9999999999").build();
+    String configValue = "9999999999";
     SystemConfig config =
         SystemConfig.builder().configKey("point_usage_unit").valueType("NUMBER").build();
     when(systemConfigRepository.findByConfigKey("point_usage_unit"))
@@ -134,33 +118,29 @@ class SystemConfigServiceImplTest {
 
     assertThrows(
         ServiceException.class,
-        () -> systemConfigService.updateConfig("point_usage_unit", request));
+        () -> systemConfigService.updateConfig("point_usage_unit", configValue));
   }
 
   @Test
   @DisplayName("int の上限ちょうどの数値は保存できること")
   void updateConfig_numberAtIntMax() {
     String value = String.valueOf(Integer.MAX_VALUE);
-    SystemConfigUpdateRequest request =
-        SystemConfigUpdateRequest.builder().configValue(value).build();
+    String configValue = value;
     SystemConfig config =
         SystemConfig.builder().configKey("point_usage_unit").valueType("NUMBER").build();
     when(systemConfigRepository.findByConfigKey("point_usage_unit"))
         .thenReturn(Optional.of(config));
     when(systemConfigRepository.save(config)).thenReturn(config);
-    when(systemConfigMapper.toResponse(config))
-        .thenReturn(SystemConfigResponse.builder().configValue(value).build());
 
     assertEquals(
-        value, systemConfigService.updateConfig("point_usage_unit", request).getConfigValue());
+        value, systemConfigService.updateConfig("point_usage_unit", configValue).configValue());
   }
 
   @Test
   @DisplayName("時刻型の設定に不正な値を指定すると例外が発生すること")
   void updateConfig_invalidTime() {
     // 読み手は解釈できない値を 00:00 へ倒すため、保存を通すと暦日と同じ挙動へ静かに入れ替わる。
-    SystemConfigUpdateRequest request =
-        SystemConfigUpdateRequest.builder().configValue("25:00").build();
+    String configValue = "25:00";
     SystemConfig config =
         SystemConfig.builder().configKey("business_date_change_time").valueType("TIME").build();
     when(systemConfigRepository.findByConfigKey("business_date_change_time"))
@@ -168,14 +148,13 @@ class SystemConfigServiceImplTest {
 
     assertThrows(
         ServiceException.class,
-        () -> systemConfigService.updateConfig("business_date_change_time", request));
+        () -> systemConfigService.updateConfig("business_date_change_time", configValue));
   }
 
   @Test
   @DisplayName("秒より細かい時刻は撥ねること（文案どおりの分精度を強制する）")
   void updateConfig_timeWithFinerPrecision() {
-    SystemConfigUpdateRequest request =
-        SystemConfigUpdateRequest.builder().configValue("05:00:30").build();
+    String configValue = "05:00:30";
     SystemConfig config =
         SystemConfig.builder().configKey("business_date_change_time").valueType("TIME").build();
     when(systemConfigRepository.findByConfigKey("business_date_change_time"))
@@ -183,14 +162,13 @@ class SystemConfigServiceImplTest {
 
     assertThrows(
         ServiceException.class,
-        () -> systemConfigService.updateConfig("business_date_change_time", request));
+        () -> systemConfigService.updateConfig("business_date_change_time", configValue));
   }
 
   @Test
   @DisplayName("24:00 は撥ねること（丸めて受理すると読み手が撥ねる値が保存される）")
   void updateConfig_timeAtEndOfDay() {
-    SystemConfigUpdateRequest request =
-        SystemConfigUpdateRequest.builder().configValue("24:00").build();
+    String configValue = "24:00";
     SystemConfig config =
         SystemConfig.builder().configKey("business_date_change_time").valueType("TIME").build();
     when(systemConfigRepository.findByConfigKey("business_date_change_time"))
@@ -198,25 +176,22 @@ class SystemConfigServiceImplTest {
 
     assertThrows(
         ServiceException.class,
-        () -> systemConfigService.updateConfig("business_date_change_time", request));
+        () -> systemConfigService.updateConfig("business_date_change_time", configValue));
   }
 
   @Test
   @DisplayName("HH:mm 形式の時刻は保存できること")
   void updateConfig_validTime() {
-    SystemConfigUpdateRequest request =
-        SystemConfigUpdateRequest.builder().configValue("05:00").build();
+    String configValue = "05:00";
     SystemConfig config =
         SystemConfig.builder().configKey("business_date_change_time").valueType("TIME").build();
     when(systemConfigRepository.findByConfigKey("business_date_change_time"))
         .thenReturn(Optional.of(config));
     when(systemConfigRepository.save(config)).thenReturn(config);
-    when(systemConfigMapper.toResponse(config))
-        .thenReturn(SystemConfigResponse.builder().configValue("05:00").build());
 
     assertEquals(
         "05:00",
-        systemConfigService.updateConfig("business_date_change_time", request).getConfigValue());
+        systemConfigService.updateConfig("business_date_change_time", configValue).configValue());
   }
 
   @Test
@@ -228,18 +203,12 @@ class SystemConfigServiceImplTest {
             .configValue("secret-value")
             .secret(true)
             .build();
-    SystemConfigResponse response =
-        SystemConfigResponse.builder()
-            .configKey("smtp_password")
-            .configValue("secret-value")
-            .build();
     when(systemConfigRepository.findAll()).thenReturn(List.of(config));
-    when(systemConfigMapper.toResponse(config)).thenReturn(response);
 
-    List<SystemConfigResponse> result = systemConfigService.getAllConfigs();
+    List<SystemConfigView> result = systemConfigService.getAllConfigs();
 
     assertEquals(1, result.size());
-    assertNull(result.get(0).getConfigValue());
+    assertNull(result.get(0).configValue());
   }
 
   @Test
@@ -265,12 +234,12 @@ class SystemConfigServiceImplTest {
   void updateConfig_NotFound() {
     // 準備
     String key = "unknown_key";
-    SystemConfigUpdateRequest request = SystemConfigUpdateRequest.builder().build();
+    String configValue = null;
 
     when(systemConfigRepository.findByConfigKey(key)).thenReturn(Optional.empty());
 
     // 実行・検証
-    assertThrows(NotFoundException.class, () -> systemConfigService.updateConfig(key, request));
+    assertThrows(NotFoundException.class, () -> systemConfigService.updateConfig(key, configValue));
   }
 
   @Test
@@ -419,10 +388,7 @@ class SystemConfigServiceImplTest {
 
     assertThrows(
         ServiceException.class,
-        () ->
-            systemConfigService.updateConfig(
-                "applicant_retention_rejected_months",
-                SystemConfigUpdateRequest.builder().configValue(value).build()));
+        () -> systemConfigService.updateConfig("applicant_retention_rejected_months", value));
   }
 
   @ParameterizedTest
@@ -439,10 +405,7 @@ class SystemConfigServiceImplTest {
 
     assertThrows(
         ServiceException.class,
-        () ->
-            systemConfigService.updateConfig(
-                "applicant_retention_hired_months",
-                SystemConfigUpdateRequest.builder().configValue(value).build()));
+        () -> systemConfigService.updateConfig("applicant_retention_hired_months", value));
   }
 
   @ParameterizedTest
@@ -457,16 +420,12 @@ class SystemConfigServiceImplTest {
     when(systemConfigRepository.findByConfigKey("applicant_retention_withdrawn_months"))
         .thenReturn(Optional.of(config));
     when(systemConfigRepository.save(config)).thenReturn(config);
-    when(systemConfigMapper.toResponse(config))
-        .thenReturn(SystemConfigResponse.builder().configValue(value).build());
 
     assertEquals(
         value,
         systemConfigService
-            .updateConfig(
-                "applicant_retention_withdrawn_months",
-                SystemConfigUpdateRequest.builder().configValue(value).build())
-            .getConfigValue());
+            .updateConfig("applicant_retention_withdrawn_months", value)
+            .configValue());
   }
 
   @Test

@@ -1,8 +1,5 @@
 package com.kizuna.settings.application;
 
-import com.kizuna.settings.api.dto.SystemConfigMapper;
-import com.kizuna.settings.api.dto.SystemConfigResponse;
-import com.kizuna.settings.api.dto.SystemConfigUpdateRequest;
 import com.kizuna.settings.domain.SystemConfig;
 import com.kizuna.settings.domain.SystemConfigRepository;
 import com.kizuna.shared.exception.NotFoundException;
@@ -48,22 +45,21 @@ public class SystemConfigServiceImpl implements SystemConfigService {
       List.of("point_", "member_rank_", RETENTION_MONTHS_PREFIX);
 
   private final SystemConfigRepository systemConfigRepository;
-  private final SystemConfigMapper systemConfigMapper;
   private final BusinessAudit businessAudit;
 
   @Override
   @Transactional(readOnly = true)
-  public List<SystemConfigResponse> getAllConfigs() {
+  public List<SystemConfigView> getAllConfigs() {
     return systemConfigRepository.findAll().stream()
-        .map(this::toMaskedResponse)
+        .map(SystemConfigView::masked)
         .collect(Collectors.toList());
   }
 
   @Override
   @Transactional(readOnly = true)
-  public List<SystemConfigResponse> getConfigsByCategory(String category) {
+  public List<SystemConfigView> getConfigsByCategory(String category) {
     return systemConfigRepository.findByCategory(category).stream()
-        .map(this::toMaskedResponse)
+        .map(SystemConfigView::masked)
         .collect(Collectors.toList());
   }
 
@@ -71,21 +67,23 @@ public class SystemConfigServiceImpl implements SystemConfigService {
   @Transactional
   // どのキーが更新されても確実に無効化するため全消去（設定更新は低頻度の管理操作）
   @CacheEvict(value = "systemConfigValues", allEntries = true)
-  public SystemConfigResponse updateConfig(String configKey, SystemConfigUpdateRequest request) {
+  public SystemConfigView updateConfig(String configKey, String configValue) {
     SystemConfig config =
         systemConfigRepository
             .findByConfigKey(configKey)
             .orElseThrow(() -> new NotFoundException("設定キーが見つかりません: " + configKey));
 
-    validateValue(config, request.getConfigValue());
+    validateValue(config, configValue);
     String oldValue = Objects.toString(config.getConfigValue(), "");
-    systemConfigMapper.updateEntityFromRequest(request, config);
+    if (configValue != null) {
+      config.setConfigValue(configValue);
+    }
     SystemConfig saved = systemConfigRepository.save(config);
     String newValue = Objects.toString(saved.getConfigValue(), "");
     if (!oldValue.equals(newValue)) {
       auditUpdate(saved, oldValue, newValue);
     }
-    return toMaskedResponse(saved);
+    return SystemConfigView.masked(saved);
   }
 
   private void auditUpdate(SystemConfig config, String oldValue, String newValue) {
@@ -253,14 +251,5 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         throw new ServiceException("時刻を HH:mm 形式で指定してください: " + config.getConfigKey());
       }
     }
-  }
-
-  /** 秘匿設定の値をマスクしてレスポンスへ変換する */
-  private SystemConfigResponse toMaskedResponse(SystemConfig config) {
-    SystemConfigResponse response = systemConfigMapper.toResponse(config);
-    if (Boolean.TRUE.equals(config.getSecret())) {
-      response.setConfigValue(null);
-    }
-    return response;
   }
 }

@@ -12,8 +12,6 @@ import com.kizuna.point.api.dto.BenefitRuleUpdateRequest;
 import com.kizuna.point.domain.BenefitRuleRepeatPolicy;
 import com.kizuna.point.domain.BenefitRuleRepository;
 import com.kizuna.point.domain.BenefitRuleType;
-import com.kizuna.settings.api.dto.SystemConfigMapperImpl;
-import com.kizuna.settings.api.dto.SystemConfigUpdateRequest;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.settings.application.SystemConfigServiceImpl;
 import com.kizuna.settings.domain.SystemConfig;
@@ -181,9 +179,9 @@ class BenefitConfigAuditIntegrationTest {
     seed(secretKey, "旧秘密", true);
     seed(plainKey, "old.example.test", false);
 
-    configs.updateConfig(secretKey, config(SECRET));
-    configs.updateConfig(plainKey, config("new.example.test"));
-    configs.updateConfig(plainKey, config("new.example.test"));
+    configs.updateConfig(secretKey, SECRET);
+    configs.updateConfig(plainKey, "new.example.test");
+    configs.updateConfig(plainKey, "new.example.test");
 
     var secretRow = audit(secretKey);
     assertThat(secretRow)
@@ -203,7 +201,7 @@ class BenefitConfigAuditIntegrationTest {
 
     failAuditFor("SYSTEM_CONFIG_UPDATED", "SYSTEM_CONFIG_UPDATED");
     try {
-      assertThatThrownBy(() -> configs.updateConfig(plainKey, config("rolled.example.test")))
+      assertThatThrownBy(() -> configs.updateConfig(plainKey, "rolled.example.test"))
           .isInstanceOf(DataIntegrityViolationException.class);
     } finally {
       jdbc.execute("alter table t_audit_events drop constraint ck_benefit_config_audit_test");
@@ -276,10 +274,6 @@ class BenefitConfigAuditIntegrationTest {
     return request;
   }
 
-  private static SystemConfigUpdateRequest config(String value) {
-    return SystemConfigUpdateRequest.builder().configValue(value).build();
-  }
-
   @Configuration
   @EnableTransactionManagement
   @EnableJpaRepositories(
@@ -301,8 +295,7 @@ class BenefitConfigAuditIntegrationTest {
     BusinessAudit.class,
     BenefitRuleService.class,
     BenefitRuleMapperImpl.class,
-    SystemConfigServiceImpl.class,
-    SystemConfigMapperImpl.class
+    SystemConfigServiceImpl.class
   })
   static class Config {
     @Bean
