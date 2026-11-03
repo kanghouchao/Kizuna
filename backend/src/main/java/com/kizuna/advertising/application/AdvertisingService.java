@@ -9,7 +9,6 @@ import com.kizuna.advertising.api.dto.AdvertisingResponses.ChangeSummary;
 import com.kizuna.advertising.api.dto.AdvertisingResponses.CopyResponse;
 import com.kizuna.advertising.api.dto.AdvertisingResponses.CostResponse;
 import com.kizuna.advertising.api.dto.AdvertisingResponses.CostSummary;
-import com.kizuna.advertising.api.dto.AdvertisingResponses.MonthResponse;
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingChange;
 import com.kizuna.advertising.domain.AdvertisingChangeRepository;
@@ -79,8 +78,8 @@ public class AdvertisingService {
       readOnly = true,
       isolation = Isolation.REPEATABLE_READ,
       timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
-  public MonthResponse month(Long storeId, String month) {
-    return MonthResponse.of(summary(storeId, AdvertisingInput.month(month)));
+  public MonthTotals month(Long storeId, String month) {
+    return summary(storeId, AdvertisingInput.month(month));
   }
 
   private MonthTotals summary(Long storeId, String month) {

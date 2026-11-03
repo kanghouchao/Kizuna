@@ -128,7 +128,7 @@ public class AdvertisingCostController {
       @CurrentStore Long storeId, @PathVariable String month) {
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
-        .body(AdvertisingFailures.run(() -> service.month(storeId, month)));
+        .body(MonthResponse.of(AdvertisingFailures.run(() -> service.month(storeId, month))));
   }
 
   @PostMapping("/advertising-cost-months/{month}/copies")
