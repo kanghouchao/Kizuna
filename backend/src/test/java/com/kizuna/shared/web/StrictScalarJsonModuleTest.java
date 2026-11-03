@@ -89,14 +89,19 @@ class StrictScalarJsonModuleTest {
         Arguments.of("kind", "\"SALES\""),
         Arguments.of("amount", "100"),
         Arguments.of("amount", "1.5"),
-        Arguments.of("at", "\"2026-01-01T00:00:00+09:00\""),
-        Arguments.of("at", "1767225600"));
+        Arguments.of("at", "\"2026-01-01T00:00:00+09:00\""));
   }
 
   @ParameterizedTest(name = "{0} は {1} を受ける")
   @MethodSource("accepted")
   void acceptsDeclaredJsonType(String field, String value) {
     assertThat(read(field, value)).isNotNull();
+  }
+
+  @Test
+  void acceptsEpochSecondsForDateTime() {
+    assertThat(read("at", "1767225600").at())
+        .isEqualTo(OffsetDateTime.parse("2026-01-01T00:00:00Z"));
   }
 
   @Test
