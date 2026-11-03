@@ -75,7 +75,7 @@ public class CustomerContactService {
     var history =
         record(contact, ContactAction.CREATE, null, actorId(), UUID.randomUUID().toString());
     audit(contact, null, history);
-    return response(storeId, contact);
+    return view(storeId, contact);
   }
 
   @Transactional
@@ -101,7 +101,7 @@ public class CustomerContactService {
     var history = record(contact, ContactAction.UPDATE, before, actorId, operationId);
     audit(contact, auditBefore, history);
     contacts.flush();
-    return response(storeId, contact);
+    return view(storeId, contact);
   }
 
   @Transactional
@@ -124,7 +124,7 @@ public class CustomerContactService {
                 UUID.randomUUID().toString()));
     audit(contact, auditBefore, history);
     contacts.flush();
-    return response(storeId, contact);
+    return view(storeId, contact);
   }
 
   @Transactional
@@ -258,7 +258,7 @@ public class CustomerContactService {
 
   private record ContactKey(ContactType type, String value) {}
 
-  private ContactView response(Long storeId, CustomerContact contact) {
+  private ContactView view(Long storeId, CustomerContact contact) {
     var group =
         contacts.findByStoreIdAndCustomerIdAndTypeAndValueAndDeletedFalse(
             storeId, contact.getCustomerId(), contact.getType(), contact.getValue());
