@@ -25,6 +25,7 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
+import com.kizuna.shared.publication.Publication;
 import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shared.web.WebBindingConfig;
@@ -37,6 +38,8 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -910,6 +913,95 @@ class ReviewIntegrationTest {
     assertThat(publicReviews(otherStore, "").get("content"))
         .extracting(r -> r.get("body").asString())
         .containsExactly("foreign");
+  }
+
+  /** 一覧の SQL・詳細の displayed・前提の不足（blockers）と shownAt の積が、境界の各行で同じ結論を出す。 */
+  @Test
+  void listingDisplayedFlagAndBlockersWithShownAtAgreeOnEveryBoundaryRow() throws Exception {
+    var now = OffsetDateTime.parse("2026-06-01T00:00:00Z");
+    clock.set(now.toInstant());
+    var ids = new LinkedHashMap<String, String>();
+    ids.put(
+        "eq-from",
+        approveGrantAndPublish("eq-from", "\"published\":true,\"publish_from\":\"" + now + "\""));
+    ids.put(
+        "eq-until",
+        approveGrantAndPublish("eq-until", "\"published\":true,\"publish_until\":\"" + now + "\""));
+    ids.put("hidden", approveGrantAndPublish("hidden", "\"published\":false"));
+    ids.put(
+        "null-order",
+        approveGrantAndPublish(
+            "null-order", "\"published\":true,\"publish_from\":\"" + now.minusDays(1) + "\""));
+    ids.put(
+        "upcoming",
+        approveGrantAndPublish(
+            "upcoming", "\"published\":true,\"publish_from\":\"" + now.plusMinutes(1) + "\""));
+    String pending =
+        send(
+                "",
+                "{\"body\":\"pending\",\"display_name\":\"表示名\",\"received_via\":\"PAPER\",\"received_at\":\"2026-01-01T20:00:00Z\",\"dedupe_key\":\"pending\"}",
+                201)
+            .get("review")
+            .get("id")
+            .asString();
+    publish(pending, "{\"version\":0,\"published\":true,\"dedupe_key\":\"pending-publish\"}", 200);
+    ids.put("pending", pending);
+    String withdrawn = approveGrantAndPublish("withdrawn", "\"published\":true");
+    send(
+        "/" + withdrawn + "/withdrawals",
+        "{\"version\":3,\"reason\":\"取り下げ\",\"dedupe_key\":\"withdrawn-withdraw\"}",
+        200);
+    ids.put("withdrawn", withdrawn);
+    String revoked = approveGrantAndPublish("revoked", "\"published\":true");
+    send(
+        "/" + revoked + "/permission-revocations",
+        "{\"version\":3,\"withdrawal_received_at\":\"2026-01-03T00:00:00Z\",\"reason\":\"撤回\",\"dedupe_key\":\"revoked-revoke\"}",
+        200);
+    ids.put("revoked", revoked);
+
+    var listed = new HashSet<String>();
+    publicReviews(storeId, "?size=100")
+        .get("content")
+        .forEach(r -> listed.add(r.get("body").asString()));
+    var verdicts = new LinkedHashMap<String, Boolean>();
+    for (var row : ids.entrySet()) {
+      var detail = read("/" + row.getValue(), 200);
+      var p = detail.get("publication");
+      boolean shown =
+          new Publication(
+                  p.get("published").asBoolean(),
+                  time(p.get("publish_from")),
+                  time(p.get("publish_until")),
+                  p.get("display_order").isNull() ? null : p.get("display_order").asInt())
+              .shownAt(now);
+      boolean eligible = detail.get("publication_blockers").isEmpty();
+      assertThat(detail.get("displayed").asBoolean()).as(row.getKey()).isEqualTo(eligible && shown);
+      assertThat(listed.contains(row.getKey())).as(row.getKey()).isEqualTo(eligible && shown);
+      verdicts.put(row.getKey(), eligible && shown);
+    }
+    assertThat(verdicts)
+        .isEqualTo(
+            Map.of(
+                "eq-from",
+                true,
+                "eq-until",
+                false,
+                "hidden",
+                false,
+                "null-order",
+                true,
+                "upcoming",
+                false,
+                "pending",
+                false,
+                "withdrawn",
+                false,
+                "revoked",
+                false));
+  }
+
+  private static OffsetDateTime time(JsonNode value) {
+    return value == null || value.isNull() ? null : OffsetDateTime.parse(value.asString());
   }
 
   private String intake(String key) throws Exception {
