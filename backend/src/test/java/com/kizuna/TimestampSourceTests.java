@@ -56,10 +56,9 @@ class TimestampSourceTests {
   private static final Pattern DOMAIN_JUDGEMENT =
       Pattern.compile("boolean\\s+(isExpired|isWithin\\w*|is\\w+At|is\\w+On)\\s*\\(([^)]*)\\)");
 
-  // 行に書く時刻で期限を判じる呼び出し。引数のどこにあっても拾う（入れ子の括弧は一段まで）。
-  private static final Pattern JUDGED_BY_RECORD_TIME =
-      Pattern.compile(
-          "\\b(?:isExpired|isWithin\\w*|is\\w+At|is\\w+On)\\((?:[^()]|\\([^()]*\\))*?Timestamps\\.now\\(\\)");
+  // 期限判定の呼び出しの開き括弧。引数は対応する閉じ括弧まで辿り、入れ子の呼び出しの中も見る。
+  private static final Pattern JUDGEMENT_CALL =
+      Pattern.compile("\\b(?:isExpired|isWithin\\w*|is\\w+At|is\\w+On)\\(");
 
   private static final Pattern TIME_PARAMETER =
       Pattern.compile(
@@ -123,12 +122,31 @@ class TimestampSourceTests {
   void judgementsDoNotReadTheRecordTime() throws Exception {
     List<String> offenders = new ArrayList<>();
     for (Path file : mainSources()) {
-      if (JUDGED_BY_RECORD_TIME.matcher(Files.readString(file)).find()) {
-        offenders.add(MAIN_SOURCES.relativize(file).toString());
+      var source = Files.readString(file);
+      var call = JUDGEMENT_CALL.matcher(source);
+      while (call.find()) {
+        if (argumentsOf(source, call.end()).contains("Timestamps.now()")) {
+          offenders.add(MAIN_SOURCES.relativize(file).toString());
+          break;
+        }
       }
     }
 
     assertThat(offenders).as("期限判定に Timestamps.now() を渡すソース").isEmpty();
+  }
+
+  // 開き括弧の直後から、対応する閉じ括弧の手前まで。文字列中の括弧は数えないが、主コードの判定呼び出しには現れない。
+  private static String argumentsOf(String source, int start) {
+    int depth = 1;
+    for (int i = start; i < source.length(); i++) {
+      char c = source.charAt(i);
+      if (c == '(') {
+        depth++;
+      } else if (c == ')' && --depth == 0) {
+        return source.substring(start, i);
+      }
+    }
+    return source.substring(start);
   }
 
   private static List<Path> mainSources() throws Exception {
