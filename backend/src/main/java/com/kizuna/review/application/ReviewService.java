@@ -27,7 +27,6 @@ import com.kizuna.review.domain.ReviewSummaryView;
 import com.kizuna.review.domain.ReviewValues.Operation;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.persistence.Paging;
 import com.kizuna.shared.publication.Publication;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PermissionCode;
@@ -38,7 +37,6 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -119,16 +117,15 @@ public class ReviewService {
 
   @Transactional(readOnly = true)
   public Page<ReviewPublicResponse> listPublic(Long storeId, Pageable pageable) {
-    // 並びは公開設定が決める。呼出側の sort は受け取らない
-    var page =
-        Paging.totalOrder(
-            pageable,
-            Publication.order(ReviewRecord::getPublication, ReviewRecord::getId),
-            Sort.Order.asc(ReviewRecord::getId));
+    var listing =
+        Publication.listing(
+            ReviewRecord::getPublication,
+            ReviewRecord::getId,
+            ReviewRepository.prerequisites(storeId),
+            OffsetDateTime.now(clock),
+            pageable);
     return reviews
-        .findBy(
-            ReviewSummaryView.displayed(storeId, OffsetDateTime.now(clock)),
-            q -> q.as(ReviewPublicView.class).page(page))
+        .findBy(listing.specification(), q -> q.as(ReviewPublicView.class).page(listing.pageable()))
         .map(r -> ReviewPublicResponse.of(r, clock.getZone()));
   }
 
@@ -307,13 +304,7 @@ public class ReviewService {
     values.put("status", state.status().name());
     values.put("permission_status", state.permissionStatus().name());
     values.put("version", state.version().toString());
-    if (type == Operation.PUBLICATION_CHANGED) {
-      var p = state.publication();
-      values.put("published", Boolean.toString(p.published()));
-      if (p.publishFrom() != null) values.put("publish_from", p.publishFrom().toString());
-      if (p.publishUntil() != null) values.put("publish_until", p.publishUntil().toString());
-      if (p.displayOrder() != null) values.put("display_order", p.displayOrder().toString());
-    }
+    if (type == Operation.PUBLICATION_CHANGED) values.putAll(state.publication().auditValues());
     return values;
   }
 

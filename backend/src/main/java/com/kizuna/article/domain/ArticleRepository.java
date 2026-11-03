@@ -1,8 +1,6 @@
 package com.kizuna.article.domain;
 
 import com.kizuna.shared.persistence.StoreScopedRepository;
-import com.kizuna.shared.publication.Publication;
-import java.time.OffsetDateTime;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -12,9 +10,8 @@ public interface ArticleRepository
     extends StoreScopedRepository<Article>, JpaSpecificationExecutor<Article> {
   Page<ArticleSummaryView> findByStoreId(Long storeId, Pageable pageable);
 
-  /** 店舗を絞った、いま公式サイトに掲出中の記事。記事は公開設定のほかに前提を持たない。 */
-  static Specification<Article> displayed(Long storeId, OffsetDateTime at) {
-    Specification<Article> store = (root, q, cb) -> cb.equal(root.get("storeId"), storeId);
-    return store.and(Publication.shownSpecification(Article::getPublication, at));
+  /** 公式サイトに載る前提。記事は店舗のほかに前提を持たず、掲出の判定は公開設定に任せる。 */
+  static Specification<Article> prerequisites(Long storeId) {
+    return (root, q, cb) -> cb.equal(root.get("storeId"), storeId);
   }
 }

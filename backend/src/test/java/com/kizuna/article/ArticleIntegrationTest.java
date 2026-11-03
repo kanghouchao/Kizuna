@@ -383,6 +383,13 @@ class ArticleIntegrationTest {
                 String.class,
                 id))
         .isEqualTo("true");
+    // 未設定の公開設定は口コミと同じく空文字で残る
+    assertThat(
+            jdbc.queryForObject(
+                "select after_values->>'publish_until' from t_audit_events where target_id=? and action='ARTICLE_PUBLICATION_CHANGED'",
+                String.class,
+                id))
+        .isEmpty();
     assertThat(
             jdbc.queryForObject(
                 "select after_values->>'exists' from t_audit_events where target_id=? and action='ARTICLE_DELETED'",
@@ -391,62 +398,26 @@ class ArticleIntegrationTest {
         .isEqualTo("false");
   }
 
+  /** 並びと半開区間は PublicationIntegrationTest が持つ。ここは記事の前提・店舗・応答の形だけを見る。 */
   @Test
-  void publicListKeepsStartExcludesEndAndOrdersTotallyWithinTheNamedStore() throws Exception {
+  void publicListShowsOnlyDisplayedArticlesOfTheNamedStoreInTheirPublicShape() throws Exception {
     var now = OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC);
-    String older = now.minusDays(2).toString();
-    String newer = now.minusDays(1).toString();
-    String start = now.toString();
-    String upcoming = now.plusMinutes(1).toString();
-    List<Object[]> publications =
-        List.of(
-            new Object[] {true, null, null, null},
-            new Object[] {true, older, null, null},
-            new Object[] {true, newer, null, null},
-            new Object[] {true, null, null, 2},
-            new Object[] {true, older, null, 1},
-            new Object[] {true, null, null, 1},
-            new Object[] {false, null, null, 0},
-            new Object[] {true, start, null, 0},
-            new Object[] {true, null, start, 0},
-            new Object[] {true, upcoming, null, 0},
-            new Object[] {true, null, null, null});
-    for (int i = 0; i < publications.size(); i++) {
-      var p = publications.get(i);
-      publish(
-          create("order-" + i, BODY),
-          (Boolean) p[0],
-          (String) p[1],
-          (String) p[2],
-          (Integer) p[3],
-          0);
-    }
+    publish(create("先頭", BODY), true, now.toString(), null, 0, 0);
+    publish(create("次", BODY), true, null, null, 1, 0);
+    publish(create("非公開", BODY), false, null, null, 0, 0);
     currentStore = otherStore;
     publish(create("foreign", BODY), true, null, null, 0, 0);
 
-    var all = publicArticles(storeId, "/articles/public?size=100", 200);
+    var all = publicArticles(storeId, "/articles/public", 200);
     assertThat(all.get("content"))
         .extracting(r -> r.get("title").asString())
-        .containsExactly(
-            "order-7",
-            "order-4",
-            "order-5",
-            "order-3",
-            "order-2",
-            "order-1",
-            "order-0",
-            "order-10");
+        .containsExactly("先頭", "次");
+    assertThat(all.get("total_elements").asLong()).isEqualTo(2);
     var first = all.get("content").get(0);
     assertThat(first.propertyNames())
         .containsExactlyInAnyOrder("id", "title", "cover_image_url", "publish_from");
     assertThat(first.get("publish_from").asString()).isEqualTo("2026-06-01T00:00:00Z");
-    assertThat(all.get("content").get(6).get("publish_from").isNull()).isTrue();
-
-    var second = publicArticles(storeId, "/articles/public?page=1&size=3", 200);
-    assertThat(second.get("content"))
-        .extracting(r -> r.get("title").asString())
-        .containsExactly("order-3", "order-2", "order-1");
-    assertThat(second.get("total_elements").asLong()).isEqualTo(8);
+    assertThat(all.get("content").get(1).get("publish_from").isNull()).isTrue();
     assertThat(publicArticles(otherStore, "/articles/public", 200).get("content"))
         .extracting(r -> r.get("title").asString())
         .containsExactly("foreign");

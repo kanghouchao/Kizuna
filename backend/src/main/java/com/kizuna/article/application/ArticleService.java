@@ -6,7 +6,6 @@ import com.kizuna.article.domain.ArticlePublicView;
 import com.kizuna.article.domain.ArticleRepository;
 import com.kizuna.article.domain.ArticleSummaryView;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.persistence.Paging;
 import com.kizuna.shared.publication.Publication;
 import com.kizuna.user.application.BusinessAudit;
 import java.time.Clock;
@@ -17,7 +16,6 @@ import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,15 +37,16 @@ public class ArticleService {
   }
 
   public Page<ArticlePublicSummaryView> listPublic(Long storeId, Pageable pageable) {
-    // 並びは公開設定が決める。呼出側の sort は受け取らない
-    var page =
-        Paging.totalOrder(
-            pageable,
-            Publication.order(Article::getPublication, Article::getId),
-            Sort.Order.asc(Article::getId));
+    var listing =
+        Publication.listing(
+            Article::getPublication,
+            Article::getId,
+            ArticleRepository.prerequisites(storeId),
+            OffsetDateTime.now(clock),
+            pageable);
     return articles.findBy(
-        ArticleRepository.displayed(storeId, OffsetDateTime.now(clock)),
-        q -> q.as(ArticlePublicSummaryView.class).page(page));
+        listing.specification(),
+        q -> q.as(ArticlePublicSummaryView.class).page(listing.pageable()));
   }
 
   /** 存在しない・他店・掲出外を同じ 404 にし、訪問者に掲出外の記事の存在を知らせない。 */
@@ -55,7 +54,11 @@ public class ArticleService {
     Specification<Article> byId = (root, q, cb) -> cb.equal(root.get("id"), id);
     return articles
         .findBy(
-            ArticleRepository.displayed(storeId, OffsetDateTime.now(clock)).and(byId),
+            ArticleRepository.prerequisites(storeId)
+                .and(
+                    Publication.shownSpecification(
+                        Article::getPublication, OffsetDateTime.now(clock)))
+                .and(byId),
             q -> q.as(ArticlePublicView.class).first())
         .orElseThrow(() -> new NotFoundException("記事が見つかりません"));
   }
@@ -118,15 +121,11 @@ public class ArticleService {
 
   /** 本文は監査に複製しない。変わったことは更新の redacted_fields_changed で表す。 */
   private static Map<String, String> snapshot(Article article) {
-    var p = article.getPublication();
     var values = new LinkedHashMap<String, String>();
     values.put("exists", "true");
     values.put("title", article.getTitle());
     values.put("cover_image_url", Objects.toString(article.getCoverImageUrl(), ""));
-    values.put("published", String.valueOf(p.published()));
-    values.put("publish_from", Objects.toString(p.publishFrom(), ""));
-    values.put("publish_until", Objects.toString(p.publishUntil(), ""));
-    values.put("display_order", Objects.toString(p.displayOrder(), ""));
+    values.putAll(article.getPublication().auditValues());
     values.put("version", String.valueOf(article.getVersion()));
     return values;
   }

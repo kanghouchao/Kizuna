@@ -1,14 +1,19 @@
 package com.kizuna.shared.publication;
 
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.persistence.Paging;
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 import jakarta.persistence.criteria.Path;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
 import org.springframework.data.core.PropertyPath;
 import org.springframework.data.core.TypedPropertyPath;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -56,6 +61,31 @@ public record Publication(
         Sort.Order.asc(publication.then(Publication::displayOrder)).nullsLast(),
         Sort.Order.desc(publication.then(Publication::publishFrom)).nullsLast(),
         Sort.Order.asc(id));
+  }
+
+  /** 公開一覧の問い合わせ。前提は店舗を明示した種別側の条件で、入口は店舗条件を補わない。 */
+  public record Listing<T>(Specification<T> specification, Pageable pageable) {}
+
+  /** 並びは公開設定が決めるので、呼出側の sort は捨てて規範の並びに差し替える。 */
+  public static <T> Listing<T> listing(
+      TypedPropertyPath<T, Publication> publication,
+      TypedPropertyPath<T, ?> id,
+      Specification<T> prerequisites,
+      OffsetDateTime at,
+      Pageable pageable) {
+    return new Listing<>(
+        prerequisites.and(shownSpecification(publication, at)),
+        Paging.totalOrder(pageable, order(publication, id), Sort.Order.asc(id)));
+  }
+
+  /** 監査値の公開設定。未設定は他の監査値と同じく空文字で残し、キーは常に揃える。 */
+  public Map<String, String> auditValues() {
+    var values = new LinkedHashMap<String, String>();
+    values.put("published", String.valueOf(published));
+    values.put("publish_from", Objects.toString(publishFrom, ""));
+    values.put("publish_until", Objects.toString(publishUntil, ""));
+    values.put("display_order", Objects.toString(displayOrder, ""));
+    return values;
   }
 
   private static OffsetDateTime minute(OffsetDateTime value) {
