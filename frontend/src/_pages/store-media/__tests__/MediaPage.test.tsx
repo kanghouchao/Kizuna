@@ -75,6 +75,22 @@ test('停止の応答で行だけを差し替え、次の操作は応答の版�
   expect(api.list).toHaveBeenCalledTimes(1);
 });
 
+test('処理中の停止ボタンはフォーカスを保ったまま無効を示し、二度目の押下を送らない', async () => {
+  let respond: (value: MediumSummary) => void = () => {};
+  api.stop.mockReturnValue(new Promise(resolve => (respond = resolve)));
+  render(<MediaPage />);
+  const stop = await screen.findByRole('button', { name: '「求人誌」を停止' });
+  fireEvent.click(stop);
+  await waitFor(() => expect(stop).toHaveAttribute('aria-disabled', 'true'));
+  expect(stop).not.toBeDisabled();
+
+  fireEvent.click(stop);
+  await act(async () => respond({ ...medium, status: 'STOPPED', version: 4 }));
+  expect(await screen.findByText('停止中')).toBeVisible();
+  expect(api.stop).toHaveBeenCalledTimes(1);
+  expect(notify.success).toHaveBeenCalledTimes(1);
+});
+
 test('停止の 409 は一覧を取り直し、取り直した版で操作させる', async () => {
   api.stop.mockRejectedValueOnce(conflict('媒体が更新されています。再読み込みしてください'));
   render(<MediaPage />);
