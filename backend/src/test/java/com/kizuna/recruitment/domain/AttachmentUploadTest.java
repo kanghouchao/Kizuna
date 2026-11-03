@@ -60,4 +60,30 @@ class AttachmentUploadTest {
     upload.requireReplay(key, "a".repeat(64), "image/png");
     assertThat(upload.getCanonicalSha256()).isEqualTo("b".repeat(64));
   }
+
+  // 実体は正規化後の副本なので、照合値は原画像ではなく正規化後のハッシュを使う。
+  @Test
+  void storedObjectIsTheCanonicalCopyAndRejectsInvalidValues() {
+    AttachmentUpload upload =
+        AttachmentUpload.reserve(
+            7L,
+            "applicant",
+            UUID.randomUUID(),
+            "a".repeat(64),
+            "image/png",
+            "b".repeat(64),
+            100L,
+            "raster-v1",
+            1L);
+    assertThat(upload.object())
+        .isEqualTo(new AttachmentObject(upload.getObjectId(), "image/png", 100L, "b".repeat(64)));
+    assertThatThrownBy(
+            () -> new AttachmentObject(UUID.randomUUID(), "image/gif", 1L, "b".repeat(64)))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(
+            () -> new AttachmentObject(UUID.randomUUID(), "image/png", 0L, "b".repeat(64)))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> new AttachmentObject(UUID.randomUUID(), "image/png", 1L, "B"))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
 }
