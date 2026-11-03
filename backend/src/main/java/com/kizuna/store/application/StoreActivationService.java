@@ -42,11 +42,11 @@ public class StoreActivationService {
   }
 
   /**
-   * ドメイン照会のキャッシュから当該店舗の写しを捨てる。{@code storeByDomain} が配るのは稼働状態を含む店舗の写しなので、
-   * 遷移を反映しないと稼働中の店舗を準備中として配り続ける。落とすのは遷移した 1 店舗の鍵だけ。
+   * ドメイン照会のキャッシュから当該店舗の写しを捨てる。このキャッシュが配るのは稼働状態を含む店舗の写しなので、 遷移を反映しないと稼働中の店舗を準備中として配り続ける。落とすのは遷移した 1
+   * 店舗の鍵だけ。
    */
   private void evictDomainLookup(String domain) {
-    Cache cache = cacheManager.getCache("storeByDomain");
+    Cache cache = cacheManager.getCache(StoreRegistryService.DOMAIN_CACHE);
     if (cache != null) {
       cache.evict(domain);
     }
