@@ -1,6 +1,5 @@
 package com.kizuna.reporting.application;
 
-import com.kizuna.reporting.api.dto.OperationalReportResponse;
 import com.kizuna.reporting.domain.OperationalReport;
 import com.kizuna.reporting.domain.ReportCriteria;
 import com.kizuna.reporting.infrastructure.ReportRenderer;
@@ -14,7 +13,6 @@ import java.util.concurrent.Semaphore;
 import java.util.function.Function;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.QueryTimeoutException;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionTimedOutException;
 
@@ -26,36 +24,32 @@ public class OperationalReportService {
   private final AppProperties properties;
   private final Semaphore slot = new Semaphore(1);
 
-  public OperationalReportResponse viewStore(
+  public OperationalReport viewStore(
       Long storeId,
       String from,
       String to,
       String groupBy,
-      Pageable pageable,
       boolean includeRemuneration,
       boolean includeAdvertising) {
     return view(
         criteria -> snapshot.store(storeId, criteria, includeRemuneration, includeAdvertising),
         from,
         to,
-        groupBy,
-        pageable);
+        groupBy);
   }
 
-  public OperationalReportResponse viewGroupWide(
+  public OperationalReport viewGroupWide(
       StoreScope scope,
       String from,
       String to,
       String groupBy,
-      Pageable pageable,
       boolean includeRemuneration,
       boolean includeAdvertising) {
     return view(
         criteria -> snapshot.groupWide(scope, criteria, includeRemuneration, includeAdvertising),
         from,
         to,
-        groupBy,
-        pageable);
+        groupBy);
   }
 
   public byte[] exportStore(
@@ -92,19 +86,10 @@ public class OperationalReportService {
         format);
   }
 
-  private OperationalReportResponse view(
-      Function<ReportCriteria, OperationalReport> read,
-      String from,
-      String to,
-      String groupBy,
-      Pageable pageable) {
+  private OperationalReport view(
+      Function<ReportCriteria, OperationalReport> read, String from, String to, String groupBy) {
     try {
-      return execute(
-          read,
-          from,
-          to,
-          groupBy,
-          (report, budget) -> OperationalReportResponse.from(report, pageable));
+      return execute(read, from, to, groupBy, (report, budget) -> report);
     } catch (IOException ex) {
       throw new IllegalStateException(ex);
     }

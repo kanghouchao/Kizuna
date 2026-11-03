@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.advertising.reporting.AdvertisingReportFacts;
 import com.kizuna.order.reporting.OperationalFacts;
-import com.kizuna.reporting.api.dto.OperationalReportResponse;
 import com.kizuna.reporting.application.OperationalReportService;
 import com.kizuna.reporting.application.ReportSnapshot;
 import com.kizuna.reporting.domain.OperationalReport;
@@ -34,7 +33,6 @@ import org.apache.poi.util.TempFile;
 import org.apache.poi.util.TempFileCreationStrategy;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.data.domain.PageRequest;
 
 class AdvertisingReportResourceTest {
   final AppProperties properties = new AppProperties();
@@ -142,9 +140,8 @@ class AdvertisingReportResourceTest {
     }
   }
 
-  private OperationalReportResponse view() {
-    return service.viewStore(
-        1L, "2026-09-01", "2026-09-30", "month", PageRequest.of(0, 1), false, true);
+  private OperationalReport view() {
+    return service.viewStore(1L, "2026-09-01", "2026-09-30", "month", false, true);
   }
 
   private byte[] export() throws IOException {
