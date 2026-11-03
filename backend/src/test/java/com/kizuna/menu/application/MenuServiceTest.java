@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.menu.api.dto.MenuVO;
 import com.kizuna.menu.domain.Menu;
 import com.kizuna.menu.domain.MenuRepository;
 import com.kizuna.shared.storescope.StoreScope;
@@ -68,10 +67,10 @@ class MenuServiceTest {
     when(menuRepository.findByParentIsNullOrderBySortOrderAsc())
         .thenReturn(List.of(visible, hidden));
 
-    List<MenuVO> result = menuService.getMyMenus();
+    List<MenuNode> result = menuService.getMyMenus();
 
     assertThat(result).hasSize(1);
-    assertThat(result.get(0).getName()).isEqualTo("Orders");
+    assertThat(result.get(0).name()).isEqualTo("Orders");
   }
 
   @Test
@@ -83,7 +82,7 @@ class MenuServiceTest {
     when(menuRepository.findByParentIsNullOrderBySortOrderAsc())
         .thenReturn(List.of(menu("Public", null)));
 
-    List<MenuVO> result = menuService.getMyMenus();
+    List<MenuNode> result = menuService.getMyMenus();
 
     assertThat(result).hasSize(1);
   }
@@ -105,11 +104,11 @@ class MenuServiceTest {
 
     when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(List.of(root));
 
-    List<MenuVO> result = menuService.getMyMenus();
+    List<MenuNode> result = menuService.getMyMenus();
 
     assertThat(result).hasSize(1);
-    assertThat(result.get(0).getItems()).hasSize(1);
-    assertThat(result.get(0).getItems().get(0).getName()).isEqualTo("キャスト管理");
+    assertThat(result.get(0).items()).hasSize(1);
+    assertThat(result.get(0).items().get(0).name()).isEqualTo("キャスト管理");
   }
 
   @Test
@@ -127,10 +126,10 @@ class MenuServiceTest {
 
     when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(List.of(root));
 
-    List<MenuVO> result = menuService.getMyMenus();
+    List<MenuNode> result = menuService.getMyMenus();
 
     assertThat(result).hasSize(1);
-    assertThat(result.get(0).getItems()).extracting(MenuVO::getName).containsExactly("キャスト管理");
+    assertThat(result.get(0).items()).extracting(MenuNode::name).containsExactly("キャスト管理");
   }
 
   @Test
@@ -153,11 +152,11 @@ class MenuServiceTest {
 
     when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(List.of(emptied, kept));
 
-    List<MenuVO> result = menuService.getMyMenus();
+    List<MenuNode> result = menuService.getMyMenus();
 
     // 子が全て濾過された見出しは、空の見出しとして残さず木ごと落とす
     assertThat(result).hasSize(1);
-    assertThat(result.get(0).getName()).isEqualTo("CRM");
+    assertThat(result.get(0).name()).isEqualTo("CRM");
   }
 
   @Test
@@ -170,11 +169,11 @@ class MenuServiceTest {
 
     when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(List.of(link));
 
-    List<MenuVO> result = menuService.getMyMenus();
+    List<MenuNode> result = menuService.getMyMenus();
 
     // 子を持たない根でも、自身が遷移先を持つなら到達可能なので残る
     assertThat(result).hasSize(1);
-    assertThat(result.get(0).getPath()).isEqualTo("/直リンク");
+    assertThat(result.get(0).path()).isEqualTo("/直リンク");
   }
 
   @Test
@@ -182,7 +181,7 @@ class MenuServiceTest {
     SecurityContextHolder.clearContext();
     when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(List.of());
 
-    List<MenuVO> result = menuService.getMyMenus();
+    List<MenuNode> result = menuService.getMyMenus();
 
     assertThat(result).isEmpty();
   }
@@ -192,7 +191,7 @@ class MenuServiceTest {
     authenticateTaskOperator("SPECIFIC_STORES");
     when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(taskMenus());
 
-    assertThat(menuService.getMyMenus()).extracting(MenuVO::getName).containsExactly("Dashboard");
+    assertThat(menuService.getMyMenus()).extracting(MenuNode::name).containsExactly("Dashboard");
   }
 
   @Test
@@ -201,9 +200,9 @@ class MenuServiceTest {
     when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(taskMenus());
 
     var result = menuService.getMyMenus();
-    assertThat(result).extracting(MenuVO::getName).containsExactly("Dashboard", "Operations");
-    assertThat(result.get(1).getItems())
-        .extracting(MenuVO::getName)
+    assertThat(result).extracting(MenuNode::name).containsExactly("Dashboard", "Operations");
+    assertThat(result.get(1).items())
+        .extracting(MenuNode::name)
         .containsExactly("Executions", "Audit");
   }
 
@@ -212,7 +211,7 @@ class MenuServiceTest {
     authenticateTaskOperator(null);
     when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(taskMenus());
 
-    assertThat(menuService.getMyMenus()).extracting(MenuVO::getName).containsExactly("Dashboard");
+    assertThat(menuService.getMyMenus()).extracting(MenuNode::name).containsExactly("Dashboard");
   }
 
   @Test
@@ -227,7 +226,7 @@ class MenuServiceTest {
         .getAuthorities();
     when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(taskMenus());
 
-    assertThat(menuService.getMyMenus()).extracting(MenuVO::getName).containsExactly("Dashboard");
+    assertThat(menuService.getMyMenus()).extracting(MenuNode::name).containsExactly("Dashboard");
   }
 
   @Test
@@ -238,7 +237,7 @@ class MenuServiceTest {
         .setAuthentication(new JwtAuthenticationToken(auth.getToken(), List.of()));
     when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(taskMenus());
 
-    assertThat(menuService.getMyMenus()).extracting(MenuVO::getName).containsExactly("Dashboard");
+    assertThat(menuService.getMyMenus()).extracting(MenuNode::name).containsExactly("Dashboard");
   }
 
   /** 作用域はトークンでなく保持器（要求ごとの解決器）が持つ。null は解決不能（CAST / MEMBER 等）。 */
