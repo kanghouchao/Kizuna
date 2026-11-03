@@ -17,6 +17,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kizuna.customer.domain.Customer;
 import com.kizuna.order.api.dto.OrderMapperImpl;
 import com.kizuna.order.application.BusinessContactPermissions;
 import com.kizuna.order.application.OrderAttributionCorrectionService;
@@ -32,6 +33,7 @@ import com.kizuna.order.application.OrderPoints;
 import com.kizuna.order.application.OrderPreview;
 import com.kizuna.order.application.OrderQueryService;
 import com.kizuna.order.application.OrderService;
+import com.kizuna.order.domain.BusinessContactHistory;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCorrection;
 import com.kizuna.order.domain.OrderCorrectionSnapshot;
@@ -194,7 +196,8 @@ class OrderControllerTest {
         .andExpect(jsonPath("$.total_elements").value(0));
 
     assertThat(pageable.getValue().getSort())
-        .isEqualTo(Sort.by(Sort.Direction.DESC, "afterVersion", "id"));
+        .isEqualTo(
+            Sort.by(Sort.Direction.DESC, OrderCorrection::getAfterVersion, OrderCorrection::getId));
   }
 
   @Test
@@ -929,7 +932,7 @@ class OrderControllerTest {
         .andExpect(jsonPath("$.total_elements").value(0));
 
     verify(orderQueryService).customerCandidates(any(), eq("090"), eq(false), any());
-    assertThat(pageable.getValue().getSort()).isEqualTo(Sort.by("id"));
+    assertThat(pageable.getValue().getSort()).isEqualTo(Sort.by(Customer::getId));
   }
 
   @Test
@@ -959,7 +962,8 @@ class OrderControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 
-    assertThat(pageable.getValue().getSort()).isEqualTo(Sort.by(Sort.Direction.DESC, "id"));
+    assertThat(pageable.getValue().getSort())
+        .isEqualTo(Sort.by(Sort.Direction.DESC, BusinessContactHistory::getId));
   }
 
   private static OrderPreview emptyPreview() {

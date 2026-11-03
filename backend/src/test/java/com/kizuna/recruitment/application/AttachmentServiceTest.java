@@ -72,7 +72,8 @@ class AttachmentServiceTest {
       if (state == AttachmentUpload.Status.RECOVERY_REQUIRED)
         row.recordFailure(AttachmentUpload.Failure.CONTENT_MISMATCH);
       if (state == AttachmentUpload.Status.READY) row.complete(1L, OffsetDateTime.now());
-      clearInvocations(applicants, uploads);
+      clearInvocations(applicants);
+      clearInvocations(uploads);
       assertThat(service.operation(STORE_ID, "a", key.toString()).status()).isEqualTo(state);
       assertThat(row.getStatus()).isEqualTo(state);
       verify(applicants).findByIdAndStoreId("a", STORE_ID);

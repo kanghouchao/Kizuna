@@ -17,6 +17,7 @@ import com.kizuna.customer.api.dto.CustomerMergeHistoryResponse;
 import com.kizuna.customer.api.dto.CustomerMergeRequest;
 import com.kizuna.customer.api.dto.MergeDirection;
 import com.kizuna.customer.application.CustomerMergeService;
+import com.kizuna.customer.domain.CustomerMerge;
 import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
@@ -121,7 +122,7 @@ class CustomerMergeControllerTest {
         .andExpect(jsonPath("$.total_elements").value(0));
 
     assertThat(pageable.getValue().getSort())
-        .isEqualTo(Sort.by(Sort.Direction.DESC, "mergedAt", "id"));
+        .isEqualTo(Sort.by(Sort.Direction.DESC, CustomerMerge::getMergedAt, CustomerMerge::getId));
   }
 
   @Test

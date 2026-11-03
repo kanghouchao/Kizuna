@@ -19,6 +19,7 @@ import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.task.application.TaskLifecycle;
 import com.kizuna.task.application.TaskQuery;
 import com.kizuna.task.application.TaskRegistry;
+import com.kizuna.task.domain.ExecutionAttempt;
 import com.kizuna.task.domain.ExecutionRequestRepository;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
 import com.kizuna.user.domain.PermissionCode;
@@ -226,7 +227,8 @@ class TaskIntegrationTest {
     first.getBean(TaskExecutor.class).executeScheduled(command());
     first.getBean(TaskExecutor.class).executeScheduled(command());
     var query = first.getBean(TaskQuery.class);
-    var newestFirst = Sort.by(Sort.Direction.DESC, "startedAt", "id");
+    var newestFirst =
+        Sort.by(Sort.Direction.DESC, ExecutionAttempt::getStartedAt, ExecutionAttempt::getId);
     var page = query.list(PageRequest.of(0, 1, newestFirst));
     assertThat(page.getTotalElements()).isGreaterThanOrEqualTo(2);
     assertThat(query.list(PageRequest.of(1, 1, newestFirst)).getContent().getFirst().id())

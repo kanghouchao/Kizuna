@@ -122,15 +122,15 @@ class ReviewWriteTest {
         .when(reviews)
         .findBy(ArgumentMatchers.<Specification<ReviewRecord>>any(), any());
 
-    service.listPublic(1L, PageRequest.of(2, 10, Sort.by("ignored")));
+    service.listPublic(1L, PageRequest.of(2, 10, Sort.by(ReviewRecord::getUpdatedAt)));
 
     var sort = pages.captured().getSort().toList();
     assertThat(sort)
         .first()
         .extracting(Sort.Order::getProperty)
         .isEqualTo("publication.displayOrder");
-    assertThat(sort).last().isEqualTo(Sort.Order.asc("id"));
-    assertThat(sort).extracting(Sort.Order::getProperty).doesNotContain("ignored");
+    assertThat(sort).last().isEqualTo(Sort.Order.asc(ReviewRecord::getId));
+    assertThat(sort).extracting(Sort.Order::getProperty).doesNotContain("updatedAt");
     assertThat(pages.captured().getPageNumber()).isEqualTo(2);
   }
 

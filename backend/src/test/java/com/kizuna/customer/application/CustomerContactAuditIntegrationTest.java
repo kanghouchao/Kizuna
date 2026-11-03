@@ -19,6 +19,8 @@ import com.kizuna.customer.domain.ContactPermissionStatus;
 import com.kizuna.customer.domain.ContactPurpose;
 import com.kizuna.customer.domain.ContactType;
 import com.kizuna.customer.domain.Customer;
+import com.kizuna.customer.domain.CustomerContact;
+import com.kizuna.customer.domain.CustomerContactHistory;
 import com.kizuna.customer.domain.CustomerContactHistoryRepository;
 import com.kizuna.customer.domain.CustomerContactRepository;
 import com.kizuna.customer.domain.CustomerListRepository;
@@ -395,14 +397,22 @@ class CustomerContactAuditIntegrationTest {
     assertThat(members.getTotalElements()).isEqualTo(3);
     assertThat(members.getContent()).hasSize(1);
 
-    var contacts = service.list(STORE_ID, ids.getFirst(), PageRequest.of(0, 1, Sort.by("id")));
+    var contacts =
+        service.list(
+            STORE_ID, ids.getFirst(), PageRequest.of(0, 1, Sort.by(CustomerContact::getId)));
     assertThat(contacts.getTotalElements()).isEqualTo(2);
     assertThat(contacts.getContent()).hasSize(1);
     var history =
         service.history(
             STORE_ID,
             ids.getFirst(),
-            PageRequest.of(0, 1, Sort.by(Sort.Direction.DESC, "occurredAt", "id")));
+            PageRequest.of(
+                0,
+                1,
+                Sort.by(
+                    Sort.Direction.DESC,
+                    CustomerContactHistory::getOccurredAt,
+                    CustomerContactHistory::getId)));
     assertThat(history.getTotalElements()).isGreaterThan(1);
     assertThat(history.getContent()).hasSize(1);
   }

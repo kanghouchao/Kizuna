@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kizuna.audit.domain.AuditEvent;
 import com.kizuna.audit.recording.AuditReader;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
@@ -66,6 +67,6 @@ class AuditEventControllerTest {
     verify(identities).requireOperator(eq("user"), eq(PermissionCode.AUDIT_VIEW));
     assertThat(pageable.getValue().getPageSize()).isEqualTo(50);
     assertThat(pageable.getValue().getSort())
-        .isEqualTo(Sort.by(Sort.Direction.DESC, "occurredAt", "id"));
+        .isEqualTo(Sort.by(Sort.Direction.DESC, AuditEvent::getOccurredAt, AuditEvent::getId));
   }
 }

@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.kizuna.order.api.dto.OrderMapperImpl;
 import com.kizuna.order.application.MemberOrderApplicationResult;
 import com.kizuna.order.application.MemberOrderApplicationService;
+import com.kizuna.order.domain.OrderApplication;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
@@ -88,7 +89,9 @@ class MemberOrderApplicationControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
     assertThat(pageable.getValue().getSort())
-        .isEqualTo(Sort.by(Sort.Direction.DESC, "businessDate", "id"));
+        .isEqualTo(
+            Sort.by(
+                Sort.Direction.DESC, OrderApplication::getBusinessDate, OrderApplication::getId));
     mockMvc.perform(memberPost("/me/order-applications/a1/withdrawal")).andExpect(status().isOk());
   }
 

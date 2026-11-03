@@ -13,15 +13,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.store.domain.Store;
 import com.kizuna.task.application.TaskLifecycle;
 import com.kizuna.task.application.TaskOptions;
 import com.kizuna.task.application.TaskQuery;
+import com.kizuna.task.domain.ExecutionAttempt;
 import com.kizuna.task.execution.ExecutionResult;
 import com.kizuna.task.execution.TaskCommand;
 import com.kizuna.task.execution.TaskExecutor;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
 import com.kizuna.user.application.StoreScopeResolver;
 import com.kizuna.user.domain.PermissionCode;
+import com.kizuna.user.domain.User;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -80,7 +83,8 @@ class TaskExecutionControllerTest {
     verify(identities).requireOperator(eq("user"), eq(PermissionCode.TASK_MANAGE));
     assertThat(pageable.getValue().getPageSize()).isEqualTo(50);
     assertThat(pageable.getValue().getSort())
-        .isEqualTo(Sort.by(Sort.Direction.DESC, "startedAt", "id"));
+        .isEqualTo(
+            Sort.by(Sort.Direction.DESC, ExecutionAttempt::getStartedAt, ExecutionAttempt::getId));
   }
 
   @Test
@@ -111,8 +115,9 @@ class TaskExecutionControllerTest {
         .andExpect(status().isBadRequest());
 
     assertThat(candidates.getValue())
-        .isEqualTo(PageRequest.of(0, 20, Sort.by("displayName", "id")));
-    assertThat(stores.getValue()).isEqualTo(PageRequest.of(0, 20, Sort.by("name", "id")));
+        .isEqualTo(PageRequest.of(0, 20, Sort.by(User::getDisplayName, User::getId)));
+    assertThat(stores.getValue())
+        .isEqualTo(PageRequest.of(0, 20, Sort.by(Store::getName, Store::getId)));
   }
 
   @Test

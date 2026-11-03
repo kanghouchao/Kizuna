@@ -220,7 +220,14 @@ class CastServiceTest {
     var captor = ArgumentCaptor.forClass(Pageable.class);
     when(profiles.search(eq(STORE_ID), any(), captor.capture())).thenReturn(Page.empty());
 
-    service.list(STORE_ID, null, PageRequest.of(0, 20, Sort.by("name", "status")));
+    service.list(
+        STORE_ID,
+        null,
+        PageRequest.of(
+            0,
+            20,
+            Sort.by(
+                Sort.Order.asc(CastProfile::getName), Sort.Order.asc(CastEnrollment::getStatus))));
 
     assertThat(captor.getValue().getSort())
         .containsExactly(

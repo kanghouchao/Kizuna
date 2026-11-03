@@ -14,6 +14,7 @@ import com.kizuna.advertising.application.AdvertisingMediaService;
 import com.kizuna.advertising.application.AdvertisingService;
 import com.kizuna.advertising.application.AdvertisingViews.CostView;
 import com.kizuna.advertising.domain.AdvertisingCategory;
+import com.kizuna.advertising.domain.AdvertisingChange;
 import com.kizuna.advertising.domain.AdvertisingChangeRepository;
 import com.kizuna.advertising.domain.AdvertisingMedium;
 import com.kizuna.advertising.infrastructure.AdvertisingRecords;
@@ -184,7 +185,13 @@ class AdvertisingMediumIntegrationTest {
         costs.changes(
             store,
             "2026-09",
-            PageRequest.of(0, 1, Sort.by(Sort.Direction.DESC, "createdAt", "id")));
+            PageRequest.of(
+                0,
+                1,
+                Sort.by(
+                    Sort.Direction.DESC,
+                    AdvertisingChange::getCreatedAt,
+                    AdvertisingChange::getId)));
     var updated = costs.changeDetail(store, "2026-09", history.getContent().getFirst().getId());
     assertThat(updated.before().medium()).isEqualTo(new AdvertisingMedium(id, "旧名"));
     assertThat(updated.after().medium()).isEqualTo(new AdvertisingMedium(id, "旧名"));

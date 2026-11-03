@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.kizuna.service.api.dto.OwnConsentRequest;
 import com.kizuna.service.application.OwnServiceConditionService;
 import com.kizuna.service.domain.ConsentDecision;
+import com.kizuna.service.domain.ServiceItem;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
@@ -62,7 +63,12 @@ class OwnServiceConditionControllerTest {
                 .principal(() -> "cast@example.test"))
         .andExpect(status().isOk());
 
-    verify(service).list(STORE_ID, "cast@example.test", null, PageRequest.of(0, 20, Sort.by("id")));
+    verify(service)
+        .list(
+            STORE_ID,
+            "cast@example.test",
+            null,
+            PageRequest.of(0, 20, Sort.by(ServiceItem::getId)));
   }
 
   @Test

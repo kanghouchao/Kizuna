@@ -21,6 +21,7 @@ import com.kizuna.advertising.application.AdvertisingMediaService;
 import com.kizuna.advertising.application.AdvertisingOrderCostService;
 import com.kizuna.advertising.application.AdvertisingService;
 import com.kizuna.advertising.domain.AdvertisingCategory;
+import com.kizuna.advertising.domain.AdvertisingChange;
 import com.kizuna.advertising.domain.AdvertisingChangeRepository;
 import com.kizuna.advertising.domain.AdvertisingOrderCostReport;
 import com.kizuna.advertising.infrastructure.AdvertisingRecords;
@@ -94,7 +95,8 @@ import tools.jackson.databind.json.JsonMapper;
 @EnabledIfIntegration
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class AdvertisingIntegrationTest {
-  private static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "createdAt", "id");
+  private static final Sort NEWEST_FIRST =
+      Sort.by(Sort.Direction.DESC, AdvertisingChange::getCreatedAt, AdvertisingChange::getId);
   AnnotationConfigApplicationContext context;
   AdvertisingService service;
   JdbcTemplate jdbc;

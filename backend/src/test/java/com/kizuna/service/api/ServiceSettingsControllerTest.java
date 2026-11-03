@@ -11,6 +11,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.service.application.ServiceSettingsService;
+import com.kizuna.service.domain.ServiceItem;
+import com.kizuna.service.domain.ServiceRevision;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
@@ -67,7 +69,10 @@ class ServiceSettingsControllerTest {
             STORE_ID,
             null,
             false,
-            PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt", "id")));
+            PageRequest.of(
+                0,
+                20,
+                Sort.by(Sort.Direction.DESC, ServiceItem::getCreatedAt, ServiceItem::getId)));
   }
 
   @Test
@@ -102,6 +107,8 @@ class ServiceSettingsControllerTest {
         .andExpect(jsonPath("$.total_elements").value(0));
 
     assertThat(pageable.getValue().getSort())
-        .isEqualTo(Sort.by(Sort.Direction.DESC, "revisionNumber", "id"));
+        .isEqualTo(
+            Sort.by(
+                Sort.Direction.DESC, ServiceRevision::getRevisionNumber, ServiceRevision::getId));
   }
 }

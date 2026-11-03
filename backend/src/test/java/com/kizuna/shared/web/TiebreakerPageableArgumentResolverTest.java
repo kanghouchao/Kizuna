@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.shared.persistence.BaseEntity;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageRequest;
@@ -27,9 +28,11 @@ class TiebreakerPageableArgumentResolverTest {
   @Test
   @DisplayName("呼出側の並びに副キーが無ければ末尾に補うこと")
   void appendsTiebreakerWhenMissing() {
-    Pageable result = resolve(PageRequest.of(0, 20, Sort.by("displayName")));
+    Pageable result = resolve(PageRequest.of(0, 20, Sort.by(BaseEntity::getUpdatedAt)));
 
-    assertThat(result.getSort()).containsExactly(Sort.Order.by("displayName"), Sort.Order.by("id"));
+    assertThat(result.getSort())
+        .containsExactly(
+            Sort.Order.asc(BaseEntity::getUpdatedAt), Sort.Order.asc(BaseEntity::getId));
     assertThat(result.getPageNumber()).isEqualTo(0);
     assertThat(result.getPageSize()).isEqualTo(20);
   }
@@ -37,7 +40,8 @@ class TiebreakerPageableArgumentResolverTest {
   @Test
   @DisplayName("副キーが既に含まれていれば並びを変えないこと")
   void leavesSortUnchangedWhenTiebreakerAlreadyPresent() {
-    Sort sort = Sort.by("createdAt").descending().and(Sort.by("id"));
+    Sort sort =
+        Sort.by(Sort.Order.desc(BaseEntity::getCreatedAt), Sort.Order.asc(BaseEntity::getId));
 
     Pageable result = resolve(PageRequest.of(1, 10, sort));
 
@@ -47,7 +51,7 @@ class TiebreakerPageableArgumentResolverTest {
   @Test
   @DisplayName("副キーを明示的に降順で指定していれば、その向きのまま変えないこと")
   void leavesExplicitTiebreakerDirectionUnchanged() {
-    Sort sort = Sort.by(Sort.Order.desc("id"));
+    Sort sort = Sort.by(Sort.Order.desc(BaseEntity::getId));
 
     Pageable result = resolve(PageRequest.of(0, 20, sort));
 

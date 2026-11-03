@@ -218,7 +218,9 @@ class ShiftLineageServiceTest {
     ShiftRequest older = request(ShiftRequestType.CHANGE, ShiftRequestStatus.DECLINED);
     older.setId("request-older");
     older.setCreatedAt(OffsetDateTime.parse("2026-08-16T12:00:00+09:00"));
-    Pageable pageable = PageRequest.of(0, 2, Sort.by(Sort.Direction.DESC, "createdAt", "id"));
+    Pageable pageable =
+        PageRequest.of(
+            0, 2, Sort.by(Sort.Direction.DESC, ShiftRequest::getCreatedAt, ShiftRequest::getId));
     when(shiftRequestRepository.findByStoreIdAndShiftIdAndType(
             STORE_ID, SHIFT_ID, ShiftRequestType.CHANGE, pageable))
         .thenReturn(new PageImpl<>(List.of(newer, older), pageable, 3));

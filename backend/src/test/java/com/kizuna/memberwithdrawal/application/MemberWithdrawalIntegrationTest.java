@@ -569,7 +569,8 @@ class MemberWithdrawalIntegrationTest {
     var entries =
         console.entries(
             member.memberId,
-            PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt", "id")));
+            PageRequest.of(
+                0, 20, Sort.by(Sort.Direction.DESC, PointEntry::getCreatedAt, PointEntry::getId)));
     assertThat(entries.getContent())
         .extracting(e -> e.entryType(), e -> e.amount(), e -> e.actorName())
         .containsExactly(

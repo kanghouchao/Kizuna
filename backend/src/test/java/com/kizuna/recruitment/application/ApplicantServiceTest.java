@@ -127,10 +127,11 @@ class ApplicantServiceTest {
         .when(applicants)
         .findBy(ArgumentMatchers.<Specification<Applicant>>any(), any());
 
-    service.list(STORE_ID, null, null, PageRequest.of(3, 500, Sort.by("name")));
+    service.list(STORE_ID, null, null, PageRequest.of(3, 500, Sort.by(Applicant::getName)));
 
     assertThat(pages.captured().getSort())
-        .containsExactly(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
+        .containsExactly(
+            Sort.Order.desc(Applicant::getCreatedAt), Sort.Order.desc(Applicant::getId));
     assertThat(pages.captured().getPageNumber()).isEqualTo(3);
     assertThat(pages.captured().getPageSize()).isEqualTo(100);
   }

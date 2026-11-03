@@ -19,6 +19,7 @@ import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.medium.lookup.MediumLookup;
 import com.kizuna.medium.lookup.MediumReference;
 import com.kizuna.order.domain.Order;
+import com.kizuna.order.domain.OrderApplication;
 import com.kizuna.order.domain.OrderApplicationRepository;
 import com.kizuna.order.domain.OrderApplicationStatus;
 import com.kizuna.order.domain.OrderApplicationView;
@@ -209,7 +210,8 @@ class OrderQueryServiceTest {
     OrderView withoutMedium = mock(OrderView.class);
     when(orderRepository.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
     when(orderRepository.findViewById(eq(STORE_ID), nullable(String.class)))
-        .thenReturn(Optional.of(withMedium), Optional.of(withoutMedium));
+        .thenReturn(Optional.of(withMedium))
+        .thenReturn(Optional.of(withoutMedium));
     when(mediumLookup.find(STORE_ID, "m1"))
         .thenReturn(Optional.of(new MediumReference("m1", "現在の名前", false)));
 
@@ -236,7 +238,7 @@ class OrderQueryServiceTest {
   void customerCandidatesCarryThePreferredPhoneWithTheCustomerManagePermission() {
     Customer customer = Customer.builder().name("山田").build();
     customer.setId("c1");
-    Pageable pageable = PageRequest.of(1, 20, Sort.by("id"));
+    Pageable pageable = PageRequest.of(1, 20, Sort.by(Customer::getId));
     when(customerRepository.findAll(ArgumentMatchers.<Specification<Customer>>any(), eq(pageable)))
         .thenReturn(new PageImpl<>(List.of(customer), pageable, 21));
     when(customerContactRepository
@@ -319,7 +321,8 @@ class OrderQueryServiceTest {
   @Test
   void listApplicationsDelegatesTheStatusFilterToTheQuery() {
     stubBusinessDate();
-    Pageable pageable = PageRequest.of(0, 20, Sort.by("businessDate", "id"));
+    Pageable pageable =
+        PageRequest.of(0, 20, Sort.by(OrderApplication::getBusinessDate, OrderApplication::getId));
     when(orderApplicationRepository.findViews(
             STORE_ID, Set.of(OrderApplicationStatus.PENDING), pageable))
         .thenReturn(Page.empty(pageable));

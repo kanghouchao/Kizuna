@@ -20,6 +20,7 @@ import com.kizuna.member.domain.MemberAlreadyWithdrawnException;
 import com.kizuna.memberconsole.api.dto.MemberDetailResponse;
 import com.kizuna.memberconsole.api.dto.MemberSummaryResponse;
 import com.kizuna.memberconsole.application.MemberConsoleService;
+import com.kizuna.point.domain.PointEntry;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.exception.NotFoundException;
@@ -185,7 +186,7 @@ class MemberConsoleControllerTest {
 
     assertThat(pageable.getValue().getPageSize()).isEqualTo(20);
     assertThat(pageable.getValue().getSort())
-        .isEqualTo(Sort.by(Sort.Direction.DESC, "createdAt", "id"));
+        .isEqualTo(Sort.by(Sort.Direction.DESC, PointEntry::getCreatedAt, PointEntry::getId));
   }
 
   @Test

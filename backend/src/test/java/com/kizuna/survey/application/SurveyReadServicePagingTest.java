@@ -44,7 +44,8 @@ class SurveyReadServicePagingTest {
     service.list(1L, "staff", PageRequest.of(2, 10), null, null, null, "CREATED_DESC");
 
     assertThat(pages.captured().getSort())
-        .containsExactly(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
+        .containsExactly(
+            Sort.Order.desc(SurveySeries::getCreatedAt), Sort.Order.desc(SurveySeries::getId));
     assertThat(pages.captured().getPageNumber()).isEqualTo(2);
   }
 
@@ -58,6 +59,7 @@ class SurveyReadServicePagingTest {
     service.answers(1L, "staff", ID, ID, PageRequest.of(0, 10), null, null, "RECEIVED_ASC");
 
     assertThat(pages.captured().getSort())
-        .containsExactly(Sort.Order.asc("receivedAt"), Sort.Order.asc("id"));
+        .containsExactly(
+            Sort.Order.asc(SurveyAnswer::getReceivedAt), Sort.Order.asc(SurveyAnswer::getId));
   }
 }

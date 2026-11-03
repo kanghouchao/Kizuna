@@ -39,7 +39,9 @@ class ServiceSettingsServiceTest {
     when(items.findAll(ArgumentMatchers.<Specification<ServiceItem>>any(), any(Pageable.class)))
         .thenReturn(Page.empty());
 
-    var newestFirst = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "createdAt", "id"));
+    var newestFirst =
+        PageRequest.of(
+            0, 20, Sort.by(Sort.Direction.DESC, ServiceItem::getCreatedAt, ServiceItem::getId));
     settings.list(7L, null, false, newestFirst);
 
     var pageable = ArgumentCaptor.forClass(Pageable.class);

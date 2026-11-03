@@ -19,7 +19,10 @@ import org.springframework.web.method.support.ModelAndViewContainer;
  */
 public class TiebreakerPageableArgumentResolver implements PageableArgumentResolver {
 
-  /** 全 aggregate が一意な id を持つため、副キーは id に固定する。 */
+  /**
+   * 全 aggregate が一意な id を持つため、副キーは id に固定する。並びの根の型は端点ごとに異なり、BaseEntity
+   * を継がない実体や射影もあるので、型付きの参照でなく名前で持つ。
+   */
   private static final Sort.Order TIEBREAKER = Sort.Order.asc("id");
 
   private final PageableArgumentResolver delegate;

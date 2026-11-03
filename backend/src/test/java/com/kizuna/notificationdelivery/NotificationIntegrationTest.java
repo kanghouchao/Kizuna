@@ -50,6 +50,7 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.store.StoreShortNames;
+import com.kizuna.store.domain.Store;
 import com.kizuna.task.application.ServiceIdentityCheckTask;
 import com.kizuna.task.application.TaskLifecycle;
 import com.kizuna.task.application.TaskOptions;
@@ -648,7 +649,10 @@ class NotificationIntegrationTest {
                 .orElseThrow()
                 .manualAllowed())
         .isFalse();
-    assertThat(options.stores(PageRequest.of(0, 100, Sort.by("name", "id"))).getContent())
+    assertThat(
+            options
+                .stores(PageRequest.of(0, 100, Sort.by(Store::getName, Store::getId)))
+                .getContent())
         .extracting(TaskOptions.StoreOption::id)
         .contains(storeId.toString());
     assertThatThrownBy(() -> options.candidates("MISSING", storeId, PageRequest.of(0, 10)))
