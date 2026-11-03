@@ -55,6 +55,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
@@ -122,7 +123,9 @@ class ApplicantServiceTest {
   @Test
   void listPageIsNewestFirstEndingInIdWithClampedSize() {
     var pages = new FluentPageCaptor();
-    doAnswer(pages.answer()).when(applicants).findBy(any(Specification.class), any());
+    doAnswer(pages.answer())
+        .when(applicants)
+        .findBy(ArgumentMatchers.<Specification<Applicant>>any(), any());
 
     service.list(STORE_ID, null, null, PageRequest.of(3, 500, Sort.by("name")));
 
