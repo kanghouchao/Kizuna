@@ -81,7 +81,10 @@ class NotificationDeliveryControllerTest {
             get("/notification-deliveries/101")
                 .header("X-Store-ID", STORE_ID.toString())
                 .principal(currentUser()))
-        .andExpect(status().isOk());
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value("101"))
+        .andExpect(jsonPath("$.contact_decision").value("ALLOWED"))
+        .andExpect(jsonPath("$.transport_availability").value("AVAILABLE"));
 
     verify(notifications).get(STORE_ID, "user", "101");
   }
@@ -100,7 +103,10 @@ class NotificationDeliveryControllerTest {
                 .principal(currentUser())
                 .contentType("application/json")
                 .content("{\"version\":0,\"reason\":\"確認済み\"}"))
-        .andExpect(status().isOk());
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value("101"))
+        .andExpect(jsonPath("$.contact_decision").value("ALLOWED"))
+        .andExpect(jsonPath("$.transport_availability").value("AVAILABLE"));
 
     verify(notifications).queue(STORE_ID, "user", "101", 0L, "確認済み", false);
   }
@@ -133,7 +139,10 @@ class NotificationDeliveryControllerTest {
                      "subject":"件名","body":"本文","scheduled_at":"2026-10-07T00:00:00Z",
                      "dedupe_key":"race"}
                     """))
-        .andExpect(status().isOk());
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value("101"))
+        .andExpect(jsonPath("$.contact_decision").value("ALLOWED"))
+        .andExpect(jsonPath("$.transport_availability").value("AVAILABLE"));
 
     verify(notifications).replay(eq(STORE_ID), eq("user"), any());
   }
