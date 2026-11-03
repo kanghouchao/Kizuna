@@ -1,6 +1,7 @@
 package com.kizuna.notificationdelivery.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -14,7 +15,9 @@ import com.kizuna.notificationdelivery.application.NotificationService;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
+import java.sql.SQLException;
 import java.util.List;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -22,6 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -91,6 +95,39 @@ class NotificationDeliveryControllerTest {
         .andExpect(status().isOk());
 
     verify(notifications).queue(STORE_ID, "user", "101", 0L, "確認済み", false);
+  }
+
+  @Test
+  @DisplayName("同じ重複排除キーの同時作成に敗れた要求は、既存の下書きの読み直しとして 200 を返すこと")
+  @WithMockUser(authorities = {"PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_MANAGE"})
+  void losingTheDedupeKeyRaceReplaysTheExistingDraft() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(notifications.create(eq(STORE_ID), eq("user"), any()))
+        .thenThrow(
+            new DataIntegrityViolationException(
+                "duplicate",
+                new ConstraintViolationException(
+                    "could not execute statement",
+                    new SQLException("duplicate key value", "23505"),
+                    "uq_t_notification_deliveries_key")));
+    when(notifications.replay(eq(STORE_ID), eq("user"), any()))
+        .thenReturn(new NotificationService.Created(null, false));
+
+    mockMvc
+        .perform(
+            post("/notification-deliveries")
+                .header("X-Store-ID", STORE_ID.toString())
+                .principal(currentUser())
+                .contentType("application/json")
+                .content(
+                    """
+                    {"source_type":"ORDER","source_id":"1","channel":"EMAIL","purpose":"BUSINESS",
+                     "subject":"件名","body":"本文","scheduled_at":"2026-10-07T00:00:00Z",
+                     "dedupe_key":"race"}
+                    """))
+        .andExpect(status().isOk());
+
+    verify(notifications).replay(eq(STORE_ID), eq("user"), any());
   }
 
   @Test
