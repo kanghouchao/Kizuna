@@ -6,12 +6,15 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.shared.persistence.FluentPageCaptor;
+import com.kizuna.survey.domain.SurveyAnswer;
 import com.kizuna.survey.domain.SurveyAnswerRepository;
 import com.kizuna.survey.domain.SurveyHistoryRepository;
 import com.kizuna.survey.domain.SurveyRevisionRepository;
+import com.kizuna.survey.domain.SurveySeries;
 import com.kizuna.survey.domain.SurveySeriesRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -34,7 +37,9 @@ class SurveyReadServicePagingTest {
 
   @Test
   void surveyListEndsInIdInTheRequestedDirection() {
-    doAnswer(pages.answer()).when(surveys).findBy(any(Specification.class), any());
+    doAnswer(pages.answer())
+        .when(surveys)
+        .findBy(ArgumentMatchers.<Specification<SurveySeries>>any(), any());
 
     service.list(1L, "staff", PageRequest.of(2, 10), null, null, null, "CREATED_DESC");
 
@@ -46,7 +51,9 @@ class SurveyReadServicePagingTest {
   @Test
   void answerListEndsInIdInTheRequestedDirection() {
     when(revisions.existsByIdAndStoreIdAndSurveyId(ID, 1L, ID)).thenReturn(true);
-    doAnswer(pages.answer()).when(answers).findBy(any(Specification.class), any());
+    doAnswer(pages.answer())
+        .when(answers)
+        .findBy(ArgumentMatchers.<Specification<SurveyAnswer>>any(), any());
 
     service.answers(1L, "staff", ID, ID, PageRequest.of(0, 10), null, null, "RECEIVED_ASC");
 

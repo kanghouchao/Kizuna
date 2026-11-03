@@ -26,6 +26,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -57,7 +58,9 @@ class ArticleServiceTest {
   @Test
   void publicListEndsInIdAfterPublicationOrder() {
     var pages = new FluentPageCaptor();
-    doAnswer(pages.answer()).when(articles).findBy(any(Specification.class), any());
+    doAnswer(pages.answer())
+        .when(articles)
+        .findBy(ArgumentMatchers.<Specification<Article>>any(), any());
 
     service.listPublic(1L, PageRequest.of(2, 10, Sort.by("ignored")));
 
