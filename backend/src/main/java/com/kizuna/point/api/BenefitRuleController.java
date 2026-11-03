@@ -2,6 +2,7 @@ package com.kizuna.point.api;
 
 import com.kizuna.point.api.dto.BenefitRuleCreateRequest;
 import com.kizuna.point.api.dto.BenefitRuleDeactivationRequest;
+import com.kizuna.point.api.dto.BenefitRuleMapper;
 import com.kizuna.point.api.dto.BenefitRuleResponse;
 import com.kizuna.point.api.dto.BenefitRuleSummaryResponse;
 import com.kizuna.point.api.dto.BenefitRuleUpdateRequest;
@@ -28,32 +29,38 @@ import org.springframework.web.bind.annotation.RestController;
 public class BenefitRuleController {
 
   private final BenefitRuleService benefitRuleService;
+  private final BenefitRuleMapper benefitRuleMapper;
 
   /** 一覧は適用店舗を件数まで畳んだ要約。店舗 ID の列挙が要る編集フォームは {@link #get(Long)} で個別に取得する。 */
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_BENEFIT_MANAGE')")
   public ResponseEntity<Page<BenefitRuleSummaryResponse>> list(Pageable pageable) {
-    return ResponseEntity.ok(benefitRuleService.list(pageable));
+    return ResponseEntity.ok(benefitRuleService.list(pageable).map(benefitRuleMapper::toSummary));
   }
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_BENEFIT_MANAGE')")
   public ResponseEntity<BenefitRuleResponse> get(@PathVariable Long id) {
-    return ResponseEntity.ok(benefitRuleService.get(id));
+    return ResponseEntity.ok(benefitRuleMapper.toResponse(benefitRuleService.get(id)));
   }
 
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_BENEFIT_MANAGE')")
   public ResponseEntity<BenefitRuleResponse> create(
       @Valid @RequestBody BenefitRuleCreateRequest request) {
-    return ResponseEntity.status(HttpStatus.CREATED).body(benefitRuleService.create(request));
+    var rule =
+        benefitRuleService.create(request.getType(), benefitRuleMapper.toDefinition(request));
+    return ResponseEntity.status(HttpStatus.CREATED).body(benefitRuleMapper.toResponse(rule));
   }
 
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_BENEFIT_MANAGE')")
   public ResponseEntity<BenefitRuleResponse> update(
       @PathVariable Long id, @Valid @RequestBody BenefitRuleUpdateRequest request) {
-    return ResponseEntity.ok(benefitRuleService.update(id, request));
+    var rule =
+        benefitRuleService.update(
+            id, request.getVersion(), benefitRuleMapper.toDefinition(request));
+    return ResponseEntity.ok(benefitRuleMapper.toResponse(rule));
   }
 
   /** 停用（退場）。再開の口は無く、二度目は 400 で撥ねる。確認した版と現物がずれていれば 409。 */
@@ -61,7 +68,7 @@ public class BenefitRuleController {
   @PreAuthorize("hasAuthority('PERM_BENEFIT_MANAGE')")
   public ResponseEntity<Void> deactivate(
       @PathVariable Long id, @Valid @RequestBody BenefitRuleDeactivationRequest request) {
-    benefitRuleService.deactivate(id, request);
+    benefitRuleService.deactivate(id, request.getVersion());
     return ResponseEntity.noContent().build();
   }
 }

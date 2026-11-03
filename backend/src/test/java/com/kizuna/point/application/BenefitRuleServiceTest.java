@@ -5,12 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.point.api.dto.BenefitRuleCreateRequest;
-import com.kizuna.point.api.dto.BenefitRuleDeactivationRequest;
-import com.kizuna.point.api.dto.BenefitRuleMapperImpl;
-import com.kizuna.point.api.dto.BenefitRuleResponse;
-import com.kizuna.point.api.dto.BenefitRuleSummaryResponse;
-import com.kizuna.point.api.dto.BenefitRuleUpdateRequest;
 import com.kizuna.point.domain.BenefitRule;
 import com.kizuna.point.domain.BenefitRuleDefinition;
 import com.kizuna.point.domain.BenefitRuleRepeatPolicy;
@@ -30,7 +24,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -41,7 +34,6 @@ class BenefitRuleServiceTest {
 
   @Mock private BenefitRuleRepository benefitRuleRepository;
 
-  @Spy private BenefitRuleMapperImpl benefitRuleMapper;
   @Mock private BusinessAudit businessAudit;
 
   @InjectMocks private BenefitRuleService benefitRuleService;
@@ -64,28 +56,25 @@ class BenefitRuleServiceTest {
   }
 
   @Test
-  @DisplayName("一覧の要約は適用店舗を件数へ畳み、店舗 ID を持たないこと")
-  void listFoldsStoresIntoACount() {
+  @DisplayName("一覧は新しい順の問い合わせの規則をそのまま返すこと")
+  void listReturnsTheNewestFirstPage() {
     when(benefitRuleRepository.findAllByOrderByCreatedAtDescIdDesc(any()))
         .thenReturn(new PageImpl<>(List.of(visitRule)));
 
-    List<BenefitRuleSummaryResponse> rows =
-        benefitRuleService.list(PageRequest.of(0, 20)).getContent();
+    List<BenefitRule> rows = benefitRuleService.list(PageRequest.of(0, 20)).getContent();
 
-    assertThat(rows).hasSize(1);
-    assertThat(rows.getFirst().storeCount()).isEqualTo(2);
-    assertThat(rows.getFirst().type()).isEqualTo("VISIT");
+    assertThat(rows).containsExactly(visitRule);
   }
 
   @Test
-  @DisplayName("詳細は編集フォームが要る店舗 ID の列挙を返すこと")
+  @DisplayName("詳細は編集フォームが要る店舗 ID の列挙を持つ規則を返すこと")
   void detailCarriesStoreIds() {
     when(benefitRuleRepository.findById(1L)).thenReturn(Optional.of(visitRule));
 
-    BenefitRuleResponse response = benefitRuleService.get(1L);
+    BenefitRule rule = benefitRuleService.get(1L);
 
-    assertThat(response.storeIds()).containsExactlyInAnyOrder(3L, 5L);
-    assertThat(response.repeatPolicy()).isEqualTo("EVERY_TIME");
+    assertThat(rule.getStoreIds()).containsExactlyInAnyOrder(3L, 5L);
+    assertThat(rule.getRepeatPolicy()).isEqualTo(BenefitRuleRepeatPolicy.EVERY_TIME);
   }
 
   @Test
@@ -99,57 +88,60 @@ class BenefitRuleServiceTest {
   @Test
   @DisplayName("作成は要求の種別で規則を建てること")
   void createDefinesTheRuleWithTheRequestedType() {
-    BenefitRuleCreateRequest request = new BenefitRuleCreateRequest();
-    request.setName("紹介キャンペーン");
-    request.setType(BenefitRuleType.REFERRAL);
-    request.setStoreScopeType(StoreScopeType.ALL_STORES);
-    request.setRepeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME);
-    request.setReferrerPoints(1000);
-    request.setReferredPoints(500);
+    var definition =
+        BenefitRuleDefinition.builder()
+            .name("紹介キャンペーン")
+            .storeScopeType(StoreScopeType.ALL_STORES)
+            .repeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME)
+            .referrerPoints(1000)
+            .referredPoints(500)
+            .build();
     when(benefitRuleRepository.saveAndFlush(any()))
         .thenAnswer(invocation -> invocation.getArgument(0));
 
-    BenefitRuleResponse response = benefitRuleService.create(request);
+    BenefitRule rule = benefitRuleService.create(BenefitRuleType.REFERRAL, definition);
 
-    assertThat(response.type()).isEqualTo("REFERRAL");
-    assertThat(response.referrerPoints()).isEqualTo(1000);
-    assertThat(response.referredPoints()).isEqualTo(500);
+    assertThat(rule.getType()).isEqualTo(BenefitRuleType.REFERRAL);
+    assertThat(rule.getReferrerPoints()).isEqualTo(1000);
+    assertThat(rule.getReferredPoints()).isEqualTo(500);
   }
 
   @Test
   @DisplayName("更新は種別を動かさずに残りの五要素を置き換えること")
   void updateKeepsTheType() {
-    BenefitRuleUpdateRequest request = new BenefitRuleUpdateRequest();
-    request.setName("来店ボーナス（改）");
-    request.setStoreScopeType(StoreScopeType.ALL_STORES);
-    request.setRepeatPolicy(BenefitRuleRepeatPolicy.ONCE_PER_MEMBER);
-    request.setPoints(300);
-    request.setGrantValidityDays(90);
-    request.setVersion(0L);
+    var definition =
+        BenefitRuleDefinition.builder()
+            .name("来店ボーナス（改）")
+            .storeScopeType(StoreScopeType.ALL_STORES)
+            .repeatPolicy(BenefitRuleRepeatPolicy.ONCE_PER_MEMBER)
+            .points(300)
+            .grantValidityDays(90)
+            .build();
     when(benefitRuleRepository.findById(1L)).thenReturn(Optional.of(visitRule));
     when(benefitRuleRepository.saveAndFlush(any()))
         .thenAnswer(invocation -> invocation.getArgument(0));
 
-    BenefitRuleResponse response = benefitRuleService.update(1L, request);
+    BenefitRule rule = benefitRuleService.update(1L, 0L, definition);
 
-    assertThat(response.type()).isEqualTo("VISIT");
-    assertThat(response.name()).isEqualTo("来店ボーナス（改）");
-    assertThat(response.storeIds()).isEmpty();
-    assertThat(response.grantValidityDays()).isEqualTo(90);
+    assertThat(rule.getType()).isEqualTo(BenefitRuleType.VISIT);
+    assertThat(rule.getName()).isEqualTo("来店ボーナス（改）");
+    assertThat(rule.getStoreIds()).isEmpty();
+    assertThat(rule.getGrantValidityDays()).isEqualTo(90);
   }
 
   @Test
   @DisplayName("陳腐化した編集フォームの提出は 409 で撥ねられること")
   void staleUpdateIsRejected() {
-    BenefitRuleUpdateRequest request = new BenefitRuleUpdateRequest();
-    request.setName("来店ボーナス（改）");
-    request.setStoreScopeType(StoreScopeType.ALL_STORES);
-    request.setRepeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME);
-    request.setPoints(300);
-    request.setVersion(1L);
+    var definition =
+        BenefitRuleDefinition.builder()
+            .name("来店ボーナス（改）")
+            .storeScopeType(StoreScopeType.ALL_STORES)
+            .repeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME)
+            .points(300)
+            .build();
     when(benefitRuleRepository.findById(1L)).thenReturn(Optional.of(visitRule));
 
-    assertThatThrownBy(() -> benefitRuleService.update(1L, request))
+    assertThatThrownBy(() -> benefitRuleService.update(1L, 1L, definition))
         .isInstanceOf(StaleBenefitRuleUpdateException.class);
     assertThat(visitRule.getName()).isEqualTo("来店ボーナス");
   }
@@ -159,10 +151,10 @@ class BenefitRuleServiceTest {
   void deactivationIsOneWay() {
     when(benefitRuleRepository.findById(1L)).thenReturn(Optional.of(visitRule));
 
-    benefitRuleService.deactivate(1L, deactivation(0L));
+    benefitRuleService.deactivate(1L, 0L);
 
     assertThat(visitRule.getEnabled()).isFalse();
-    assertThatThrownBy(() -> benefitRuleService.deactivate(1L, deactivation(0L)))
+    assertThatThrownBy(() -> benefitRuleService.deactivate(1L, 0L))
         .isInstanceOf(InvalidBenefitRuleException.class);
   }
 
@@ -171,14 +163,8 @@ class BenefitRuleServiceTest {
   void deactivationRefusesStaleVersion() {
     when(benefitRuleRepository.findById(1L)).thenReturn(Optional.of(visitRule));
 
-    assertThatThrownBy(() -> benefitRuleService.deactivate(1L, deactivation(1L)))
+    assertThatThrownBy(() -> benefitRuleService.deactivate(1L, 1L))
         .isInstanceOf(StaleBenefitRuleUpdateException.class);
     assertThat(visitRule.getEnabled()).isTrue();
-  }
-
-  private static BenefitRuleDeactivationRequest deactivation(Long version) {
-    BenefitRuleDeactivationRequest request = new BenefitRuleDeactivationRequest();
-    request.setVersion(version);
-    return request;
   }
 }

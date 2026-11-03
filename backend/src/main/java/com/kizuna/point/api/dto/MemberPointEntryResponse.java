@@ -1,5 +1,6 @@
 package com.kizuna.point.api.dto;
 
+import com.kizuna.point.application.MemberPointEntry;
 import java.time.LocalDate;
 
 /**
@@ -15,4 +16,9 @@ import java.time.LocalDate;
  * @param expiresOn 加算ロットの有効期限。期限なしと減算では欠落する
  */
 public record MemberPointEntryResponse(
-    LocalDate occurredOn, String storeName, String entryType, int amount, LocalDate expiresOn) {}
+    LocalDate occurredOn, String storeName, String entryType, int amount, LocalDate expiresOn) {
+  public static MemberPointEntryResponse of(MemberPointEntry e) {
+    return new MemberPointEntryResponse(
+        e.occurredOn(), e.storeName(), e.entryType().name(), e.amount(), e.expiresOn());
+  }
+}

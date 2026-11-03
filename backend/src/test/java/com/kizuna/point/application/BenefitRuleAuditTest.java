@@ -10,10 +10,6 @@ import static org.mockito.Mockito.when;
 import com.kizuna.audit.domain.AuditEvent;
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
-import com.kizuna.point.api.dto.BenefitRuleCreateRequest;
-import com.kizuna.point.api.dto.BenefitRuleDeactivationRequest;
-import com.kizuna.point.api.dto.BenefitRuleMapperImpl;
-import com.kizuna.point.api.dto.BenefitRuleUpdateRequest;
 import com.kizuna.point.domain.BenefitRule;
 import com.kizuna.point.domain.BenefitRuleDefinition;
 import com.kizuna.point.domain.BenefitRuleRepeatPolicy;
@@ -54,9 +50,7 @@ class BenefitRuleAuditTest {
             new UsernamePasswordAuthenticationToken("operator@example.test", null, List.of()));
     service =
         new BenefitRuleService(
-            rules,
-            new BenefitRuleMapperImpl(),
-            new BusinessAudit(users, new AuditWriter(events, Clock.systemUTC())));
+            rules, new BusinessAudit(users, new AuditWriter(events, Clock.systemUTC())));
     var actor =
         User.builder()
             .email("operator@example.test")
@@ -96,15 +90,7 @@ class BenefitRuleAuditTest {
 
   @Test
   void creationAuditsGroupWideWithoutFreeText() {
-    var request = new BenefitRuleCreateRequest();
-    request.setType(BenefitRuleType.VISIT);
-    request.setName("秘密の名前");
-    request.setStoreScopeType(StoreScopeType.SPECIFIC_STORES);
-    request.setStoreIds(Set.of(3L, 5L));
-    request.setRepeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME);
-    request.setPoints(500);
-
-    service.create(request);
+    service.create(BenefitRuleType.VISIT, definition("秘密の名前", 500));
 
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
@@ -125,9 +111,7 @@ class BenefitRuleAuditTest {
 
   @Test
   void updateAuditsChangedFieldNamesAndNeverTheName() {
-    var request = update(0L, "別の名前", 800);
-
-    service.update(7L, request);
+    service.update(7L, 0L, definition("別の名前", 800));
 
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
@@ -144,23 +128,20 @@ class BenefitRuleAuditTest {
 
   @Test
   void nameOnlyUpdateStillAudits() {
-    service.update(7L, update(0L, "別の名前", 500));
+    service.update(7L, 0L, definition("別の名前", 500));
     assertThat(recorded).hasSize(1);
     assertThat(recorded.getFirst().getAfterValues()).containsEntry("changed_fields", "name");
   }
 
   @Test
   void identicalUpdateLeavesNoAudit() {
-    service.update(7L, update(0L, "来店ボーナス", 500));
+    service.update(7L, 0L, definition("来店ボーナス", 500));
     assertThat(recorded).isEmpty();
   }
 
   @Test
   void deactivationAuditsStateFlip() {
-    var request = new BenefitRuleDeactivationRequest();
-    request.setVersion(0L);
-
-    service.deactivate(7L, request);
+    service.deactivate(7L, 0L);
 
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
@@ -172,27 +153,24 @@ class BenefitRuleAuditTest {
 
   @Test
   void rejectionsLeaveNoAudit() {
-    assertThatThrownBy(() -> service.update(7L, update(5L, "x", 800)))
+    assertThatThrownBy(() -> service.update(7L, 5L, definition("x", 800)))
         .isInstanceOf(StaleBenefitRuleUpdateException.class);
-    var invalid = update(0L, "x", 0);
-    assertThatThrownBy(() -> service.update(7L, invalid))
+    var invalid = definition("x", 0);
+    assertThatThrownBy(() -> service.update(7L, 0L, invalid))
         .isInstanceOf(InvalidBenefitRuleException.class);
-    var stale = new BenefitRuleDeactivationRequest();
-    stale.setVersion(9L);
-    assertThatThrownBy(() -> service.deactivate(7L, stale))
+    assertThatThrownBy(() -> service.deactivate(7L, 9L))
         .isInstanceOf(StaleBenefitRuleUpdateException.class);
     assertThat(recorded).isEmpty();
   }
 
-  private BenefitRuleUpdateRequest update(Long version, String name, int points) {
-    var request = new BenefitRuleUpdateRequest();
-    request.setVersion(version);
-    request.setName(name);
-    request.setStoreScopeType(StoreScopeType.SPECIFIC_STORES);
-    request.setStoreIds(Set.of(3L, 5L));
-    request.setRepeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME);
-    request.setPoints(points);
-    return request;
+  private static BenefitRuleDefinition definition(String name, int points) {
+    return BenefitRuleDefinition.builder()
+        .name(name)
+        .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+        .storeIds(Set.of(3L, 5L))
+        .repeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME)
+        .points(points)
+        .build();
   }
 
   private static BenefitRule rule(String name, int points) {

@@ -2,8 +2,6 @@ package com.kizuna.point.application;
 
 import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberLookupService.MemberLookup;
-import com.kizuna.point.api.dto.MemberPointBalanceResponse;
-import com.kizuna.point.api.dto.MemberPointEntryResponse;
 import com.kizuna.point.domain.MemberPointEntryView;
 import com.kizuna.point.domain.PointEntryRepository;
 import com.kizuna.shared.config.AppProperties;
@@ -35,16 +33,16 @@ public class MemberPointService {
 
   /** 本人の現在残高。 */
   @Transactional(readOnly = true)
-  public MemberPointBalanceResponse balance(String email) {
-    return new MemberPointBalanceResponse(pointLedgerService.balance(resolveMemberId(email)));
+  public long balance(String email) {
+    return pointLedgerService.balance(resolveMemberId(email));
   }
 
   /** 本人のポイント明細（全種別・跨店集約）。 */
   @Transactional(readOnly = true)
-  public Page<MemberPointEntryResponse> entries(String email, Pageable pageable) {
+  public Page<MemberPointEntry> entries(String email, Pageable pageable) {
     return pointEntryRepository
         .findMemberEntryViews(resolveMemberId(email), pageable)
-        .map(this::toResponse);
+        .map(this::toEntry);
   }
 
   private Long resolveMemberId(String email) {
@@ -60,11 +58,11 @@ public class MemberPointService {
   }
 
   /** 記帳時刻は業務のタイムゾーンで日付へ畳む — JVM のタイムゾーンで畳むと、深夜の記帳が 1 日ずれた日付で並ぶ。 */
-  private MemberPointEntryResponse toResponse(MemberPointEntryView view) {
-    return new MemberPointEntryResponse(
+  private MemberPointEntry toEntry(MemberPointEntryView view) {
+    return new MemberPointEntry(
         view.getCreatedAt().atZoneSameInstant(ZoneId.of(appProperties.getTimezone())).toLocalDate(),
         view.getStoreName(),
-        view.getEntryType().name(),
+        view.getEntryType(),
         view.getAmount(),
         view.getExpiresOn());
   }

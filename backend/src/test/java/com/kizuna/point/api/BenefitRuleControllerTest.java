@@ -11,17 +11,18 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kizuna.point.api.dto.BenefitRuleCreateRequest;
-import com.kizuna.point.api.dto.BenefitRuleResponse;
-import com.kizuna.point.api.dto.BenefitRuleSummaryResponse;
-import com.kizuna.point.api.dto.BenefitRuleUpdateRequest;
+import com.kizuna.point.api.dto.BenefitRuleMapperImpl;
 import com.kizuna.point.application.BenefitRuleService;
+import com.kizuna.point.domain.BenefitRule;
+import com.kizuna.point.domain.BenefitRuleDefinition;
+import com.kizuna.point.domain.BenefitRuleRepeatPolicy;
+import com.kizuna.point.domain.BenefitRuleType;
 import com.kizuna.point.domain.InvalidBenefitRuleException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
+import com.kizuna.user.domain.StoreScopeType;
 import java.util.List;
-import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -34,10 +35,15 @@ import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(BenefitRuleController.class)
-@Import({BenefitRuleControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
+@Import({
+  BenefitRuleControllerTest.MethodSecurityConfig.class,
+  StoreScopeHolder.class,
+  BenefitRuleMapperImpl.class
+})
 class BenefitRuleControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -65,7 +71,7 @@ class BenefitRuleControllerTest {
   @WithMockUser(authorities = "PERM_BENEFIT_MANAGE")
   void listWithAuthority() throws Exception {
     when(benefitRuleService.list(any()))
-        .thenReturn(new PageImpl<>(List.of(summary(1L, "来店ボーナス", true))));
+        .thenReturn(new PageImpl<>(List.of(rule(1L, "来店ボーナス", true))));
 
     mockMvc
         .perform(get("/benefit-rules"))
@@ -79,7 +85,7 @@ class BenefitRuleControllerTest {
   @WithMockUser(authorities = "PERM_BENEFIT_MANAGE")
   void listIncludesDeactivatedRules() throws Exception {
     when(benefitRuleService.list(any()))
-        .thenReturn(new PageImpl<>(List.of(summary(2L, "終了した施策", false))));
+        .thenReturn(new PageImpl<>(List.of(rule(2L, "終了した施策", false))));
 
     mockMvc
         .perform(get("/benefit-rules"))
@@ -91,7 +97,7 @@ class BenefitRuleControllerTest {
   @DisplayName("規則の作成は 201 と生成された規則を返すこと")
   @WithMockUser(authorities = "PERM_BENEFIT_MANAGE")
   void createReturnsCreated() throws Exception {
-    when(benefitRuleService.create(any())).thenReturn(response(9L));
+    when(benefitRuleService.create(any(), any())).thenReturn(rule(9L, "来店ボーナス", true));
 
     mockMvc
         .perform(
@@ -99,10 +105,10 @@ class BenefitRuleControllerTest {
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.id").value(9));
 
-    ArgumentCaptor<BenefitRuleCreateRequest> captor =
-        ArgumentCaptor.forClass(BenefitRuleCreateRequest.class);
-    verify(benefitRuleService).create(captor.capture());
-    org.assertj.core.api.Assertions.assertThat(captor.getValue().getPoints()).isEqualTo(500);
+    ArgumentCaptor<BenefitRuleDefinition> captor =
+        ArgumentCaptor.forClass(BenefitRuleDefinition.class);
+    verify(benefitRuleService).create(eq(BenefitRuleType.VISIT), captor.capture());
+    org.assertj.core.api.Assertions.assertThat(captor.getValue().points()).isEqualTo(500);
   }
 
   @Test
@@ -120,7 +126,7 @@ class BenefitRuleControllerTest {
                     """))
         .andExpect(status().isBadRequest());
 
-    verify(benefitRuleService, never()).create(any());
+    verify(benefitRuleService, never()).create(any(), any());
   }
 
   @Test
@@ -138,7 +144,7 @@ class BenefitRuleControllerTest {
                     """))
         .andExpect(status().isBadRequest());
 
-    verify(benefitRuleService, never()).update(any(), any());
+    verify(benefitRuleService, never()).update(any(), any(), any());
   }
 
   @Test
@@ -155,14 +161,14 @@ class BenefitRuleControllerTest {
                     """))
         .andExpect(status().isBadRequest());
 
-    verify(benefitRuleService, never()).update(any(), any());
+    verify(benefitRuleService, never()).update(any(), any(), any());
   }
 
   @Test
   @DisplayName("規則の更新は 200 と更新後の規則を返すこと")
   @WithMockUser(authorities = "PERM_BENEFIT_MANAGE")
   void updateReturnsOk() throws Exception {
-    when(benefitRuleService.update(eq(1L), any())).thenReturn(response(1L));
+    when(benefitRuleService.update(eq(1L), eq(0L), any())).thenReturn(rule(1L, "来店ボーナス", true));
 
     mockMvc
         .perform(
@@ -176,10 +182,10 @@ class BenefitRuleControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(1));
 
-    ArgumentCaptor<BenefitRuleUpdateRequest> captor =
-        ArgumentCaptor.forClass(BenefitRuleUpdateRequest.class);
-    verify(benefitRuleService).update(eq(1L), captor.capture());
-    org.assertj.core.api.Assertions.assertThat(captor.getValue().getName()).isEqualTo("来店ボーナス");
+    ArgumentCaptor<BenefitRuleDefinition> captor =
+        ArgumentCaptor.forClass(BenefitRuleDefinition.class);
+    verify(benefitRuleService).update(eq(1L), eq(0L), captor.capture());
+    org.assertj.core.api.Assertions.assertThat(captor.getValue().name()).isEqualTo("来店ボーナス");
   }
 
   @Test
@@ -258,39 +264,19 @@ class BenefitRuleControllerTest {
         .andExpect(status().isForbidden());
   }
 
-  private static BenefitRuleSummaryResponse summary(Long id, String name, boolean enabled) {
-    return new BenefitRuleSummaryResponse(
-        id,
-        name,
-        "VISIT",
-        "ALL_STORES",
-        0,
-        null,
-        null,
-        null,
-        "EVERY_TIME",
-        500,
-        null,
-        null,
-        enabled,
-        0L);
-  }
-
-  private static BenefitRuleResponse response(Long id) {
-    return new BenefitRuleResponse(
-        id,
-        "来店ボーナス",
-        "VISIT",
-        "ALL_STORES",
-        Set.of(),
-        null,
-        null,
-        null,
-        "EVERY_TIME",
-        500,
-        null,
-        null,
-        true,
-        0L);
+  private static BenefitRule rule(Long id, String name, boolean enabled) {
+    var rule =
+        BenefitRule.define(
+            BenefitRuleType.VISIT,
+            BenefitRuleDefinition.builder()
+                .name(name)
+                .storeScopeType(StoreScopeType.ALL_STORES)
+                .repeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME)
+                .points(500)
+                .build());
+    if (!enabled) rule.deactivate();
+    ReflectionTestUtils.setField(rule, "id", id);
+    ReflectionTestUtils.setField(rule, "version", 0L);
+    return rule;
   }
 }
