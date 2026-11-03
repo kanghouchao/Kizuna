@@ -1,1 +1,11 @@
+// プラグインの依存（Spring Boot プラグインの loader-tools・spring-core 等）は Maven Central が正本。
+// プラグインポータルの中継は Central の pom を一時的に見失うことがあり、ポータルだけだと build が落ちる。
+// Central を先に引き、Central に無いプラグインマーカーだけをポータルから解決する。
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
 rootProject.name = "kizuna"
