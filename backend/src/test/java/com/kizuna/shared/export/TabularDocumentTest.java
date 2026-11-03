@@ -39,6 +39,11 @@ class TabularDocumentTest {
                 + "\"'条件\",\"'=式,\"\"引用\"\"\"\r\n"
                 + "\"'明細\",\"1\"\r\n"
                 + "\"'明細\",\"\"\r\n");
+    assertThat(
+            new String(
+                TabularDocument.write("csv", HEADER, sheets("00123", 1L), budget()),
+                StandardCharsets.UTF_8))
+        .contains("\"'条件\",\"'00123\"\r\n");
   }
 
   @Test
