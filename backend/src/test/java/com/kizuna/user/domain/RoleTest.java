@@ -20,6 +20,16 @@ class RoleTest {
   }
 
   @Test
+  @DisplayName("返した権限集合は変更できず、変更は replacePermissions を通るしかない")
+  void permissionIdsCannotBeModifiedThroughTheGetter() {
+    Role role = Role.builder().name("店長").permissionIds(Set.of(1L)).build();
+
+    assertThatThrownBy(() -> role.getPermissionIds().add(99L))
+        .isInstanceOf(UnsupportedOperationException.class);
+    assertThat(role.getPermissionIds()).containsExactly(1L);
+  }
+
+  @Test
   @DisplayName("systemRole 未指定は自作ロール（false）として扱う")
   void systemRoleDefaultsToFalse() {
     Role role = Role.builder().name("受付").permissionIds(Set.of(1L)).build();
