@@ -25,10 +25,11 @@ import com.kizuna.point.domain.PointRollback;
 import com.kizuna.point.domain.PointRollbackRepository;
 import com.kizuna.settings.application.PointSettings;
 import com.kizuna.settings.application.SystemConfigService;
-import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.application.BusinessAudit;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
@@ -42,7 +43,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.InOrder;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -62,16 +62,14 @@ class PointLedgerServiceTest {
   @Mock private PointAllocationRepository pointAllocationRepository;
   @Mock private PointRollbackRepository pointRollbackRepository;
   @Mock private SystemConfigService systemConfigService;
-  @Mock private AppProperties appProperties;
-
-  @InjectMocks private PointLedgerService pointLedgerService;
+  private PointLedgerService pointLedgerService;
 
   @Captor private ArgumentCaptor<PointEntry> savedEntry;
   @Captor private ArgumentCaptor<PointRollback> savedRollback;
 
   @BeforeEach
-  void stubBusinessTimezone() {
-    lenient().when(appProperties.getTimezone()).thenReturn(TIMEZONE);
+  void setUp() {
+    pointLedgerService = ledgerAt(Clock.system(ZoneId.of(TIMEZONE)));
     lenient().when(pointEntryRepository.findByIdempotencyKey(any())).thenReturn(Optional.empty());
     // 記帳は保存された行の ID を返す（付与はそれを昇格判定の根拠として渡す）。永続化層の採番を写す。
     lenient()
@@ -428,18 +426,32 @@ class PointLedgerServiceTest {
   }
 
   @Test
-  @DisplayName("期限の判定は設定のタイムゾーンの本日で行うこと")
-  void balanceJudgesExpiryInTheConfiguredTimezone() {
-    // 日界線の両端（UTC-12 と UTC+14）は「本日」が常に 1 日以上ずれるため、同じロットの可否が
-    // タイムゾーンだけで分かれる。JVM のタイムゾーンで判定していると両者が同じ結果になる。
-    LocalDate todayAtDateLineWest = LocalDate.now(ZoneId.of("Etc/GMT+12"));
+  @DisplayName("期限の判定は業務の時計の本日で行うこと")
+  void balanceJudgesExpiryOnTheBusinessClock() {
+    // 業務の時計が刻む日付だけで同じロットの可否が分かれることを、同じ瞬間を 2 つのタイムゾーンで読んで示す。
+    // 2026-11-03T23:00Z は UTC-12 で 11/3、UTC+14 で 11/4。時計を経由しない判定では両者が同じ結果になる。
+    Instant instant = Instant.parse("2026-11-03T23:00:00Z");
     when(pointEntryRepository.findCredits(MEMBER_ID))
-        .thenReturn(List.of(credit(1L, 500, todayAtDateLineWest)));
+        .thenReturn(List.of(credit(1L, 500, LocalDate.of(2026, 11, 3))));
     when(pointAllocationRepository.findConsumedBySourceEntryIds(List.of(1L))).thenReturn(List.of());
-    when(appProperties.getTimezone()).thenReturn("Etc/GMT+12").thenReturn("Pacific/Kiritimati");
 
-    assertThat(pointLedgerService.balance(MEMBER_ID)).as("期限当日はまだ使える").isEqualTo(500);
-    assertThat(pointLedgerService.balance(MEMBER_ID)).as("期限を過ぎたロットは残高に入らない").isZero();
+    assertThat(ledgerAt(Clock.fixed(instant, ZoneId.of("Etc/GMT+12"))).balance(MEMBER_ID))
+        .as("期限当日はまだ使える")
+        .isEqualTo(500);
+    assertThat(ledgerAt(Clock.fixed(instant, ZoneId.of("Pacific/Kiritimati"))).balance(MEMBER_ID))
+        .as("期限を過ぎたロットは残高に入らない")
+        .isZero();
+  }
+
+  private PointLedgerService ledgerAt(Clock clock) {
+    return new PointLedgerService(
+        businessAudit,
+        memberLookupService,
+        pointEntryRepository,
+        pointAllocationRepository,
+        pointRollbackRepository,
+        systemConfigService,
+        clock);
   }
 
   @Test

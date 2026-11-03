@@ -90,7 +90,11 @@ class CastAuditTest {
             profiles,
             stores,
             new CastInvitationService(
-                enrollments, mock(CastInvitationRepository.class), stores, audit),
+                enrollments,
+                mock(CastInvitationRepository.class),
+                stores,
+                audit,
+                Clock.systemUTC()),
             definitions,
             ids -> Set.of(),
             ids -> Set.of(),

@@ -55,7 +55,7 @@ class CastInvitationAuditTest {
   @BeforeEach
   void setup() {
     var audit = new BusinessAudit(users, new AuditWriter(events, Clock.systemUTC()));
-    issuing = new CastInvitationService(enrollments, invitations, stores, audit);
+    issuing = new CastInvitationService(enrollments, invitations, stores, audit, Clock.systemUTC());
     var people = mock(CastRepository.class);
     accepting =
         new CastInvitationAcceptanceService(
@@ -66,7 +66,8 @@ class CastInvitationAuditTest {
             users,
             stores,
             encoder,
-            audit);
+            audit,
+            Clock.systemUTC());
     when(encoder.matches(any(), any())).thenReturn(true);
     when(people.save(any()))
         .thenAnswer(

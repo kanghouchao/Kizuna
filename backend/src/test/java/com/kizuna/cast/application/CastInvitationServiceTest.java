@@ -20,17 +20,22 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
 import java.sql.SQLException;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.hibernate.exception.ConstraintViolationException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -45,7 +50,17 @@ class CastInvitationServiceTest {
   @Mock private StoreRepository storeRepository;
   @Mock private BusinessAudit audit;
 
-  @InjectMocks private CastInvitationService castInvitationService;
+  private CastInvitationService castInvitationService;
+
+  @BeforeEach
+  void setUp() {
+    castInvitationService = serviceAt(Clock.systemUTC());
+  }
+
+  private CastInvitationService serviceAt(Clock clock) {
+    return new CastInvitationService(
+        castRepository, castInvitationRepository, storeRepository, audit, clock);
+  }
 
   private CastEnrollment cast(String id, Long userId) {
     CastEnrollment cast = CastEnrollment.builder().castId(userId).build();
@@ -237,6 +252,21 @@ class CastInvitationServiceTest {
     assertThat(statuses.get("expired").name()).isEqualTo("UNAVAILABLE");
     assertThat(statuses.get("not-invited").name()).isEqualTo("UNAVAILABLE");
     assertThat(statuses.get("linked")).isEqualTo(CastInvitationStatus.LINKED);
+  }
+
+  @ParameterizedTest
+  @CsvSource({"0, INVITED", "1, EXPIRED"})
+  void deriveStatuses_judgesExpiryOnTheBusinessClock(long micros, CastInvitationStatus expected) {
+    OffsetDateTime expiresAt = OffsetDateTime.parse("2025-01-01T15:00:00Z");
+    when(castInvitationRepository.findByStoreIdAndCastIdIn(eq(STORE_ID), any()))
+        .thenReturn(List.of(invitation("c1", CastInvitation.Status.PENDING, expiresAt)));
+    Clock clock =
+        Clock.fixed(expiresAt.plus(micros, ChronoUnit.MICROS).toInstant(), ZoneOffset.UTC);
+
+    Map<String, CastInvitationStatus> statuses =
+        serviceAt(clock).deriveStatuses(STORE_ID, List.of(cast("c1", null)));
+
+    assertThat(statuses.get("c1")).isEqualTo(expected);
   }
 
   @Test

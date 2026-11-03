@@ -320,7 +320,8 @@ class MemberReceiptClaimAuditIntegrationTest {
           new ActorIdentityService(users()),
           members,
           materializer(em),
-          audit);
+          audit,
+          Clock.systemUTC());
     }
 
     private static void effect(EntityManager em, String kind, Object orderId) {

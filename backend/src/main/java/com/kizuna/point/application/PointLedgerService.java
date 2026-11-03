@@ -14,14 +14,13 @@ import com.kizuna.point.domain.PointRollback;
 import com.kizuna.point.domain.PointRollbackRepository;
 import com.kizuna.settings.application.PointSettings;
 import com.kizuna.settings.application.SystemConfigService;
-import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.application.BusinessAudit;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -59,7 +58,7 @@ public class PointLedgerService {
   private final PointAllocationRepository pointAllocationRepository;
   private final PointRollbackRepository pointRollbackRepository;
   private final SystemConfigService systemConfigService;
-  private final AppProperties appProperties;
+  private final Clock clock;
 
   /**
    * 会計金額に対して付与されるポイント数。台帳へは書き込まない。
@@ -666,7 +665,7 @@ public class PointLedgerService {
 
   /** 期限の判定は業務のタイムゾーンの「本日」で行う — JVM のタイムゾーンで判じると、業務日と 1 日ずれる。 */
   private LocalDate businessToday() {
-    return LocalDate.now(ZoneId.of(appProperties.getTimezone()));
+    return LocalDate.now(clock);
   }
 
   private List<PointLot> lotsOf(List<PointEntry> credits) {

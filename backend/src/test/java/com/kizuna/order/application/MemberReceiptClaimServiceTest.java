@@ -27,8 +27,11 @@ import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -39,7 +42,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.Spy;
@@ -72,7 +74,21 @@ class MemberReceiptClaimServiceTest {
   @Mock private AttributionMaterializer materializer;
 
   private final List<AuditEvent> events = new ArrayList<>();
+  private BusinessAudit audit;
   private MemberReceiptClaimService service;
+
+  private MemberReceiptClaimService serviceAt(Clock clock) {
+    return new MemberReceiptClaimService(
+        orderReceiptTokenRepository,
+        orderRepository,
+        receiptTokenGenerator,
+        pointLedgerService,
+        actorIdentityService,
+        memberLookupService,
+        materializer,
+        audit,
+        clock);
+  }
 
   @BeforeEach
   void resolveAuthenticatedMember() {
@@ -98,16 +114,8 @@ class MemberReceiptClaimServiceTest {
               events.add(event);
               return event;
             });
-    service =
-        new MemberReceiptClaimService(
-            orderReceiptTokenRepository,
-            orderRepository,
-            receiptTokenGenerator,
-            pointLedgerService,
-            actorIdentityService,
-            memberLookupService,
-            materializer,
-            new BusinessAudit(userRepository, new AuditWriter(auditRepository, Clock.systemUTC())));
+    audit = new BusinessAudit(userRepository, new AuditWriter(auditRepository, Clock.systemUTC()));
+    service = serviceAt(Clock.systemUTC());
     Mockito.lenient()
         .when(memberLookupService.findByUserId(USER_ID))
         .thenReturn(Optional.of(new MemberLookup(MEMBER_ID, MEMBER_CODE)));
@@ -125,7 +133,6 @@ class MemberReceiptClaimServiceTest {
     assertThat(response.grantedPoints()).isEqualTo(PLANNED_POINTS);
     assertThat(token.getStatus()).isEqualTo(OrderReceiptTokenStatus.CLAIMED);
     Mockito.verify(orderReceiptTokenRepository).save(token);
-    var occurredAt = ArgumentCaptor.forClass(OffsetDateTime.class);
     Mockito.verify(materializer)
         .materialize(
             Mockito.eq(MEMBER_ID),
@@ -133,10 +140,39 @@ class MemberReceiptClaimServiceTest {
             Mockito.eq(ORDER_ID),
             Mockito.eq(STORE_ID),
             Mockito.eq(ORDER_BUSINESS_DATE),
-            occurredAt.capture(),
+            Mockito.notNull(),
             Mockito.eq(USER_ID),
             Mockito.eq(new AttributionMaterializer.ReceiptClaim(PLANNED_POINTS)));
-    Mockito.verify(token).claim(occurredAt.getValue());
+  }
+
+  @Test
+  @DisplayName("申領の期限は業務の時計で判じ、期限の 1µs 前なら通すこと")
+  void claimPassesOneMicrosecondBeforeTheDeadlineOnTheBusinessClock() {
+    OrderReceiptToken token = issuedToken(OffsetDateTime.parse("2025-01-01T00:00:00Z"));
+    givenToken(token);
+    Instant justBefore = token.getExpiresAt().toInstant().minus(1, ChronoUnit.MICROS);
+
+    serviceAt(Clock.fixed(justBefore, ZoneOffset.UTC)).claim(EMAIL, RAW_TOKEN);
+
+    assertThat(token.getStatus()).isEqualTo(OrderReceiptTokenStatus.CLAIMED);
+  }
+
+  @Test
+  @DisplayName("申領の期限は業務の時計で判じ、期限ちょうどで撥ねること")
+  void claimRefusesAtTheDeadlineOnTheBusinessClock() {
+    OrderReceiptToken token = issuedToken(OffsetDateTime.now());
+    Mockito.when(orderReceiptTokenRepository.findByTokenDigest(DIGEST))
+        .thenReturn(Optional.of(token));
+    // 受注も引けるようにしておき、撥ねた理由が期限の判定だけであることを示す。
+    Mockito.lenient()
+        .when(orderRepository.findByReceiptTokenDigest(DIGEST))
+        .thenReturn(Optional.of(completedOrder()));
+    Instant deadline = token.getExpiresAt().toInstant();
+
+    assertThatThrownBy(
+            () -> serviceAt(Clock.fixed(deadline, ZoneOffset.UTC)).claim(EMAIL, RAW_TOKEN))
+        .isInstanceOf(NotFoundException.class);
+    assertThat(token.getStatus()).isEqualTo(OrderReceiptTokenStatus.ISSUED);
   }
 
   @Test
@@ -348,6 +384,11 @@ class MemberReceiptClaimServiceTest {
               return new AttributionMaterializer.Result(
                   trigger.plannedPoints(), 0, attribution(), false);
             });
+    Mockito.when(orderRepository.findByReceiptTokenDigest(DIGEST))
+        .thenReturn(Optional.of(completedOrder()));
+  }
+
+  private static Order completedOrder() {
     Order order =
         Order.builder()
             .businessDate(ORDER_BUSINESS_DATE)
@@ -356,6 +397,6 @@ class MemberReceiptClaimServiceTest {
             .build();
     order.setId(ORDER_ID);
     order.setStoreId(STORE_ID);
-    Mockito.when(orderRepository.findByReceiptTokenDigest(DIGEST)).thenReturn(Optional.of(order));
+    return order;
   }
 }

@@ -14,6 +14,7 @@ import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -49,6 +50,7 @@ public class MemberReceiptClaimService {
   private final MemberLookupService memberLookupService;
   private final AttributionMaterializer materializer;
   private final BusinessAudit businessAudit;
+  private final Clock clock;
 
   /** 伝票トークンを申領し、その来店を本人の記録として確定する。 */
   @Transactional
@@ -63,7 +65,7 @@ public class MemberReceiptClaimService {
     // 時刻は行ロックを取った後に読む。並行申領の待ち合わせはロックの解放まで伸びるため、要求開始時の
     // 時刻で判じると、待っている間に期限を越えた伝票を通しうる。帰属時刻も「成立した瞬間」であるべきで、
     // 「要求が届いた瞬間」ではない。
-    OffsetDateTime now = Timestamps.now();
+    OffsetDateTime now = OffsetDateTime.now(clock);
     if (!token.isClaimableAt(now)) {
       throw new NotFoundException(UNCLAIMABLE_MESSAGE);
     }
@@ -92,7 +94,7 @@ public class MemberReceiptClaimService {
             token.getOrderId(),
             order.getStoreId(),
             order.getBusinessDate(),
-            now,
+            Timestamps.now(),
             userId,
             new AttributionMaterializer.ReceiptClaim(token.getPlannedPoints()));
     long bookedPoints = (long) result.grantedPoints() + result.benefitPoints();
