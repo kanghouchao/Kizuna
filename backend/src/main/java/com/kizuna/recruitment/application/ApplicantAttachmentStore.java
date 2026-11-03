@@ -292,14 +292,15 @@ public class ApplicantAttachmentStore {
     }
   }
 
-  // 同じ行の並行処理は NOWAIT で 409 に、DB の障害は保存の失敗として 503 にする。業務の拒否と Failed はそのまま通す。
+  // 同じ行の並行処理は NOWAIT で 409 に、DB・監査の障害は保存の失敗として記録する（予約があれば回復待ちにする）。
+  // 業務の拒否と Failed はそのまま通す。
   private <T> T write(TransactionCallback<T> step) {
     try {
       return writing.execute(step);
     } catch (PessimisticLockingFailureException busy) {
       throw new ConflictException("同じアップロードを処理中です。時間をおいて再試行してください");
     } catch (DataAccessException | TransactionException databaseFailure) {
-      throw unavailable();
+      throw new Failed(AttachmentUpload.Failure.STORAGE_UNAVAILABLE, unavailable());
     }
   }
 
@@ -364,7 +365,7 @@ public class ApplicantAttachmentStore {
 
   public record Receipt(boolean created, AttachmentSummaryResponse attachment) {}
 
-  /** 外部（正規化器・非公開ストレージ）の失敗。予約があればコードを記録してから response を返す。 */
+  /** 回復待ちにする失敗（正規化器・非公開ストレージ・DB）。予約があればコードを記録してから response を返す。 */
   private static final class Failed extends RuntimeException {
     private final AttachmentUpload.Failure failure;
     private final RuntimeException response;
