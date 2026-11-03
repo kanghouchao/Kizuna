@@ -7,52 +7,107 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * アプリが作る {@code OffsetDateTime} の「今」は {@code Timestamps.now()} か業務の時計 {@code now(clock)} を通す。
- *
- * <p>それ以外の {@code OffsetDateTime.now(...)} はシステム時計の精度のまま値を持ち込み、保存時の四捨五入で応答と読み直しが食い違う。時計の精度は OS と
- * JDK で異なり、手元で再現しないことがある。
+ * 主コードが「今」を読む口を {@code Timestamps.now()}（行に書く時刻）と業務の時計 {@code now(clock)}（期限・本日の判定）に限る。 それ以外は JVM
+ * の時計を直接読み、ナノ秒が保存時に四捨五入されるか、固定時計の試験で判定を動かせなくなる。
  */
 class TimestampSourceTests {
 
   private static final Path MAIN_SOURCES = Paths.get("src/main/java");
 
-  private static final Path TIMESTAMPS = Paths.get("com/kizuna/shared/persistence/Timestamps.java");
-
   // 静的 import は呼び出し側に型名が残らないため、import 宣言そのものを拒否する。
   private static final Pattern UNBOUNDED_NOW =
       Pattern.compile(
-          "OffsetDateTime\\.now\\((?!clock\\))|import static java\\.time\\.OffsetDateTime\\.");
+          "\\b(?:Instant|OffsetDateTime|OffsetTime|ZonedDateTime|LocalDateTime|LocalDate|LocalTime"
+              + "|YearMonth|Year|MonthDay)\\.now\\((?!clock\\))"
+              + "|\\bClock\\.system\\w*\\("
+              + "|System\\.currentTimeMillis\\(\\)"
+              + "|import static java\\.time\\.\\w+\\.(?:now|system\\w*|\\*);");
+
+  // 時刻源そのものと、業務判定でも応答に出る時刻でもない JVM 時計の読み手。理由を値に持つ。
+  private static final Map<Path, String> ALLOWED =
+      Map.of(
+          Paths.get("com/kizuna/shared/persistence/Timestamps.java"), "行に書く時刻の時刻源",
+          Paths.get("com/kizuna/shared/config/ClockConfig.java"), "業務の時計の時刻源",
+          Paths.get("com/kizuna/auth/infrastructure/JwtIssuer.java"),
+              "JWT の iat/exp。検証側の Spring Security が JVM の時計で読むので揃える",
+          Paths.get("com/kizuna/auth/infrastructure/SessionTokenDecoder.java"),
+              "refresh JWT の有効期間の検証。発行側と同じ JVM の時計で読む",
+          Paths.get("com/kizuna/auth/infrastructure/RefreshTokenCookies.java"),
+              "refresh cookie の Max-Age。JWT の exp までの残り秒",
+          Paths.get("com/kizuna/auth/infrastructure/TokenBlacklistService.java"),
+              "失効キーの TTL。JWT の exp までの残りミリ秒",
+          Paths.get("com/kizuna/shared/persistence/SnowflakeIdGenerator.java"),
+              "ID の採番に埋める epoch ミリ秒。時刻としては保存も応答もしない");
+
+  // 期限・有効期間の判定を名乗るドメインのメソッド。判定の時刻を引数で受け、自分では「今」を読まない。
+  private static final Pattern DOMAIN_JUDGEMENT =
+      Pattern.compile("boolean\\s+(isExpired|isWithin\\w*|is\\w+At|is\\w+On)\\s*\\(([^)]*)\\)");
+
+  private static final Pattern TIME_PARAMETER =
+      Pattern.compile(
+          "\\b(?:OffsetDateTime|Instant|LocalDate|LocalDateTime|ZonedDateTime)\\s+\\w+");
 
   @Test
-  @DisplayName("src/main/java の OffsetDateTime.now は Timestamps と業務の時計に限られること")
+  @DisplayName("src/main/java が JVM の時計を読むのは、時刻源と理由付きの許可に限られること")
   void mainSourcesTakeNowFromTheTwoSources() throws Exception {
-    List<Path> javaFiles;
-    try (Stream<Path> paths = Files.walk(MAIN_SOURCES)) {
-      javaFiles =
-          paths
-              .filter(Files::isRegularFile)
-              .filter(path -> path.toString().endsWith(".java"))
-              .toList();
-    }
+    List<Path> javaFiles = mainSources();
 
     List<String> offenders = new ArrayList<>();
     for (Path file : javaFiles) {
       var relative = MAIN_SOURCES.relativize(file);
-      if (!relative.equals(TIMESTAMPS) && UNBOUNDED_NOW.matcher(Files.readString(file)).find()) {
+      if (!ALLOWED.containsKey(relative) && UNBOUNDED_NOW.matcher(Files.readString(file)).find()) {
         offenders.add(relative.toString());
       }
     }
 
-    // 暗黙の no-op 防止: 走査が実際にソースを読めており、除外した時刻源が実在することを担保する。
+    // 暗黙の no-op 防止: 走査が実際にソースを読めており、許可の各行が今も JVM の時計を読んでいることを担保する。
     assertThat(javaFiles).as("src/main/java 配下の .java ソース").isNotEmpty();
-    assertThat(MAIN_SOURCES.resolve(TIMESTAMPS)).as("時刻源").exists();
+    for (Path allowed : ALLOWED.keySet()) {
+      assertThat(UNBOUNDED_NOW.matcher(Files.readString(MAIN_SOURCES.resolve(allowed))).find())
+          .as("許可した %s が今も JVM の時計を読むこと（読まなくなったら許可から外す）", allowed)
+          .isTrue();
+    }
 
-    assertThat(offenders).as("OffsetDateTime.now を時刻源の外で呼ぶソース").isEmpty();
+    assertThat(offenders).as("JVM の時計を時刻源の外で読むソース").isEmpty();
+  }
+
+  @Test
+  @DisplayName("ドメインの期限判定メソッドは判定の時刻を引数で受けること")
+  void domainJudgementsTakeTheInstantAsAnArgument() throws Exception {
+    List<String> judgements = new ArrayList<>();
+    List<String> offenders = new ArrayList<>();
+    for (Path file : mainSources()) {
+      var relative = MAIN_SOURCES.relativize(file);
+      if (!relative.toString().contains("/domain/")) {
+        continue;
+      }
+      var matcher = DOMAIN_JUDGEMENT.matcher(Files.readString(file));
+      while (matcher.find()) {
+        var method = relative.getFileName() + "#" + matcher.group(1);
+        judgements.add(method);
+        if (!TIME_PARAMETER.matcher(matcher.group(2)).find()) {
+          offenders.add(method);
+        }
+      }
+    }
+
+    assertThat(judgements).as("走査が既知の期限判定を拾うこと").contains("CastInvitation.java#isExpired");
+    assertThat(offenders).as("判定の時刻を引数で受けない期限判定").isEmpty();
+  }
+
+  private static List<Path> mainSources() throws Exception {
+    try (Stream<Path> paths = Files.walk(MAIN_SOURCES)) {
+      return paths
+          .filter(Files::isRegularFile)
+          .filter(path -> path.toString().endsWith(".java"))
+          .toList();
+    }
   }
 }
