@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import com.kizuna.recruitment.api.dto.AttachmentSummaryResponse;
 import com.kizuna.recruitment.application.ApplicantAttachmentStore;
 import com.kizuna.recruitment.application.AttachmentService;
+import com.kizuna.recruitment.application.AttachmentViews;
 import com.kizuna.recruitment.infrastructure.AttachmentBodyReceiver;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceUnavailableException;
@@ -64,8 +65,7 @@ class AttachmentAsyncCorrelationTest {
               storedId.set(ThreadContext.get("requestId"));
               if (failure) throw new ServiceUnavailableException("非公開ストレージに接続できません");
               return new ApplicantAttachmentStore.Receipt(
-                  true,
-                  new AttachmentSummaryResponse("image", "image/png", 3, OffsetDateTime.now()));
+                  true, new AttachmentViews.Summary("image", "image/png", 3, OffsetDateTime.now()));
             });
     var jwt = Jwt.withTokenValue("synthetic").header("alg", "none").subject("actor").build();
     try (var worker = Executors.newSingleThreadExecutor()) {

@@ -50,7 +50,7 @@ public class AttachmentController {
   @GetMapping("/attachment-policy")
   @PreAuthorize(AttachmentService.READ)
   public AttachmentPolicyResponse policy() {
-    return attachments.policy();
+    return AttachmentPolicyResponse.from(attachments.policy());
   }
 
   @GetMapping("/{id}/attachments")
@@ -63,7 +63,7 @@ public class AttachmentController {
               sort = {"createdAt", "id"},
               direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return attachments.list(storeId, id, pageable);
+    return attachments.list(storeId, id, pageable).map(AttachmentSummaryResponse::from);
   }
 
   @GetMapping("/{id}/attachment-uploads")
@@ -76,14 +76,14 @@ public class AttachmentController {
               sort = {"createdAt", "id"},
               direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return attachments.uploads(storeId, id, pageable);
+    return attachments.uploads(storeId, id, pageable).map(AttachmentUploadResponse::from);
   }
 
   @GetMapping("/{id}/attachment-operations/{key}")
   @PreAuthorize(AttachmentService.WRITE)
   public AttachmentUploadResponse operation(
       @CurrentStore Long storeId, @PathVariable String id, @PathVariable String key) {
-    return attachments.operation(storeId, id, key);
+    return AttachmentUploadResponse.from(attachments.operation(storeId, id, key));
   }
 
   @PostMapping("/{id}/attachments")
@@ -128,7 +128,8 @@ public class AttachmentController {
                     attachments.receive(
                         storeId, id, uploadId, key, admission.receive(request), actorEmail);
                 int status = uploadId == null && receipt.created() ? 201 : 200;
-                return ResponseEntity.status(status).body(receipt.attachment());
+                return ResponseEntity.status(status)
+                    .body(AttachmentSummaryResponse.from(receipt.attachment()));
               }
             });
     var task =

@@ -1,6 +1,7 @@
 package com.kizuna.recruitment.api.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.kizuna.recruitment.application.ApplicantViews;
 import com.kizuna.recruitment.domain.ApplicantInterview;
 import com.kizuna.recruitment.domain.ApplicantSourceType;
 import com.kizuna.recruitment.domain.ApplicantStatus;
@@ -27,4 +28,28 @@ public record ApplicantResponse(
     Long modifiedBy,
     OffsetDateTime updatedAt,
     String enrollmentId,
-    OffsetDateTime anonymizedAt) {}
+    OffsetDateTime anonymizedAt) {
+  public static ApplicantResponse from(ApplicantViews.Detail a) {
+    return new ApplicantResponse(
+        a.id(),
+        a.name(),
+        a.status(),
+        a.channel(),
+        a.sourceType(),
+        ApplicantMediumResponse.from(a.medium()),
+        a.assignee(),
+        a.createdAt(),
+        a.version(),
+        a.referrer(),
+        a.phone(),
+        a.email(),
+        a.address(),
+        a.experience(),
+        a.desiredConditions(),
+        a.interview(),
+        a.modifiedBy(),
+        a.updatedAt(),
+        a.enrollmentId(),
+        a.anonymizedAt());
+  }
+}

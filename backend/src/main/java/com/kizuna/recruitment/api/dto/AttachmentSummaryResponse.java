@@ -1,12 +1,12 @@
 package com.kizuna.recruitment.api.dto;
 
-import com.kizuna.recruitment.domain.AttachmentUpload;
+import com.kizuna.recruitment.application.AttachmentViews;
 import java.time.OffsetDateTime;
 
 public record AttachmentSummaryResponse(
     String id, String mediaType, long sizeBytes, OffsetDateTime createdAt) {
-  public static AttachmentSummaryResponse from(AttachmentUpload upload) {
+  public static AttachmentSummaryResponse from(AttachmentViews.Summary attachment) {
     return new AttachmentSummaryResponse(
-        upload.getId(), upload.getMediaType(), upload.getSizeBytes(), upload.getCreatedAt());
+        attachment.id(), attachment.mediaType(), attachment.sizeBytes(), attachment.createdAt());
   }
 }

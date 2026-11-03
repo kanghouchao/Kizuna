@@ -1,6 +1,7 @@
 package com.kizuna.recruitment.api.dto;
 
 import com.kizuna.recruitment.domain.ApplicantStatus;
+import com.kizuna.recruitment.domain.ApplicantStatusHistory;
 import java.time.OffsetDateTime;
 
 public record ApplicantHistoryResponse(
@@ -9,4 +10,14 @@ public record ApplicantHistoryResponse(
     ApplicantStatus newStatus,
     Long actorId,
     OffsetDateTime createdAt,
-    String reason) {}
+    String reason) {
+  public static ApplicantHistoryResponse from(ApplicantStatusHistory history) {
+    return new ApplicantHistoryResponse(
+        history.getId(),
+        history.getPreviousStatus(),
+        history.getNewStatus(),
+        history.getActorId(),
+        history.getCreatedAt(),
+        history.getReason());
+  }
+}

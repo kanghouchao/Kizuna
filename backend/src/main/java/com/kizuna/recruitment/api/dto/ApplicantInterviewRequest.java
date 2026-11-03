@@ -1,5 +1,6 @@
 package com.kizuna.recruitment.api.dto;
 
+import com.kizuna.recruitment.application.ApplicantCommands;
 import com.kizuna.recruitment.domain.ApplicantInterview;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -16,7 +17,8 @@ public record ApplicantInterviewRequest(
     @Size(max = 5000, message = "5000文字または件以内で指定してください") String notes,
     @NotNull(message = "必須項目を指定してください") @Size(max = 30, message = "30文字または件以内で指定してください")
         Map<String, Boolean> checklist) {
-  public ApplicantInterview toInterview() {
-    return new ApplicantInterview(interviewAt, interviewer, notes, checklist);
+  public ApplicantCommands.InterviewRecord command() {
+    return new ApplicantCommands.InterviewRecord(
+        version, new ApplicantInterview(interviewAt, interviewer, notes, checklist));
   }
 }

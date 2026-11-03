@@ -44,19 +44,19 @@ public class ApplicantController {
       @RequestParam(required = false) String search,
       @RequestParam(required = false) ApplicantStatus status,
       @PageableDefault(size = 20) Pageable pageable) {
-    return applicants.list(storeId, search, status, pageable);
+    return applicants.list(storeId, search, status, pageable).map(ApplicantSummaryResponse::from);
   }
 
   @GetMapping("/policy")
   @PreAuthorize("hasAuthority('PERM_RECRUITMENT_VIEW')")
   public RecruitmentPolicyResponse policy() {
-    return applicants.policy();
+    return RecruitmentPolicyResponse.from(applicants.policy());
   }
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_RECRUITMENT_VIEW')")
   public ApplicantResponse get(@CurrentStore Long storeId, @PathVariable String id) {
-    return applicants.get(storeId, id);
+    return ApplicantResponse.from(applicants.get(storeId, id));
   }
 
   @PostMapping
@@ -66,7 +66,9 @@ public class ApplicantController {
       @Valid @RequestBody ApplicantIntakeRequest request,
       Principal principal) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(applicants.create(storeId, request, principal.getName()));
+        .body(
+            ApplicantResponse.from(
+                applicants.create(storeId, request.toIntake(), principal.getName())));
   }
 
   @PutMapping("/{id}")
@@ -76,7 +78,8 @@ public class ApplicantController {
       @PathVariable String id,
       @Valid @RequestBody ApplicantUpdateRequest request,
       Principal principal) {
-    return applicants.update(storeId, id, request, principal.getName());
+    return ApplicantResponse.from(
+        applicants.update(storeId, id, request.command(), principal.getName()));
   }
 
   @PutMapping("/{id}/interview")
@@ -86,7 +89,8 @@ public class ApplicantController {
       @PathVariable String id,
       @Valid @RequestBody ApplicantInterviewRequest request,
       Principal principal) {
-    return applicants.interview(storeId, id, request, principal.getName());
+    return ApplicantResponse.from(
+        applicants.interview(storeId, id, request.command(), principal.getName()));
   }
 
   @PostMapping("/{id}/transitions")
@@ -96,7 +100,8 @@ public class ApplicantController {
       @PathVariable String id,
       @Valid @RequestBody ApplicantTransitionRequest request,
       Principal principal) {
-    return applicants.transition(storeId, id, request, principal.getName());
+    return ApplicantResponse.from(
+        applicants.transition(storeId, id, request.command(), principal.getName()));
   }
 
   @PostMapping("/{id}/decision")
@@ -106,7 +111,8 @@ public class ApplicantController {
       @PathVariable String id,
       @Valid @RequestBody ApplicantTransitionRequest request,
       Principal principal) {
-    return applicants.decide(storeId, id, request, principal.getName());
+    return ApplicantResponse.from(
+        applicants.decide(storeId, id, request.command(), principal.getName()));
   }
 
   @PostMapping("/{id}/enrollment")
@@ -117,7 +123,9 @@ public class ApplicantController {
       @Valid @RequestBody ApplicantEnrollmentRequest request,
       Principal principal) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(applicants.enroll(storeId, id, request, principal.getName()));
+        .body(
+            ApplicantResponse.from(
+                applicants.enroll(storeId, id, request.command(), principal.getName())));
   }
 
   @GetMapping("/{id}/history")
@@ -130,6 +138,6 @@ public class ApplicantController {
               sort = {"createdAt", "id"},
               direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return applicants.history(storeId, id, pageable);
+    return applicants.history(storeId, id, pageable).map(ApplicantHistoryResponse::from);
   }
 }
