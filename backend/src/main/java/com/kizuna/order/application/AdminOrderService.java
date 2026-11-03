@@ -22,7 +22,7 @@ public class AdminOrderService {
   /** 授権店舗集合での受注横断一覧。SPECIFIC_STORES は集合内の店舗だけ、ALL_STORES は全店舗を返す。 */
   @Transactional(readOnly = true)
   public Page<AdminOrderView> list(StoreScope scope, Pageable pageable) {
-    var page = Paging.totalOrder(pageable, pageable.getSort(), Sort.Order.desc(Order::getId));
+    var page = Paging.totalOrder(pageable, Sort.Order.asc(Order::getId));
     return scope.allStores()
         ? orderRepository.findGroupWideViews(page)
         : orderRepository.findGroupWideViewsInStores(scope.storeIds(), page);
