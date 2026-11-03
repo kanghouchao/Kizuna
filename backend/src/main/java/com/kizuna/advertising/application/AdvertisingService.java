@@ -14,6 +14,7 @@ import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingChange;
 import com.kizuna.advertising.domain.AdvertisingChangeRepository;
 import com.kizuna.advertising.domain.AdvertisingCost;
+import com.kizuna.advertising.domain.AdvertisingMedium;
 import com.kizuna.advertising.infrastructure.AdvertisingRecords;
 import com.kizuna.medium.lookup.MediumLookup;
 import com.kizuna.medium.lookup.MediumReference;
@@ -79,10 +80,10 @@ public class AdvertisingService {
       isolation = Isolation.REPEATABLE_READ,
       timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
   public MonthResponse month(Long storeId, String month) {
-    return summary(storeId, AdvertisingInput.month(month));
+    return MonthResponse.of(summary(storeId, AdvertisingInput.month(month)));
   }
 
-  private MonthResponse summary(Long storeId, String month) {
+  private MonthTotals summary(Long storeId, String month) {
     long sales = 0, recruitment = 0, count = 0;
     for (var row : records.totals(storeId, month)) {
       long amount = (Long) row[1];
@@ -92,7 +93,7 @@ public class AdvertisingService {
     }
     if (sales < 0 || recruitment < 0 || sales > 9_007_199_254_740_991L - recruitment)
       throw tooLarge();
-    return new MonthResponse(
+    return new MonthTotals(
         storeId,
         month,
         revision(storeId, month),
@@ -308,7 +309,40 @@ public class AdvertisingService {
         json.readValue(c.getAfterValue(), CostResponse.class));
   }
 
-  public record ExportSnapshot(MonthResponse summary, List<CostResponse> costs) {}
+  /** 出力時点の対象月の総計と、有効な広告費の全件。媒体名は現在名。 */
+  public record ExportSnapshot(MonthTotals summary, List<ExportedCost> costs) {}
+
+  public record MonthTotals(
+      Long storeId,
+      String month,
+      long version,
+      long entryCount,
+      long salesAmount,
+      long recruitmentAmount,
+      long recordedTotalAmount,
+      OffsetDateTime generatedAt) {}
+
+  public record ExportedCost(
+      String id,
+      long version,
+      AdvertisingCategory category,
+      AdvertisingMedium medium,
+      String agencyName,
+      String planName,
+      Integer inquiryCount,
+      int amount) {
+    static ExportedCost of(AdvertisingCost c, String mediumName) {
+      return new ExportedCost(
+          c.getId(),
+          c.getVersion(),
+          c.getCategory(),
+          new AdvertisingMedium(c.getMediumId(), mediumName),
+          c.getAgencyName(),
+          c.getPlanName(),
+          c.getInquiryCount(),
+          c.getAmount());
+    }
+  }
 
   @Transactional(
       readOnly = true,
@@ -320,7 +354,7 @@ public class AdvertisingService {
     var names = media(storeId, rows);
     var costs =
         rows.stream()
-            .map(c -> CostResponse.of(c, MediumLookup.referenced(names, c.getMediumId()).name()))
+            .map(c -> ExportedCost.of(c, MediumLookup.referenced(names, c.getMediumId()).name()))
             .toList();
     return new ExportSnapshot(summary(storeId, month), costs);
   }

@@ -1,7 +1,7 @@
 package com.kizuna.advertising.application;
 
-import com.kizuna.advertising.api.dto.AdvertisingResponses.CostResponse;
 import com.kizuna.advertising.application.AdvertisingService.ExportSnapshot;
+import com.kizuna.advertising.application.AdvertisingService.ExportedCost;
 import com.kizuna.shared.export.DocumentBudget;
 import com.kizuna.shared.export.TabularDocument;
 import com.kizuna.shared.export.TabularDocument.Sheet;
@@ -45,7 +45,7 @@ public class AdvertisingRenderer {
         budget);
   }
 
-  private List<Object> row(ExportSnapshot report, CostResponse cost) {
+  private List<Object> row(ExportSnapshot report, ExportedCost cost) {
     var s = report.summary();
     var row =
         new ArrayList<Object>(

@@ -2,12 +2,12 @@ package com.kizuna.advertising;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.kizuna.advertising.api.dto.AdvertisingResponses.CostResponse;
-import com.kizuna.advertising.api.dto.AdvertisingResponses.MediumResponse;
-import com.kizuna.advertising.api.dto.AdvertisingResponses.MonthResponse;
 import com.kizuna.advertising.application.AdvertisingRenderer;
 import com.kizuna.advertising.application.AdvertisingService.ExportSnapshot;
+import com.kizuna.advertising.application.AdvertisingService.ExportedCost;
+import com.kizuna.advertising.application.AdvertisingService.MonthTotals;
 import com.kizuna.advertising.domain.AdvertisingCategory;
+import com.kizuna.advertising.domain.AdvertisingMedium;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.export.DocumentBudget;
 import com.kizuna.shared.export.ExportCells;
@@ -28,22 +28,18 @@ class AdvertisingRendererTest {
         IntStream.range(0, count)
             .mapToObj(
                 i ->
-                    new CostResponse(
+                    new ExportedCost(
                         String.format("%05d", i),
-                        1L,
-                        "2026-09",
+                        0,
                         AdvertisingCategory.SALES,
-                        new MediumResponse("900000", "=媒体,\"試験\""),
+                        new AdvertisingMedium("900000", "=媒体,\"試験\""),
                         null,
                         "00001",
                         i == 0 ? null : 0,
-                        100,
-                        0,
-                        at,
-                        at))
+                        100))
             .toList();
     return new ExportSnapshot(
-        new MonthResponse(1L, "2026-09", 1, count, amount, 0, amount, at), costs);
+        new MonthTotals(1L, "2026-09", 1, count, amount, 0, amount, at), costs);
   }
 
   @Test
