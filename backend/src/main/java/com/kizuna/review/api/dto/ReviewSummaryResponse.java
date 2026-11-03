@@ -1,7 +1,7 @@
 package com.kizuna.review.api.dto;
 
+import com.kizuna.review.application.ReviewViews;
 import com.kizuna.review.domain.ReviewInput;
-import com.kizuna.review.domain.ReviewSummaryView;
 import com.kizuna.review.domain.ReviewValues.PermissionStatus;
 import com.kizuna.review.domain.ReviewValues.ReceivedVia;
 import com.kizuna.review.domain.ReviewValues.Status;
@@ -20,7 +20,8 @@ public record ReviewSummaryResponse(
     Long version,
     Publication publication,
     boolean displayed) {
-  public static ReviewSummaryResponse of(ReviewSummaryView r, OffsetDateTime now) {
+  public static ReviewSummaryResponse of(ReviewViews.Summary summary) {
+    var r = summary.review();
     return new ReviewSummaryResponse(
         r.getId(),
         "STAFF_RECORDED",
@@ -32,6 +33,6 @@ public record ReviewSummaryResponse(
         r.getPermissionStatus(),
         r.getVersion(),
         r.getPublication(),
-        r.displayedAt(now));
+        summary.displayed());
   }
 }

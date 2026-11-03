@@ -125,10 +125,12 @@ public class ReviewController {
       @RequestParam(required = false) Status status,
       @RequestParam(name = "permission_status", required = false) PermissionStatus permissionStatus,
       @RequestParam(defaultValue = "RECEIVED_DESC") ReviewSearch.Order sort) {
-    return reviews.list(
-        storeId,
-        auth.getName(),
-        new ReviewSearch(pageable, q, reviewId, status, permissionStatus, sort));
+    return reviews
+        .list(
+            storeId,
+            auth.getName(),
+            new ReviewSearch(pageable, q, reviewId, status, permissionStatus, sort))
+        .map(ReviewSummaryResponse::of);
   }
 
   @GetMapping("/public")
@@ -139,14 +141,14 @@ public class ReviewController {
               size = 20,
               sort = {})
           Pageable pageable) {
-    return reviews.listPublic(storeId, pageable);
+    return reviews.listPublic(storeId, pageable).map(ReviewPublicResponse::of);
   }
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_REVIEW_VIEW')")
   public ReviewResponse detail(
       @CurrentStore Long storeId, Authentication auth, @PathVariable String id) {
-    return reviews.detail(storeId, auth.getName(), id);
+    return ReviewResponse.of(reviews.detail(storeId, auth.getName(), id));
   }
 
   @GetMapping("/{id}/history")
@@ -156,16 +158,17 @@ public class ReviewController {
       Authentication auth,
       @PathVariable String id,
       @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
-    return reviews.history(storeId, auth.getName(), id, pageable);
+    return reviews.history(storeId, auth.getName(), id, pageable).map(ReviewHistoryResponse::of);
   }
 
   private ResponseEntity<ReviewWriteResponse> write(
       Long storeId, Authentication auth, ReviewCommand command, boolean create) {
     var result =
-        Replays.write(
-            DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-            () -> reviews.write(storeId, auth.getName(), command),
-            () -> reviews.replayOnly(storeId, auth.getName(), command));
+        ReviewWriteResponse.of(
+            Replays.write(
+                DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
+                () -> reviews.write(storeId, auth.getName(), command),
+                () -> reviews.replayOnly(storeId, auth.getName(), command)));
     return ResponseEntity.status(create && !result.operation().replayed() ? 201 : 200).body(result);
   }
 }
