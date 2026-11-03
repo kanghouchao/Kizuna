@@ -1,10 +1,12 @@
 package com.kizuna.task.api;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -14,6 +16,7 @@ import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.task.application.TaskLifecycle;
 import com.kizuna.task.application.TaskOptions;
 import com.kizuna.task.application.TaskQuery;
+import com.kizuna.task.execution.TaskCommand;
 import com.kizuna.task.execution.TaskExecutor;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
 import com.kizuna.user.application.StoreScopeResolver;
@@ -30,6 +33,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.test.context.support.WithMockUser;
@@ -107,5 +111,33 @@ class TaskExecutionControllerTest {
     assertThat(candidates.getValue())
         .isEqualTo(PageRequest.of(0, 20, Sort.by("displayName", "id")));
     assertThat(stores.getValue()).isEqualTo(PageRequest.of(0, 20, Sort.by("name", "id")));
+  }
+
+  @Test
+  @DisplayName("店舗は選択肢と同じ文字列の id で受け、安全な整数を超える値も桁を落とさず実行に渡すこと")
+  @WithMockUser(authorities = "PERM_TASK_MANAGE")
+  void storeIdTravelsAsStringWithoutLosingDigits() throws Exception {
+    var command = ArgumentCaptor.forClass(TaskCommand.class);
+    var auth = SecurityContextHolder.getContext().getAuthentication();
+    String body =
+        "{\"task_name\":\"NOTIFICATION_DELIVER\",\"logical_key\":\"k\",\"service_user_id\":10,"
+            + "\"store_id\":%s,\"period_start\":\"2026-10-07\",\"period_end\":\"2026-10-07\"}";
+
+    mockMvc.perform(
+        post("/task-executions")
+            .principal(auth)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body.formatted("\"9007199254740993\"")));
+    verify(executor).execute(command.capture(), any());
+    assertThat(command.getValue().storeId()).isEqualTo(9007199254740993L);
+
+    for (String invalid : List.of("9007199254740993", "\"0\"", "\"abc\""))
+      mockMvc
+          .perform(
+              post("/task-executions")
+                  .principal(auth)
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(body.formatted(invalid)))
+          .andExpect(status().isBadRequest());
   }
 }
