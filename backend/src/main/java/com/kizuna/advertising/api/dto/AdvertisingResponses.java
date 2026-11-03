@@ -2,8 +2,11 @@ package com.kizuna.advertising.api.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.kizuna.advertising.application.AdvertisingService.MonthTotals;
+import com.kizuna.advertising.application.AdvertisingViews.ChangeDetail;
+import com.kizuna.advertising.application.AdvertisingViews.CopyResult;
+import com.kizuna.advertising.application.AdvertisingViews.CostView;
 import com.kizuna.advertising.domain.AdvertisingCategory;
-import com.kizuna.advertising.domain.AdvertisingCost;
+import com.kizuna.advertising.domain.AdvertisingChange;
 import com.kizuna.advertising.domain.AdvertisingMedium;
 import java.time.OffsetDateTime;
 
@@ -24,21 +27,22 @@ public final class AdvertisingResponses {
       long version,
       OffsetDateTime createdAt,
       OffsetDateTime updatedAt) {
-    /** mediumName は媒体の現在名。変更履歴にはこの応答をその時点の写しとして残す。 */
-    public static CostResponse of(AdvertisingCost c, String mediumName) {
-      return new CostResponse(
-          c.getId(),
-          c.getStoreId(),
-          c.getMonth(),
-          c.getCategory(),
-          new MediumResponse(c.getMediumId(), mediumName),
-          c.getAgencyName(),
-          c.getPlanName(),
-          c.getInquiryCount(),
-          c.getAmount(),
-          c.getVersion(),
-          c.getCreatedAt(),
-          c.getUpdatedAt());
+    public static CostResponse of(CostView c) {
+      return c == null
+          ? null
+          : new CostResponse(
+              c.id(),
+              c.storeId(),
+              c.month(),
+              c.category(),
+              MediumResponse.of(c.medium()),
+              c.agencyName(),
+              c.planName(),
+              c.inquiryCount(),
+              c.amount(),
+              c.version(),
+              c.createdAt(),
+              c.updatedAt());
     }
   }
 
@@ -55,19 +59,19 @@ public final class AdvertisingResponses {
       int amount,
       long version,
       OffsetDateTime updatedAt) {
-    public static CostSummary of(AdvertisingCost c, String mediumName) {
+    public static CostSummary of(CostView c) {
       return new CostSummary(
-          c.getId(),
-          c.getStoreId(),
-          c.getMonth(),
-          c.getCategory(),
-          new MediumResponse(c.getMediumId(), mediumName),
-          c.getAgencyName(),
-          c.getPlanName(),
-          c.getInquiryCount(),
-          c.getAmount(),
-          c.getVersion(),
-          c.getUpdatedAt());
+          c.id(),
+          c.storeId(),
+          c.month(),
+          c.category(),
+          MediumResponse.of(c.medium()),
+          c.agencyName(),
+          c.planName(),
+          c.inquiryCount(),
+          c.amount(),
+          c.version(),
+          c.updatedAt());
     }
   }
 
@@ -107,7 +111,19 @@ public final class AdvertisingResponses {
       int copiedCount,
       long sourceVersion,
       long targetVersion,
-      OffsetDateTime createdAt) {}
+      OffsetDateTime createdAt) {
+    public static CopyResponse of(CopyResult r) {
+      return new CopyResponse(
+          r.id(),
+          r.storeId(),
+          r.sourceMonth(),
+          r.targetMonth(),
+          r.copiedCount(),
+          r.sourceVersion(),
+          r.targetVersion(),
+          r.createdAt());
+    }
+  }
 
   @JsonInclude(JsonInclude.Include.ALWAYS)
   public record ChangeSummary(
@@ -117,7 +133,18 @@ public final class AdvertisingResponses {
       Long actorId,
       OffsetDateTime occurredAt,
       Long versionBefore,
-      Long versionAfter) {}
+      Long versionAfter) {
+    public static ChangeSummary of(AdvertisingChange c) {
+      return new ChangeSummary(
+          c.getId(),
+          c.getCostId(),
+          c.getAction(),
+          c.getActorId(),
+          c.getCreatedAt(),
+          c.getVersionBefore(),
+          c.getVersionAfter());
+    }
+  }
 
   @JsonInclude(JsonInclude.Include.ALWAYS)
   public record ChangeResponse(
@@ -131,5 +158,21 @@ public final class AdvertisingResponses {
       String reason,
       String sourceCostId,
       CostResponse before,
-      CostResponse after) {}
+      CostResponse after) {
+    public static ChangeResponse of(ChangeDetail d) {
+      var c = d.change();
+      return new ChangeResponse(
+          c.getId(),
+          c.getCostId(),
+          c.getAction(),
+          c.getActorId(),
+          c.getCreatedAt(),
+          c.getVersionBefore(),
+          c.getVersionAfter(),
+          c.getReason(),
+          c.getSourceCostId(),
+          CostResponse.of(d.before()),
+          CostResponse.of(d.after()));
+    }
+  }
 }

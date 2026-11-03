@@ -1,10 +1,8 @@
 package com.kizuna.advertising.application;
 
-import com.kizuna.advertising.api.dto.AdvertisingResponses.ChangeResponse;
-import com.kizuna.advertising.api.dto.AdvertisingResponses.ChangeSummary;
-import com.kizuna.advertising.api.dto.AdvertisingResponses.CopyResponse;
-import com.kizuna.advertising.api.dto.AdvertisingResponses.CostResponse;
-import com.kizuna.advertising.api.dto.AdvertisingResponses.CostSummary;
+import com.kizuna.advertising.application.AdvertisingViews.ChangeDetail;
+import com.kizuna.advertising.application.AdvertisingViews.CopyResult;
+import com.kizuna.advertising.application.AdvertisingViews.CostView;
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingChange;
 import com.kizuna.advertising.domain.AdvertisingChangeRepository;
@@ -60,14 +58,14 @@ public class AdvertisingService {
       readOnly = true,
       isolation = Isolation.REPEATABLE_READ,
       timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
-  public Page<CostSummary> list(Long storeId, String month, Pageable pageable) {
+  public Page<CostView> list(Long storeId, String month, Pageable pageable) {
     var page = records.list(storeId, AdvertisingInput.month(month), pageable);
     var names = media(storeId, page.getContent());
-    return page.map(c -> CostSummary.of(c, MediumLookup.referenced(names, c.getMediumId()).name()));
+    return page.map(c -> CostView.of(c, MediumLookup.referenced(names, c.getMediumId()).name()));
   }
 
   @Transactional(readOnly = true)
-  public CostResponse get(Long storeId, String id) {
+  public CostView get(Long storeId, String id) {
     return response(storeId, records.cost(storeId, id));
   }
 
@@ -105,7 +103,7 @@ public class AdvertisingService {
   }
 
   @Transactional(timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
-  public CostResponse create(Long storeId, AdvertisingCommand.Create command, String actor) {
+  public CostView create(Long storeId, AdvertisingCommand.Create command, String actor) {
     var month = AdvertisingInput.month(command.month());
     var values = command.values();
     return receipts.once(
@@ -121,7 +119,7 @@ public class AdvertisingService {
           records.advance(storeId, month);
           MediumLookup.flush(records::flush, DbConstraint.FK_T_ADVERTISING_COSTS_MEDIUM);
           var after =
-              CostResponse.of(cost, MediumLookup.referenced(selected, cost.getMediumId()).name());
+              CostView.of(cost, MediumLookup.referenced(selected, cost.getMediumId()).name());
           change(storeId, actor, month, "CREATED", null, after, null, null);
           return committed("CREATED", cost);
         },
@@ -129,7 +127,7 @@ public class AdvertisingService {
   }
 
   @Transactional(timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
-  public CostResponse replace(Long storeId, AdvertisingCommand.Replace command, String actor) {
+  public CostView replace(Long storeId, AdvertisingCommand.Replace command, String actor) {
     var values = command.values();
     return receipts.once(
         key(storeId, actor, command.requestId()),
@@ -142,12 +140,12 @@ public class AdvertisingService {
               mediumLookup.findAll(
                   storeId, Stream.of(current, values.mediumId()).collect(Collectors.toSet()));
           MediumLookup.selectable(selected.get(values.mediumId()), current);
-          var before = CostResponse.of(cost, MediumLookup.referenced(selected, current).name());
+          var before = CostView.of(cost, MediumLookup.referenced(selected, current).name());
           cost.replace(values);
           records.advance(storeId, cost.getMonth());
           MediumLookup.flush(records::flush, DbConstraint.FK_T_ADVERTISING_COSTS_MEDIUM);
           var after =
-              CostResponse.of(cost, MediumLookup.referenced(selected, cost.getMediumId()).name());
+              CostView.of(cost, MediumLookup.referenced(selected, cost.getMediumId()).name());
           change(storeId, actor, cost.getMonth(), "UPDATED", before, after, command.reason(), null);
           return committed("UPDATED", cost);
         },
@@ -156,7 +154,7 @@ public class AdvertisingService {
 
   /** 作成と置換の要求キーの一意制約に敗れた要求を、成立済みの受領から解決する。 */
   @Transactional(readOnly = true)
-  public CostResponse replayCost(Long storeId, AdvertisingCommand command, String actor) {
+  public CostView replayCost(Long storeId, AdvertisingCommand command, String actor) {
     return receipts.replayOnly(
         key(storeId, actor, command.requestId()),
         command.fingerprint(),
@@ -194,7 +192,7 @@ public class AdvertisingService {
   }
 
   @Transactional(timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
-  public CopyResponse copy(Long storeId, AdvertisingCommand.Copy command, String actor) {
+  public CopyResult copy(Long storeId, AdvertisingCommand.Copy command, String actor) {
     String target = command.targetMonth();
     String source = source(target);
     return receipts.once(
@@ -224,7 +222,7 @@ public class AdvertisingService {
                 target,
                 "COPIED",
                 null,
-                CostResponse.of(cost, MediumLookup.referenced(names, cost.getMediumId()).name()),
+                CostView.of(cost, MediumLookup.referenced(names, cost.getMediumId()).name()),
                 command.reason(),
                 original.getId());
           }
@@ -247,7 +245,7 @@ public class AdvertisingService {
   }
 
   @Transactional(readOnly = true)
-  public CopyResponse replayCopy(Long storeId, AdvertisingCommand.Copy command, String actor) {
+  public CopyResult replayCopy(Long storeId, AdvertisingCommand.Copy command, String actor) {
     source(command.targetMonth());
     return receipts.replayOnly(
         key(storeId, actor, command.requestId()),
@@ -263,8 +261,8 @@ public class AdvertisingService {
   }
 
   // コピーの ID・件数・成立時の各月の版は行や履歴に残らないので、受領の事実だけから組む。
-  private static CopyResponse copied(Long storeId, Receipt receipt) {
-    return new CopyResponse(
+  private static CopyResult copied(Long storeId, Receipt receipt) {
+    return new CopyResult(
         receipt.textFact("copy_id"),
         storeId,
         source(receipt.targetId()),
@@ -276,36 +274,17 @@ public class AdvertisingService {
   }
 
   @Transactional(readOnly = true)
-  public Page<ChangeSummary> changes(Long storeId, String month, Pageable pageable) {
-    return changes
-        .findByStoreIdAndMonth(storeId, AdvertisingInput.month(month), pageable)
-        .map(
-            c ->
-                new ChangeSummary(
-                    c.getId(),
-                    c.getCostId(),
-                    c.getAction(),
-                    c.getActorId(),
-                    c.getCreatedAt(),
-                    c.getVersionBefore(),
-                    c.getVersionAfter()));
+  public Page<AdvertisingChange> changes(Long storeId, String month, Pageable pageable) {
+    return changes.findByStoreIdAndMonth(storeId, AdvertisingInput.month(month), pageable);
   }
 
   @Transactional(readOnly = true)
-  public ChangeResponse changeDetail(Long storeId, String month, String id) {
+  public ChangeDetail changeDetail(Long storeId, String month, String id) {
     var c = records.change(storeId, AdvertisingInput.month(month), id);
-    return new ChangeResponse(
-        c.getId(),
-        c.getCostId(),
-        c.getAction(),
-        c.getActorId(),
-        c.getCreatedAt(),
-        c.getVersionBefore(),
-        c.getVersionAfter(),
-        c.getReason(),
-        c.getSourceCostId(),
-        json.readValue(c.getBeforeValue(), CostResponse.class),
-        json.readValue(c.getAfterValue(), CostResponse.class));
+    return new ChangeDetail(
+        c,
+        json.readValue(c.getBeforeValue(), CostView.class),
+        json.readValue(c.getAfterValue(), CostView.class));
   }
 
   /** 出力時点の対象月の総計と、有効な広告費の全件。媒体名は現在名。 */
@@ -358,9 +337,9 @@ public class AdvertisingService {
     return new ExportSnapshot(summary(storeId, month), costs);
   }
 
-  private CostResponse response(Long storeId, AdvertisingCost cost) {
+  private CostView response(Long storeId, AdvertisingCost cost) {
     var names = media(storeId, List.of(cost));
-    return CostResponse.of(cost, MediumLookup.referenced(names, cost.getMediumId()).name());
+    return CostView.of(cost, MediumLookup.referenced(names, cost.getMediumId()).name());
   }
 
   private Map<String, MediumReference> media(Long storeId, Collection<AdvertisingCost> costs) {
@@ -390,7 +369,7 @@ public class AdvertisingService {
   }
 
   // 受領を持つ広告費は論理削除で終わるので、行が無いのは不変条件の破れであって業務拒否ではない。
-  private CostResponse recorded(Long storeId, Receipt receipt) {
+  private CostView recorded(Long storeId, Receipt receipt) {
     var cost =
         records
             .recorded(storeId, receipt.targetId())
@@ -403,8 +382,8 @@ public class AdvertisingService {
       String actor,
       String month,
       String action,
-      CostResponse before,
-      CostResponse after,
+      CostView before,
+      CostView after,
       String reason,
       String source) {
     String id = after == null ? before.id() : after.id();
@@ -436,7 +415,7 @@ public class AdvertisingService {
         auditValues(after));
   }
 
-  private Map<String, String> auditValues(CostResponse c) {
+  private Map<String, String> auditValues(CostView c) {
     return c == null
         ? Map.of()
         : Map.of(

@@ -1,10 +1,9 @@
 package com.kizuna.remuneration.api.dto;
 
+import com.kizuna.remuneration.application.RemunerationViews.GuaranteeView;
 import com.kizuna.remuneration.domain.GuaranteeState;
-import com.kizuna.remuneration.domain.GuaranteeTerm;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 
 public record GuaranteeResponse(
     String id,
@@ -16,20 +15,16 @@ public record GuaranteeResponse(
     OffsetDateTime cancelledAt,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt) {
-  public static GuaranteeResponse of(GuaranteeTerm t) {
+  public static GuaranteeResponse of(GuaranteeView v) {
     return new GuaranteeResponse(
-        t.getId(),
-        t.getPersonId(),
-        t.getEffectiveFrom(),
-        t.getState(),
-        t.getDailyAmount(),
-        t.getReason(),
-        utc(t.getCancelledAt()),
-        utc(t.getCreatedAt()),
-        utc(t.getUpdatedAt()));
-  }
-
-  private static OffsetDateTime utc(OffsetDateTime value) {
-    return value == null ? null : value.withOffsetSameInstant(ZoneOffset.UTC);
+        v.id(),
+        v.personId(),
+        v.effectiveFrom(),
+        v.state(),
+        v.dailyAmount(),
+        v.reason(),
+        v.cancelledAt(),
+        v.createdAt(),
+        v.updatedAt());
   }
 }

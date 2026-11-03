@@ -183,11 +183,11 @@ class AdvertisingIntegrationTest {
     assertThat(history.getTotalElements()).isEqualTo(3);
     assertThat(service.changes(1L, "2026-09", PageRequest.of(1, 2, NEWEST_FIRST)).getContent())
         .hasSize(1);
-    var change = service.changeDetail(1L, "2026-09", history.getContent().getFirst().id());
+    var change = service.changeDetail(1L, "2026-09", history.getContent().getFirst().getId());
     assertThat(change.before().amount()).isEqualTo(200);
     assertThat(change.after()).isNull();
-    assertThat(change.actorId()).isEqualTo(42);
-    assertThatThrownBy(() -> service.changeDetail(1L, "2026-10", change.id()))
+    assertThat(change.change().getActorId()).isEqualTo(42);
+    assertThatThrownBy(() -> service.changeDetail(1L, "2026-10", change.change().getId()))
         .isInstanceOf(NotFoundException.class);
   }
 
@@ -281,7 +281,7 @@ class AdvertisingIntegrationTest {
     assertThat(service.changes(2L, "2026-09", PageRequest.of(0, 20, NEWEST_FIRST)).getContent())
         .isEmpty();
     assertThatThrownBy(() -> service.get(2L, c.id())).isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> service.changeDetail(2L, "2026-09", change.id()))
+    assertThatThrownBy(() -> service.changeDetail(2L, "2026-09", change.getId()))
         .isInstanceOf(NotFoundException.class);
   }
 

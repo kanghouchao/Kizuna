@@ -1,9 +1,8 @@
 package com.kizuna.remuneration.api.dto;
 
-import com.kizuna.remuneration.domain.BonusAward;
+import com.kizuna.remuneration.application.RemunerationViews.BonusView;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 
 public record BonusResponse(
     String id,
@@ -16,21 +15,17 @@ public record BonusResponse(
     OffsetDateTime cancelledAt,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt) {
-  public static BonusResponse of(BonusAward a) {
+  public static BonusResponse of(BonusView v) {
     return new BonusResponse(
-        a.getId(),
-        a.getPersonId(),
-        a.getAwardDate(),
-        a.getAmount(),
-        a.effectiveAmount(),
-        a.getReason(),
-        a.getVersion(),
-        utc(a.getCancelledAt()),
-        utc(a.getCreatedAt()),
-        utc(a.getUpdatedAt()));
-  }
-
-  private static OffsetDateTime utc(OffsetDateTime value) {
-    return value == null ? null : value.withOffsetSameInstant(ZoneOffset.UTC);
+        v.id(),
+        v.personId(),
+        v.awardDate(),
+        v.amount(),
+        v.effectiveAmount(),
+        v.reason(),
+        v.version(),
+        v.cancelledAt(),
+        v.createdAt(),
+        v.updatedAt());
   }
 }

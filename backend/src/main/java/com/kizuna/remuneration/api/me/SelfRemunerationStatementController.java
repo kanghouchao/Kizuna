@@ -35,6 +35,7 @@ public class SelfRemunerationStatementController {
               size = 20,
               sort = {})
           Pageable bonusPageable) {
-    return service.self(principal.getName(), storeId, month, orderPageable, bonusPageable);
+    return RemunerationStatementResponse.of(
+        service.self(principal.getName(), storeId, month, orderPageable, bonusPageable));
   }
 }

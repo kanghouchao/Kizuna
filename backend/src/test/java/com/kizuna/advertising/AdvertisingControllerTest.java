@@ -21,13 +21,12 @@ import com.kizuna.advertising.api.AdvertisingMediaController;
 import com.kizuna.advertising.api.AdvertisingOrderCostController;
 import com.kizuna.advertising.api.AdvertisingRecruitmentEffectController;
 import com.kizuna.advertising.api.dto.AdvertisingRecruitmentEffectResponse;
-import com.kizuna.advertising.api.dto.AdvertisingResponses.CostResponse;
-import com.kizuna.advertising.api.dto.AdvertisingResponses.MediumResponse;
 import com.kizuna.advertising.application.AdvertisingExportService;
 import com.kizuna.advertising.application.AdvertisingMediaService;
 import com.kizuna.advertising.application.AdvertisingOrderCostService;
 import com.kizuna.advertising.application.AdvertisingRecruitmentEffectService;
 import com.kizuna.advertising.application.AdvertisingService;
+import com.kizuna.advertising.application.AdvertisingViews.CostView;
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingCommand;
 import com.kizuna.advertising.domain.AdvertisingMediaReport;
@@ -149,12 +148,12 @@ class AdvertisingControllerTest {
     var at = OffsetDateTime.now();
     when(service.create(any(), any(), anyString()))
         .thenReturn(
-            new CostResponse(
+            new CostView(
                 "c",
                 1L,
                 "2026-09",
                 AdvertisingCategory.SALES,
-                new MediumResponse("m1", "媒体"),
+                new AdvertisingMedium("m1", "媒体"),
                 null,
                 null,
                 null,
@@ -187,12 +186,12 @@ class AdvertisingControllerTest {
     var at = OffsetDateTime.now();
     when(service.get(7L, "c"))
         .thenReturn(
-            new CostResponse(
+            new CostView(
                 "c",
                 7L,
                 "2026-09",
                 AdvertisingCategory.SALES,
-                new MediumResponse("m1", "媒体"),
+                new AdvertisingMedium("m1", "媒体"),
                 null,
                 null,
                 null,

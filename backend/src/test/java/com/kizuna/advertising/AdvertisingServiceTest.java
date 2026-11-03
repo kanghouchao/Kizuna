@@ -19,8 +19,8 @@ import static org.mockito.Mockito.when;
 import com.kizuna.advertising.api.dto.AdvertisingRequests.CopyRequest;
 import com.kizuna.advertising.api.dto.AdvertisingRequests.CreateRequest;
 import com.kizuna.advertising.api.dto.AdvertisingRequests.ReplaceRequest;
-import com.kizuna.advertising.api.dto.AdvertisingResponses.CopyResponse;
 import com.kizuna.advertising.application.AdvertisingService;
+import com.kizuna.advertising.application.AdvertisingViews.CopyResult;
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingChange;
 import com.kizuna.advertising.domain.AdvertisingChangeRepository;
@@ -301,7 +301,7 @@ class AdvertisingServiceTest {
 
     assertThat(copied)
         .isEqualTo(
-            new CopyResponse(
+            new CopyResult(
                 "copy",
                 STORE_ID,
                 "2026-09",
