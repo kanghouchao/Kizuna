@@ -436,6 +436,30 @@ Then(
       data: { ...body, amount: 1235 },
     });
     expect(conflict.status()).toBe(409);
+    // 訂正の後の再送は初回の写しではなく対象の現在の状態を返し、変更 ID は作成時の受領から組む。
+    const created = await a.json();
+    const correction = await request.post(
+      `/api/bonus-awards/${created.bonus.id}/corrections`,
+      {
+        headers: headers(),
+        data: {
+          award_date: date,
+          amount: 2345,
+          reason: body.reason,
+          correction_reason: "金額訂正",
+          expected_version: created.bonus.version,
+          request_id: randomUUID(),
+        },
+      },
+    );
+    expect(correction.status(), await correction.text()).toBe(201);
+    const corrected = await correction.json();
+    const replay = await create();
+    expect(replay.status(), await replay.text()).toBe(201);
+    const replayed = await replay.json();
+    expect(replayed.bonus).toEqual(corrected.bonus);
+    expect(replayed.change_id).toBe(created.change_id);
+    expect((await statement(request)).bonus_total).toBe(2345);
   },
 );
 Then("授権外店舗と無権限の内訳操作は拒否される", async ({ request }) => {
