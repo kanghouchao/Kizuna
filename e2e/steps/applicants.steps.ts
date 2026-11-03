@@ -563,7 +563,7 @@ Then("応募者の監査には操作主体と状態だけが記録される", as
       "5",
     ]);
     for (const row of rows) {
-      expect(row.store_id).toBe(storeId);
+      expect(row.originating_store_id).toBe(storeId);
       expect(row.actor_id).toBeTruthy();
       expect(row.actor_type).toBe("STAFF");
       expect(row.result).toBe("SUCCEEDED");

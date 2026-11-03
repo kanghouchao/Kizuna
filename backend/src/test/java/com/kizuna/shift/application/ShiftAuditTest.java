@@ -224,7 +224,7 @@ class ShiftAuditTest {
     assertThat(event.getAction()).isEqualTo("SHIFT_CREATED");
     assertThat(event.getTargetId()).isEqualTo(created.getId());
     assertThat(event.getActorId()).isEqualTo(9L);
-    assertThat(event.getStoreId()).isEqualTo(1L);
+    assertThat(event.getOriginatingStoreId()).isEqualTo(1L);
     assertThat(event.getBeforeValues()).isEmpty();
     assertThat(event.getAfterValues())
         .containsEntry("cast_id", "cast")

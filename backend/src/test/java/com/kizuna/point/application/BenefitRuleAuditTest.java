@@ -111,7 +111,7 @@ class BenefitRuleAuditTest {
     assertThat(event.getAction()).isEqualTo("BENEFIT_RULE_CREATED");
     assertThat(event.getTargetType()).isEqualTo("BENEFIT_RULE");
     assertThat(event.getTargetId()).isEqualTo("7");
-    assertThat(event.getStoreId()).isNull();
+    assertThat(event.getOriginatingStoreId()).isNull();
     assertThat(event.getBeforeValues()).containsOnlyKeys("exists").containsEntry("exists", "false");
     assertThat(event.getAfterValues())
         .containsEntry("exists", "true")
@@ -132,7 +132,7 @@ class BenefitRuleAuditTest {
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("BENEFIT_RULE_UPDATED");
-    assertThat(event.getStoreId()).isNull();
+    assertThat(event.getOriginatingStoreId()).isNull();
     assertThat(event.getBeforeValues()).containsEntry("points", "500");
     assertThat(event.getAfterValues())
         .containsEntry("points", "800")
@@ -165,7 +165,7 @@ class BenefitRuleAuditTest {
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("BENEFIT_RULE_DEACTIVATED");
-    assertThat(event.getStoreId()).isNull();
+    assertThat(event.getOriginatingStoreId()).isNull();
     assertThat(event.getBeforeValues()).containsEntry("active", "true");
     assertThat(event.getAfterValues()).containsEntry("active", "false");
   }

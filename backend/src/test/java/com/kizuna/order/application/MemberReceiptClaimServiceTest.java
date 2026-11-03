@@ -218,7 +218,7 @@ class MemberReceiptClaimServiceTest {
     assertThat(event.getSourceType()).isEqualTo("ORDER_ATTRIBUTION");
     assertThat(event.getSourceId()).isEqualTo("88");
     assertThat(event.getActorId()).isEqualTo(USER_ID);
-    assertThat(event.getStoreId()).isEqualTo(STORE_ID);
+    assertThat(event.getOriginatingStoreId()).isEqualTo(STORE_ID);
     assertThat(event.getBeforeValues()).containsEntry("exists", "false");
     assertThat(event.getAfterValues())
         .containsEntry("exists", "true")

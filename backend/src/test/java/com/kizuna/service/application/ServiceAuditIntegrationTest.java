@@ -233,7 +233,7 @@ class ServiceAuditIntegrationTest {
     return transactions.execute(
         status ->
             context.getBean(AuditEventRepository.class).findAll().stream()
-                .filter(e -> storeId.equals(e.getStoreId()))
+                .filter(e -> storeId.equals(e.getOriginatingStoreId()))
                 .sorted(Comparator.comparing(AuditEvent::getId))
                 .toList());
   }
@@ -243,8 +243,13 @@ class ServiceAuditIntegrationTest {
         .map(
             table ->
                 jdbc.queryForList(
-                    "select * from " + table + " where store_id=? order by id", storeId))
+                    "select * from " + table + " where " + storeColumn(table) + "=? order by id",
+                    storeId))
         .toList();
+  }
+
+  private static String storeColumn(String table) {
+    return "t_audit_events".equals(table) ? "originating_store_id" : "store_id";
   }
 
   private String order(String serviceId) {

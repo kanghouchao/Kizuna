@@ -136,11 +136,13 @@ class StoreDeleteAuditIntegrationTest {
     assertThat(count("select count(*) from t_cascade_child where store_id=?", id)).isZero();
     assertThat(
             jdbc.queryForList(
-                "select action from t_audit_events where store_id=? order by id", String.class, id))
+                "select action from t_audit_events where originating_store_id=? order by id",
+                String.class,
+                id))
         .containsExactly("STORE_CREATED", "STORE_UPDATED", "STORE_DELETED");
     var deleted =
         jdbc.queryForMap(
-            "select actor_id, before_values ->> 'exists' as old_exists, before_values ->> 'status' as old_status, after_values ->> 'exists' as new_exists, after_values ->> 'cascade_deleted' as cascade from t_audit_events where store_id=? and action='STORE_DELETED'",
+            "select actor_id, before_values ->> 'exists' as old_exists, before_values ->> 'status' as old_status, after_values ->> 'exists' as new_exists, after_values ->> 'cascade_deleted' as cascade from t_audit_events where originating_store_id=? and action='STORE_DELETED'",
             id);
     assertThat(deleted)
         .containsEntry("actor_id", ordinaryId)
@@ -153,7 +155,7 @@ class StoreDeleteAuditIntegrationTest {
         .doesNotContain("t_services");
     assertThat(
             jdbc.queryForObject(
-                "select string_agg(before_values::text || after_values::text, '') from t_audit_events where store_id=?",
+                "select string_agg(before_values::text || after_values::text, '') from t_audit_events where originating_store_id=?",
                 String.class,
                 id))
         .doesNotContain("改名後");
@@ -204,7 +206,8 @@ class StoreDeleteAuditIntegrationTest {
 
   private long deleteAudits(long id) {
     return count(
-        "select count(*) from t_audit_events where action='STORE_DELETED' and store_id=?", id);
+        "select count(*) from t_audit_events where action='STORE_DELETED' and originating_store_id=?",
+        id);
   }
 
   @Configuration

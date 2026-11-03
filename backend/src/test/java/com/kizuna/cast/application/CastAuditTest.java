@@ -306,7 +306,7 @@ class CastAuditTest {
     lifecycle.suspend(STORE_ID, "enrollment", "operator@example.test");
     assertThat(recorded).hasSize(1);
     assertThat(recorded.getFirst().getActorId()).isEqualTo(9L);
-    assertThat(recorded.getFirst().getStoreId()).isEqualTo(1L);
+    assertThat(recorded.getFirst().getOriginatingStoreId()).isEqualTo(1L);
     assertThatThrownBy(() -> lifecycle.suspend(STORE_ID, "enrollment", "operator@example.test"))
         .isInstanceOf(ServiceException.class);
     var request = new CastUpdateRequest();
@@ -329,7 +329,7 @@ class CastAuditTest {
     assertThat(event.getAction()).isEqualTo("CAST_ENROLLMENT_DELETED");
     assertThat(event.getTargetType()).isEqualTo("CAST_ENROLLMENT");
     assertThat(event.getTargetId()).isEqualTo("enrollment");
-    assertThat(event.getStoreId()).isEqualTo(STORE_ID);
+    assertThat(event.getOriginatingStoreId()).isEqualTo(STORE_ID);
     assertThat(event.getBeforeValues())
         .containsEntry("exists", "true")
         .containsEntry("status", "ENROLLED")

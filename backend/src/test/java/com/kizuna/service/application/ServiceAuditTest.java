@@ -116,7 +116,7 @@ class ServiceAuditTest {
         .satisfies(
             event -> {
               assertThat(event.getAction()).isEqualTo("SERVICE_CREATED");
-              assertThat(event.getStoreId()).isEqualTo(STORE_ID);
+              assertThat(event.getOriginatingStoreId()).isEqualTo(STORE_ID);
               assertThat(event.getTargetType()).isEqualTo("SERVICE");
               assertThat(event.getTargetId()).isEqualTo("service");
               assertThat(event.getSourceType()).isEqualTo("SERVICE_REVISION");
@@ -247,7 +247,7 @@ class ServiceAuditTest {
         .satisfies(
             event -> {
               assertThat(event.getAction()).isEqualTo("SERVICE_CONSENT_CHANGED");
-              assertThat(event.getStoreId()).isEqualTo(STORE_ID);
+              assertThat(event.getOriginatingStoreId()).isEqualTo(STORE_ID);
               assertThat(event.getTargetType()).isEqualTo("SERVICE_CONSENT");
               assertThat(event.getTargetId()).isEqualTo("consent");
               assertThat(event.getSourceType()).isEqualTo("SERVICE_CONSENT_EVENT");

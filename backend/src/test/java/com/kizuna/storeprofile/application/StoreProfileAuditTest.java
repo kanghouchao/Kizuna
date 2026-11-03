@@ -104,7 +104,7 @@ class StoreProfileAuditTest {
     assertThat(event.getAction()).isEqualTo("STORE_PROFILE_UPDATED");
     assertThat(event.getTargetType()).isEqualTo("STORE_PROFILE");
     assertThat(event.getTargetId()).isEqualTo("7");
-    assertThat(event.getStoreId()).isEqualTo(STORE_ID);
+    assertThat(event.getOriginatingStoreId()).isEqualTo(STORE_ID);
     assertThat(event.getBeforeValues()).containsOnly(Map.entry("version", "3"));
     assertThat(event.getAfterValues())
         .containsOnly(

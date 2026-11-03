@@ -26,8 +26,9 @@ public class ExecutionRequest extends BaseEntity {
   @Column(nullable = false, updatable = false)
   private Long serviceUserId;
 
-  @Column(updatable = false)
-  private Long storeId;
+  /** 処理の対象店舗。グループ全体の処理では null で、店舗分離の軸ではなく帰属情報（列名を store_id にしないのはこのため）。 */
+  @Column(name = "target_store_id", updatable = false)
+  private Long targetStoreId;
 
   @Column(nullable = false, updatable = false)
   private LocalDate periodStart;
@@ -40,14 +41,15 @@ public class ExecutionRequest extends BaseEntity {
     request.taskName = command.taskName();
     request.logicalKey = command.logicalKey();
     request.serviceUserId = command.serviceUserId();
-    request.storeId = command.storeId();
+    request.targetStoreId = command.storeId();
     request.periodStart = command.periodStart();
     request.periodEnd = command.periodEnd();
     return request;
   }
 
   public TaskCommand command() {
-    return new TaskCommand(taskName, logicalKey, serviceUserId, storeId, periodStart, periodEnd);
+    return new TaskCommand(
+        taskName, logicalKey, serviceUserId, targetStoreId, periodStart, periodEnd);
   }
 
   public void requireSame(TaskCommand command) {

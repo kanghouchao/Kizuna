@@ -163,11 +163,11 @@ class CastInvitationAuditIntegrationTest {
 
     var accepted =
         jdbc.queryForMap(
-            "select a.actor_id,a.actor_type,a.store_id,a.after_values ->> 'user_id' as user_id,a.after_values ->> 'acceptance' as acceptance,u.id as linked from t_audit_events a join t_cast_enrollments e on e.id=a.source_id join t_casts c on c.id=e.cast_id join t_users u on u.id=c.user_id where a.action='CAST_INVITATION_ACCEPTED' and a.source_id=?",
+            "select a.actor_id,a.actor_type,a.originating_store_id,a.after_values ->> 'user_id' as user_id,a.after_values ->> 'acceptance' as acceptance,u.id as linked from t_audit_events a join t_cast_enrollments e on e.id=a.source_id join t_casts c on c.id=e.cast_id join t_users u on u.id=c.user_id where a.action='CAST_INVITATION_ACCEPTED' and a.source_id=?",
             enrollmentId);
     assertThat(accepted)
         .containsEntry("actor_type", "CAST")
-        .containsEntry("store_id", storeId)
+        .containsEntry("originating_store_id", storeId)
         .containsEntry("acceptance", "NEW_USER");
     assertThat(accepted.get("actor_id")).isEqualTo(accepted.get("linked"));
     assertThat(accepted.get("user_id")).isEqualTo(String.valueOf(accepted.get("linked")));

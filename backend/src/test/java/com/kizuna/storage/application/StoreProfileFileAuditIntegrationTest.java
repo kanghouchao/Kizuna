@@ -162,13 +162,13 @@ class StoreProfileFileAuditIntegrationTest {
 
     var row =
         jdbc.queryForMap(
-            "select action,actor_id,store_id,before_values ->> 'version' as b,after_values ->> 'version' as a,after_values ->> 'changed_fields' as c from t_audit_events where target_type='STORE_PROFILE' and target_id=?",
+            "select action,actor_id,originating_store_id,before_values ->> 'version' as b,after_values ->> 'version' as a,after_values ->> 'changed_fields' as c from t_audit_events where target_type='STORE_PROFILE' and target_id=?",
             String.valueOf(STORE_ID));
     assertThat(audits("STORE_PROFILE") - before).isEqualTo(1);
     assertThat(row)
         .containsEntry("action", "STORE_PROFILE_UPDATED")
         .containsEntry("actor_id", ordinaryId)
-        .containsEntry("store_id", STORE_ID)
+        .containsEntry("originating_store_id", STORE_ID)
         .containsEntry("c", "logo_url,description");
     assertThat(row.get("a")).isNotEqualTo(row.get("b"));
     assertThat(
@@ -204,11 +204,11 @@ class StoreProfileFileAuditIntegrationTest {
 
     var rows =
         jdbc.queryForList(
-            "select target_id,store_id,actor_id,after_values ->> 'bucket' as bucket,after_values ->> 'size' as size,after_values ->> 'content_type' as type from t_audit_events where action='FILE_UPLOADED' order by id");
+            "select target_id,originating_store_id,actor_id,after_values ->> 'bucket' as bucket,after_values ->> 'size' as size,after_values ->> 'content_type' as type from t_audit_events where action='FILE_UPLOADED' order by id");
     assertThat(rows).hasSize(2);
     assertThat(rows.get(0))
         .containsEntry("target_id", "public/11/store-logo/one.jpg")
-        .containsEntry("store_id", STORE_ID)
+        .containsEntry("originating_store_id", STORE_ID)
         .containsEntry("actor_id", ordinaryId)
         .containsEntry("bucket", "public")
         .containsEntry("size", "3")

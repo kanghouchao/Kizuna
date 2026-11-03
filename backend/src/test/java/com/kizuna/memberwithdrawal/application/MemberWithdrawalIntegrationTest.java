@@ -221,12 +221,12 @@ class MemberWithdrawalIntegrationTest {
             member.memberId);
     var audits =
         jdbc.queryForList(
-            "select actor_id, store_id, source_type, source_id, after_values->>'cleared_points' as cleared, after_values->>'withdrawn_applications' as apps from t_audit_events where action='MEMBER_WITHDRAWN' and target_type='MEMBER' and target_id=?",
+            "select actor_id, originating_store_id, source_type, source_id, after_values->>'cleared_points' as cleared, after_values->>'withdrawn_applications' as apps from t_audit_events where action='MEMBER_WITHDRAWN' and target_type='MEMBER' and target_id=?",
             String.valueOf(member.memberId));
     assertThat(audits).hasSize(1);
     assertThat(audits.getFirst())
         .containsEntry("actor_id", member.userId)
-        .containsEntry("store_id", null)
+        .containsEntry("originating_store_id", null)
         .containsEntry("source_type", "POINT_LEDGER_ENTRY")
         .containsEntry("source_id", String.valueOf(clearId))
         .containsEntry("cleared", "500")
@@ -497,12 +497,14 @@ class MemberWithdrawalIntegrationTest {
         .isEqualTo("WITHDRAWN");
     assertThat(
             jdbc.queryForList(
-                "select actor_id, store_id from t_audit_events where action='MEMBER_WITHDRAWN' and target_id=?",
+                "select actor_id, originating_store_id from t_audit_events where action='MEMBER_WITHDRAWN' and target_id=?",
                 String.valueOf(member.memberId)))
         .singleElement()
         .satisfies(
             row ->
-                assertThat(row).containsEntry("actor_id", staff).containsEntry("store_id", null));
+                assertThat(row)
+                    .containsEntry("actor_id", staff)
+                    .containsEntry("originating_store_id", null));
     assertThatThrownBy(() -> service.withdrawByStaff(member.memberId, staff, "二度目"))
         .isInstanceOf(MemberAlreadyWithdrawnException.class);
     assertThat(

@@ -112,7 +112,7 @@ public class TaskExecutor {
                     new TaskContext(
                         id,
                         service.id(),
-                        request.getStoreId(),
+                        request.getTargetStoreId(),
                         request.getPeriodStart(),
                         request.getPeriodEnd()));
             attempt.succeed(count, OffsetDateTime.now(clock));

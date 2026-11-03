@@ -257,10 +257,11 @@ class CustomerMemberLinkAuditIntegrationTest {
     links.link(STORE_ID, customer, memberCode(), first, "秘密の変更", "operator@example.test");
     var events =
         jdbc.queryForList(
-            "select actor_id,store_id from t_audit_events where source_id=? order by id", customer);
+            "select actor_id,originating_store_id from t_audit_events where source_id=? order by id",
+            customer);
     assertThat(events).hasSize(3);
     for (var event : events.subList(1, 3)) {
-      assertThat(event).containsEntry("actor_id", 9L).containsEntry("store_id", 1L);
+      assertThat(event).containsEntry("actor_id", 9L).containsEntry("originating_store_id", 1L);
     }
   }
 

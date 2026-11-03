@@ -154,7 +154,7 @@ class CustomerContactAuditTest {
     assertThat(event.getSourceType()).isEqualTo("CUSTOMER_CONTACT_HISTORY");
     assertThat(event.getSourceId()).isEqualTo(history.getFirst().getId());
     assertThat(event.getActorId()).isEqualTo(9L);
-    assertThat(event.getStoreId()).isEqualTo(STORE_ID);
+    assertThat(event.getOriginatingStoreId()).isEqualTo(STORE_ID);
     assertThat(history.getFirst().getStoreId()).isEqualTo(STORE_ID);
     assertThat(event.getBeforeValues()).isEmpty();
     assertThat(event.getAfterValues())

@@ -124,7 +124,7 @@ class StoreAuditTest {
     assertThat(event.getAction()).isEqualTo("STORE_CREATED");
     assertThat(event.getTargetType()).isEqualTo("STORE");
     assertThat(event.getTargetId()).isEqualTo("7");
-    assertThat(event.getStoreId()).isEqualTo(STORE_ID);
+    assertThat(event.getOriginatingStoreId()).isEqualTo(STORE_ID);
     assertThat(event.getBeforeValues()).isEmpty();
     assertThat(event.getAfterValues())
         .containsOnly(
@@ -158,7 +158,7 @@ class StoreAuditTest {
 
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("STORE_UPDATED");
-    assertThat(event.getStoreId()).isEqualTo(STORE_ID);
+    assertThat(event.getOriginatingStoreId()).isEqualTo(STORE_ID);
     assertThat(event.getBeforeValues()).containsOnly(Map.entry("version", "3"));
     assertThat(event.getAfterValues())
         .containsOnly(Map.entry("version", "4"), Map.entry("changed_fields", "name"));
@@ -200,7 +200,7 @@ class StoreAuditTest {
 
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("STORE_DELETED");
-    assertThat(event.getStoreId()).isEqualTo(STORE_ID);
+    assertThat(event.getOriginatingStoreId()).isEqualTo(STORE_ID);
     assertThat(event.getBeforeValues())
         .containsOnly(
             Map.entry("exists", "true"),
@@ -235,7 +235,7 @@ class StoreAuditTest {
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("STORE_ACTIVATED");
     assertThat(event.getTargetId()).isEqualTo("7");
-    assertThat(event.getStoreId()).isEqualTo(STORE_ID);
+    assertThat(event.getOriginatingStoreId()).isEqualTo(STORE_ID);
     assertThat(event.getBeforeValues())
         .containsOnly(Map.entry("status", "PREPARING"), Map.entry("version", "3"));
     assertThat(event.getAfterValues())

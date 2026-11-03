@@ -40,7 +40,7 @@ public class AuditReader {
         event.getActorId(),
         event.getActorType(),
         event.getActorName(),
-        event.getStoreId(),
+        event.getOriginatingStoreId(),
         event.getAction(),
         event.getResult(),
         event.getTargetType(),

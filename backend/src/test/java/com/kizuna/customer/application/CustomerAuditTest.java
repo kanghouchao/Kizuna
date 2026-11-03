@@ -121,7 +121,7 @@ class CustomerAuditTest {
     assertThat(event.getTargetId()).isEqualTo(created.getId());
     assertThat(event.getTargetType()).isEqualTo("CUSTOMER");
     assertThat(event.getActorId()).isEqualTo(9L);
-    assertThat(event.getStoreId()).isEqualTo(STORE_ID);
+    assertThat(event.getOriginatingStoreId()).isEqualTo(STORE_ID);
     assertThat(event.getSourceId()).isNull();
     assertThat(event.getSourceType()).isNull();
     assertThat(event.getBeforeValues()).isEmpty();

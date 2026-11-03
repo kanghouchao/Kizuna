@@ -137,7 +137,7 @@ class OrderRescueAuditTest {
     assertThat(event.getTargetId()).isEqualTo("501");
     assertThat(event.getSourceType()).isNull();
     assertThat(event.getActorId()).isEqualTo(ACTOR_ID);
-    assertThat(event.getStoreId()).isEqualTo(STORE_ID);
+    assertThat(event.getOriginatingStoreId()).isEqualTo(STORE_ID);
     assertThat(event.getBeforeValues())
         .containsEntry("status", "ACTIVE")
         .containsEntry("version", "2");

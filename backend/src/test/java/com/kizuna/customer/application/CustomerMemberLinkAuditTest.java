@@ -207,7 +207,7 @@ class CustomerMemberLinkAuditTest {
     assertThat(event.getSourceType()).isEqualTo("CUSTOMER");
     assertThat(event.getSourceId()).isEqualTo("customer");
     assertThat(event.getActorId()).isEqualTo(9L);
-    assertThat(event.getStoreId()).isEqualTo(STORE_ID);
+    assertThat(event.getOriginatingStoreId()).isEqualTo(STORE_ID);
     assertThat(event.getBeforeValues()).isEmpty();
     assertThat(event.getAfterValues())
         .containsOnlyKeys(

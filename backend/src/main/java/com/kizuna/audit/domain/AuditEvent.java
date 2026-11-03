@@ -38,7 +38,9 @@ public class AuditEvent {
   @Column(nullable = false, updatable = false)
   private String actorName;
 
-  private Long storeId;
+  /** 事象の起きた店舗。グループ級の操作では null で、店舗分離の軸ではなく帰属情報（列名を store_id にしないのはこのため）。 */
+  @Column(name = "originating_store_id", updatable = false)
+  private Long originatingStoreId;
 
   @Column(nullable = false, updatable = false, length = 80)
   private String action;
@@ -72,7 +74,7 @@ public class AuditEvent {
     event.actorId = change.actor().id();
     event.actorType = change.actor().type();
     event.actorName = change.actor().name();
-    event.storeId = change.storeId();
+    event.originatingStoreId = change.storeId();
     event.action = change.action();
     event.result = change.result();
     event.targetType = change.targetType();

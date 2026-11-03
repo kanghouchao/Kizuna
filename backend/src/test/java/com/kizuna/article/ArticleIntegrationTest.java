@@ -361,7 +361,9 @@ class ArticleIntegrationTest {
             "ARTICLE_CREATED", "ARTICLE_UPDATED", "ARTICLE_PUBLICATION_CHANGED", "ARTICLE_DELETED");
     assertThat(
             jdbc.queryForList(
-                "select store_id from t_audit_events where target_id=?", Long.class, id))
+                "select originating_store_id from t_audit_events where target_id=?",
+                Long.class,
+                id))
         .containsOnly(storeId);
 
     String values =

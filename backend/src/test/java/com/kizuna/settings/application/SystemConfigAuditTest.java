@@ -101,7 +101,7 @@ class SystemConfigAuditTest {
     assertThat(event.getAction()).isEqualTo("SYSTEM_CONFIG_UPDATED");
     assertThat(event.getTargetType()).isEqualTo("SYSTEM_CONFIG");
     assertThat(event.getTargetId()).isEqualTo(key);
-    assertThat(event.getStoreId()).isNull();
+    assertThat(event.getOriginatingStoreId()).isNull();
     assertThat(event.getBeforeValues()).containsOnly(Map.entry("config_value", "10"));
     assertThat(event.getAfterValues()).containsOnly(Map.entry("config_value", "20"));
   }

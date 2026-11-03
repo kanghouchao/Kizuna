@@ -128,14 +128,14 @@ class BenefitConfigAuditIntegrationTest {
 
     var rows =
         jdbc.queryForList(
-            "select action,actor_id,store_id,after_values ->> 'version' as v,after_values ->> 'points' as p,after_values ->> 'active' as a,after_values ->> 'changed_fields' as c from t_audit_events where target_type='BENEFIT_RULE' and target_id=? order by id",
+            "select action,actor_id,originating_store_id,after_values ->> 'version' as v,after_values ->> 'points' as p,after_values ->> 'active' as a,after_values ->> 'changed_fields' as c from t_audit_events where target_type='BENEFIT_RULE' and target_id=? order by id",
             String.valueOf(id));
     assertThat(rows).hasSize(3);
     assertThat(rows.get(0))
         .containsEntry("action", "BENEFIT_RULE_CREATED")
         .containsEntry("actor_id", ordinaryId)
         .containsEntry("v", "0");
-    assertThat(rows.get(0).get("store_id")).isNull();
+    assertThat(rows.get(0).get("originating_store_id")).isNull();
     assertThat(rows.get(1))
         .containsEntry("action", "BENEFIT_RULE_UPDATED")
         .containsEntry("v", "1")
@@ -190,7 +190,7 @@ class BenefitConfigAuditIntegrationTest {
         .containsEntry("changed", "true")
         .containsEntry("old", null)
         .containsEntry("new", null);
-    assertThat(secretRow.get("store_id")).isNull();
+    assertThat(secretRow.get("originating_store_id")).isNull();
     assertThat(audit(plainKey))
         .containsEntry("old", "old.example.test")
         .containsEntry("new", "new.example.test");
@@ -219,7 +219,7 @@ class BenefitConfigAuditIntegrationTest {
 
   private Map<String, Object> audit(String key) {
     return jdbc.queryForMap(
-        "select store_id,after_values ->> 'changed' as changed,before_values ->> 'config_value' as old,after_values ->> 'config_value' as new from t_audit_events where target_type='SYSTEM_CONFIG' and target_id=?",
+        "select originating_store_id,after_values ->> 'changed' as changed,before_values ->> 'config_value' as old,after_values ->> 'config_value' as new from t_audit_events where target_type='SYSTEM_CONFIG' and target_id=?",
         key);
   }
 

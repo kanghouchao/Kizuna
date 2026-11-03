@@ -169,7 +169,7 @@ class ApplicantEnrollmentIntegrationTest {
   void auditFailureAfterCastCreationLeavesNothingBehind() {
     String applicant = hiredApplicant(storeId);
     long enrollments = count("t_cast_enrollments where store_id=?", storeId);
-    long audits = count("t_audit_events where store_id=?", storeId);
+    long audits = count("t_audit_events where originating_store_id=?", storeId);
     doThrow(new IllegalStateException("監査失敗"))
         .when(audit)
         .recordCurrent(eq(storeId), eq("APPLICANT_ENROLLED"), anyString(), any(), anyMap(), any());
@@ -177,7 +177,7 @@ class ApplicantEnrollmentIntegrationTest {
         .isInstanceOf(IllegalStateException.class);
     assertThat(count("t_cast_enrollments where store_id=?", storeId)).isEqualTo(enrollments);
     assertThat(count("t_cast_profiles where store_id=?", storeId)).isEqualTo(enrollments);
-    assertThat(count("t_audit_events where store_id=?", storeId)).isEqualTo(audits);
+    assertThat(count("t_audit_events where originating_store_id=?", storeId)).isEqualTo(audits);
     assertThat(
             jdbc.queryForMap(
                 "select enrollment_id, version from t_applicants where id=?", applicant))
