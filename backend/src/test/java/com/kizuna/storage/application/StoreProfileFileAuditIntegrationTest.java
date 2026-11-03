@@ -2,6 +2,10 @@ package com.kizuna.storage.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
@@ -61,6 +65,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.services.s3.S3Client;
 
 /** 実PGで店舗プロフィール更新の原子性と、ファイル登録の「保存成功後に独立取引で監査」の順序を確認する。 */
@@ -102,13 +107,23 @@ class StoreProfileFileAuditIntegrationTest {
                     .getId());
     jdbc.execute(
         "alter table t_audit_events add constraint fk_test_audit_actor foreign key(actor_id) references t_users(id)");
-    FileStorageService storage =
-        (storeId, bucket, purpose, file) -> {
-          if (storeFails) throw new IllegalStateException("s3");
-          String path = bucket + "/" + storeId + "/" + purpose + "/" + file.getOriginalFilename();
-          stored.add(path);
-          return path;
-        };
+    FileStorageService storage = Mockito.mock(FileStorageService.class);
+    when(storage.store(anyLong(), anyString(), anyString(), any()))
+        .thenAnswer(
+            invocation -> {
+              if (storeFails) throw new IllegalStateException("s3");
+              MultipartFile file = invocation.getArgument(3);
+              String path =
+                  invocation.getArgument(1)
+                      + "/"
+                      + invocation.getArgument(0)
+                      + "/"
+                      + invocation.getArgument(2)
+                      + "/"
+                      + file.getOriginalFilename();
+              stored.add(path);
+              return path;
+            });
     var properties = new AppProperties();
     properties.setUpload(new AppProperties.Upload());
     uploads = new FileUploadController(storage, properties, context.getBean(StoredFileAudit.class));
@@ -238,7 +253,7 @@ class StoreProfileFileAuditIntegrationTest {
     upload.setAllowedTypes(List.of("image/jpeg"));
     var properties = new AppProperties();
     properties.setUpload(upload);
-    var real = new S3FileStorage(Mockito.mock(S3Client.class), properties);
+    var real = new FileStorageService(Mockito.mock(S3Client.class), properties);
     var controller =
         new FileUploadController(real, properties, context.getBean(StoredFileAudit.class));
     // "public/11/store-logo/" (21) + UUID (36) + 拡張子（"." 込み）で key をちょうど 100 文字にする

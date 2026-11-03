@@ -29,13 +29,13 @@ import software.amazon.awssdk.services.s3.model.PutBucketPolicyRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 @ExtendWith(MockitoExtension.class)
-class S3FileStorageTest {
+class FileStorageServiceTest {
 
   @Mock private S3Client s3Client;
 
   @Mock private MultipartFile multipartFile;
 
-  private S3FileStorage storageService;
+  private FileStorageService storageService;
 
   @BeforeEach
   void setUp() {
@@ -46,7 +46,7 @@ class S3FileStorageTest {
     upload.setAllowedTypes(List.of("image/jpeg", "image/png", "image/gif", "image/webp"));
     appProperties.setUpload(upload);
 
-    storageService = new S3FileStorage(s3Client, appProperties);
+    storageService = new FileStorageService(s3Client, appProperties);
   }
 
   @Test
