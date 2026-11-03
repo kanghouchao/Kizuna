@@ -67,7 +67,9 @@ When('担当者が口コミを受付し公開許可なしで内部承認する',
   expect(result.review.publication_connection).toBe('NOT_CONFIGURED');
   const detail = page.getByRole('dialog', { name: '口コミの内容・履歴', exact: true });
   await expect(detail.getByText('スタッフによる記録', { exact: true })).toBeVisible();
-  await detail.getByRole('button', { name: '内部承認', exact: true }).click();
+  // 受付のダイアログが閉じるアニメーションの途中（応答から 200ms 以内）に操作を選んでも、操作のダイアログは詳細の上に開く。
+  // 通常の click は詳細の開くアニメーションが止まるまで待ち、この時間帯を外すため、force で応答直後に押す。
+  await detail.getByRole('button', { name: '内部承認', exact: true }).click({ force: true });
   const decision = page.getByRole('dialog', { name: '内部承認', exact: true });
   await expect(decision.getByText('内部承認のみ。公開には別途許可と公開設定が必要です。')).toBeVisible();
   await decision.getByLabel('判断・変更の理由').fill('掲載判断とは別に内容を確認');
