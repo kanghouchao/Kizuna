@@ -15,6 +15,7 @@ interface Snapshot {
   pending: PendingOperation<unknown> | null;
   unreadable: boolean;
 }
+/** 操作の内容と重複排除のキーは別の引数で渡す。内容の型はキーを持たず、再送で内容とキーを変えない。 */
 export type SendOperation<P, R> = (
   payload: P,
   key: string,

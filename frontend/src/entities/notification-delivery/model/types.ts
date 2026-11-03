@@ -20,7 +20,7 @@ export interface Delivery extends DeliverySummary {
   transport_availability: 'AVAILABLE' | 'UNAVAILABLE';
   scheduling_availability: 'MANUAL_TASK_ONLY';
 }
-/** 下書きの内容。重複排除のキーは送信時に別に渡す（再送で内容とキーを変えないため）。 */
+/** 下書きの内容。キーを持たない理由は `SendOperation`（shared/lib/hooks/useOperation）。 */
 export interface DeliveryInput {
   source_type: 'ORDER' | 'APPLICATION';
   source_id: string;

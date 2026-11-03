@@ -128,7 +128,7 @@ export interface ActionInput {
   version: number;
   reason: string;
 }
-/** 操作の内容。重複排除のキーは送信時に別に渡す（再送で内容とキーを変えないため）。 */
+/** 操作の内容。キーを持たない理由は `SendOperation`（shared/lib/hooks/useOperation）。 */
 export type SurveyCommand =
   | { kind: 'CREATE'; input: DefinitionInput }
   | {

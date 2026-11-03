@@ -91,7 +91,7 @@ export interface ReviewInput {
   origin_order_id: string | null;
 }
 export type ActionInput = { version: number; reason: string };
-/** 操作の内容。重複排除のキーは送信時に別に渡す（再送で内容とキーを変えないため）。 */
+/** 操作の内容。キーを持たない理由は `SendOperation`（shared/lib/hooks/useOperation）。 */
 export type ReviewCommand =
   | { kind: 'CREATE'; input: ReviewInput }
   | { kind: 'CORRECT'; id: string; input: ReviewInput & ActionInput }
