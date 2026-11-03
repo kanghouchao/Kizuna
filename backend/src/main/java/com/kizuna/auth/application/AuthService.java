@@ -1,6 +1,5 @@
 package com.kizuna.auth.application;
 
-import com.kizuna.auth.api.dto.MeResponse;
 import com.kizuna.auth.infrastructure.IssuedJwt;
 import com.kizuna.auth.infrastructure.JwtIssuer;
 import com.kizuna.auth.infrastructure.RefreshTokenRejectedException;
@@ -154,22 +153,22 @@ public class AuthService {
     return claims;
   }
 
-  /** me 応答を返す（GET /me）。ユーザー不在は空を返し、HTTP 表現は呼び出し側が決める。 */
+  /** 本人資料を返す（GET /me）。ユーザー不在は空を返し、HTTP 表現は呼び出し側が決める。 */
   @Transactional(readOnly = true)
-  public Optional<MeResponse> me(String email) {
-    return userRepository.findByEmail(email).map(this::toMeResponse);
+  public Optional<MeView> me(String email) {
+    return userRepository.findByEmail(email).map(this::toMeView);
   }
 
-  /** 自己プロフィール（表示名）を更新し、更新後の me レスポンスを返す。 */
+  /** 自己プロフィール（表示名）を更新し、更新後の本人資料を返す。 */
   @Transactional
-  public MeResponse updateMe(String email, String displayName) {
+  public MeView updateMe(String email, String displayName) {
     User user =
         userRepository
             .findByEmail(email)
             .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
     user.updateDisplayName(displayName);
     userRepository.save(user);
-    return toMeResponse(user);
+    return toMeView(user);
   }
 
   /** パスワード変更。版の増分により当該トークンを含む全端末のセッションが失効する（要再ログイン、ADR 0022）。 */
@@ -186,9 +185,9 @@ public class AuthService {
     userRepository.save(user);
   }
 
-  private MeResponse toMeResponse(User user) {
+  private MeView toMeView(User user) {
     Set<PermissionCode> permissions = permissionsOf(user);
-    return new MeResponse(
+    return new MeView(
         user.getEmail(),
         user.getDisplayName(),
         user.getUserType().name(),

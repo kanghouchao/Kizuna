@@ -37,14 +37,14 @@ public class LineController {
   @GetMapping("/auth/line/config")
   @PermitAll
   public ResponseEntity<LineConfigResponse> config() {
-    return ResponseEntity.ok(lineAuthService.config());
+    return ResponseEntity.ok(LineConfigResponse.of(lineAuthService.config()));
   }
 
   @PostMapping("/auth/line/login")
   @PermitAll
   public ResponseEntity<LineLoginResponse> login(
       @Valid @RequestBody LineAuthorizationRequest request) {
-    LineLogin login = lineAuthService.login(request);
+    LineLogin login = lineAuthService.login(request.command());
     if (login.session() == null) {
       return ResponseEntity.ok(
           LineLoginResponse.unregistered(login.registrationTicket(), login.displayName()));
@@ -52,7 +52,7 @@ public class LineController {
     return ResponseEntity.ok()
         .header(
             HttpHeaders.SET_COOKIE, refreshTokenCookies.issue(login.session().refresh()).toString())
-        .body(LineLoginResponse.registered(login.session().toToken()));
+        .body(LineLoginResponse.registered(Token.of(login.session())));
   }
 
   @PostMapping("/auth/line/register")
@@ -60,7 +60,7 @@ public class LineController {
   public ResponseEntity<Token> register(@Valid @RequestBody LineRegistrationRequest request) {
     return AuthController.withRefreshCookie(
         ResponseEntity.status(HttpStatus.CREATED),
-        lineAuthService.register(request),
+        lineAuthService.register(request.command()),
         refreshTokenCookies);
   }
 
@@ -68,7 +68,7 @@ public class LineController {
   @PreAuthorize("isAuthenticated()")
   public ResponseEntity<Void> link(
       Principal principal, @Valid @RequestBody LineAuthorizationRequest request) {
-    lineAuthService.link(principal.getName(), request);
+    lineAuthService.link(principal.getName(), request.command());
     return ResponseEntity.noContent().build();
   }
 }

@@ -10,8 +10,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.auth.api.dto.LineAuthorizationRequest;
-import com.kizuna.auth.api.dto.LineRegistrationRequest;
 import com.kizuna.auth.infrastructure.IssuedJwt;
 import com.kizuna.auth.infrastructure.JwtIssuer;
 import com.kizuna.auth.infrastructure.LineApiClient;
@@ -72,20 +70,12 @@ class LineAuthServiceTest {
 
   @InjectMocks private LineAuthService lineAuthService;
 
-  private static LineAuthorizationRequest authorizationRequest() {
-    LineAuthorizationRequest request = new LineAuthorizationRequest();
-    request.setCode("auth-code");
-    request.setRedirectUri("https://app.test/cb");
-    request.setCodeVerifier("verifier");
-    return request;
+  private static LineAuthorizationCommand authorizationCommand() {
+    return new LineAuthorizationCommand("auth-code", "https://app.test/cb", "verifier");
   }
 
-  private static LineRegistrationRequest registrationRequest() {
-    LineRegistrationRequest request = new LineRegistrationRequest();
-    request.setRegistrationTicket("ticket-1");
-    request.setDisplayName("会員太郎");
-    request.setEmail("member@kizuna.test");
-    return request;
+  private static LineRegistrationCommand registrationCommand() {
+    return new LineRegistrationCommand("ticket-1", "会員太郎", "member@kizuna.test");
   }
 
   private static User member(String email) {
@@ -132,7 +122,7 @@ class LineAuthServiceTest {
     when(userRepository.findByLineUserId("U-line-1")).thenReturn(Optional.of(user));
     when(authService.issueSessionFor(user)).thenReturn(SESSION);
 
-    LineLogin response = lineAuthService.login(authorizationRequest());
+    LineLogin response = lineAuthService.login(authorizationCommand());
 
     assertThat(response.session()).isEqualTo(SESSION);
     assertThat(response.registrationTicket()).isNull();
@@ -145,7 +135,7 @@ class LineAuthServiceTest {
   void loginRunsOutsideATransaction() throws Exception {
     assertThat(
             LineAuthService.class
-                .getMethod("login", LineAuthorizationRequest.class)
+                .getMethod("login", LineAuthorizationCommand.class)
                 .getAnnotation(Transactional.class))
         .isNull();
     assertThat(LineAuthService.class.getAnnotation(Transactional.class)).isNull();
@@ -158,7 +148,7 @@ class LineAuthServiceTest {
     when(userRepository.findByLineUserId("U-line-1")).thenReturn(Optional.empty());
     when(ticketStore.issue("U-line-1")).thenReturn("ticket-1");
 
-    LineLogin response = lineAuthService.login(authorizationRequest());
+    LineLogin response = lineAuthService.login(authorizationCommand());
 
     assertThat(response.session()).isNull();
     assertThat(response.registrationTicket()).isEqualTo("ticket-1");
@@ -174,7 +164,7 @@ class LineAuthServiceTest {
     when(userRepository.findByLineUserId("U-line-1")).thenReturn(Optional.empty());
     when(ticketStore.issue("U-line-1")).thenReturn("ticket-1");
 
-    lineAuthService.login(authorizationRequest());
+    lineAuthService.login(authorizationCommand());
 
     verify(userRepository, never()).findByEmail(anyString());
     verify(userRepository, never()).findByEmailForUpdate(anyString());
@@ -188,7 +178,7 @@ class LineAuthServiceTest {
     user.stop();
     when(userRepository.findByLineUserId("U-line-1")).thenReturn(Optional.of(user));
 
-    assertThatThrownBy(() -> withRealTokenIssuance().login(authorizationRequest()))
+    assertThatThrownBy(() -> withRealTokenIssuance().login(authorizationCommand()))
         .isInstanceOf(DisabledException.class);
     verifyNoInteractions(jwtIssuer);
   }
@@ -198,7 +188,7 @@ class LineAuthServiceTest {
   void loginWithoutChannelIsUnavailable() {
     when(channelResolver.resolve()).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> lineAuthService.login(authorizationRequest()))
+    assertThatThrownBy(() -> lineAuthService.login(authorizationCommand()))
         .isInstanceOf(ServiceUnavailableException.class);
   }
 
@@ -211,7 +201,7 @@ class LineAuthServiceTest {
         .thenReturn(created);
     when(authService.issueSessionFor(created)).thenReturn(SESSION);
 
-    assertThat(lineAuthService.register(registrationRequest())).isEqualTo(SESSION);
+    assertThat(lineAuthService.register(registrationCommand())).isEqualTo(SESSION);
     verify(ticketStore).consume("ticket-1");
     // 登録直後の自動ログインは認証成功ではなく登録の一部。発火事象に数えない。
     verifyNoInteractions(loginBenefitTrigger);
@@ -222,7 +212,7 @@ class LineAuthServiceTest {
   void registerWithInvalidTicketIsRejected() {
     when(ticketStore.peek("ticket-1")).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> lineAuthService.register(registrationRequest()))
+    assertThatThrownBy(() -> lineAuthService.register(registrationCommand()))
         .isInstanceOf(ServiceException.class);
     verify(memberRegistrationService, never())
         .registerWithLine(anyString(), anyString(), anyString());
@@ -235,7 +225,7 @@ class LineAuthServiceTest {
     when(memberRegistrationService.registerWithLine("member@kizuna.test", "会員太郎", "U-line-1"))
         .thenThrow(new ConflictException("このメールアドレスは既に登録されています。ログインしてご利用ください"));
 
-    assertThatThrownBy(() -> lineAuthService.register(registrationRequest()))
+    assertThatThrownBy(() -> lineAuthService.register(registrationCommand()))
         .isInstanceOf(ConflictException.class);
     verify(ticketStore, never()).consume(anyString());
   }
@@ -248,7 +238,7 @@ class LineAuthServiceTest {
     when(userRepository.findByEmail("member@kizuna.test")).thenReturn(Optional.of(user));
     when(userRepository.existsByLineUserId("U-line-1")).thenReturn(false);
 
-    lineAuthService.link("member@kizuna.test", authorizationRequest());
+    lineAuthService.link("member@kizuna.test", authorizationCommand());
 
     assertThat(user.getLineUserId()).isEqualTo("U-line-1");
     verify(userRepository).saveAndFlush(user);
@@ -270,7 +260,7 @@ class LineAuthServiceTest {
                     new SQLException("duplicate key value violates unique constraint"),
                     "uq_t_users_line_user_id")));
 
-    assertThatThrownBy(() -> lineAuthService.link("member@kizuna.test", authorizationRequest()))
+    assertThatThrownBy(() -> lineAuthService.link("member@kizuna.test", authorizationCommand()))
         .isInstanceOf(ConflictException.class);
   }
 
@@ -282,7 +272,7 @@ class LineAuthServiceTest {
     user.linkLine("U-line-1");
     when(userRepository.findByEmail("member@kizuna.test")).thenReturn(Optional.of(user));
 
-    assertThatThrownBy(() -> lineAuthService.link("member@kizuna.test", authorizationRequest()))
+    assertThatThrownBy(() -> lineAuthService.link("member@kizuna.test", authorizationCommand()))
         .isInstanceOf(LineAlreadyLinkedException.class);
     verify(userRepository, never()).save(any());
   }
@@ -295,7 +285,7 @@ class LineAuthServiceTest {
     when(userRepository.findByEmail("member@kizuna.test"))
         .thenReturn(Optional.of(member("member@kizuna.test")));
 
-    assertThatThrownBy(() -> lineAuthService.link("member@kizuna.test", authorizationRequest()))
+    assertThatThrownBy(() -> lineAuthService.link("member@kizuna.test", authorizationCommand()))
         .isInstanceOf(ConflictException.class);
     verify(userRepository, never()).save(any());
   }
@@ -310,7 +300,7 @@ class LineAuthServiceTest {
     stubVerifiedIdentity();
     when(userRepository.findByLineUserId("U-line-1")).thenReturn(Optional.of(serviceIdentity));
 
-    assertThatThrownBy(() -> service.login(authorizationRequest()))
+    assertThatThrownBy(() -> service.login(authorizationCommand()))
         .isInstanceOf(ServiceIdentityLoginException.class);
     verifyNoInteractions(jwtIssuer);
   }
@@ -345,7 +335,7 @@ class LineAuthServiceTest {
     when(memberRegistrationService.registerWithLine("member@kizuna.test", "会員太郎", "U-line-1"))
         .thenReturn(user);
 
-    assertThatThrownBy(() -> withRealTokenIssuance().register(registrationRequest()))
+    assertThatThrownBy(() -> withRealTokenIssuance().register(registrationCommand()))
         .isInstanceOf(DisabledException.class);
     verifyNoInteractions(jwtIssuer);
   }
@@ -358,7 +348,7 @@ class LineAuthServiceTest {
     when(memberRegistrationService.registerWithLine("member@kizuna.test", "会員太郎", "U-line-1"))
         .thenReturn(user);
 
-    assertThatThrownBy(() -> withRealTokenIssuance().register(registrationRequest()))
+    assertThatThrownBy(() -> withRealTokenIssuance().register(registrationCommand()))
         .isInstanceOf(ServiceIdentityLoginException.class);
     verifyNoInteractions(jwtIssuer);
   }
