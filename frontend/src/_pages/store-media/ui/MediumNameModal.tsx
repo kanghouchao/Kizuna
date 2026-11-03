@@ -15,6 +15,7 @@ import {
   FormLabel,
   FormMessage,
   Input,
+  RegionError,
 } from '@/shared/ui';
 
 interface MediumNameModalProps {
@@ -23,6 +24,11 @@ interface MediumNameModalProps {
   medium: MediumSummary | null;
   /** 改名対象が一覧から消えた */
   gone: boolean;
+  /** 改名の版を引く一覧が取れていない。一覧の再試行はダイアログの背後に隠れるので、入力を残したままここで再試行させる。 */
+  listFailed: boolean;
+  onRetryList: () => void;
+  /** 送る版がまだ手元に無い */
+  versionPending: boolean;
   busy: boolean;
   onClose: () => void;
   /** 前後の空白を除いた名前を渡す。閉じるかどうかは呼び出し側が決める。 */
@@ -36,6 +42,9 @@ export function MediumNameModal({
   open,
   medium,
   gone,
+  listFailed,
+  onRetryList,
+  versionPending,
   busy,
   onClose,
   onSubmit,
@@ -73,6 +82,9 @@ export function MediumNameModal({
               className="space-y-6"
               noValidate
             >
+              {listFailed && (
+                <RegionError message="媒体一覧の取得に失敗しました" onRetry={onRetryList} />
+              )}
               <FormField
                 control={control}
                 name="name"
@@ -99,7 +111,7 @@ export function MediumNameModal({
                 <Button type="button" variant="outline" onClick={onClose}>
                   キャンセル
                 </Button>
-                <Button type="submit" disabled={busy}>
+                <Button type="submit" disabled={busy || versionPending}>
                   {busy ? '保存中...' : '保存する'}
                 </Button>
               </div>

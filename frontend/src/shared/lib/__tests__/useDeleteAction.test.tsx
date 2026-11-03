@@ -92,6 +92,29 @@ describe('useDeleteAction', () => {
     expect(remove).toHaveBeenCalledTimes(2);
   });
 
+  it('前の削除の応答待ちに確認した削除は送らず、そのことを伝える', async () => {
+    let finish: () => void = () => {};
+    const remove = jest.fn(() => new Promise<void>(resolve => (finish = resolve)));
+    const { result } = setup(remove);
+
+    act(() => result.current.ask({ id: '1' }));
+    let first: Promise<void> = Promise.resolve();
+    act(() => {
+      first = result.current.confirm();
+    });
+    act(() => result.current.ask({ id: '2' }));
+    await act(async () => {
+      await result.current.confirm();
+    });
+
+    expect(remove).toHaveBeenCalledTimes(1);
+    expect(notify.error).toHaveBeenCalledWith('前の操作が終わってから、もう一度実行してください');
+    await act(async () => {
+      finish();
+      await first;
+    });
+  });
+
   it('サーバが理由を返さないときだけ既定の文言へ落ちる', async () => {
     const remove = jest.fn(async () => {
       throw new Error('boom');
