@@ -1,13 +1,11 @@
 package com.kizuna.customer.application;
 
-import com.kizuna.customer.api.dto.ContactSummary;
-import com.kizuna.customer.api.dto.CustomerCreateRequest;
-import com.kizuna.customer.api.dto.CustomerDuplicateGroupResponse;
-import com.kizuna.customer.api.dto.CustomerMapper;
-import com.kizuna.customer.api.dto.CustomerMergeComparisonResponse;
-import com.kizuna.customer.api.dto.CustomerResponse;
-import com.kizuna.customer.api.dto.CustomerSummaryResponse;
-import com.kizuna.customer.api.dto.CustomerUpdateRequest;
+import com.kizuna.customer.application.CustomerCommands.NewCustomer;
+import com.kizuna.customer.application.CustomerViews.ComparisonRow;
+import com.kizuna.customer.application.CustomerViews.CustomerDetail;
+import com.kizuna.customer.application.CustomerViews.CustomerSummary;
+import com.kizuna.customer.application.CustomerViews.DuplicateGroup;
+import com.kizuna.customer.domain.ContactSummary;
 import com.kizuna.customer.domain.ContactType;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerCandidateRepository;
@@ -19,6 +17,7 @@ import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerMergeRepository;
 import com.kizuna.customer.domain.CustomerOrderCountView;
+import com.kizuna.customer.domain.CustomerPatch;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.customer.domain.LinkStatus;
 import com.kizuna.shared.exception.ConflictException;
@@ -81,12 +80,11 @@ public class CustomerService {
   private final CustomerContactRepository customerContactRepository;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final CustomerMergeRepository customerMergeRepository;
-  private final CustomerMapper customerMapper;
   private final BusinessAudit audit;
 
   /** 検索結果と一致理由を同じ断面から読み、途中の連絡先変更による不一致を避ける。 */
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public Page<CustomerSummaryResponse> list(
+  public Page<CustomerSummary> list(
       Long storeId, String search, String classification, Pageable pageable) {
     Specification<Customer> spec = searchSpec(search, classification);
     Page<CustomerListRepository.Row> page = customerListRepository.findAll(storeId, spec, pageable);
@@ -112,19 +110,19 @@ public class CustomerService {
     return page.map(
         entry -> {
           Customer customer = entry.customer();
-          CustomerSummaryResponse row = customerMapper.toSummaryResponse(customer);
-          row.setPreferredContacts(preferred.getOrDefault(customer.getId(), List.of()));
-          row.setMatchedContacts(matched.getOrDefault(customer.getId(), List.of()));
-          row.setMemberLinked(entry.memberLinked());
-          row.setLastVisitDate(entry.lastVisitDate());
-          row.setPointBalance(entry.pointBalance());
-          return row;
+          return new CustomerSummary(
+              customer,
+              preferred.getOrDefault(customer.getId(), List.of()),
+              matched.getOrDefault(customer.getId(), List.of()),
+              entry.memberLinked(),
+              entry.lastVisitDate(),
+              entry.pointBalance());
         });
   }
 
   /** グループ件数と判断材料を同じ断面から読み、途中の削除・統合による不一致を避ける。 */
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public Page<CustomerDuplicateGroupResponse> listDuplicateCandidates(
+  public Page<DuplicateGroup> listDuplicateCandidates(
       Long storeId, String search, ContactType type, Pageable pageable) {
     var page = candidateRepository.groups(storeId, search, type, pageable);
     var matches =
@@ -147,10 +145,10 @@ public class CustomerService {
         fetchComparisonMaterial(storeId, customers.stream().map(Customer::getId).toList());
     var comparisons =
         toComparisonRows(storeId, customers, material).stream()
-            .collect(Collectors.toMap(CustomerMergeComparisonResponse::id, Function.identity()));
+            .collect(Collectors.toMap(row -> row.customer().getId(), Function.identity()));
     return page.map(
         group ->
-            new CustomerDuplicateGroupResponse(
+            new DuplicateGroup(
                 group.type(),
                 group.value(),
                 group.total(),
@@ -160,7 +158,7 @@ public class CustomerService {
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public Page<CustomerMergeComparisonResponse> duplicateCustomers(
+  public Page<ComparisonRow> duplicateCustomers(
       Long storeId, ContactType type, String value, Pageable pageable) {
     if (value == null || value.isBlank() || value.length() > 320)
       throw new ServiceException("320文字以内の連絡先を指定してください");
@@ -194,8 +192,7 @@ public class CustomerService {
    * @param customerIds 見比べる 2 行。並びはそのまま応答の並びになる
    */
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public List<CustomerMergeComparisonResponse> mergeComparison(
-      Long storeId, List<String> customerIds) {
+  public List<ComparisonRow> mergeComparison(Long storeId, List<String> customerIds) {
     if (customerIds.size() != COMPARISON_SIZE) {
       throw new ServiceException("見比べる顧客を 2 件指定してください");
     }
@@ -216,18 +213,18 @@ public class CustomerService {
         fetchComparisonMaterial(storeId, customerIds));
   }
 
-  private List<CustomerMergeComparisonResponse> toComparisonRows(
+  private List<ComparisonRow> toComparisonRows(
       Long storeId, List<Customer> customers, ComparisonMaterial material) {
     var preferred =
         customerContactService.preferred(storeId, customers.stream().map(Customer::getId).toList());
     return customers.stream()
         .map(
             customer ->
-                customerMapper.toComparisonResponse(
+                new ComparisonRow(
                     customer,
+                    preferred.getOrDefault(customer.getId(), List.of()),
                     material.linked(customer.getId()),
-                    material.orderCount(customer.getId()),
-                    preferred.getOrDefault(customer.getId(), List.of())))
+                    material.orderCount(customer.getId())))
         .toList();
   }
 
@@ -298,26 +295,37 @@ public class CustomerService {
    * <p>3xx リダイレクトは採らない — HTTP クライアントが透過的に追随するため、画面が統合の発生そのものを知れなくなる。
    */
   @Transactional(readOnly = true)
-  public CustomerResponse get(Long storeId, String id) {
+  public CustomerDetail get(Long storeId, String id) {
     Customer customer =
         customerRepository
             .findResolvingMerge(storeId, id)
             .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
-    CustomerResponse response = customerMapper.toResponse(customer);
-    response.setPreferredContacts(
+    return new CustomerDetail(
+        customer,
         customerContactService
             .preferred(storeId, List.of(customer.getId()))
-            .getOrDefault(customer.getId(), List.of()));
-    withMemberLink(response, activeMemberCodeOf(storeId, customer.getId()));
-    return withMergeMark(response, id, customer.getId());
+            .getOrDefault(customer.getId(), List.of()),
+        activeMemberCodeOf(storeId, customer.getId()),
+        id.equals(customer.getId()) ? null : id);
   }
 
   @Transactional
-  public CustomerResponse create(Long storeId, CustomerCreateRequest request) {
-    Customer customer = customerMapper.toEntity(request);
+  public CustomerDetail create(Long storeId, NewCustomer request) {
+    Customer customer =
+        Customer.builder()
+            .name(request.name())
+            .address(request.address())
+            .buildingName(request.buildingName())
+            .landmark(request.landmark())
+            .classification(request.classification())
+            .hasPet(request.hasPet())
+            .usageAreas(request.usageAreas())
+            .ngType(request.ngType())
+            .ngContent(request.ngContent())
+            .build();
     customer.setStoreId(storeId);
     customerRepository.saveAndFlush(customer);
-    for (var contact : request.getContacts())
+    for (var contact : request.contacts())
       customerContactService.create(storeId, customer.getId(), contact);
     audit.recordCurrent(
         customer.getStoreId(),
@@ -326,13 +334,11 @@ public class CustomerService {
         customer.getId(),
         Map.of(),
         CustomerAuditSnapshot.of(customer).after(null));
-    var response = customerMapper.toResponse(customer);
-    response.setPreferredContacts(List.of());
-    return withMemberLink(response, null);
+    return new CustomerDetail(customer, List.of(), null, null);
   }
 
   @Transactional
-  public CustomerResponse update(Long storeId, String id, CustomerUpdateRequest request) {
+  public CustomerDetail update(Long storeId, String id, CustomerPatch patch) {
     Customer customer =
         customerRepository
             .findByIdAndStoreId(id, storeId)
@@ -342,7 +348,7 @@ public class CustomerService {
     }
 
     var before = CustomerAuditSnapshot.of(customer);
-    customer.apply(customerMapper.toPatch(request));
+    customer.apply(patch);
     customerRepository.save(customer);
     customerRepository.flush();
     var after = CustomerAuditSnapshot.of(customer).after(before);
@@ -355,10 +361,11 @@ public class CustomerService {
           before.values(),
           after);
 
-    var response = customerMapper.toResponse(customer);
-    response.setPreferredContacts(
-        customerContactService.preferred(storeId, List.of(id)).getOrDefault(id, List.of()));
-    return withMemberLink(response, activeMemberCodeOf(storeId, id));
+    return new CustomerDetail(
+        customer,
+        customerContactService.preferred(storeId, List.of(id)).getOrDefault(id, List.of()),
+        activeMemberCodeOf(storeId, id),
+        null);
   }
 
   /**
@@ -425,23 +432,5 @@ public class CustomerService {
         .findByStoreIdAndCustomerIdAndStatus(storeId, customerId, LinkStatus.ACTIVE)
         .map(CustomerMemberLink::getMemberCode)
         .orElse(null);
-  }
-
-  /** 旧 ID で引かれたときだけ統合の標識を載せる。生きた行を引いた応答には欄そのものが現れない（non_null 直列化）ので、 欄の有無が「この ID は統合済みか」の答えになる。 */
-  private static CustomerResponse withMergeMark(
-      CustomerResponse response, String requestedId, String targetId) {
-    if (requestedId.equals(targetId)) {
-      return response;
-    }
-    response.setMerged(true);
-    response.setMergedFromId(requestedId);
-    return response;
-  }
-
-  /** 会員紐づけの投影を載せる。memberLinked は関連状態の有無そのものなので、常に真偽値が入る。 */
-  private static CustomerResponse withMemberLink(CustomerResponse response, String memberCode) {
-    response.setMemberLinked(memberCode != null);
-    response.setLinkedMemberCode(memberCode);
-    return response;
   }
 }

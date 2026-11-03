@@ -1,5 +1,6 @@
 package com.kizuna.customer.api.dto;
 
+import com.kizuna.customer.domain.CustomerMergeView;
 import java.time.OffsetDateTime;
 
 /**
@@ -18,4 +19,21 @@ public record CustomerMergeHistoryResponse(
     int movedOrderCount,
     int movedLinkCount,
     int movedContactCount,
-    String operationReason) {}
+    String operationReason) {
+
+  /** 「相手」は問い合わせた顧客によって変わる。向きの判定を記録の側に持たせず、読み手ごとにここで解く。 */
+  public static CustomerMergeHistoryResponse of(String customerId, CustomerMergeView view) {
+    boolean surviving = customerId.equals(view.getSurvivingCustomerId());
+    return new CustomerMergeHistoryResponse(
+        view.getId(),
+        surviving ? MergeDirection.SURVIVING : MergeDirection.MERGED,
+        surviving ? view.getMergedCustomerId() : view.getSurvivingCustomerId(),
+        surviving ? view.getMergedCustomerName() : view.getSurvivingCustomerName(),
+        view.getMergedByName(),
+        view.getMergedAt(),
+        view.getMovedOrderCount(),
+        view.getMovedLinkCount(),
+        view.getMovedContactCount(),
+        view.getOperationReason());
+  }
+}

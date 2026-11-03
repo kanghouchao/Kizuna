@@ -1,5 +1,6 @@
 package com.kizuna.customer.api.dto;
 
+import com.kizuna.customer.application.CustomerCommands.PointAdjustment;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -30,4 +31,8 @@ public class CustomerPointAdjustmentRequest {
   @NotBlank(message = "冪等キーは必須です")
   @Size(max = 64, message = "冪等キーは64文字以内です")
   private String idempotencyKey;
+
+  public PointAdjustment command() {
+    return new PointAdjustment(delta, reason, expiresOn, idempotencyKey);
+  }
 }

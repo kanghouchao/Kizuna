@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -13,11 +14,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kizuna.customer.api.dto.CustomerMergeHistoryResponse;
-import com.kizuna.customer.api.dto.CustomerMergeRequest;
-import com.kizuna.customer.api.dto.MergeDirection;
+import com.kizuna.customer.application.CustomerCommands.MergeExecution;
 import com.kizuna.customer.application.CustomerMergeService;
 import com.kizuna.customer.domain.CustomerMerge;
+import com.kizuna.customer.domain.CustomerMergeView;
 import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
@@ -80,21 +80,9 @@ class CustomerMergeControllerTest {
   @WithMockUser(authorities = "PERM_CUSTOMER_MERGE")
   void historyExposesTheEvidenceInSnakeCase() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    var row = historyRow();
     when(customerMergeService.history(eq(STORE_ID), anyString(), any()))
-        .thenReturn(
-            new PageImpl<>(
-                List.of(
-                    new CustomerMergeHistoryResponse(
-                        "m1",
-                        MergeDirection.SURVIVING,
-                        "c2",
-                        "山田太郎",
-                        "田中花子",
-                        OffsetDateTime.parse("2026-08-10T10:00:00+09:00"),
-                        3,
-                        1,
-                        0,
-                        "重複を確認"))));
+        .thenReturn(new PageImpl<>(List.of(row)));
 
     mockMvc
         .perform(storeGet("/customers/c1/merges"))
@@ -144,8 +132,21 @@ class CustomerMergeControllerTest {
   void acceptsFiveHundredCharactersAfterStrippingReason() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     String reason = "理由".repeat(250);
+    when(customerMergeService.merge(any(), anyString(), any(), anyString()))
+        .thenReturn(
+            CustomerMerge.record(
+                STORE_ID,
+                "c1",
+                "c2",
+                1L,
+                OffsetDateTime.parse("2026-08-10T10:00:00+09:00"),
+                0,
+                0,
+                0,
+                reason,
+                null));
     mockMvc.perform(mergeRequest(" \t" + reason + "\n　")).andExpect(status().isOk());
-    var captured = ArgumentCaptor.forClass(CustomerMergeRequest.class);
+    var captured = ArgumentCaptor.forClass(MergeExecution.class);
     verify(customerMergeService).merge(eq(STORE_ID), anyString(), captured.capture(), anyString());
     assertThat(captured.getValue().operationReason()).isEqualTo(reason);
   }
@@ -204,5 +205,22 @@ class CustomerMergeControllerTest {
     return get(path)
         .header("X-Store-ID", STORE_ID.toString())
         .principal(() -> "tanaka.hanako@kizuna.test");
+  }
+
+  /** パスの c1 が存続行として受けた統合。相手は被統合行の c2。 */
+  private static CustomerMergeView historyRow() {
+    var view = mock(CustomerMergeView.class);
+    when(view.getId()).thenReturn("m1");
+    when(view.getSurvivingCustomerId()).thenReturn("c1");
+    when(view.getMergedCustomerId()).thenReturn("c2");
+    when(view.getSurvivingCustomerName()).thenReturn("佐藤一郎");
+    when(view.getMergedCustomerName()).thenReturn("山田太郎");
+    when(view.getMergedByName()).thenReturn("田中花子");
+    when(view.getMergedAt()).thenReturn(OffsetDateTime.parse("2026-08-10T10:00:00+09:00"));
+    when(view.getMovedOrderCount()).thenReturn(3);
+    when(view.getMovedLinkCount()).thenReturn(1);
+    when(view.getMovedContactCount()).thenReturn(0);
+    when(view.getOperationReason()).thenReturn("重複を確認");
+    return view;
   }
 }

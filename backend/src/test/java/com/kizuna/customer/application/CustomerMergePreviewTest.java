@@ -9,8 +9,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.customer.api.dto.CustomerMergePreviewRequest;
 import com.kizuna.customer.api.dto.CustomerMergeRequest;
+import com.kizuna.customer.application.CustomerCommands.MergeSelection;
 import com.kizuna.customer.domain.ContactPermissionStatus;
 import com.kizuna.customer.domain.ContactPurpose;
 import com.kizuna.customer.domain.ContactType;
@@ -92,15 +92,12 @@ class CustomerMergePreviewTest {
 
   @Test
   void requiresExplicitPreferenceWhenBothRowsHaveOne() {
-    var unresolved =
-        service.preview(STORE_ID, "a", new CustomerMergePreviewRequest("b", null, null));
+    var unresolved = service.preview(STORE_ID, "a", new MergeSelection("b", null, null));
     assertThat(unresolved.preferenceConflicts()).containsExactly(ContactType.EMAIL);
     assertThat(unresolved.previewToken()).isNull();
     var selected =
         service.preview(
-            STORE_ID,
-            "a",
-            new CustomerMergePreviewRequest("b", null, new MergePreferences(null, "two", null)));
+            STORE_ID, "a", new MergeSelection("b", null, new MergePreferences(null, "two", null)));
     assertThat(selected.preferenceConflicts()).isEmpty();
     assertThat(selected.preferredContacts().email()).isEqualTo("two");
     assertThat(selected.profile().name()).isEqualTo("a");
@@ -117,16 +114,14 @@ class CustomerMergePreviewTest {
                 service.preview(
                     STORE_ID,
                     "a",
-                    new CustomerMergePreviewRequest(
-                        "b", null, new MergePreferences(null, "two", null))))
+                    new MergeSelection("b", null, new MergePreferences(null, "two", null))))
         .isInstanceOf(ServiceException.class);
     assertThatThrownBy(
             () ->
                 service.preview(
                     STORE_ID,
                     "a",
-                    new CustomerMergePreviewRequest(
-                        "b", null, new MergePreferences("one", null, null))))
+                    new MergeSelection("b", null, new MergePreferences("one", null, null))))
         .isInstanceOf(ServiceException.class);
   }
 
@@ -162,7 +157,7 @@ class CustomerMergePreviewTest {
         service.preview(
             STORE_ID,
             "a",
-            new CustomerMergePreviewRequest("b", profile, new MergePreferences(null, "one", null)));
+            new MergeSelection("b", profile, new MergePreferences(null, "one", null)));
     assertThat(result.profile()).isEqualTo(profile);
     assertThat(result.surviving().profile().name()).isEqualTo("a");
     assertThat(result.finalMemberCode()).isEqualTo("MEMBER");
@@ -181,8 +176,7 @@ class CustomerMergePreviewTest {
   @Test
   void rejectsAlteredConfirmationBeforeAnyWrites() {
     var preferences = new MergePreferences(null, "one", null);
-    var preview =
-        service.preview(STORE_ID, "a", new CustomerMergePreviewRequest("b", null, preferences));
+    var preview = service.preview(STORE_ID, "a", new MergeSelection("b", null, preferences));
     var actor = mock(User.class);
     when(actor.getId()).thenReturn(3L);
     when(users.findByEmail("actor")).thenReturn(Optional.of(actor));
@@ -193,7 +187,8 @@ class CustomerMergePreviewTest {
                     STORE_ID,
                     "a",
                     new CustomerMergeRequest(
-                        "b", preview.previewToken(), null, preferences, true, "照合"),
+                            "b", preview.previewToken(), null, preferences, true, "照合")
+                        .command(),
                     "actor"))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("関連情報が変更");

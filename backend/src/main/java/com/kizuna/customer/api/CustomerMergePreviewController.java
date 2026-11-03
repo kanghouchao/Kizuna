@@ -23,6 +23,6 @@ public class CustomerMergePreviewController {
       @CurrentStore Long storeId,
       @PathVariable String customerId,
       @Valid @RequestBody CustomerMergePreviewRequest request) {
-    return service.preview(storeId, customerId, request);
+    return CustomerMergePreviewResponse.of(service.preview(storeId, customerId, request.command()));
   }
 }

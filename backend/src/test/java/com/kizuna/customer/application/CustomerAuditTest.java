@@ -12,7 +12,6 @@ import com.kizuna.audit.domain.AuditEvent;
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.customer.api.dto.CustomerCreateRequest;
-import com.kizuna.customer.api.dto.CustomerMapperImpl;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerCandidateRepository;
@@ -100,7 +99,6 @@ class CustomerAuditTest {
             contacts,
             mock(CustomerMemberLinkRepository.class),
             merges,
-            new CustomerMapperImpl(),
             sink);
   }
 
@@ -114,11 +112,11 @@ class CustomerAuditTest {
     var request = new CustomerCreateRequest();
     request.setName("秘密の氏名");
     request.setAddress("秘密の住所");
-    var created = service.create(STORE_ID, request);
+    var created = service.create(STORE_ID, request.command());
     assertThat(audit).hasSize(1);
     var event = audit.getFirst();
     assertThat(event.getAction()).isEqualTo("CUSTOMER_CREATED");
-    assertThat(event.getTargetId()).isEqualTo(created.getId());
+    assertThat(event.getTargetId()).isEqualTo(created.customer().getId());
     assertThat(event.getTargetType()).isEqualTo("CUSTOMER");
     assertThat(event.getActorId()).isEqualTo(9L);
     assertThat(event.getOriginatingStoreId()).isEqualTo(STORE_ID);
@@ -135,7 +133,7 @@ class CustomerAuditTest {
   void editingPrivateAttributesRecordsOnlyChangedNamesAndIgnoresNoOps() {
     var request = new CustomerCreateRequest();
     request.setName("元の秘密名");
-    service.create(STORE_ID, request);
+    service.create(STORE_ID, request.command());
     audit.clear();
     var patch = new CustomerUpdateRequest();
     patch.setName("新しい秘密名");
@@ -147,9 +145,9 @@ class CustomerAuditTest {
     patch.setUsageAreas("秘密地域");
     patch.setNgType("秘密区分");
     patch.setNgContent("秘密内容");
-    service.update(STORE_ID, "customer", patch);
-    service.update(STORE_ID, "customer", patch);
-    service.update(STORE_ID, "customer", new CustomerUpdateRequest());
+    service.update(STORE_ID, "customer", patch.patch());
+    service.update(STORE_ID, "customer", patch.patch());
+    service.update(STORE_ID, "customer", new CustomerUpdateRequest().patch());
     assertThat(audit).hasSize(1);
     var event = audit.getFirst();
     assertThat(event.getAction()).isEqualTo("CUSTOMER_UPDATED");
@@ -166,7 +164,7 @@ class CustomerAuditTest {
   void physicalDeletionKeepsTheLastSafeSnapshot() {
     var request = new CustomerCreateRequest();
     request.setName("削除する秘密名");
-    service.create(STORE_ID, request);
+    service.create(STORE_ID, request.command());
     audit.clear();
     service.delete(STORE_ID, "customer");
     assertThat(audit).hasSize(1);
@@ -181,14 +179,16 @@ class CustomerAuditTest {
   void missingMergedAndProtectedCustomersNeverProduceSuccessEvents() {
     assertThatThrownBy(() -> service.delete(STORE_ID, "missing"))
         .isInstanceOf(RuntimeException.class);
-    assertThatThrownBy(() -> service.update(STORE_ID, "missing", new CustomerUpdateRequest()))
+    assertThatThrownBy(
+            () -> service.update(STORE_ID, "missing", new CustomerUpdateRequest().patch()))
         .isInstanceOf(RuntimeException.class);
     var request = new CustomerCreateRequest();
     request.setName("拒否対象");
-    service.create(STORE_ID, request);
+    service.create(STORE_ID, request.command());
     audit.clear();
     when(customers.isMerged(STORE_ID, "customer")).thenReturn(true);
-    assertThatThrownBy(() -> service.update(STORE_ID, "customer", new CustomerUpdateRequest()))
+    assertThatThrownBy(
+            () -> service.update(STORE_ID, "customer", new CustomerUpdateRequest().patch()))
         .isInstanceOf(RuntimeException.class);
     assertThatThrownBy(() -> service.delete(STORE_ID, "customer"))
         .isInstanceOf(RuntimeException.class);

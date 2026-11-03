@@ -1,5 +1,7 @@
 package com.kizuna.customer.api.dto;
 
+import com.kizuna.customer.application.CustomerCommands.MergeExecution;
+import com.kizuna.customer.application.CustomerCommands.MergeSelection;
 import com.kizuna.customer.domain.MergePreferences;
 import com.kizuna.customer.domain.MergeProfile;
 import jakarta.validation.Valid;
@@ -19,7 +21,10 @@ public record CustomerMergeRequest(
     operationReason = operationReason == null ? null : operationReason.strip();
   }
 
-  public CustomerMergePreviewRequest preview() {
-    return new CustomerMergePreviewRequest(mergedCustomerId, profile, preferredContacts);
+  public MergeExecution command() {
+    return new MergeExecution(
+        new MergeSelection(mergedCustomerId, profile, preferredContacts),
+        previewToken,
+        operationReason);
   }
 }

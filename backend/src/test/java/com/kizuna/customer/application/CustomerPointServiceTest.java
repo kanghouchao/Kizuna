@@ -7,8 +7,8 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 
-import com.kizuna.customer.api.dto.CustomerPointAdjustmentRequest;
-import com.kizuna.customer.api.dto.CustomerPointBalanceResponse;
+import com.kizuna.customer.application.CustomerCommands.PointAdjustment;
+import com.kizuna.customer.application.CustomerViews.PointBalance;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
@@ -62,10 +62,10 @@ class CustomerPointServiceTest {
                 STORE_ID, CUSTOMER_ID, LinkStatus.ACTIVE))
         .thenReturn(Optional.empty());
 
-    CustomerPointBalanceResponse response = service.balance(STORE_ID, CUSTOMER_ID);
+    PointBalance response = service.balance(STORE_ID, CUSTOMER_ID);
 
-    assertThat(response.isLinked()).isFalse();
-    assertThat(response.getBalance()).isNull();
+    assertThat(response.linked()).isFalse();
+    assertThat(response.balance()).isNull();
     // 非会員には台帳そのものが無いため、台帳へは問い合わせない
     Mockito.verify(pointLedgerService, Mockito.never()).balance(anyLong());
   }
@@ -80,10 +80,10 @@ class CustomerPointServiceTest {
     Mockito.when(detached.getMemberId()).thenReturn(null);
     givenActiveLink(detached);
 
-    CustomerPointBalanceResponse response = service.balance(STORE_ID, CUSTOMER_ID);
+    PointBalance response = service.balance(STORE_ID, CUSTOMER_ID);
 
-    assertThat(response.isLinked()).isFalse();
-    assertThat(response.getBalance()).isNull();
+    assertThat(response.linked()).isFalse();
+    assertThat(response.balance()).isNull();
     Mockito.verify(pointLedgerService, Mockito.never()).balance(anyLong());
   }
 
@@ -94,10 +94,10 @@ class CustomerPointServiceTest {
     givenActiveLink(MEMBER_ID);
     Mockito.when(pointLedgerService.balance(MEMBER_ID)).thenReturn(1500L);
 
-    CustomerPointBalanceResponse response = service.balance(STORE_ID, CUSTOMER_ID);
+    PointBalance response = service.balance(STORE_ID, CUSTOMER_ID);
 
-    assertThat(response.isLinked()).isTrue();
-    assertThat(response.getBalance()).isEqualTo(1500);
+    assertThat(response.linked()).isTrue();
+    assertThat(response.balance()).isEqualTo(1500);
   }
 
   @Test
@@ -137,13 +137,13 @@ class CustomerPointServiceTest {
     Mockito.when(pointLedgerService.balance(MEMBER_ID)).thenReturn(300L);
     LocalDate expiresOn = LocalDate.of(2099, 12, 31);
 
-    CustomerPointBalanceResponse response =
+    PointBalance response =
         service.adjust(STORE_ID, CUSTOMER_ID, request(300, "来店記念の付与", expiresOn), ACTOR_EMAIL);
 
     Mockito.verify(pointLedgerService)
         .adjust(MEMBER_ID, STORE_ID, 300, "来店記念の付与", expiresOn, ACTOR_ID, IDEMPOTENCY_KEY);
-    assertThat(response.isLinked()).isTrue();
-    assertThat(response.getBalance()).isEqualTo(300);
+    assertThat(response.linked()).isTrue();
+    assertThat(response.balance()).isEqualTo(300);
   }
 
   @Test
@@ -204,15 +204,15 @@ class CustomerPointServiceTest {
     Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor()));
     Mockito.when(pointLedgerService.balance(MEMBER_ID)).thenReturn(800L);
 
-    CustomerPointBalanceResponse response =
+    PointBalance response =
         service.replayAdjust(STORE_ID, CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_EMAIL);
 
     Mockito.verify(pointLedgerService)
         .adjust(MEMBER_ID, STORE_ID, 300, "来店記念の付与", null, ACTOR_ID, IDEMPOTENCY_KEY);
     Mockito.verify(customerRepository, Mockito.never())
         .findByIdAndStoreIdForUpdate(anyString(), any());
-    assertThat(response.isLinked()).isTrue();
-    assertThat(response.getBalance()).isEqualTo(800);
+    assertThat(response.linked()).isTrue();
+    assertThat(response.balance()).isEqualTo(800);
   }
 
   @Test
@@ -297,13 +297,7 @@ class CustomerPointServiceTest {
     return user;
   }
 
-  private static CustomerPointAdjustmentRequest request(
-      int delta, String reason, LocalDate expiresOn) {
-    CustomerPointAdjustmentRequest request = new CustomerPointAdjustmentRequest();
-    request.setDelta(delta);
-    request.setReason(reason);
-    request.setExpiresOn(expiresOn);
-    request.setIdempotencyKey(IDEMPOTENCY_KEY);
-    return request;
+  private static PointAdjustment request(int delta, String reason, LocalDate expiresOn) {
+    return new PointAdjustment(delta, reason, expiresOn, IDEMPOTENCY_KEY);
   }
 }

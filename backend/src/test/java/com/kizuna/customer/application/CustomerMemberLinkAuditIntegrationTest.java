@@ -125,11 +125,11 @@ class CustomerMemberLinkAuditIntegrationTest {
     String customer = customer();
     String code = memberCode();
     String first =
-        links.link(STORE_ID, customer, code, null, "秘密の建立理由", "operator@example.test").id();
+        links.link(STORE_ID, customer, code, null, "秘密の建立理由", "operator@example.test").getId();
     String second =
         links
             .link(STORE_ID, customer, memberCode(), first, "秘密の変更理由", "operator@example.test")
-            .id();
+            .getId();
     links.unlink(STORE_ID, customer, second, "秘密の解除理由", "operator@example.test");
     var events =
         jdbc.queryForList(
@@ -193,7 +193,7 @@ class CustomerMemberLinkAuditIntegrationTest {
     for (String action : List.of("CUSTOMER_MEMBER_LINK_RELEASED", "CUSTOMER_MEMBER_LINK_CREATED")) {
       String customer = customer();
       String first =
-          links.link(STORE_ID, customer, memberCode(), null, "秘密", "operator@example.test").id();
+          links.link(STORE_ID, customer, memberCode(), null, "秘密", "operator@example.test").getId();
       reject(action);
       try {
         assertThatThrownBy(
@@ -212,7 +212,7 @@ class CustomerMemberLinkAuditIntegrationTest {
   void auditFailureRollsBackExplicitRelease() {
     String customer = customer();
     String first =
-        links.link(STORE_ID, customer, memberCode(), null, "秘密", "operator@example.test").id();
+        links.link(STORE_ID, customer, memberCode(), null, "秘密", "operator@example.test").getId();
     reject("CUSTOMER_MEMBER_LINK_RELEASED");
     try {
       assertThatThrownBy(
@@ -228,7 +228,7 @@ class CustomerMemberLinkAuditIntegrationTest {
   void outerRollbackRestoresLinkAndBothReplacementEvents() {
     String customer = customer();
     String first =
-        links.link(STORE_ID, customer, memberCode(), null, "秘密", "operator@example.test").id();
+        links.link(STORE_ID, customer, memberCode(), null, "秘密", "operator@example.test").getId();
     assertThatThrownBy(
             () ->
                 transactions.executeWithoutResult(
@@ -250,7 +250,7 @@ class CustomerMemberLinkAuditIntegrationTest {
   void actorAndStoreComeFromContextForBothReplacementEvents() {
     String customer = customer();
     String first =
-        links.link(STORE_ID, customer, memberCode(), null, "秘密", "operator@example.test").id();
+        links.link(STORE_ID, customer, memberCode(), null, "秘密", "operator@example.test").getId();
     var jwt =
         Jwt.withTokenValue(UUID.randomUUID().toString())
             .header("alg", "HS256")
@@ -273,7 +273,7 @@ class CustomerMemberLinkAuditIntegrationTest {
   void concurrentReplacementOfOneCustomerRejectsStaleExpectedLink() throws Exception {
     String customer = customer();
     String first =
-        links.link(STORE_ID, customer, memberCode(), null, "秘密", "operator@example.test").id();
+        links.link(STORE_ID, customer, memberCode(), null, "秘密", "operator@example.test").getId();
     var start = new CountDownLatch(1);
     try (var workers = Executors.newFixedThreadPool(2)) {
       var one = workers.submit(() -> replaceAfter(start, customer, memberCode(), first));
@@ -286,16 +286,20 @@ class CustomerMemberLinkAuditIntegrationTest {
     }
     assertThat(links.history(STORE_ID, customer, HISTORY_PAGE).getContent()).hasSize(2);
     assertThat(auditCount(customer)).isEqualTo(3);
-    assertThat(links.current(STORE_ID, customer).id()).isNotEqualTo(first);
+    assertThat(links.current(STORE_ID, customer).getId()).isNotEqualTo(first);
   }
 
   @Test
   void uniqueMemberRaceRollsBackLosersReleaseAndAudit() throws Exception {
     String customerOne = customer(), customerTwo = customer();
     String oldOne =
-        links.link(STORE_ID, customerOne, memberCode(), null, "秘密", "operator@example.test").id();
+        links
+            .link(STORE_ID, customerOne, memberCode(), null, "秘密", "operator@example.test")
+            .getId();
     String oldTwo =
-        links.link(STORE_ID, customerTwo, memberCode(), null, "秘密", "operator@example.test").id();
+        links
+            .link(STORE_ID, customerTwo, memberCode(), null, "秘密", "operator@example.test")
+            .getId();
     String targetCode = memberCode();
     long targetMember = Long.parseLong(targetCode.substring("private-code-".length()));
     jdbc.execute(
@@ -343,7 +347,7 @@ class CustomerMemberLinkAuditIntegrationTest {
       String winner = firstResult == null ? customerOne : customerTwo;
       assertThat(links.history(STORE_ID, winner, HISTORY_PAGE).getContent()).hasSize(2);
       assertThat(auditCount(winner)).isEqualTo(3);
-      assertThat(links.current(STORE_ID, winner).memberCode()).isEqualTo(targetCode);
+      assertThat(links.current(STORE_ID, winner).getMemberCode()).isEqualTo(targetCode);
     } finally {
       jdbc.execute("drop trigger link_test_gate on t_customer_member_links");
       jdbc.execute("drop function link_test_gate()");
@@ -365,7 +369,7 @@ class CustomerMemberLinkAuditIntegrationTest {
   }
 
   private void assertActiveUnchanged(String customer, String first) {
-    assertThat(links.current(STORE_ID, customer).id()).isEqualTo(first);
+    assertThat(links.current(STORE_ID, customer).getId()).isEqualTo(first);
     assertThat(links.history(STORE_ID, customer, HISTORY_PAGE).getContent()).hasSize(1);
     assertThat(
             jdbc.queryForMap(

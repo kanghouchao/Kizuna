@@ -38,7 +38,8 @@ public class CustomerMergeController {
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE')")
   public CustomerMergeAuditResponse audit(
       @CurrentStore Long storeId, @PathVariable String customerId, @PathVariable String mergeId) {
-    return customerMergeService.audit(storeId, customerId, mergeId);
+    return CustomerMergeAuditResponse.from(
+        customerMergeService.audit(storeId, customerId, mergeId));
   }
 
   /** 統合を実行する。パスが名指すのが存続行で、本文が被統合行を指す。 */
@@ -50,7 +51,9 @@ public class CustomerMergeController {
       @Valid @RequestBody CustomerMergeRequest request,
       Principal principal) {
     return ResponseEntity.ok(
-        customerMergeService.merge(storeId, customerId, request, principal.getName()));
+        CustomerMergeResponse.of(
+            customerMergeService.merge(
+                storeId, customerId, request.command(), principal.getName())));
   }
 
   /**
@@ -71,6 +74,9 @@ public class CustomerMergeController {
               sort = {"mergedAt", "id"},
               direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return ResponseEntity.ok(customerMergeService.history(storeId, customerId, pageable));
+    return ResponseEntity.ok(
+        customerMergeService
+            .history(storeId, customerId, pageable)
+            .map(view -> CustomerMergeHistoryResponse.of(customerId, view)));
   }
 }

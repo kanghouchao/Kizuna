@@ -1,5 +1,6 @@
 package com.kizuna.customer.api.dto;
 
+import com.kizuna.customer.application.CustomerViews.PointBalance;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -21,4 +22,8 @@ public class CustomerPointBalanceResponse {
 
   /** 紐づく会員の現在残高。未紐づけでは null。台帳の合計は 1 件の仕訳と違い int を超えうる。 */
   private Long balance;
+
+  public static CustomerPointBalanceResponse of(PointBalance b) {
+    return new CustomerPointBalanceResponse(b.linked(), b.balance());
+  }
 }

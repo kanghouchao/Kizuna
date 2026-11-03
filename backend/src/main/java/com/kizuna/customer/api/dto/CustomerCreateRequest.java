@@ -2,6 +2,7 @@ package com.kizuna.customer.api.dto;
 
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.annotation.Nulls;
+import com.kizuna.customer.application.CustomerCommands.NewCustomer;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -29,4 +30,18 @@ public class CustomerCreateRequest {
   private String usageAreas;
   private String ngType;
   private String ngContent;
+
+  public NewCustomer command() {
+    return new NewCustomer(
+        name,
+        contacts.stream().map(ContactRequest::command).toList(),
+        address,
+        buildingName,
+        landmark,
+        classification,
+        hasPet,
+        usageAreas,
+        ngType,
+        ngContent);
+  }
 }

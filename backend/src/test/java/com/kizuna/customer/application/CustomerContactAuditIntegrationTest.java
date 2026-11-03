@@ -11,10 +11,10 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
-import com.kizuna.customer.api.dto.ContactPermissionRequest;
 import com.kizuna.customer.api.dto.ContactRequest;
 import com.kizuna.customer.api.dto.CustomerCreateRequest;
-import com.kizuna.customer.api.dto.CustomerMapperImpl;
+import com.kizuna.customer.application.CustomerCommands.ContactValue;
+import com.kizuna.customer.application.CustomerCommands.PermissionChange;
 import com.kizuna.customer.domain.ContactPermissionStatus;
 import com.kizuna.customer.domain.ContactPurpose;
 import com.kizuna.customer.domain.ContactType;
@@ -116,7 +116,7 @@ class CustomerContactAuditIntegrationTest {
   @Test
   void initialContactAndHistoryAndAuditCommitWithTheirParentCustomer() {
     var request = request();
-    var customer = customers.create(STORE_ID, request);
+    var customer = customers.create(STORE_ID, request.command()).customer();
     String contactId =
         jdbc.queryForObject(
             "select id from t_customer_contacts where customer_id = ?",
@@ -154,7 +154,7 @@ class CustomerContactAuditIntegrationTest {
     long auditsBefore = count("t_audit_events");
     reject("action <> 'CUSTOMER_CONTACT_CREATED'");
     try {
-      assertThatThrownBy(() -> customers.create(STORE_ID, request))
+      assertThatThrownBy(() -> customers.create(STORE_ID, request.command()).customer())
           .isInstanceOf(RuntimeException.class);
       assertThat(
               jdbc.queryForObject(
@@ -178,7 +178,7 @@ class CustomerContactAuditIntegrationTest {
             () ->
                 transactions.executeWithoutResult(
                     transaction -> {
-                      customers.create(STORE_ID, request);
+                      customers.create(STORE_ID, request.command()).customer();
                       assertThat(count("t_audit_events")).isEqualTo(auditsBefore + 2);
                       throw new IllegalStateException("親取引の後続失敗");
                     }))
@@ -194,13 +194,13 @@ class CustomerContactAuditIntegrationTest {
 
   @Test
   void preferenceSwitchKeepsTheUniqueIndexAndRecordsBothCommittedVersions() {
-    var customer = customers.create(STORE_ID, request());
+    var customer = customers.create(STORE_ID, request().command()).customer();
     String first = firstContact(customer.getId());
     String second =
         service
-            .create(
-                STORE_ID, customer.getId(), new ContactRequest(ContactType.LINE, "other-private"))
-            .id();
+            .create(STORE_ID, customer.getId(), new ContactValue(ContactType.LINE, "other-private"))
+            .contact()
+            .getId();
     service.prefer(STORE_ID, customer.getId(), ContactType.LINE, first);
     service.prefer(STORE_ID, customer.getId(), ContactType.LINE, second);
     assertThat(
@@ -232,13 +232,13 @@ class CustomerContactAuditIntegrationTest {
 
   @Test
   void secondPreferenceAuditFailureRollsBackBothSidesAndTheFirstAudit() {
-    var customer = customers.create(STORE_ID, request());
+    var customer = customers.create(STORE_ID, request().command()).customer();
     String first = firstContact(customer.getId());
     String second =
         service
-            .create(
-                STORE_ID, customer.getId(), new ContactRequest(ContactType.LINE, "other-private"))
-            .id();
+            .create(STORE_ID, customer.getId(), new ContactValue(ContactType.LINE, "other-private"))
+            .contact()
+            .getId();
     service.prefer(STORE_ID, customer.getId(), ContactType.LINE, first);
     long auditsBefore = count("t_audit_events");
     long historiesBefore = count("t_customer_contact_history");
@@ -270,17 +270,19 @@ class CustomerContactAuditIntegrationTest {
   @Test
   void deletionAuditFailureAlsoRollsBackInheritedRestrictionsAndTheirAudits() {
     var request = request();
-    var customer = customers.create(STORE_ID, request);
+    var customer = customers.create(STORE_ID, request.command()).customer();
     String source = firstContact(customer.getId());
     String duplicate =
-        service.create(STORE_ID, customer.getId(), request.getContacts().getFirst()).id();
+        service
+            .create(STORE_ID, customer.getId(), request.getContacts().getFirst().command())
+            .contact()
+            .getId();
     service.changePermission(
         STORE_ID,
         customer.getId(),
         source,
         ContactPurpose.BUSINESS,
-        new ContactPermissionRequest(
-            ContactPermissionStatus.DENIED, "private-source", "private-reason"));
+        new PermissionChange(ContactPermissionStatus.DENIED, "private-source", "private-reason"));
     long auditsBefore = count("t_audit_events");
     long historiesBefore = count("t_customer_contact_history");
     reject("action <> 'CUSTOMER_CONTACT_DELETED'");
@@ -311,22 +313,24 @@ class CustomerContactAuditIntegrationTest {
   @Test
   void valueChangeWithInheritanceRecordsVersionsBeforeAndAfterQueryAutoFlush() {
     var request = request();
-    var customer = customers.create(STORE_ID, request);
+    var customer = customers.create(STORE_ID, request.command()).customer();
     String source = firstContact(customer.getId());
     String duplicate =
-        service.create(STORE_ID, customer.getId(), request.getContacts().getFirst()).id();
+        service
+            .create(STORE_ID, customer.getId(), request.getContacts().getFirst().command())
+            .contact()
+            .getId();
     service.changePermission(
         STORE_ID,
         customer.getId(),
         source,
         ContactPurpose.BUSINESS,
-        new ContactPermissionRequest(
-            ContactPermissionStatus.DENIED, "private-source", "private-reason"));
+        new PermissionChange(ContactPermissionStatus.DENIED, "private-source", "private-reason"));
     service.update(
         STORE_ID,
         customer.getId(),
         source,
-        new ContactRequest(ContactType.EMAIL, "private@example.test"));
+        new ContactValue(ContactType.EMAIL, "private@example.test"));
     var sourceAudit =
         jdbc.queryForMap(
             "select before_values ->> 'version' as old_version, after_values ->> 'version' as new_version, after_values ->> 'business_status' as status from t_audit_events where target_id = ? and action = 'CUSTOMER_CONTACT_UPDATED'",
@@ -380,7 +384,7 @@ class CustomerContactAuditIntegrationTest {
                       List.of(
                           new ContactRequest(ContactType.LINE, key + "-1"),
                           new ContactRequest(ContactType.LINE, key + "-2")));
-                  return customers.create(STORE_ID, request).getId();
+                  return customers.create(STORE_ID, request.command()).customer().getId();
                 })
             .toList();
 
@@ -556,7 +560,6 @@ class CustomerContactAuditIntegrationTest {
           contactRepository,
           mock(CustomerMemberLinkRepository.class),
           mock(CustomerMergeRepository.class),
-          new CustomerMapperImpl(),
           audit);
     }
   }
