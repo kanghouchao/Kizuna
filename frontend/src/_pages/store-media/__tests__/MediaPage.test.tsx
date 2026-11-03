@@ -171,7 +171,7 @@ test('改名の 404 は一覧を取り直し、ダイアログを削除済みの
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 });
 
-test('改名後の取り直しが失敗しても、削除済みとは表示せず入力を残す', async () => {
+test('改名後の取り直しが失敗したら、入力を残したままダイアログ内で一覧を再試行させる', async () => {
   api.rename.mockRejectedValue(conflict('同じ名前の媒体が既に登録されています'));
   render(<MediaPage />);
   const dialog = await openRename();
@@ -179,7 +179,21 @@ test('改名後の取り直しが失敗しても、削除済みとは表示せ�
   api.list.mockRejectedValue(new Error('network'));
   fireEvent.click(within(dialog).getByRole('button', { name: '保存する' }));
   await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2));
-  expect(await screen.findByText('媒体一覧の取得に失敗しました')).toBeVisible();
+  expect(
+    await within(screen.getByRole('dialog')).findByText('媒体一覧の取得に失敗しました')
+  ).toBeVisible();
   expect(screen.queryByText('この媒体は削除されています。')).not.toBeInTheDocument();
-  expect(within(screen.getByRole('dialog')).getByLabelText('媒体名')).toHaveValue('重複名');
+  const dialog2 = screen.getByRole('dialog');
+  expect(within(dialog2).getByLabelText('媒体名')).toHaveValue('重複名');
+  expect(within(dialog2).getByRole('button', { name: '保存する' })).toBeDisabled();
+
+  api.list.mockResolvedValue([{ ...medium, version: 6 }]);
+  fireEvent.click(within(dialog2).getByRole('button', { name: '再試行' }));
+  await waitFor(() =>
+    expect(within(dialog2).getByRole('button', { name: '保存する' })).toBeEnabled()
+  );
+  expect(within(dialog2).getByLabelText('媒体名')).toHaveValue('重複名');
+  api.rename.mockResolvedValue({ ...medium, name: '重複名', version: 7 });
+  fireEvent.click(within(dialog2).getByRole('button', { name: '保存する' }));
+  await waitFor(() => expect(api.rename).toHaveBeenLastCalledWith('m1', '重複名', 6));
 });

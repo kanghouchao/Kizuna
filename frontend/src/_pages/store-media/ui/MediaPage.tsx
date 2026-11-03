@@ -204,7 +204,11 @@ function MediaList({ manage }: { manage: boolean }) {
         open={modalOpen}
         medium={renaming}
         gone={renaming !== null && !isLoading && failure === null && !renamingNow}
+        listFailed={renaming !== null && failure !== null}
+        onRetryList={() => void reload()}
         busy={writer.busy}
+        // 版は一覧の行から引くので、行が取れるまで（取得中・失敗）は送らせない
+        versionPending={renaming !== null && !renamingNow}
         onClose={() => setModalOpen(false)}
         onSubmit={submitName}
       />

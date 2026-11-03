@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { notify } from '@/shared/notify';
 import { useVersionedWrite } from './useVersionedWrite';
 
 interface DeleteActionOptions<T> {
@@ -37,6 +38,9 @@ export function useDeleteAction<T>({
       onSuccess: () => void reload(),
     });
     if (outcome === 'conflict') await writer.reload();
+    // 確認ダイアログは押した時点で閉じるので、前の操作の応答待ちで送らなかったことを黙って捨てない
+    else if (outcome === 'refused')
+      notify.error('前の操作が終わってから、もう一度実行してください');
   };
 
   return {
