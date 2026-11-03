@@ -1,9 +1,7 @@
 package com.kizuna.notificationdelivery.application;
 
 import com.kizuna.notification.transport.EmailTransport;
-import com.kizuna.notificationdelivery.api.dto.DeliveryAttemptResponse;
-import com.kizuna.notificationdelivery.api.dto.DeliveryResponse;
-import com.kizuna.notificationdelivery.api.dto.DeliverySummary;
+import com.kizuna.notificationdelivery.domain.DeliveryAttempt;
 import com.kizuna.notificationdelivery.domain.DeliveryAttemptRepository;
 import com.kizuna.notificationdelivery.domain.DeliveryContent;
 import com.kizuna.notificationdelivery.domain.NotificationDelivery;
@@ -29,7 +27,7 @@ public class NotificationService {
   private final EmailTransport transport;
   private final Clock clock;
 
-  public record Created(DeliveryResponse delivery, boolean created) {}
+  public record Created(DeliveryView delivery, boolean created) {}
 
   @Transactional
   public Created create(Long storeId, String email, DeliveryContent content) {
@@ -58,19 +56,19 @@ public class NotificationService {
   }
 
   @Transactional(readOnly = true)
-  public Page<DeliverySummary> list(Long storeId, String email, Pageable pageable) {
+  public Page<NotificationDelivery> list(Long storeId, String email, Pageable pageable) {
     actors.require(storeId, email, PermissionCode.NOTIFICATION_VIEW);
-    return deliveries.findByStoreId(storeId, pageable).map(DeliverySummary::of);
+    return deliveries.findByStoreId(storeId, pageable);
   }
 
   @Transactional(readOnly = true)
-  public DeliveryResponse get(Long storeId, String email, String id) {
+  public DeliveryView get(Long storeId, String email, String id) {
     actors.require(storeId, email, PermissionCode.NOTIFICATION_VIEW);
     return response(storeId, require(storeId, id));
   }
 
   @Transactional
-  public DeliveryResponse queue(
+  public DeliveryView queue(
       Long storeId, String email, String id, Long version, String reason, boolean retry) {
     var actor = actors.require(storeId, email, PermissionCode.NOTIFICATION_SEND);
     var row =
@@ -85,13 +83,10 @@ public class NotificationService {
   }
 
   @Transactional(readOnly = true)
-  public Page<DeliveryAttemptResponse> history(
-      Long storeId, String email, String id, Pageable pageable) {
+  public Page<DeliveryAttempt> history(Long storeId, String email, String id, Pageable pageable) {
     actors.require(storeId, email, PermissionCode.NOTIFICATION_VIEW);
     require(storeId, id);
-    return attempts
-        .findByStoreIdAndDeliveryId(storeId, id, pageable)
-        .map(DeliveryAttemptResponse::of);
+    return attempts.findByStoreIdAndDeliveryId(storeId, id, pageable);
   }
 
   private NotificationDelivery require(Long storeId, String id) {
@@ -100,8 +95,8 @@ public class NotificationService {
         .orElseThrow(() -> new NotFoundException("通知が見つかりません"));
   }
 
-  private DeliveryResponse response(Long storeId, NotificationDelivery row) {
-    return DeliveryResponse.of(
-        row, contacts.decide(storeId, row.content()).decision().name(), transport.available());
+  private DeliveryView response(Long storeId, NotificationDelivery row) {
+    return new DeliveryView(
+        row, contacts.decide(storeId, row.content()).decision(), transport.available());
   }
 }

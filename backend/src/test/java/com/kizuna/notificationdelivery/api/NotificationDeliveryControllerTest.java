@@ -11,13 +11,17 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kizuna.notificationdelivery.application.DeliveryView;
 import com.kizuna.notificationdelivery.application.NotificationService;
 import com.kizuna.notificationdelivery.domain.DeliveryAttempt;
+import com.kizuna.notificationdelivery.domain.DeliveryContent;
 import com.kizuna.notificationdelivery.domain.NotificationDelivery;
+import com.kizuna.order.contact.BusinessContactDecision;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.sql.SQLException;
+import java.time.OffsetDateTime;
 import java.util.List;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.DisplayName;
@@ -70,6 +74,7 @@ class NotificationDeliveryControllerTest {
   @WithMockUser(authorities = "PERM_NOTIFICATION_VIEW")
   void detailPassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(notifications.get(STORE_ID, "user", "101")).thenReturn(view());
 
     mockMvc
         .perform(
@@ -86,6 +91,7 @@ class NotificationDeliveryControllerTest {
   @WithMockUser(authorities = {"PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_SEND"})
   void queuePassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(notifications.queue(STORE_ID, "user", "101", 0L, "確認済み", false)).thenReturn(view());
 
     mockMvc
         .perform(
@@ -113,7 +119,7 @@ class NotificationDeliveryControllerTest {
                     new SQLException("duplicate key value", "23505"),
                     "uq_t_notification_deliveries_key")));
     when(notifications.replay(eq(STORE_ID), eq("user"), any()))
-        .thenReturn(new NotificationService.Created(null, false));
+        .thenReturn(new NotificationService.Created(view(), false));
 
     mockMvc
         .perform(
@@ -173,5 +179,22 @@ class NotificationDeliveryControllerTest {
 
     assertThat(pageable.getValue().getSort())
         .isEqualTo(Sort.by(Sort.Direction.DESC, DeliveryAttempt::getId));
+  }
+
+  private static DeliveryView view() {
+    var row =
+        NotificationDelivery.draft(
+            STORE_ID,
+            new DeliveryContent(
+                DeliveryContent.SourceType.ORDER,
+                "1",
+                "EMAIL",
+                "BUSINESS",
+                "件名",
+                "本文",
+                OffsetDateTime.parse("2026-10-07T09:00:00+09:00"),
+                "race"));
+    row.setId("101");
+    return new DeliveryView(row, BusinessContactDecision.ALLOWED, true);
   }
 }

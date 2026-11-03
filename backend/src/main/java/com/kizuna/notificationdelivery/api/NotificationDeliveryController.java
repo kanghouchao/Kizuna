@@ -44,7 +44,8 @@ public class NotificationDeliveryController {
             DbConstraint.UQ_T_NOTIFICATION_DELIVERIES_KEY,
             () -> notifications.create(storeId, auth.getName(), content),
             () -> notifications.replay(storeId, auth.getName(), content));
-    return ResponseEntity.status(created.created() ? 201 : 200).body(created.delivery());
+    return ResponseEntity.status(created.created() ? 201 : 200)
+        .body(DeliveryResponse.of(created.delivery()));
   }
 
   @GetMapping
@@ -53,14 +54,14 @@ public class NotificationDeliveryController {
       @CurrentStore Long storeId,
       Authentication auth,
       @PageableDefault(size = 50, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
-    return notifications.list(storeId, auth.getName(), pageable);
+    return notifications.list(storeId, auth.getName(), pageable).map(DeliverySummary::of);
   }
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_NOTIFICATION_VIEW')")
   public DeliveryResponse get(
       @CurrentStore Long storeId, Authentication auth, @PathVariable String id) {
-    return notifications.get(storeId, auth.getName(), id);
+    return DeliveryResponse.of(notifications.get(storeId, auth.getName(), id));
   }
 
   @PostMapping("/{id}/queue")
@@ -70,8 +71,9 @@ public class NotificationDeliveryController {
       Authentication auth,
       @PathVariable String id,
       @Valid @RequestBody DeliveryActionRequest request) {
-    return notifications.queue(
-        storeId, auth.getName(), id, request.version(), request.reason(), false);
+    return DeliveryResponse.of(
+        notifications.queue(
+            storeId, auth.getName(), id, request.version(), request.reason(), false));
   }
 
   @PostMapping("/{id}/retries")
@@ -83,8 +85,9 @@ public class NotificationDeliveryController {
       @Valid @RequestBody DeliveryActionRequest request) {
     return ResponseEntity.status(201)
         .body(
-            notifications.queue(
-                storeId, auth.getName(), id, request.version(), request.reason(), true));
+            DeliveryResponse.of(
+                notifications.queue(
+                    storeId, auth.getName(), id, request.version(), request.reason(), true)));
   }
 
   @GetMapping("/{id}/attempts")
@@ -94,6 +97,8 @@ public class NotificationDeliveryController {
       Authentication auth,
       @PathVariable String id,
       @PageableDefault(size = 50, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
-    return notifications.history(storeId, auth.getName(), id, pageable);
+    return notifications
+        .history(storeId, auth.getName(), id, pageable)
+        .map(DeliveryAttemptResponse::of);
   }
 }
