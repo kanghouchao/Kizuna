@@ -1,7 +1,5 @@
 package com.kizuna.customer.application;
 
-import com.kizuna.customer.api.dto.CustomerMemberLinkHistoryResponse;
-import com.kizuna.customer.api.dto.CustomerMemberLinkResponse;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerMemberLinkView;
@@ -45,7 +43,7 @@ public class CustomerMemberLinkService {
   private final BusinessAudit audit;
 
   @Transactional
-  public CustomerMemberLinkResponse link(
+  public CustomerMemberLink link(
       Long storeId,
       String customerId,
       String memberCode,
@@ -126,8 +124,7 @@ public class CustomerMemberLinkService {
         saved.getCustomerId(),
         Map.of(),
         snapshot(saved));
-    return new CustomerMemberLinkResponse(
-        saved.getId(), true, saved.getMemberCode(), saved.getLinkedAt());
+    return saved;
   }
 
   @Transactional
@@ -168,25 +165,18 @@ public class CustomerMemberLinkService {
    * 顧客に現に有効な紐づけ。無ければ 404 — 「紐づいていない」を 200 で表すと、呼出側が本体を読んでから もう一度分岐することになり、操作の可否を状態の有無だけで決められなくなる。
    */
   @Transactional(readOnly = true)
-  public CustomerMemberLinkResponse current(Long storeId, String customerId) {
+  public CustomerMemberLink current(Long storeId, String customerId) {
     requireCustomer(storeId, customerId);
     return customerMemberLinkRepository
         .findByStoreIdAndCustomerIdAndStatus(storeId, customerId, LinkStatus.ACTIVE)
-        .map(
-            link ->
-                new CustomerMemberLinkResponse(
-                    link.getId(), true, link.getMemberCode(), link.getLinkedAt()))
         .orElseThrow(() -> new NotFoundException("紐づけられている会員がいません"));
   }
 
   /** 顧客 1 件の紐づけ履歴。履歴は解除・再紐づけのたびに増え続けるので、ページで区切って返す。 */
   @Transactional(readOnly = true)
-  public Page<CustomerMemberLinkHistoryResponse> history(
-      Long storeId, String customerId, Pageable pageable) {
+  public Page<CustomerMemberLinkView> history(Long storeId, String customerId, Pageable pageable) {
     requireCustomer(storeId, customerId);
-    return customerMemberLinkRepository
-        .findHistory(storeId, customerId, pageable)
-        .map(CustomerMemberLinkService::toHistoryResponse);
+    return customerMemberLinkRepository.findHistory(storeId, customerId, pageable);
   }
 
   private void requireCustomer(Long storeId, String customerId) {
@@ -217,21 +207,5 @@ public class CustomerMemberLinkService {
         .findByEmail(actorEmail)
         .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
         .getId();
-  }
-
-  private static CustomerMemberLinkHistoryResponse toHistoryResponse(CustomerMemberLinkView view) {
-    return new CustomerMemberLinkHistoryResponse(
-        view.getId(),
-        view.getMemberCode(),
-        view.getStatus(),
-        view.getReason(),
-        view.getOperationReason(),
-        view.getReleaseReason(),
-        view.getLinkedBy(),
-        view.getReleasedBy(),
-        view.getLinkedAt(),
-        view.getLinkedByName(),
-        view.getReleasedAt(),
-        view.getReleasedByName());
   }
 }

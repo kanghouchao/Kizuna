@@ -1,5 +1,6 @@
 package com.kizuna.customer.api.dto;
 
+import com.kizuna.customer.application.CustomerCommands.PermissionChange;
 import com.kizuna.customer.domain.ContactPermissionStatus;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -12,5 +13,9 @@ public record ContactPermissionRequest(
   public ContactPermissionRequest {
     if (source != null) source = source.strip();
     if (reason != null) reason = reason.strip();
+  }
+
+  public PermissionChange command() {
+    return new PermissionChange(status, source, reason);
   }
 }

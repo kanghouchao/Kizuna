@@ -1,7 +1,7 @@
 package com.kizuna.customer.application;
 
-import com.kizuna.customer.api.dto.CustomerPointAdjustmentRequest;
-import com.kizuna.customer.api.dto.CustomerPointBalanceResponse;
+import com.kizuna.customer.application.CustomerCommands.PointAdjustment;
+import com.kizuna.customer.application.CustomerViews.PointBalance;
 import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
@@ -36,11 +36,11 @@ public class CustomerPointService {
   private final UserRepository userRepository;
 
   @Transactional(readOnly = true)
-  public CustomerPointBalanceResponse balance(Long storeId, String customerId) {
+  public PointBalance balance(Long storeId, String customerId) {
     requireCustomer(storeId, customerId);
     Long memberId = activeMemberId(storeId, customerId);
     if (memberId == null) {
-      return CustomerPointBalanceResponse.builder().linked(false).build();
+      return new PointBalance(false, null);
     }
     return linkedBalance(memberId);
   }
@@ -51,8 +51,8 @@ public class CustomerPointService {
    * <p>会員に紐づかない顧客は調整できない。台帳は会員が持つものなので、紐づけの無い顧客には積み先そのものが無い。
    */
   @Transactional
-  public CustomerPointBalanceResponse adjust(
-      Long storeId, String customerId, CustomerPointAdjustmentRequest request, String actorEmail) {
+  public PointBalance adjust(
+      Long storeId, String customerId, PointAdjustment request, String actorEmail) {
     // 積み先を決める前に顧客行を押さえる。契約は CustomerRepository#findByIdAndStoreIdForUpdate に記す。
     customerRepository
         .findByIdAndStoreIdForUpdate(customerId, storeId)
@@ -71,11 +71,11 @@ public class CustomerPointService {
     pointLedgerService.adjust(
         memberId,
         storeId,
-        request.getDelta(),
-        request.getReason(),
-        request.getExpiresOn(),
+        request.delta(),
+        request.reason(),
+        request.expiresOn(),
         actorId,
-        request.getIdempotencyKey());
+        request.idempotencyKey());
     return linkedBalance(memberId);
   }
 
@@ -87,8 +87,8 @@ public class CustomerPointService {
    * 済みで直列化する相手もいない。台帳側の再送判定（内容一致なら何も書かず戻る／不一致は 409）に落ちることで、逐次再送と同一の応答になる。
    */
   @Transactional(readOnly = true)
-  public CustomerPointBalanceResponse replayAdjust(
-      Long storeId, String customerId, CustomerPointAdjustmentRequest request, String actorEmail) {
+  public PointBalance replayAdjust(
+      Long storeId, String customerId, PointAdjustment request, String actorEmail) {
     requireCustomer(storeId, customerId);
     Long memberId = activeMemberId(storeId, customerId);
     if (memberId == null) {
@@ -98,19 +98,16 @@ public class CustomerPointService {
     pointLedgerService.adjust(
         memberId,
         storeId,
-        request.getDelta(),
-        request.getReason(),
-        request.getExpiresOn(),
+        request.delta(),
+        request.reason(),
+        request.expiresOn(),
         actorId,
-        request.getIdempotencyKey());
+        request.idempotencyKey());
     return linkedBalance(memberId);
   }
 
-  private CustomerPointBalanceResponse linkedBalance(long memberId) {
-    return CustomerPointBalanceResponse.builder()
-        .linked(true)
-        .balance(pointLedgerService.balance(memberId))
-        .build();
+  private PointBalance linkedBalance(long memberId) {
+    return new PointBalance(true, pointLedgerService.balance(memberId));
   }
 
   private void requireCustomer(Long storeId, String customerId) {

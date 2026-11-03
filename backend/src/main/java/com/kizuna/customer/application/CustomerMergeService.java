@@ -1,12 +1,8 @@
 package com.kizuna.customer.application;
 
-import com.kizuna.customer.api.dto.CustomerMergeAuditResponse;
-import com.kizuna.customer.api.dto.CustomerMergeHistoryResponse;
-import com.kizuna.customer.api.dto.CustomerMergePreviewRequest;
-import com.kizuna.customer.api.dto.CustomerMergePreviewResponse;
-import com.kizuna.customer.api.dto.CustomerMergeRequest;
-import com.kizuna.customer.api.dto.CustomerMergeResponse;
-import com.kizuna.customer.api.dto.MergeDirection;
+import com.kizuna.customer.application.CustomerCommands.MergeExecution;
+import com.kizuna.customer.application.CustomerCommands.MergeSelection;
+import com.kizuna.customer.application.CustomerViews.MergePreview;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerMerge;
@@ -58,9 +54,9 @@ public class CustomerMergeService {
 
   /** 墓標は別の顧客へ読み替えず拒否する。確認した二行と原資料の一致が不可逆な統合の前提になる。 */
   @Transactional
-  public CustomerMergeResponse merge(
-      Long storeId, String survivingCustomerId, CustomerMergeRequest request, String actorEmail) {
-    String mergedCustomerId = request.mergedCustomerId();
+  public CustomerMerge merge(
+      Long storeId, String survivingCustomerId, MergeExecution request, String actorEmail) {
+    String mergedCustomerId = request.selection().mergedCustomerId();
     if (survivingCustomerId.equals(mergedCustomerId)) {
       throw new ServiceException("同じ顧客を統合することはできません");
     }
@@ -75,10 +71,10 @@ public class CustomerMergeService {
       throw new ConflictException(RELEASE_THE_LINK_FIRST);
     }
 
-    var prepared = preparation.prepare(storeId, survivingCustomerId, request.preview());
-    confirmation.verify(request.previewToken(), prepared.response().previewToken());
+    var prepared = preparation.prepare(storeId, survivingCustomerId, request.selection());
+    confirmation.verify(request.previewToken(), prepared.preview().previewToken());
 
-    var preview = prepared.response();
+    var preview = prepared.preview();
     customerRepository
         .findByIdAndStoreId(survivingCustomerId, storeId)
         .orElseThrow()
@@ -136,22 +132,16 @@ public class CustomerMergeService {
             Integer.toString(preview.movedContactCount()),
             "reason",
             request.operationReason().strip()));
-    return new CustomerMergeResponse(
-        survivingCustomerId,
-        movedOrderCount,
-        movedLinkCount,
-        recorded.getId(),
-        preview.movedContactCount());
+    return recorded;
   }
 
   @Transactional
-  public CustomerMergePreviewResponse preview(
-      Long storeId, String survivingId, CustomerMergePreviewRequest input) {
+  public MergePreview preview(Long storeId, String survivingId, MergeSelection input) {
     if (survivingId.equals(input.mergedCustomerId()))
       throw new ServiceException("同じ顧客を統合することはできません");
     lockBothInIdOrder(storeId, survivingId, input.mergedCustomerId());
     rejectTombstones(storeId, survivingId, input.mergedCustomerId());
-    return preparation.prepare(storeId, survivingId, input).response();
+    return preparation.prepare(storeId, survivingId, input).preview();
   }
 
   /**
@@ -162,44 +152,22 @@ public class CustomerMergeService {
    * <p>統合履歴は機微情報なので、読むにも実行と同じ {@code CUSTOMER_MERGE} を要する（強制は端点の注釈）。
    */
   @Transactional(readOnly = true)
-  public Page<CustomerMergeHistoryResponse> history(
-      Long storeId, String customerId, Pageable pageable) {
+  public Page<CustomerMergeView> history(Long storeId, String customerId, Pageable pageable) {
     if (!customerRepository.existsByIdAndStoreId(customerId, storeId)) {
       throw new NotFoundException("顧客が見つかりません");
     }
-    return customerMergeRepository
-        .findHistory(storeId, customerId, pageable)
-        .map(view -> toHistoryResponse(customerId, view));
+    return customerMergeRepository.findHistory(storeId, customerId, pageable);
   }
 
   @Transactional(readOnly = true)
-  public CustomerMergeAuditResponse audit(Long storeId, String customerId, String mergeId) {
-    var merge =
-        customerMergeRepository
-            .findByIdAndStoreId(mergeId, storeId)
-            .filter(
-                m ->
-                    m.getSurvivingCustomerId().equals(customerId)
-                        || m.getMergedCustomerId().equals(customerId))
-            .orElseThrow(() -> new NotFoundException("統合履歴が見つかりません"));
-    return CustomerMergeAuditResponse.from(merge);
-  }
-
-  /** 「相手」は問い合わせた顧客によって変わる。向きの判定を記録の側に持たせず、読み手ごとにここで解く。 */
-  private static CustomerMergeHistoryResponse toHistoryResponse(
-      String customerId, CustomerMergeView view) {
-    boolean surviving = customerId.equals(view.getSurvivingCustomerId());
-    return new CustomerMergeHistoryResponse(
-        view.getId(),
-        surviving ? MergeDirection.SURVIVING : MergeDirection.MERGED,
-        surviving ? view.getMergedCustomerId() : view.getSurvivingCustomerId(),
-        surviving ? view.getMergedCustomerName() : view.getSurvivingCustomerName(),
-        view.getMergedByName(),
-        view.getMergedAt(),
-        view.getMovedOrderCount(),
-        view.getMovedLinkCount(),
-        view.getMovedContactCount(),
-        view.getOperationReason());
+  public CustomerMerge audit(Long storeId, String customerId, String mergeId) {
+    return customerMergeRepository
+        .findByIdAndStoreId(mergeId, storeId)
+        .filter(
+            m ->
+                m.getSurvivingCustomerId().equals(customerId)
+                    || m.getMergedCustomerId().equals(customerId))
+        .orElseThrow(() -> new NotFoundException("統合履歴が見つかりません"));
   }
 
   /**

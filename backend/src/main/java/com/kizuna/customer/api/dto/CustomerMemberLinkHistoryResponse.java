@@ -1,5 +1,6 @@
 package com.kizuna.customer.api.dto;
 
+import com.kizuna.customer.domain.CustomerMemberLinkView;
 import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
 import java.time.OffsetDateTime;
@@ -17,4 +18,20 @@ public record CustomerMemberLinkHistoryResponse(
     OffsetDateTime linkedAt,
     String linkedByName,
     OffsetDateTime releasedAt,
-    String releasedByName) {}
+    String releasedByName) {
+  public static CustomerMemberLinkHistoryResponse of(CustomerMemberLinkView view) {
+    return new CustomerMemberLinkHistoryResponse(
+        view.getId(),
+        view.getMemberCode(),
+        view.getStatus(),
+        view.getReason(),
+        view.getOperationReason(),
+        view.getReleaseReason(),
+        view.getLinkedBy(),
+        view.getReleasedBy(),
+        view.getLinkedAt(),
+        view.getLinkedByName(),
+        view.getReleasedAt(),
+        view.getReleasedByName());
+  }
+}

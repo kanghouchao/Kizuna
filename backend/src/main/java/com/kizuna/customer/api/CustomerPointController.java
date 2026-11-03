@@ -34,7 +34,8 @@ public class CustomerPointController {
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<CustomerPointBalanceResponse> balance(
       @CurrentStore Long storeId, @PathVariable String customerId) {
-    return ResponseEntity.ok(customerPointService.balance(storeId, customerId));
+    return ResponseEntity.ok(
+        CustomerPointBalanceResponse.of(customerPointService.balance(storeId, customerId)));
   }
 
   @PostMapping("/point-adjustments")
@@ -44,12 +45,15 @@ public class CustomerPointController {
       @PathVariable String customerId,
       @Valid @RequestBody CustomerPointAdjustmentRequest request,
       Principal principal) {
+    var command = request.command();
     return ResponseEntity.ok(
-        Replays.write(
-            DbConstraint.UQ_T_POINT_ENTRIES_IDEMPOTENCY_KEY,
-            () -> customerPointService.adjust(storeId, customerId, request, principal.getName()),
-            () ->
-                customerPointService.replayAdjust(
-                    storeId, customerId, request, principal.getName())));
+        CustomerPointBalanceResponse.of(
+            Replays.write(
+                DbConstraint.UQ_T_POINT_ENTRIES_IDEMPOTENCY_KEY,
+                () ->
+                    customerPointService.adjust(storeId, customerId, command, principal.getName()),
+                () ->
+                    customerPointService.replayAdjust(
+                        storeId, customerId, command, principal.getName()))));
   }
 }

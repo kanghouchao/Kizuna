@@ -1,9 +1,8 @@
 package com.kizuna.customer.api.dto;
 
+import com.kizuna.customer.application.CustomerViews.ContactView;
 import com.kizuna.customer.domain.ContactPermissionStatus;
-import com.kizuna.customer.domain.ContactPermissions;
 import com.kizuna.customer.domain.ContactType;
-import com.kizuna.customer.domain.CustomerContact;
 import java.time.OffsetDateTime;
 
 public record ContactResponse(
@@ -19,7 +18,9 @@ public record ContactResponse(
     ContactPermissionStatus marketingStatus,
     ContactPermissionStatus effectiveBusinessStatus,
     ContactPermissionStatus effectiveMarketingStatus) {
-  public static ContactResponse from(CustomerContact c, ContactPermissions effective) {
+  public static ContactResponse of(ContactView view) {
+    var c = view.contact();
+    var effective = view.effective();
     return new ContactResponse(
         c.getId(),
         c.getCustomerId(),

@@ -203,7 +203,7 @@ class CustomerMemberLinkAuditTest {
     var event = audit.getFirst();
     assertThat(event.getAction()).isEqualTo("CUSTOMER_MEMBER_LINK_CREATED");
     assertThat(event.getTargetType()).isEqualTo("CUSTOMER_MEMBER_LINK");
-    assertThat(event.getTargetId()).isEqualTo(result.id());
+    assertThat(event.getTargetId()).isEqualTo(result.getId());
     assertThat(event.getSourceType()).isEqualTo("CUSTOMER");
     assertThat(event.getSourceId()).isEqualTo("customer");
     assertThat(event.getActorId()).isEqualTo(9L);

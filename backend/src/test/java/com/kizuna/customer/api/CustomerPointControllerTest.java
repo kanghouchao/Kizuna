@@ -9,8 +9,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kizuna.customer.api.dto.CustomerPointBalanceResponse;
 import com.kizuna.customer.application.CustomerPointService;
+import com.kizuna.customer.application.CustomerViews.PointBalance;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
@@ -62,7 +62,7 @@ class CustomerPointControllerTest {
   void balanceIsReachableWithCustomerManage() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(customerPointService.balance(eq(STORE_ID), anyString()))
-        .thenReturn(CustomerPointBalanceResponse.builder().linked(false).build());
+        .thenReturn(new PointBalance(false, null));
 
     mockMvc.perform(storeGet("/customers/c1/member-point-balance")).andExpect(status().isOk());
   }
@@ -95,7 +95,7 @@ class CustomerPointControllerTest {
   void adjustmentIsReachableWithThePointPermission() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(customerPointService.adjust(eq(STORE_ID), anyString(), any(), anyString()))
-        .thenReturn(CustomerPointBalanceResponse.builder().linked(true).balance(100L).build());
+        .thenReturn(new PointBalance(true, 100L));
 
     mockMvc
         .perform(storePost("/customers/c1/point-adjustments", adjustmentBody("訂正")))
@@ -147,7 +147,7 @@ class CustomerPointControllerTest {
     when(customerPointService.adjust(eq(STORE_ID), anyString(), any(), anyString()))
         .thenThrow(integrityViolation("uq_t_point_entries_idempotency_key"));
     when(customerPointService.replayAdjust(eq(STORE_ID), anyString(), any(), anyString()))
-        .thenReturn(CustomerPointBalanceResponse.builder().linked(true).balance(800L).build());
+        .thenReturn(new PointBalance(true, 800L));
 
     mockMvc
         .perform(storePost("/customers/c1/point-adjustments", adjustmentBody("訂正")))

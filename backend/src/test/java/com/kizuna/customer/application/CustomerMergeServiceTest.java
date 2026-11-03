@@ -4,10 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.customer.api.dto.CustomerMergeHistoryResponse;
-import com.kizuna.customer.api.dto.CustomerMergePreviewResponse;
 import com.kizuna.customer.api.dto.CustomerMergeRequest;
 import com.kizuna.customer.api.dto.CustomerMergeResponse;
 import com.kizuna.customer.api.dto.MergeDirection;
+import com.kizuna.customer.application.CustomerCommands.MergeExecution;
+import com.kizuna.customer.application.CustomerViews.MergePreview;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerMerge;
@@ -75,9 +76,10 @@ class CustomerMergeServiceTest {
   @Mock private MergeConfirmation confirmation;
   @Mock private EntityManager entityManager;
 
-  private CustomerMergeRequest input(String id) {
+  private MergeExecution input(String id) {
     return new CustomerMergeRequest(
-        id, "proof", null, new MergePreferences(null, null, null), true, "重複を確認");
+            id, "proof", null, new MergePreferences(null, null, null), true, "重複を確認")
+        .command();
   }
 
   @InjectMocks private CustomerMergeService service;
@@ -196,7 +198,7 @@ class CustomerMergeServiceTest {
     assertThat(
             service
                 .merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL)
-                .survivingCustomerId())
+                .getSurvivingCustomerId())
         .isEqualTo(SURVIVING_ID);
   }
 
@@ -214,7 +216,8 @@ class CustomerMergeServiceTest {
         .thenReturn(3);
 
     CustomerMergeResponse response =
-        service.merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL);
+        CustomerMergeResponse.of(
+            service.merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL));
 
     assertThat(response.movedOrderCount()).isEqualTo(7);
     assertThat(response.movedLinkCount()).isEqualTo(3);
@@ -260,9 +263,11 @@ class CustomerMergeServiceTest {
         .thenReturn(new PageImpl<>(List.of(row)));
 
     CustomerMergeHistoryResponse fromSurviving =
-        service.history(STORE_ID, SURVIVING_ID, PAGE).getContent().get(0);
+        CustomerMergeHistoryResponse.of(
+            SURVIVING_ID, service.history(STORE_ID, SURVIVING_ID, PAGE).getContent().get(0));
     CustomerMergeHistoryResponse fromMerged =
-        service.history(STORE_ID, MERGED_ID, PAGE).getContent().get(0);
+        CustomerMergeHistoryResponse.of(
+            MERGED_ID, service.history(STORE_ID, MERGED_ID, PAGE).getContent().get(0));
 
     assertThat(fromSurviving.direction()).isEqualTo(MergeDirection.SURVIVING);
     assertThat(fromSurviving.counterpartCustomerId()).isEqualTo(MERGED_ID);
@@ -285,7 +290,7 @@ class CustomerMergeServiceTest {
                 Mockito.eq(STORE_ID), Mockito.anyString(), Mockito.any()))
         .thenReturn(Page.empty(PAGE));
 
-    Page<CustomerMergeHistoryResponse> page = service.history(STORE_ID, SURVIVING_ID, PAGE);
+    Page<CustomerMergeView> page = service.history(STORE_ID, SURVIVING_ID, PAGE);
 
     assertThat(page.getContent()).isEmpty();
     assertThat(page.getTotalElements()).isZero();
@@ -421,7 +426,7 @@ class CustomerMergeServiceTest {
     var survivor = new MergeSnapshot(SURVIVING_ID, profile, List.of(), List.of());
     var merged = new MergeSnapshot(MERGED_ID, profile, List.of(), List.of());
     var preview =
-        new CustomerMergePreviewResponse(
+        new MergePreview(
             survivor,
             merged,
             profile,

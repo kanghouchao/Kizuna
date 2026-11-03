@@ -38,13 +38,14 @@ public class CustomerMemberLinkController {
       Principal principal) {
     return ResponseEntity.status(201)
         .body(
-            customerMemberLinkService.link(
-                storeId,
-                customerId,
-                request.getMemberCode(),
-                request.getExpectedLinkId(),
-                request.getOperationReason(),
-                principal.getName()));
+            CustomerMemberLinkResponse.of(
+                customerMemberLinkService.link(
+                    storeId,
+                    customerId,
+                    request.getMemberCode(),
+                    request.getExpectedLinkId(),
+                    request.getOperationReason(),
+                    principal.getName())));
   }
 
   @PostMapping("/releases")
@@ -68,7 +69,8 @@ public class CustomerMemberLinkController {
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<CustomerMemberLinkResponse> current(
       @CurrentStore Long storeId, @PathVariable String customerId) {
-    return ResponseEntity.ok(customerMemberLinkService.current(storeId, customerId));
+    return ResponseEntity.ok(
+        CustomerMemberLinkResponse.of(customerMemberLinkService.current(storeId, customerId)));
   }
 
   @GetMapping("/history")
@@ -81,6 +83,9 @@ public class CustomerMemberLinkController {
               sort = {"linkedAt", "id"},
               direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return ResponseEntity.ok(customerMemberLinkService.history(storeId, customerId, pageable));
+    return ResponseEntity.ok(
+        customerMemberLinkService
+            .history(storeId, customerId, pageable)
+            .map(CustomerMemberLinkHistoryResponse::of));
   }
 }

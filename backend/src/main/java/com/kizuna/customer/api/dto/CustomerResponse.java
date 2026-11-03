@@ -1,5 +1,6 @@
 package com.kizuna.customer.api.dto;
 
+import com.kizuna.customer.domain.ContactSummary;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

@@ -122,7 +122,8 @@ class CustomerMemberLinkServiceTest {
     givenSaveReturnsArgument();
 
     CustomerMemberLinkResponse response =
-        service.link(STORE_ID, CUSTOMER_ID, MEMBER_CODE, null, "本人確認", ACTOR_EMAIL);
+        CustomerMemberLinkResponse.of(
+            service.link(STORE_ID, CUSTOMER_ID, MEMBER_CODE, null, "本人確認", ACTOR_EMAIL));
 
     assertThat(response.linked()).isTrue();
     assertThat(response.memberCode()).isEqualTo(MEMBER_CODE);
@@ -239,7 +240,8 @@ class CustomerMemberLinkServiceTest {
     givenSaveReturnsArgument();
 
     CustomerMemberLinkResponse response =
-        service.link(STORE_ID, CUSTOMER_ID, "999999999999", null, "本人確認", ACTOR_EMAIL);
+        CustomerMemberLinkResponse.of(
+            service.link(STORE_ID, CUSTOMER_ID, "999999999999", null, "本人確認", ACTOR_EMAIL));
 
     assertThat(response.memberCode()).isEqualTo("999999999999");
     ArgumentCaptor<CustomerMemberLink> saved = ArgumentCaptor.forClass(CustomerMemberLink.class);
@@ -443,7 +445,10 @@ class CustomerMemberLinkServiceTest {
         .thenReturn(new PageImpl<>(List.of(view)));
 
     List<CustomerMemberLinkHistoryResponse> history =
-        service.history(STORE_ID, CUSTOMER_ID, PageRequest.of(0, 20)).getContent();
+        service
+            .history(STORE_ID, CUSTOMER_ID, PageRequest.of(0, 20))
+            .map(CustomerMemberLinkHistoryResponse::of)
+            .getContent();
 
     assertThat(history).hasSize(1);
     CustomerMemberLinkHistoryResponse row = history.get(0);

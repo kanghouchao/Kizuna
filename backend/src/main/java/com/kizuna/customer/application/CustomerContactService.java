@@ -1,16 +1,15 @@
 package com.kizuna.customer.application;
 
-import com.kizuna.customer.api.dto.ContactHistoryResponse;
-import com.kizuna.customer.api.dto.ContactPermissionRequest;
-import com.kizuna.customer.api.dto.ContactRequest;
-import com.kizuna.customer.api.dto.ContactResponse;
-import com.kizuna.customer.api.dto.ContactSummary;
+import com.kizuna.customer.application.CustomerCommands.ContactValue;
+import com.kizuna.customer.application.CustomerCommands.PermissionChange;
+import com.kizuna.customer.application.CustomerViews.ContactView;
 import com.kizuna.customer.domain.ContactAction;
 import com.kizuna.customer.domain.ContactPermissionStatus;
 import com.kizuna.customer.domain.ContactPermissions;
 import com.kizuna.customer.domain.ContactPurpose;
 import com.kizuna.customer.domain.ContactRestrictionView;
 import com.kizuna.customer.domain.ContactState;
+import com.kizuna.customer.domain.ContactSummary;
 import com.kizuna.customer.domain.ContactType;
 import com.kizuna.customer.domain.CustomerContact;
 import com.kizuna.customer.domain.CustomerContactHistory;
@@ -49,7 +48,7 @@ public class CustomerContactService {
   private final BusinessAudit businessAudit;
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public Page<ContactResponse> list(Long storeId, String customerId, Pageable pageable) {
+  public Page<ContactView> list(Long storeId, String customerId, Pageable pageable) {
     String resolved = resolve(storeId, customerId);
     var page = contacts.findByStoreIdAndCustomerIdAndDeletedFalse(storeId, resolved, pageable);
     var values = page.getContent().stream().map(CustomerContact::getValue).distinct().toList();
@@ -64,11 +63,11 @@ public class CustomerContactService {
                         ContactRestrictionView::permissions,
                         ContactPermissions::restrict));
     return page.map(
-        c -> ContactResponse.from(c, restrictions.get(new ContactKey(c.getType(), c.getValue()))));
+        c -> new ContactView(c, restrictions.get(new ContactKey(c.getType(), c.getValue()))));
   }
 
   @Transactional
-  public ContactResponse create(Long storeId, String customerId, ContactRequest input) {
+  public ContactView create(Long storeId, String customerId, ContactValue input) {
     lock(storeId, customerId);
     CustomerContact contact =
         contacts.saveAndFlush(
@@ -80,7 +79,7 @@ public class CustomerContactService {
   }
 
   @Transactional
-  public ContactResponse update(Long storeId, String customerId, String id, ContactRequest input) {
+  public ContactView update(Long storeId, String customerId, String id, ContactValue input) {
     lock(storeId, customerId);
     var contact = active(storeId, customerId, id);
     var before = contact.state();
@@ -106,12 +105,8 @@ public class CustomerContactService {
   }
 
   @Transactional
-  public ContactResponse changePermission(
-      Long storeId,
-      String customerId,
-      String id,
-      ContactPurpose purpose,
-      ContactPermissionRequest input) {
+  public ContactView changePermission(
+      Long storeId, String customerId, String id, ContactPurpose purpose, PermissionChange input) {
     lock(storeId, customerId);
     var contact = active(storeId, customerId, id);
     var before = contact.state();
@@ -174,26 +169,8 @@ public class CustomerContactService {
   }
 
   @Transactional(readOnly = true)
-  public Page<ContactHistoryResponse> history(Long storeId, String customerId, Pageable pageable) {
-    return histories
-        .history(storeId, resolve(storeId, customerId), pageable)
-        .map(
-            h ->
-                new ContactHistoryResponse(
-                    h.getId(),
-                    h.getContactId(),
-                    h.getOriginCustomerId(),
-                    h.getAction(),
-                    h.getActorId(),
-                    h.getOccurredAt(),
-                    h.getBefore(),
-                    h.getAfter(),
-                    h.getOperationId(),
-                    h.getPurpose(),
-                    h.getSource(),
-                    h.getReason(),
-                    h.getSourceContactId(),
-                    h.getApplicationId()));
+  public Page<CustomerContactHistory> history(Long storeId, String customerId, Pageable pageable) {
+    return histories.history(storeId, resolve(storeId, customerId), pageable);
   }
 
   @Transactional(readOnly = true)
@@ -281,11 +258,11 @@ public class CustomerContactService {
 
   private record ContactKey(ContactType type, String value) {}
 
-  private ContactResponse response(Long storeId, CustomerContact contact) {
+  private ContactView response(Long storeId, CustomerContact contact) {
     var group =
         contacts.findByStoreIdAndCustomerIdAndTypeAndValueAndDeletedFalse(
             storeId, contact.getCustomerId(), contact.getType(), contact.getValue());
-    return ContactResponse.from(contact, restriction(group));
+    return new ContactView(contact, restriction(group));
   }
 
   private ContactPermissions restriction(List<CustomerContact> group) {

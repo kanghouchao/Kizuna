@@ -64,12 +64,12 @@ class CustomerAuditIntegrationTest {
 
   @Test
   void committedCrudVersionsSurvivePhysicalDeletionAndNoOpsAddNothing() {
-    var id = customers.create(STORE_ID, request(false)).getId();
+    var id = customers.create(STORE_ID, request(false).command()).customer().getId();
     var patch = new CustomerUpdateRequest();
     patch.setAddress("監査へ残さない住所");
-    customers.update(STORE_ID, id, patch);
-    customers.update(STORE_ID, id, patch);
-    customers.update(STORE_ID, id, new CustomerUpdateRequest());
+    customers.update(STORE_ID, id, patch.patch());
+    customers.update(STORE_ID, id, patch.patch());
+    customers.update(STORE_ID, id, new CustomerUpdateRequest().patch());
     customers.delete(STORE_ID, id);
     assertThat(jdbc.queryForObject("select count(*) from t_customers where id = ?", Long.class, id))
         .isZero();
@@ -101,7 +101,7 @@ class CustomerAuditIntegrationTest {
     long audits = count("t_audit_events");
     reject("CUSTOMER_CREATED");
     try {
-      assertThatThrownBy(() -> customers.create(STORE_ID, request))
+      assertThatThrownBy(() -> customers.create(STORE_ID, request.command()))
           .isInstanceOf(RuntimeException.class);
       assertThat(
               jdbc.queryForObject(
@@ -129,7 +129,7 @@ class CustomerAuditIntegrationTest {
             () ->
                 transactions.executeWithoutResult(
                     status -> {
-                      customers.create(STORE_ID, request);
+                      customers.create(STORE_ID, request.command());
                       assertThat(count("t_audit_events")).isEqualTo(audits + 3);
                       throw new IllegalStateException("後続失敗");
                     }))
@@ -146,13 +146,13 @@ class CustomerAuditIntegrationTest {
   @Test
   void updateAuditRejectionRestoresAttributesAndVersion() {
     var request = request(false);
-    var id = customers.create(STORE_ID, request).getId();
+    var id = customers.create(STORE_ID, request.command()).customer().getId();
     long audits = count("t_audit_events");
     var patch = new CustomerUpdateRequest();
     patch.setName("確定しない秘密名");
     reject("CUSTOMER_UPDATED");
     try {
-      assertThatThrownBy(() -> customers.update(STORE_ID, id, patch))
+      assertThatThrownBy(() -> customers.update(STORE_ID, id, patch.patch()))
           .isInstanceOf(RuntimeException.class);
       assertThat(jdbc.queryForMap("select name, version from t_customers where id = ?", id))
           .containsEntry("name", request.getName())
@@ -165,7 +165,7 @@ class CustomerAuditIntegrationTest {
 
   @Test
   void deleteAuditRejectionRestoresThePhysicallyRemovedCustomer() {
-    var id = customers.create(STORE_ID, request(false)).getId();
+    var id = customers.create(STORE_ID, request(false).command()).customer().getId();
     long audits = count("t_audit_events");
     reject("CUSTOMER_DELETED");
     try {
@@ -181,7 +181,7 @@ class CustomerAuditIntegrationTest {
 
   @Test
   void existingContactHistoryProtectsItsParentWithoutASuccessfulDeletionAudit() {
-    var id = customers.create(STORE_ID, request(true)).getId();
+    var id = customers.create(STORE_ID, request(true).command()).customer().getId();
     long audits = count("t_audit_events");
     assertThatThrownBy(() -> customers.delete(STORE_ID, id)).isInstanceOf(ConflictException.class);
     assertThat(jdbc.queryForObject("select count(*) from t_customers where id = ?", Long.class, id))
@@ -191,7 +191,7 @@ class CustomerAuditIntegrationTest {
 
   @Test
   void databaseReferenceRejectsPhysicalDeletionWithoutAddingAnAudit() {
-    var id = customers.create(STORE_ID, request(false)).getId();
+    var id = customers.create(STORE_ID, request(false).command()).customer().getId();
     long audits = count("t_audit_events");
     jdbc.execute(
         "create table customer_audit_test_reference (customer_id varchar(64) references t_customers(id))");

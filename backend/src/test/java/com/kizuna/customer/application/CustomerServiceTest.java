@@ -10,10 +10,11 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.customer.api.dto.CustomerCreateRequest;
 import com.kizuna.customer.api.dto.CustomerMapper;
-import com.kizuna.customer.api.dto.CustomerMergeComparisonResponse;
+import com.kizuna.customer.api.dto.CustomerMapperImpl;
 import com.kizuna.customer.api.dto.CustomerResponse;
 import com.kizuna.customer.api.dto.CustomerSummaryResponse;
 import com.kizuna.customer.api.dto.CustomerUpdateRequest;
+import com.kizuna.customer.application.CustomerViews.ComparisonRow;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerCandidateRepository;
 import com.kizuna.customer.domain.CustomerContactRepository;
@@ -22,7 +23,6 @@ import com.kizuna.customer.domain.CustomerMemberLink;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerMergeRepository;
 import com.kizuna.customer.domain.CustomerOrderCountView;
-import com.kizuna.customer.domain.CustomerPatch;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.customer.domain.LinkStatus;
@@ -36,6 +36,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -57,10 +58,12 @@ class CustomerServiceTest {
   @Mock private CustomerCandidateRepository candidateRepository;
   @Mock private CustomerMemberLinkRepository customerMemberLinkRepository;
   @Mock private CustomerMergeRepository customerMergeRepository;
-  @Mock private CustomerMapper customerMapper;
   @Mock private BusinessAudit audit;
 
   @InjectMocks private CustomerService customerService;
+
+  // 応答の形（統合の標識・紐づけの真偽値）まで確かめるため、本物の写像に通す。
+  private final CustomerMapper customerMapper = new CustomerMapperImpl();
 
   @Test
   void list_returnsPage() {
@@ -69,16 +72,14 @@ class CustomerServiceTest {
     Page<CustomerListRepository.Row> page =
         new PageImpl<>(List.of(new CustomerListRepository.Row(c, null, null, false)));
 
-    CustomerSummaryResponse resp = new CustomerSummaryResponse();
-    resp.setName("Test");
-
     when(customerListRepository.findAll(
             eq(STORE_ID), ArgumentMatchers.<Specification<Customer>>any(), any(PageRequest.class)))
         .thenReturn(page);
-    when(customerMapper.toSummaryResponse(c)).thenReturn(resp);
 
     Page<CustomerSummaryResponse> result =
-        customerService.list(STORE_ID, "test", "VIP", PageRequest.of(0, 10));
+        customerService
+            .list(STORE_ID, "test", "VIP", PageRequest.of(0, 10))
+            .map(customerMapper::toSummaryResponse);
     assertThat(result.getContent()).hasSize(1);
     assertThat(result.getContent().get(0).getName()).isEqualTo("Test");
   }
@@ -90,16 +91,14 @@ class CustomerServiceTest {
     Page<CustomerListRepository.Row> page =
         new PageImpl<>(List.of(new CustomerListRepository.Row(c, null, null, false)));
 
-    CustomerSummaryResponse resp = new CustomerSummaryResponse();
-    resp.setName("All");
-
     when(customerListRepository.findAll(
             eq(STORE_ID), ArgumentMatchers.<Specification<Customer>>any(), any(PageRequest.class)))
         .thenReturn(page);
-    when(customerMapper.toSummaryResponse(c)).thenReturn(resp);
 
     Page<CustomerSummaryResponse> result =
-        customerService.list(STORE_ID, null, null, PageRequest.of(0, 10));
+        customerService
+            .list(STORE_ID, null, null, PageRequest.of(0, 10))
+            .map(customerMapper::toSummaryResponse);
     assertThat(result.getContent()).hasSize(1);
     assertThat(result.getContent().get(0).getName()).isEqualTo("All");
   }
@@ -109,13 +108,10 @@ class CustomerServiceTest {
     Customer c = new Customer();
     c.setId("c1");
 
-    CustomerResponse resp = new CustomerResponse();
-    resp.setId("c1");
-
     when(customerRepository.findResolvingMerge(STORE_ID, "c1")).thenReturn(Optional.of(c));
-    when(customerMapper.toResponse(c)).thenReturn(resp);
 
-    assertThat(customerService.get(STORE_ID, "c1").getId()).isEqualTo("c1");
+    assertThat(customerMapper.toResponse(customerService.get(STORE_ID, "c1")).getId())
+        .isEqualTo("c1");
   }
 
   @Test
@@ -132,10 +128,6 @@ class CustomerServiceTest {
     CustomerCreateRequest req = new CustomerCreateRequest();
     req.setName("New");
 
-    Customer customerEntity = Customer.builder().name("New").build();
-
-    when(customerMapper.toEntity(req)).thenReturn(customerEntity);
-
     when(customerRepository.saveAndFlush(any()))
         .thenAnswer(
             i -> {
@@ -144,13 +136,11 @@ class CustomerServiceTest {
               return saved;
             });
 
-    CustomerResponse resp = new CustomerResponse();
-    resp.setId("new_id");
-    resp.setName("New");
-    when(customerMapper.toResponse(any())).thenReturn(resp);
-
-    CustomerResponse res = customerService.create(STORE_ID, req);
-    assertThat(customerEntity.getStoreId()).isEqualTo(STORE_ID);
+    CustomerResponse res =
+        customerMapper.toResponse(customerService.create(STORE_ID, req.command()));
+    ArgumentCaptor<Customer> saved = ArgumentCaptor.forClass(Customer.class);
+    verify(customerRepository).saveAndFlush(saved.capture());
+    assertThat(saved.getValue().getStoreId()).isEqualTo(STORE_ID);
     assertThat(res.getId()).isEqualTo("new_id");
     assertThat(res.getName()).isEqualTo("New");
   }
@@ -166,14 +156,8 @@ class CustomerServiceTest {
     CustomerUpdateRequest req = new CustomerUpdateRequest();
     req.setName("Updated");
 
-    when(customerMapper.toPatch(req))
-        .thenReturn(new CustomerPatch("Updated", null, null, null, null, null, null, null, null));
-
-    CustomerResponse resp = new CustomerResponse();
-    resp.setName("Updated");
-    when(customerMapper.toResponse(c)).thenReturn(resp);
-
-    CustomerResponse res = customerService.update(STORE_ID, "c1", req);
+    CustomerResponse res =
+        customerMapper.toResponse(customerService.update(STORE_ID, "c1", req.patch()));
     assertThat(c.getName()).isEqualTo("Updated");
     assertThat(res.getName()).isEqualTo("Updated");
   }
@@ -183,7 +167,7 @@ class CustomerServiceTest {
     when(customerRepository.findByIdAndStoreId("missing", STORE_ID)).thenReturn(Optional.empty());
 
     assertThatThrownBy(
-            () -> customerService.update(STORE_ID, "missing", new CustomerUpdateRequest()))
+            () -> customerService.update(STORE_ID, "missing", new CustomerUpdateRequest().patch()))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("顧客が見つかりません");
   }
@@ -201,19 +185,15 @@ class CustomerServiceTest {
                 new CustomerListRepository.Row(linked, null, 0L, true),
                 new CustomerListRepository.Row(unlinked, null, null, false)));
 
-    CustomerSummaryResponse linkedResponse = new CustomerSummaryResponse();
-    linkedResponse.setId("c1");
-    CustomerSummaryResponse unlinkedResponse = new CustomerSummaryResponse();
-    unlinkedResponse.setId("c2");
-
     when(customerListRepository.findAll(
             eq(STORE_ID), ArgumentMatchers.<Specification<Customer>>any(), any(PageRequest.class)))
         .thenReturn(page);
-    when(customerMapper.toSummaryResponse(linked)).thenReturn(linkedResponse);
-    when(customerMapper.toSummaryResponse(unlinked)).thenReturn(unlinkedResponse);
 
     List<CustomerSummaryResponse> result =
-        customerService.list(STORE_ID, null, null, PageRequest.of(0, 10)).getContent();
+        customerService
+            .list(STORE_ID, null, null, PageRequest.of(0, 10))
+            .map(customerMapper::toSummaryResponse)
+            .getContent();
 
     assertThat(result.get(0).getMemberLinked()).isTrue();
     assertThat(result.get(1).getMemberLinked()).isFalse();
@@ -224,16 +204,12 @@ class CustomerServiceTest {
   void get_decoratesMemberLink() {
     Customer c = new Customer();
     c.setId("c1");
-    CustomerResponse resp = new CustomerResponse();
-    resp.setId("c1");
-
     when(customerRepository.findResolvingMerge(STORE_ID, "c1")).thenReturn(Optional.of(c));
-    when(customerMapper.toResponse(c)).thenReturn(resp);
     when(customerMemberLinkRepository.findByStoreIdAndCustomerIdAndStatus(
             STORE_ID, "c1", LinkStatus.ACTIVE))
         .thenReturn(Optional.of(activeLink("c1", "123456789012")));
 
-    CustomerResponse linked = customerService.get(STORE_ID, "c1");
+    CustomerResponse linked = customerMapper.toResponse(customerService.get(STORE_ID, "c1"));
     assertThat(linked.getMemberLinked()).isTrue();
     assertThat(linked.getLinkedMemberCode()).isEqualTo("123456789012");
 
@@ -241,7 +217,7 @@ class CustomerServiceTest {
             STORE_ID, "c1", LinkStatus.ACTIVE))
         .thenReturn(Optional.empty());
 
-    CustomerResponse unlinked = customerService.get(STORE_ID, "c1");
+    CustomerResponse unlinked = customerMapper.toResponse(customerService.get(STORE_ID, "c1"));
     assertThat(unlinked.getMemberLinked()).isFalse();
     assertThat(unlinked.getLinkedMemberCode()).isNull();
   }
@@ -251,15 +227,11 @@ class CustomerServiceTest {
   void get_resolvesAMergedIdToTheSurvivingRow() {
     Customer surviving = new Customer();
     surviving.setId("c2");
-    CustomerResponse resp = new CustomerResponse();
-    resp.setId("c2");
-
     // 解決と取得を 1 文で行う。2 文に分けると、統合先を読んだ後に連鎖統合が確定した場合に
     // 既に墓標になった行を本体として返してしまう
     when(customerRepository.findResolvingMerge(STORE_ID, "c1")).thenReturn(Optional.of(surviving));
-    when(customerMapper.toResponse(surviving)).thenReturn(resp);
 
-    CustomerResponse result = customerService.get(STORE_ID, "c1");
+    CustomerResponse result = customerMapper.toResponse(customerService.get(STORE_ID, "c1"));
 
     assertThat(result.getId()).isEqualTo("c2");
     assertThat(result.getMerged()).isTrue();
@@ -272,13 +244,9 @@ class CustomerServiceTest {
   void get_leavesTheMergeMarkOffALiveRow() {
     Customer c = new Customer();
     c.setId("c1");
-    CustomerResponse resp = new CustomerResponse();
-    resp.setId("c1");
-
     when(customerRepository.findResolvingMerge(STORE_ID, "c1")).thenReturn(Optional.of(c));
-    when(customerMapper.toResponse(c)).thenReturn(resp);
 
-    CustomerResponse result = customerService.get(STORE_ID, "c1");
+    CustomerResponse result = customerMapper.toResponse(customerService.get(STORE_ID, "c1"));
 
     assertThat(result.getMerged()).isNull();
     assertThat(result.getMergedFromId()).isNull();
@@ -292,7 +260,8 @@ class CustomerServiceTest {
     when(customerRepository.findByIdAndStoreId("c1", STORE_ID)).thenReturn(Optional.of(tombstone));
     when(customerRepository.isMerged(STORE_ID, "c1")).thenReturn(true);
 
-    assertThatThrownBy(() -> customerService.update(STORE_ID, "c1", new CustomerUpdateRequest()))
+    assertThatThrownBy(
+            () -> customerService.update(STORE_ID, "c1", new CustomerUpdateRequest().patch()))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("統合済みの顧客です。統合先の顧客を編集してください");
     verify(customerRepository, never()).save(any());
@@ -370,16 +339,13 @@ class CustomerServiceTest {
         .thenReturn(List.of(activeLink("c1", "123456789012")));
     when(customerMergeRepository.countOrdersByCustomerId(STORE_ID, requested))
         .thenReturn(List.of(new OrderCountView("c2", 3)));
-    // 材料が食い違えば写像は素通しの null になり、下の containsExactly が落ちる
-    when(customerMapper.toComparisonResponse(c2, false, 3L, List.of()))
-        .thenReturn(comparison("c2"));
-    when(customerMapper.toComparisonResponse(c1, true, 0L, List.of())).thenReturn(comparison("c1"));
-
-    List<CustomerMergeComparisonResponse> rows =
-        customerService.mergeComparison(STORE_ID, requested);
+    List<ComparisonRow> rows = customerService.mergeComparison(STORE_ID, requested);
 
     // 並びが要求と食い違うと、画面の左右が入れ替わって「残す行」の選択が別人を指す
-    assertThat(rows).containsExactly(comparison("c2"), comparison("c1"));
+    assertThat(rows)
+        .containsExactly(
+            new ComparisonRow(c2, List.of(), false, 3L),
+            new ComparisonRow(c1, List.of(), true, 0L));
   }
 
   @Test
@@ -434,11 +400,5 @@ class CustomerServiceTest {
     Customer customer = Customer.builder().name(id).build();
     customer.setId(id);
     return customer;
-  }
-
-  /** 写像の結果は同一性だけを見るので、識別のつく id 以外は空でよい。 */
-  private static CustomerMergeComparisonResponse comparison(String id) {
-    return new CustomerMergeComparisonResponse(
-        id, null, List.of(), null, null, null, null, null, null, null, false, 0L);
   }
 }

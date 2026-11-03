@@ -12,9 +12,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kizuna.customer.api.dto.CustomerResponse;
-import com.kizuna.customer.api.dto.CustomerSummaryResponse;
+import com.kizuna.customer.api.dto.CustomerMapperImpl;
 import com.kizuna.customer.application.CustomerService;
+import com.kizuna.customer.application.CustomerViews.CustomerDetail;
+import com.kizuna.customer.application.CustomerViews.CustomerSummary;
+import com.kizuna.customer.domain.Customer;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
@@ -37,7 +39,11 @@ import org.springframework.test.web.servlet.MockMvc;
 
 /** ハンドラ層で閉じている約束（offset ページングの全順序、生成 201 / 削除 204、名乗られた店舗の受け渡し）の単体テスト。 */
 @WebMvcTest(CustomerController.class)
-@Import({CustomerControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
+@Import({
+  CustomerControllerTest.MethodSecurityConfig.class,
+  StoreScopeHolder.class,
+  CustomerMapperImpl.class
+})
 class CustomerControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -62,7 +68,7 @@ class CustomerControllerTest {
   void listAppendsIdTiebreakerWhenCallerOverridesSort() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-    Page<CustomerSummaryResponse> empty = new PageImpl<>(List.of());
+    Page<CustomerSummary> empty = new PageImpl<>(List.of());
     when(customerService.list(eq(STORE_ID), any(), any(), pageableCaptor.capture()))
         .thenReturn(empty);
 
@@ -79,7 +85,7 @@ class CustomerControllerTest {
   void listTrimsSurroundingWhitespaceOfSearch() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<String> searchCaptor = ArgumentCaptor.forClass(String.class);
-    Page<CustomerSummaryResponse> empty = new PageImpl<>(List.of());
+    Page<CustomerSummary> empty = new PageImpl<>(List.of());
     when(customerService.list(eq(STORE_ID), searchCaptor.capture(), any(), any()))
         .thenReturn(empty);
 
@@ -97,7 +103,7 @@ class CustomerControllerTest {
   void listPassesIdeographicSpaceOnlySearchAsNull() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<String> searchCaptor = ArgumentCaptor.forClass(String.class);
-    Page<CustomerSummaryResponse> empty = new PageImpl<>(List.of());
+    Page<CustomerSummary> empty = new PageImpl<>(List.of());
     when(customerService.list(eq(STORE_ID), searchCaptor.capture(), any(), any()))
         .thenReturn(empty);
 
@@ -114,7 +120,7 @@ class CustomerControllerTest {
   void createRespondsWithCreated() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(customerService.create(eq(STORE_ID), any()))
-        .thenReturn(CustomerResponse.builder().id("c1").build());
+        .thenReturn(new CustomerDetail(customer("c1"), List.of(), null, null));
 
     mockMvc
         .perform(
@@ -178,6 +184,7 @@ class CustomerControllerTest {
   @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
   void listPassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(customerService.list(any(), any(), any(), any())).thenReturn(new PageImpl<>(List.of()));
 
     mockMvc
         .perform(get("/customers").header("X-Store-ID", STORE_ID.toString()))
@@ -191,6 +198,8 @@ class CustomerControllerTest {
   @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
   void createPassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(customerService.create(any(), any()))
+        .thenReturn(new CustomerDetail(customer("c1"), List.of(), null, null));
 
     mockMvc
         .perform(
@@ -201,5 +210,11 @@ class CustomerControllerTest {
         .andExpect(status().isCreated());
 
     verify(customerService).create(eq(STORE_ID), any());
+  }
+
+  private static Customer customer(String id) {
+    Customer customer = Customer.builder().build();
+    customer.setId(id);
+    return customer;
   }
 }

@@ -3,6 +3,7 @@ package com.kizuna.customer.api.dto;
 import com.kizuna.customer.domain.ContactAction;
 import com.kizuna.customer.domain.ContactPurpose;
 import com.kizuna.customer.domain.ContactState;
+import com.kizuna.customer.domain.CustomerContactHistory;
 import java.time.OffsetDateTime;
 
 public record ContactHistoryResponse(
@@ -19,4 +20,22 @@ public record ContactHistoryResponse(
     String source,
     String reason,
     String sourceContactId,
-    String applicationId) {}
+    String applicationId) {
+  public static ContactHistoryResponse of(CustomerContactHistory h) {
+    return new ContactHistoryResponse(
+        h.getId(),
+        h.getContactId(),
+        h.getOriginCustomerId(),
+        h.getAction(),
+        h.getActorId(),
+        h.getOccurredAt(),
+        h.getBefore(),
+        h.getAfter(),
+        h.getOperationId(),
+        h.getPurpose(),
+        h.getSource(),
+        h.getReason(),
+        h.getSourceContactId(),
+        h.getApplicationId());
+  }
+}

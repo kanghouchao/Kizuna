@@ -1,7 +1,7 @@
 package com.kizuna.customer.application;
 
-import com.kizuna.customer.api.dto.CustomerMergePreviewRequest;
-import com.kizuna.customer.api.dto.CustomerMergePreviewResponse;
+import com.kizuna.customer.application.CustomerCommands.MergeSelection;
+import com.kizuna.customer.application.CustomerViews.MergePreview;
 import com.kizuna.customer.domain.ContactType;
 import com.kizuna.customer.domain.CustomerContactRepository;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
@@ -35,10 +35,10 @@ public class MergePreparation {
   private final MemberLookupService members;
   private final MergeConfirmation confirmation;
 
-  public record Prepared(CustomerMergePreviewResponse response, List<String> movedOrderIds) {}
+  public record Prepared(MergePreview preview, List<String> movedOrderIds) {}
 
   /** 呼出元が両顧客をロックし、受注の状態変更も快照取得から確定まで直列化する。 */
-  public Prepared prepare(Long storeId, String survivingId, CustomerMergePreviewRequest input) {
+  public Prepared prepare(Long storeId, String survivingId, MergeSelection input) {
     var orders = merges.lockOrders(storeId, List.of(survivingId, input.mergedCustomerId()));
     var surviving = snapshot(storeId, survivingId);
     var merged = snapshot(storeId, input.mergedCustomerId());
@@ -85,7 +85,7 @@ public class MergePreparation {
             .map(CustomerMergeRepository.OrderState::getId)
             .toList();
     var result =
-        new CustomerMergePreviewResponse(
+        new MergePreview(
             surviving,
             merged,
             profile,
@@ -110,7 +110,7 @@ public class MergePreparation {
     String token =
         conflicts.isEmpty() ? confirmation.sign(storeId, List.of(result, versions)) : null;
     return new Prepared(
-        new CustomerMergePreviewResponse(
+        new MergePreview(
             surviving,
             merged,
             profile,

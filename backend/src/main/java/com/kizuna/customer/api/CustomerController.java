@@ -2,6 +2,7 @@ package com.kizuna.customer.api;
 
 import com.kizuna.customer.api.dto.CustomerCreateRequest;
 import com.kizuna.customer.api.dto.CustomerDuplicateGroupResponse;
+import com.kizuna.customer.api.dto.CustomerMapper;
 import com.kizuna.customer.api.dto.CustomerMergeComparisonResponse;
 import com.kizuna.customer.api.dto.CustomerResponse;
 import com.kizuna.customer.api.dto.CustomerSummaryResponse;
@@ -34,6 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class CustomerController {
 
   private final CustomerService customerService;
+  private final CustomerMapper customerMapper;
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
@@ -42,7 +44,10 @@ public class CustomerController {
       @RequestParam(required = false) String search,
       @RequestParam(required = false) String classification,
       @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
-    return ResponseEntity.ok(customerService.list(storeId, search, classification, pageable));
+    return ResponseEntity.ok(
+        customerService
+            .list(storeId, search, classification, pageable)
+            .map(customerMapper::toSummaryResponse));
   }
 
   /** 同店の未統合顧客が共有する有効連絡先を、種類・値の順で提示する。 */
@@ -57,7 +62,9 @@ public class CustomerController {
               sort = {})
           Pageable pageable) {
     return ResponseEntity.ok(
-        customerService.listDuplicateCandidates(storeId, search, type, pageable));
+        customerService
+            .listDuplicateCandidates(storeId, search, type, pageable)
+            .map(customerMapper::toDuplicateGroupResponse));
   }
 
   @GetMapping("/duplicates/customers")
@@ -70,7 +77,10 @@ public class CustomerController {
               size = 20,
               sort = {})
           Pageable pageable) {
-    return ResponseEntity.ok(customerService.duplicateCustomers(storeId, type, value, pageable));
+    return ResponseEntity.ok(
+        customerService
+            .duplicateCustomers(storeId, type, value, pageable)
+            .map(customerMapper::toComparisonResponse));
   }
 
   /**
@@ -82,20 +92,24 @@ public class CustomerController {
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MERGE') and hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<List<CustomerMergeComparisonResponse>> mergeComparison(
       @CurrentStore Long storeId, @RequestParam List<String> ids) {
-    return ResponseEntity.ok(customerService.mergeComparison(storeId, ids));
+    return ResponseEntity.ok(
+        customerService.mergeComparison(storeId, ids).stream()
+            .map(customerMapper::toComparisonResponse)
+            .toList());
   }
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<CustomerResponse> get(@CurrentStore Long storeId, @PathVariable String id) {
-    return ResponseEntity.ok(customerService.get(storeId, id));
+    return ResponseEntity.ok(customerMapper.toResponse(customerService.get(storeId, id)));
   }
 
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<CustomerResponse> create(
       @CurrentStore Long storeId, @Valid @RequestBody CustomerCreateRequest request) {
-    return ResponseEntity.status(HttpStatus.CREATED).body(customerService.create(storeId, request));
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(customerMapper.toResponse(customerService.create(storeId, request.command())));
   }
 
   @PutMapping("/{id}")
@@ -104,7 +118,8 @@ public class CustomerController {
       @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody CustomerUpdateRequest request) {
-    return ResponseEntity.ok(customerService.update(storeId, id, request));
+    return ResponseEntity.ok(
+        customerMapper.toResponse(customerService.update(storeId, id, request.patch())));
   }
 
   @DeleteMapping("/{id}")

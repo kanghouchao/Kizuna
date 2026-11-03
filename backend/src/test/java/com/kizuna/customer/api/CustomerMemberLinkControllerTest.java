@@ -11,9 +11,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kizuna.customer.api.dto.CustomerMemberLinkResponse;
 import com.kizuna.customer.application.CustomerMemberLinkService;
 import com.kizuna.customer.domain.CustomerMemberLink;
+import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
@@ -73,9 +73,7 @@ class CustomerMemberLinkControllerTest {
   void currentReturnsTheMemberCodeWhenLinked() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(customerMemberLinkService.current(eq(STORE_ID), anyString()))
-        .thenReturn(
-            new CustomerMemberLinkResponse(
-                "l1", true, "123456789012", OffsetDateTime.parse("2026-08-01T10:00:00+09:00")));
+        .thenReturn(link("l1", "123456789012", OffsetDateTime.parse("2026-08-01T10:00:00+09:00")));
 
     mockMvc
         .perform(storeGet("/customers/c1/member-link"))
@@ -151,5 +149,19 @@ class CustomerMemberLinkControllerTest {
     return get(path)
         .header("X-Store-ID", STORE_ID.toString())
         .principal(() -> "tanaka.hanako@kizuna.test");
+  }
+
+  private static CustomerMemberLink link(String id, String memberCode, OffsetDateTime linkedAt) {
+    CustomerMemberLink link =
+        CustomerMemberLink.builder()
+            .customerId("c1")
+            .memberId(1L)
+            .memberCode(memberCode)
+            .reason(LinkReason.MEMBER_CODE)
+            .linkedBy(1L)
+            .linkedAt(linkedAt)
+            .build();
+    link.setId(id);
+    return link;
   }
 }

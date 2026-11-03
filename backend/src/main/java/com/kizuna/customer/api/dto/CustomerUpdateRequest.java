@@ -1,5 +1,6 @@
 package com.kizuna.customer.api.dto;
 
+import com.kizuna.customer.domain.CustomerPatch;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -17,4 +18,18 @@ public class CustomerUpdateRequest {
   private String usageAreas;
   private String ngType;
   private String ngContent;
+
+  /** null の項目は「変更しない」。 */
+  public CustomerPatch patch() {
+    return new CustomerPatch(
+        name,
+        address,
+        buildingName,
+        landmark,
+        classification,
+        hasPet,
+        usageAreas,
+        ngType,
+        ngContent);
+  }
 }

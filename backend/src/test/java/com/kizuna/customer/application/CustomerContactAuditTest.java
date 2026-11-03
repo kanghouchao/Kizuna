@@ -12,8 +12,8 @@ import static org.mockito.Mockito.when;
 import com.kizuna.audit.domain.AuditEvent;
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
-import com.kizuna.customer.api.dto.ContactPermissionRequest;
-import com.kizuna.customer.api.dto.ContactRequest;
+import com.kizuna.customer.application.CustomerCommands.ContactValue;
+import com.kizuna.customer.application.CustomerCommands.PermissionChange;
 import com.kizuna.customer.domain.ContactPermissionStatus;
 import com.kizuna.customer.domain.ContactPurpose;
 import com.kizuna.customer.domain.ContactType;
@@ -145,12 +145,12 @@ class CustomerContactAuditTest {
   void createdContactIsTraceableWithoutCopyingItsPrivateValue() {
     var created =
         service.create(
-            STORE_ID, "customer", new ContactRequest(ContactType.EMAIL, "private@EXAMPLE.TEST"));
+            STORE_ID, "customer", new ContactValue(ContactType.EMAIL, "private@EXAMPLE.TEST"));
     assertThat(audit).hasSize(1);
     var event = audit.getFirst();
     assertThat(event.getAction()).isEqualTo("CUSTOMER_CONTACT_CREATED");
     assertThat(event.getTargetType()).isEqualTo("CUSTOMER_CONTACT");
-    assertThat(event.getTargetId()).isEqualTo(created.id());
+    assertThat(event.getTargetId()).isEqualTo(created.contact().getId());
     assertThat(event.getSourceType()).isEqualTo("CUSTOMER_CONTACT_HISTORY");
     assertThat(event.getSourceId()).isEqualTo(history.getFirst().getId());
     assertThat(event.getActorId()).isEqualTo(9L);
@@ -166,41 +166,40 @@ class CustomerContactAuditTest {
   @Test
   void switchingPreferenceRecordsBothSidesOnceAndIgnoresRepeatingTheChoice() {
     var first =
-        service.create(STORE_ID, "customer", new ContactRequest(ContactType.LINE, "private-first"));
+        service.create(STORE_ID, "customer", new ContactValue(ContactType.LINE, "private-first"));
     var second =
-        service.create(
-            STORE_ID, "customer", new ContactRequest(ContactType.LINE, "private-second"));
-    service.prefer(STORE_ID, "customer", ContactType.LINE, first.id());
+        service.create(STORE_ID, "customer", new ContactValue(ContactType.LINE, "private-second"));
+    service.prefer(STORE_ID, "customer", ContactType.LINE, first.contact().getId());
     audit.clear();
-    service.prefer(STORE_ID, "customer", ContactType.LINE, second.id());
+    service.prefer(STORE_ID, "customer", ContactType.LINE, second.contact().getId());
     assertThat(audit).hasSize(2);
     assertThat(audit)
         .allSatisfy(
             event ->
                 assertThat(event.getAction()).isEqualTo("CUSTOMER_CONTACT_PREFERENCE_CHANGED"));
-    assertThat(audit.getFirst().getTargetId()).isEqualTo(first.id());
+    assertThat(audit.getFirst().getTargetId()).isEqualTo(first.contact().getId());
     assertThat(audit.getFirst().getBeforeValues()).containsEntry("preferred", "true");
     assertThat(audit.getFirst().getAfterValues()).containsEntry("preferred", "false");
-    assertThat(audit.getLast().getTargetId()).isEqualTo(second.id());
+    assertThat(audit.getLast().getTargetId()).isEqualTo(second.contact().getId());
     assertThat(audit.getLast().getBeforeValues()).containsEntry("preferred", "false");
     assertThat(audit.getLast().getAfterValues()).containsEntry("preferred", "true");
     assertThat(audit.getFirst().getAfterValues().get("operation_id"))
         .isEqualTo(audit.getLast().getAfterValues().get("operation_id"));
-    service.prefer(STORE_ID, "customer", ContactType.LINE, second.id());
+    service.prefer(STORE_ID, "customer", ContactType.LINE, second.contact().getId());
     assertThat(audit).hasSize(2);
   }
 
   @Test
   void permissionEvidenceIsRecordedEvenWhenTheStatusIsUnchangedWithoutCopyingEvidence() {
     var contact =
-        service.create(
-            STORE_ID, "customer", new ContactRequest(ContactType.LINE, "private-contact"));
+        service.create(STORE_ID, "customer", new ContactValue(ContactType.LINE, "private-contact"));
     audit.clear();
     var input =
-        new ContactPermissionRequest(
-            ContactPermissionStatus.ALLOWED, "private-source", "private-reason");
-    service.changePermission(STORE_ID, "customer", contact.id(), ContactPurpose.BUSINESS, input);
-    service.changePermission(STORE_ID, "customer", contact.id(), ContactPurpose.BUSINESS, input);
+        new PermissionChange(ContactPermissionStatus.ALLOWED, "private-source", "private-reason");
+    service.changePermission(
+        STORE_ID, "customer", contact.contact().getId(), ContactPurpose.BUSINESS, input);
+    service.changePermission(
+        STORE_ID, "customer", contact.contact().getId(), ContactPurpose.BUSINESS, input);
     assertThat(audit).hasSize(2);
     assertThat(audit)
         .allSatisfy(
@@ -219,29 +218,34 @@ class CustomerContactAuditTest {
   void deletingADenialAuditsTheRemainingContactsInheritedRestriction() {
     var source =
         service.create(
-            STORE_ID, "customer", new ContactRequest(ContactType.LINE, "private-duplicate"));
+            STORE_ID, "customer", new ContactValue(ContactType.LINE, "private-duplicate"));
     var target =
         service.create(
-            STORE_ID, "customer", new ContactRequest(ContactType.LINE, "private-duplicate"));
+            STORE_ID, "customer", new ContactValue(ContactType.LINE, "private-duplicate"));
     service.changePermission(
         STORE_ID,
         "customer",
-        source.id(),
+        source.contact().getId(),
         ContactPurpose.BUSINESS,
-        new ContactPermissionRequest(
-            ContactPermissionStatus.DENIED, "private-source", "private-reason"));
+        new PermissionChange(ContactPermissionStatus.DENIED, "private-source", "private-reason"));
     audit.clear();
-    service.delete(STORE_ID, "customer", source.id());
+    service.delete(STORE_ID, "customer", source.contact().getId());
     assertThat(audit).hasSize(2);
     var inherited =
-        audit.stream().filter(e -> e.getTargetId().equals(target.id())).findFirst().orElseThrow();
+        audit.stream()
+            .filter(e -> e.getTargetId().equals(target.contact().getId()))
+            .findFirst()
+            .orElseThrow();
     var deleted =
-        audit.stream().filter(e -> e.getTargetId().equals(source.id())).findFirst().orElseThrow();
+        audit.stream()
+            .filter(e -> e.getTargetId().equals(source.contact().getId()))
+            .findFirst()
+            .orElseThrow();
     assertThat(inherited.getAction()).isEqualTo("CUSTOMER_CONTACT_RESTRICTION_INHERITED");
     assertThat(inherited.getBeforeValues()).containsEntry("business_status", "UNKNOWN");
     assertThat(inherited.getAfterValues())
         .containsEntry("business_status", "DENIED")
-        .containsEntry("source_contact_id", source.id());
+        .containsEntry("source_contact_id", source.contact().getId());
     assertThat(deleted.getAction()).isEqualTo("CUSTOMER_CONTACT_DELETED");
     assertThat(deleted.getBeforeValues()).containsEntry("deleted", "false");
     assertThat(deleted.getAfterValues()).containsEntry("deleted", "true");
@@ -255,16 +259,19 @@ class CustomerContactAuditTest {
   void changingAValueRecordsOnlyItsFieldNameAndLeavesNormalizedNoOpUnaudited() {
     var created =
         service.create(
-            STORE_ID, "customer", new ContactRequest(ContactType.EMAIL, "private@EXAMPLE.TEST"));
+            STORE_ID, "customer", new ContactValue(ContactType.EMAIL, "private@EXAMPLE.TEST"));
     audit.clear();
     service.update(
         STORE_ID,
         "customer",
-        created.id(),
-        new ContactRequest(ContactType.EMAIL, "private@example.test"));
+        created.contact().getId(),
+        new ContactValue(ContactType.EMAIL, "private@example.test"));
     assertThat(audit).isEmpty();
     service.update(
-        STORE_ID, "customer", created.id(), new ContactRequest(ContactType.LINE, "private-line"));
+        STORE_ID,
+        "customer",
+        created.contact().getId(),
+        new ContactValue(ContactType.LINE, "private-line"));
     assertThat(audit).hasSize(1);
     assertThat(audit.getFirst().getAction()).isEqualTo("CUSTOMER_CONTACT_UPDATED");
     assertThat(audit.getFirst().getBeforeValues()).containsEntry("type", "EMAIL");
@@ -277,69 +284,68 @@ class CustomerContactAuditTest {
   @Test
   void editingTheSourceInheritsRestrictionsButDeletingUnchangedDuplicatesAddsNoInheritanceAudit() {
     var source =
-        service.create(
-            STORE_ID, "customer", new ContactRequest(ContactType.LINE, "private-shared"));
+        service.create(STORE_ID, "customer", new ContactValue(ContactType.LINE, "private-shared"));
     var target =
-        service.create(
-            STORE_ID, "customer", new ContactRequest(ContactType.LINE, "private-shared"));
+        service.create(STORE_ID, "customer", new ContactValue(ContactType.LINE, "private-shared"));
     service.changePermission(
         STORE_ID,
         "customer",
-        source.id(),
+        source.contact().getId(),
         ContactPurpose.MARKETING,
-        new ContactPermissionRequest(
-            ContactPermissionStatus.DENIED, "private-source", "private-reason"));
+        new PermissionChange(ContactPermissionStatus.DENIED, "private-source", "private-reason"));
     audit.clear();
     service.update(
-        STORE_ID, "customer", source.id(), new ContactRequest(ContactType.LINE, "private-new"));
+        STORE_ID,
+        "customer",
+        source.contact().getId(),
+        new ContactValue(ContactType.LINE, "private-new"));
     assertThat(audit)
         .extracting(AuditEvent::getAction)
         .containsExactly("CUSTOMER_CONTACT_RESTRICTION_INHERITED", "CUSTOMER_CONTACT_UPDATED");
-    assertThat(audit.getFirst().getTargetId()).isEqualTo(target.id());
+    assertThat(audit.getFirst().getTargetId()).isEqualTo(target.contact().getId());
     assertThat(audit.getFirst().getAfterValues()).containsEntry("marketing_status", "DENIED");
     var duplicate =
-        service.create(
-            STORE_ID, "customer", new ContactRequest(ContactType.LINE, "private-shared"));
+        service.create(STORE_ID, "customer", new ContactValue(ContactType.LINE, "private-shared"));
     service.changePermission(
         STORE_ID,
         "customer",
-        duplicate.id(),
+        duplicate.contact().getId(),
         ContactPurpose.MARKETING,
-        new ContactPermissionRequest(
-            ContactPermissionStatus.DENIED, "private-source", "private-reason"));
+        new PermissionChange(ContactPermissionStatus.DENIED, "private-source", "private-reason"));
     audit.clear();
-    service.delete(STORE_ID, "customer", target.id());
+    service.delete(STORE_ID, "customer", target.contact().getId());
     assertThat(audit).extracting(AuditEvent::getAction).containsExactly("CUSTOMER_CONTACT_DELETED");
   }
 
   @Test
   void deniedInputsAndMissingContactsNeverCreateSuccessfulAudit() {
     var created =
-        service.create(STORE_ID, "customer", new ContactRequest(ContactType.LINE, "private"));
+        service.create(STORE_ID, "customer", new ContactValue(ContactType.LINE, "private"));
     service.changePermission(
         STORE_ID,
         "customer",
-        created.id(),
+        created.contact().getId(),
         ContactPurpose.BUSINESS,
-        new ContactPermissionRequest(
-            ContactPermissionStatus.DENIED, "private-source", "private-reason"));
+        new PermissionChange(ContactPermissionStatus.DENIED, "private-source", "private-reason"));
     audit.clear();
     assertThatThrownBy(
             () ->
                 service.changePermission(
                     STORE_ID,
                     "customer",
-                    created.id(),
+                    created.contact().getId(),
                     ContactPurpose.BUSINESS,
-                    new ContactPermissionRequest(
+                    new PermissionChange(
                         ContactPermissionStatus.UNKNOWN, "private-source", "private-reason")))
         .isInstanceOf(RuntimeException.class);
     assertThatThrownBy(() -> service.delete(STORE_ID, "customer", "missing"))
         .isInstanceOf(RuntimeException.class);
-    assertThatThrownBy(() -> service.prefer(STORE_ID, "customer", ContactType.EMAIL, created.id()))
+    assertThatThrownBy(
+            () ->
+                service.prefer(STORE_ID, "customer", ContactType.EMAIL, created.contact().getId()))
         .isInstanceOf(RuntimeException.class);
     when(customers.isMerged(STORE_ID, "customer")).thenReturn(true);
-    assertThatThrownBy(() -> service.delete(STORE_ID, "customer", created.id()))
+    assertThatThrownBy(() -> service.delete(STORE_ID, "customer", created.contact().getId()))
         .isInstanceOf(RuntimeException.class);
     assertThat(audit).isEmpty();
   }

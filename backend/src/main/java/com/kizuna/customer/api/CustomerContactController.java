@@ -39,7 +39,7 @@ public class CustomerContactController {
       @CurrentStore Long storeId,
       @PathVariable String customerId,
       @PageableDefault(size = 20, sort = "id") Pageable pageable) {
-    return service.list(storeId, customerId, pageable);
+    return service.list(storeId, customerId, pageable).map(ContactResponse::of);
   }
 
   @PostMapping("/contacts")
@@ -49,7 +49,7 @@ public class CustomerContactController {
       @PathVariable String customerId,
       @Valid @RequestBody ContactRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(service.create(storeId, customerId, request));
+        .body(ContactResponse.of(service.create(storeId, customerId, request.command())));
   }
 
   @PutMapping("/contacts/{contactId}")
@@ -59,7 +59,7 @@ public class CustomerContactController {
       @PathVariable String customerId,
       @PathVariable String contactId,
       @Valid @RequestBody ContactRequest request) {
-    return service.update(storeId, customerId, contactId, request);
+    return ContactResponse.of(service.update(storeId, customerId, contactId, request.command()));
   }
 
   @PutMapping("/contacts/{contactId}/permissions/{purpose}")
@@ -70,7 +70,8 @@ public class CustomerContactController {
       @PathVariable String contactId,
       @PathVariable ContactPurpose purpose,
       @Valid @RequestBody ContactPermissionRequest request) {
-    return service.changePermission(storeId, customerId, contactId, purpose, request);
+    return ContactResponse.of(
+        service.changePermission(storeId, customerId, contactId, purpose, request.command()));
   }
 
   @DeleteMapping("/contacts/{contactId}")
@@ -102,6 +103,6 @@ public class CustomerContactController {
               sort = {"occurredAt", "id"},
               direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return service.history(storeId, customerId, pageable);
+    return service.history(storeId, customerId, pageable).map(ContactHistoryResponse::of);
   }
 }
