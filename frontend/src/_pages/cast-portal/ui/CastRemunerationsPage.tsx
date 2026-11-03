@@ -72,7 +72,9 @@ function RemunerationList({ onOpen }: { onOpen: (id: string) => void }) {
                   onClick={() => choose(e.enrollment_id)}
                 >
                   {e.store_name}・{memberships[e.status]}
-                  {e.ended_at ? `（${e.ended_at.slice(0, 10)}）` : ''}
+                  {e.ended_at
+                    ? `（${new Date(e.ended_at).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' })}）`
+                    : ''}
                 </Button>
               ))}
             </div>
