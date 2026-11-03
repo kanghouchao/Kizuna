@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { notify } from '@/shared/notify';
-import { getApiErrorMessage } from '../apiError';
+import { useVersionedWrite } from './useVersionedWrite';
 
 interface DeleteActionOptions<T> {
   /** 削除本体。確認済みの対象を受け取る */
@@ -10,34 +9,34 @@ interface DeleteActionOptions<T> {
   successMessage: string;
   /** サーバが理由を返さなかったときの文言 */
   errorMessage: string;
-  /** 削除成功後の後始末（一覧の取り直し等） */
-  onDeleted: () => void;
+  /** 一覧の取り直し。成功・404・409 の後に走る */
+  reload: () => void | Promise<void>;
 }
 
 /**
  * 一覧行の削除ライフサイクル（確認対象の保持・実行・トースト）。
- * 失敗理由はサーバだけが持つ（授与中ロールの 409 等）ため、文言は常に応答から取り、
- * 応答が理由を持たないときだけ errorMessage へ落とす。
+ * 失敗理由はサーバだけが持つ（授与中ロールの 409 等）ため、文言は常に応答から取る。
+ * 一覧の行には失われる入力が無いので、409 は案内を出さずにその場で取り直す。
  * 確認ダイアログの文言は対象に依存するため、描画は呼び出し側の責務（target を読んで組み立てる）。
  */
 export function useDeleteAction<T>({
   remove,
   successMessage,
   errorMessage,
-  onDeleted,
+  reload,
 }: DeleteActionOptions<T>) {
   const [open, setOpen] = useState(false);
   const [target, setTarget] = useState<T | null>(null);
+  const writer = useVersionedWrite(reload);
 
   const confirm = async () => {
     if (!open || !target) return;
-    try {
-      await remove(target);
-      notify.success(successMessage);
-      onDeleted();
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, errorMessage));
-    }
+    const outcome = await writer.write(() => remove(target), {
+      success: successMessage,
+      failure: errorMessage,
+      onSuccess: () => void reload(),
+    });
+    if (outcome === 'conflict') await writer.reload();
   };
 
   return {

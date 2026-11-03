@@ -10,16 +10,16 @@ interface Row {
   id: string;
 }
 
-const setup = (remove: (target: Row) => Promise<void>, onDeleted = jest.fn()) => {
+const setup = (remove: (target: Row) => Promise<void>, reload = jest.fn()) => {
   const rendered = renderHook(() =>
     useDeleteAction<Row>({
       remove,
       successMessage: '削除しました',
       errorMessage: '削除に失敗しました',
-      onDeleted,
+      reload,
     })
   );
-  return { ...rendered, onDeleted };
+  return { ...rendered, reload };
 };
 
 describe('useDeleteAction', () => {
@@ -43,9 +43,9 @@ describe('useDeleteAction', () => {
     expect(result.current.target).toEqual({ id: '2' });
   });
 
-  it('confirm は確認中の対象を削除し、成功文言と後始末を走らせる', async () => {
+  it('confirm は確認中の対象を削除し、成功文言を出して一覧を取り直す', async () => {
     const remove = jest.fn(async () => {});
-    const { result, onDeleted } = setup(remove);
+    const { result, reload } = setup(remove);
 
     act(() => result.current.ask({ id: '1' }));
     await act(async () => {
@@ -54,14 +54,14 @@ describe('useDeleteAction', () => {
 
     expect(remove).toHaveBeenCalledWith({ id: '1' });
     expect(notify.success).toHaveBeenCalledWith('削除しました');
-    expect(onDeleted).toHaveBeenCalledTimes(1);
+    expect(reload).toHaveBeenCalledTimes(1);
   });
 
-  it('失敗時はサーバが返した文言を出し、後始末は走らせない', async () => {
+  it('失敗時はサーバが返した文言を出し、一覧は取り直さない', async () => {
     const remove = jest.fn(async () => {
       throw { response: { data: { error: 'このロールは付与中のため削除できません' } } };
     });
-    const { result, onDeleted } = setup(remove);
+    const { result, reload } = setup(remove);
 
     act(() => result.current.ask({ id: '1' }));
     await act(async () => {
@@ -70,7 +70,26 @@ describe('useDeleteAction', () => {
 
     expect(notify.error).toHaveBeenCalledWith('このロールは付与中のため削除できません');
     expect(notify.success).not.toHaveBeenCalled();
-    expect(onDeleted).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('409 は一覧をその場で取り直し、次の削除を止めない', async () => {
+    const remove = jest.fn(async () => {
+      throw { response: { status: 409, data: { error: '媒体が更新されています' } } };
+    });
+    const { result, reload } = setup(remove);
+
+    act(() => result.current.ask({ id: '1' }));
+    await act(async () => {
+      await result.current.confirm();
+    });
+    expect(reload).toHaveBeenCalledTimes(1);
+
+    act(() => result.current.ask({ id: '1' }));
+    await act(async () => {
+      await result.current.confirm();
+    });
+    expect(remove).toHaveBeenCalledTimes(2);
   });
 
   it('サーバが理由を返さないときだけ既定の文言へ落ちる', async () => {

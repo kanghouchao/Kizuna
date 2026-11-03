@@ -63,7 +63,7 @@ export default function CastListPage() {
     remove: cast => castApi.delete(cast.id),
     successMessage: 'キャストを削除しました',
     errorMessage: 'キャストの削除に失敗しました',
-    onDeleted: list.reload,
+    reload: list.reload,
   });
 
   /** 在籍状態の表示ラベルと配色を返す */

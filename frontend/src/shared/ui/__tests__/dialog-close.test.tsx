@@ -12,7 +12,7 @@ it('削除と親の再取得は退出を待たずに行い、確認文は退出�
   function Page() {
     const deletion = useDeleteAction({
       remove,
-      onDeleted: refresh,
+      reload: refresh,
       successMessage: '削除しました',
       errorMessage: '削除できませんでした',
     });

@@ -14,6 +14,8 @@ export { useListPage } from './hooks/useListPage';
 export { useResource } from './hooks/useResource';
 export { useDeleteAction } from './hooks/useDeleteAction';
 export { useBlobDownload } from './hooks/useBlobDownload';
+export { useVersionedWrite } from './hooks/useVersionedWrite';
+export type { WriteOutcome } from './hooks/useVersionedWrite';
 export { memoryOperationStore, sessionOperationStore } from './operation-store';
 export type { OperationStore } from './operation-store';
 export { useOperation, useOperationRevision } from './hooks/useOperation';

@@ -42,7 +42,7 @@ export default function StoresPage() {
     remove: store => adminStoreApi.delete(store.id),
     successMessage: '店舗を削除しました',
     errorMessage: '店舗の削除に失敗しました',
-    onDeleted: () => {
+    reload: () => {
       list.reload();
       reloadStores();
     },

@@ -5,8 +5,13 @@ import { ArrowLeftIcon, PlusIcon } from 'lucide-react';
 import { useState } from 'react';
 import { mediumApi, type MediumSummary } from '@/entities/medium';
 import { MePending, hasPermission, useMe } from '@/entities/user';
-import { getApiErrorMessage, storePath, useDeleteAction, useResource } from '@/shared/lib';
-import { notify } from '@/shared/notify';
+import {
+  storePath,
+  useDeleteAction,
+  useResource,
+  useVersionedWrite,
+  type WriteOutcome,
+} from '@/shared/lib';
 import {
   Badge,
   Button,
@@ -39,36 +44,58 @@ function MediaList({ manage }: { manage: boolean }) {
   const replace = (updated: MediumSummary) =>
     setData(rows => rows?.map(row => (row.id === updated.id ? updated : row)) ?? rows);
   const [modalOpen, setModalOpen] = useState(false);
+  // 開いた時点の写し。版は送信時に一覧から引き直すので、競合後に取り直した版で送り直せる
   const [renaming, setRenaming] = useState<MediumSummary | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  const renamingNow = renaming && items.find(row => row.id === renaming.id);
+  const writer = useVersionedWrite(reload);
+  // 一覧の行には失われる入力が無いので、409 は案内を出さずにその場で取り直す
+  const resync = (outcome: WriteOutcome) => {
+    if (outcome === 'conflict') void writer.reload();
+    return outcome;
+  };
   const deletion = useDeleteAction<MediumSummary>({
     remove: medium => mediumApi.delete(medium.id, medium.version),
     successMessage: '媒体を削除しました',
     errorMessage: '媒体の削除に失敗しました',
-    onDeleted: () => void reload(),
+    reload,
   });
 
   const toggle = async (medium: MediumSummary) => {
-    if (busy !== null) return;
     const stopping = medium.status === 'ACTIVE';
-    setBusy(medium.id);
-    try {
-      replace(
-        stopping
-          ? await mediumApi.stop(medium.id, medium.version)
-          : await mediumApi.resume(medium.id, medium.version)
+    resync(
+      await writer.write(
+        () =>
+          stopping
+            ? mediumApi.stop(medium.id, medium.version)
+            : mediumApi.resume(medium.id, medium.version),
+        {
+          success: stopping ? '媒体を停止しました' : '媒体を再開しました',
+          failure: stopping ? '媒体の停止に失敗しました' : '媒体の再開に失敗しました',
+          onSuccess: replace,
+        }
+      )
+    );
+  };
+
+  // 409 は名前の重複でも返るので、入力を残すためにダイアログは開いたままにする
+  const submitName = async (name: string) => {
+    let outcome: WriteOutcome = 'refused';
+    if (renaming === null)
+      outcome = await writer.write(() => mediumApi.create(name), {
+        success: '媒体を登録しました',
+        failure: '媒体の登録に失敗しました',
+        onSuccess: () => void reload(),
+      });
+    else if (renamingNow)
+      outcome = await writer.write(
+        () => mediumApi.rename(renamingNow.id, name, renamingNow.version),
+        {
+          success: '媒体名を変更しました',
+          failure: '媒体名の変更に失敗しました',
+          onSuccess: replace,
+        }
       );
-      notify.success(stopping ? '媒体を停止しました' : '媒体を再開しました');
-    } catch (error) {
-      notify.error(
-        getApiErrorMessage(
-          error,
-          stopping ? '媒体の停止に失敗しました' : '媒体の再開に失敗しました'
-        )
-      );
-    } finally {
-      setBusy(null);
-    }
+    if (resync(outcome) === 'success') setModalOpen(false);
   };
 
   return (
@@ -150,7 +177,7 @@ function MediaList({ manage }: { manage: boolean }) {
                       <Button
                         variant="outline"
                         size="sm"
-                        aria-disabled={busy === medium.id}
+                        aria-disabled={writer.busy}
                         aria-label={`「${medium.name}」を${medium.status === 'ACTIVE' ? '停止' : '再開'}`}
                         onClick={() => void toggle(medium)}
                       >
@@ -176,8 +203,10 @@ function MediaList({ manage }: { manage: boolean }) {
       <MediumNameModal
         open={modalOpen}
         medium={renaming}
+        gone={renaming !== null && !isLoading && failure === null && !renamingNow}
+        busy={writer.busy}
         onClose={() => setModalOpen(false)}
-        onSaved={updated => (updated ? replace(updated) : void reload())}
+        onSubmit={submitName}
       />
       <ConfirmDialog
         open={deletion.open}
