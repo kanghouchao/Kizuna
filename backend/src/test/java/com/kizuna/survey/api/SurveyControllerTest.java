@@ -11,12 +11,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kizuna.receipt.once.Receipt;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
-import com.kizuna.survey.api.dto.SurveyOperationResponse;
-import com.kizuna.survey.api.dto.SurveyRevisionWriteResponse;
 import com.kizuna.survey.application.SurveyReadService;
 import com.kizuna.survey.application.SurveyService;
+import com.kizuna.survey.application.SurveyViews.RevisionWritten;
 import com.kizuna.survey.domain.SurveyCommand;
 import com.kizuna.survey.domain.SurveyHistory;
 import com.kizuna.survey.domain.SurveyRevision;
@@ -24,6 +24,7 @@ import com.kizuna.survey.domain.SurveySeries;
 import com.kizuna.survey.domain.SurveyValues.Operation;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -74,6 +75,8 @@ class SurveyControllerTest {
   @WithMockUser(authorities = "PERM_SURVEY_VIEW")
   void listPassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(reads.list(any(), any(), any(), any(), any(), any(), any()))
+        .thenReturn(new PageImpl<>(List.of()));
 
     mockMvc
         .perform(get("/surveys").header("X-Store-ID", STORE_ID.toString()).principal(currentUser()))
@@ -97,8 +100,14 @@ class SurveyControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(service.write(eq(STORE_ID), eq("user"), any()))
         .thenReturn(
-            new SurveyRevisionWriteResponse(
-                null, new SurveyOperationResponse("op", Operation.DRAFT_CREATED, "r1", 0L, false)));
+            new RevisionWritten(
+                null,
+                new Receipt(
+                    "op",
+                    Operation.DRAFT_CREATED.receiptName(),
+                    "r1",
+                    Map.of("committed_version", 0L),
+                    false)));
 
     mockMvc
         .perform(

@@ -136,7 +136,7 @@ public class SurveyController {
       Authentication auth,
       @PathVariable String sid,
       @PathVariable String rid) {
-    return service.revision(storeId, auth.getName(), sid, rid);
+    return SurveyRevisionResponse.of(service.revision(storeId, auth.getName(), sid, rid));
   }
 
   @GetMapping("/{sid}/revisions/{rid}/response-counts")
@@ -146,7 +146,8 @@ public class SurveyController {
       Authentication auth,
       @PathVariable String sid,
       @PathVariable String rid) {
-    return service.counts(storeId, auth.getName(), sid, rid);
+    return SurveyResponseCountsResponse.of(
+        sid, rid, service.counts(storeId, auth.getName(), sid, rid));
   }
 
   @GetMapping
@@ -162,14 +163,16 @@ public class SurveyController {
       @RequestParam(name = "survey_id", required = false) String surveyId,
       @RequestParam(name = "latest_status", required = false) RevisionStatus latestStatus,
       @RequestParam(defaultValue = "CREATED_DESC") String sort) {
-    return reads.list(storeId, auth.getName(), pageable, q, surveyId, latestStatus, sort);
+    return reads
+        .list(storeId, auth.getName(), pageable, q, surveyId, latestStatus, sort)
+        .map(SurveySummaryResponse::of);
   }
 
   @GetMapping("/{sid}")
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW')")
   public SurveyResponse survey(
       @CurrentStore Long storeId, Authentication auth, @PathVariable String sid) {
-    return reads.detail(storeId, auth.getName(), sid);
+    return SurveyResponse.of(reads.detail(storeId, auth.getName(), sid));
   }
 
   @GetMapping("/{sid}/revisions")
@@ -183,7 +186,9 @@ public class SurveyController {
               sort = {"revisionNumber", "id"},
               direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return reads.revisions(storeId, auth.getName(), sid, pageable);
+    return reads
+        .revisions(storeId, auth.getName(), sid, pageable)
+        .map(SurveyRevisionSummaryResponse::of);
   }
 
   @GetMapping("/{sid}/revisions/{rid}/responses")
@@ -200,7 +205,9 @@ public class SurveyController {
       @RequestParam(name = "response_id", required = false) String responseId,
       @RequestParam(required = false) AnswerStatus status,
       @RequestParam(defaultValue = "RECEIVED_DESC") String sort) {
-    return reads.answers(storeId, auth.getName(), sid, rid, pageable, responseId, status, sort);
+    return reads
+        .answers(storeId, auth.getName(), sid, rid, pageable, responseId, status, sort)
+        .map(SurveyAnswerSummaryResponse::of);
   }
 
   @GetMapping("/{sid}/revisions/{rid}/history")
@@ -211,16 +218,19 @@ public class SurveyController {
       @PathVariable String sid,
       @PathVariable String rid,
       @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
-    return reads.revisionHistory(storeId, auth.getName(), sid, rid, pageable);
+    return reads
+        .revisionHistory(storeId, auth.getName(), sid, rid, pageable)
+        .map(SurveyRevisionHistoryResponse::of);
   }
 
   private ResponseEntity<SurveyWriteResponse> write(
       Long storeId, Authentication auth, SurveyCommand command, boolean create) {
     var result =
-        Replays.write(
-            DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-            () -> service.write(storeId, auth.getName(), command),
-            () -> service.replayOnly(storeId, auth.getName(), command));
+        SurveyWriteResponse.of(
+            Replays.write(
+                DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
+                () -> service.write(storeId, auth.getName(), command),
+                () -> service.replayOnly(storeId, auth.getName(), command)));
     return ResponseEntity.status(create && !result.operation().replayed() ? 201 : 200).body(result);
   }
 }

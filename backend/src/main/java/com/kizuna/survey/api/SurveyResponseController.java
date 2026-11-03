@@ -65,7 +65,7 @@ public class SurveyResponseController {
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW')")
   public SurveyAnswerResponse answer(
       @CurrentStore Long storeId, Authentication auth, @PathVariable String aid) {
-    return service.answer(storeId, auth.getName(), aid);
+    return SurveyAnswerResponse.of(service.answer(storeId, auth.getName(), aid));
   }
 
   @GetMapping("/history")
@@ -75,16 +75,19 @@ public class SurveyResponseController {
       Authentication auth,
       @PathVariable String aid,
       @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
-    return reads.answerHistory(storeId, auth.getName(), aid, pageable);
+    return reads
+        .answerHistory(storeId, auth.getName(), aid, pageable)
+        .map(SurveyAnswerHistoryResponse::of);
   }
 
   private ResponseEntity<SurveyWriteResponse> write(
       Long storeId, Authentication auth, SurveyCommand command, boolean create) {
     var result =
-        Replays.write(
-            DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-            () -> service.write(storeId, auth.getName(), command),
-            () -> service.replayOnly(storeId, auth.getName(), command));
+        SurveyWriteResponse.of(
+            Replays.write(
+                DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
+                () -> service.write(storeId, auth.getName(), command),
+                () -> service.replayOnly(storeId, auth.getName(), command)));
     return ResponseEntity.status(create && !result.operation().replayed() ? 201 : 200).body(result);
   }
 }
