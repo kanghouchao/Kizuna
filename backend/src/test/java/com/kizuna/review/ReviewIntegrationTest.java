@@ -893,8 +893,8 @@ class ReviewIntegrationTest {
   /** 並びと半開区間は PublicationIntegrationTest が持つ。ここは口コミの前提・店舗・応答の形だけを見る。 */
   @Test
   void publicEndpointShowsOnlyEligibleReviewsOfTheNamedStore() throws Exception {
-    approveGrantAndPublish("first", "\"published\":true,\"display_order\":0");
     approveGrantAndPublish("next", "\"published\":true,\"display_order\":1");
+    approveGrantAndPublish("first", "\"published\":true,\"display_order\":0");
     String pending = intake("pending-published");
     publish(pending, "{\"version\":0,\"published\":true,\"dedupe_key\":\"pending-publish\"}", 200);
     String withdrawn = approveGrantAndPublish("withdrawn", "\"published\":true");
@@ -909,6 +909,9 @@ class ReviewIntegrationTest {
         .extracting(r -> r.get("body").asString())
         .containsExactly("first", "next");
     assertThat(all.get("total_elements").asLong()).isEqualTo(2);
+    assertThat(publicReviews(storeId, "?page=1&size=1").get("content"))
+        .extracting(r -> r.get("body").asString())
+        .containsExactly("next");
     assertThat(all.get("content").get(0).get("received_on").asString()).isEqualTo("2026-01-02");
     assertThat(publicReviews(otherStore, "").get("content"))
         .extracting(r -> r.get("body").asString())

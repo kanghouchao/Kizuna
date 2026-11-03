@@ -402,8 +402,8 @@ class ArticleIntegrationTest {
   @Test
   void publicListShowsOnlyDisplayedArticlesOfTheNamedStoreInTheirPublicShape() throws Exception {
     var now = OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC);
-    publish(create("先頭", BODY), true, now.toString(), null, 0, 0);
     publish(create("次", BODY), true, null, null, 1, 0);
+    publish(create("先頭", BODY), true, now.toString(), null, 0, 0);
     publish(create("非公開", BODY), false, null, null, 0, 0);
     currentStore = otherStore;
     publish(create("foreign", BODY), true, null, null, 0, 0);
@@ -418,6 +418,11 @@ class ArticleIntegrationTest {
         .containsExactlyInAnyOrder("id", "title", "cover_image_url", "publish_from");
     assertThat(first.get("publish_from").asString()).isEqualTo("2026-06-01T00:00:00Z");
     assertThat(all.get("content").get(1).get("publish_from").isNull()).isTrue();
+    var secondPage = publicArticles(storeId, "/articles/public?page=1&size=1", 200);
+    assertThat(secondPage.get("content"))
+        .extracting(r -> r.get("title").asString())
+        .containsExactly("次");
+    assertThat(secondPage.get("total_elements").asLong()).isEqualTo(2);
     assertThat(publicArticles(otherStore, "/articles/public", 200).get("content"))
         .extracting(r -> r.get("title").asString())
         .containsExactly("foreign");
