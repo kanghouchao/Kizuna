@@ -1,6 +1,7 @@
 package com.kizuna.advertising.api.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.kizuna.advertising.application.AdvertisingService.MonthTotals;
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingCost;
 import com.kizuna.advertising.domain.AdvertisingMedium;
@@ -84,7 +85,19 @@ public final class AdvertisingResponses {
       long salesAmount,
       long recruitmentAmount,
       long recordedTotalAmount,
-      OffsetDateTime generatedAt) {}
+      OffsetDateTime generatedAt) {
+    public static MonthResponse of(MonthTotals t) {
+      return new MonthResponse(
+          t.storeId(),
+          t.month(),
+          t.version(),
+          t.entryCount(),
+          t.salesAmount(),
+          t.recruitmentAmount(),
+          t.recordedTotalAmount(),
+          t.generatedAt());
+    }
+  }
 
   public record CopyResponse(
       String id,

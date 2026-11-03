@@ -84,11 +84,7 @@ public class AdvertisingMediaComparison {
             .map(
                 c -> {
                   budget.text(c.medium().name());
-                  return new Cost(
-                      c.category(),
-                      new AdvertisingMedium(c.medium().id(), c.medium().name()),
-                      c.amount(),
-                      c.inquiryCount());
+                  return new Cost(c.category(), c.medium(), c.amount(), c.inquiryCount());
                 })
             .toList();
     var report = aggregate.apply(selected);

@@ -8,15 +8,14 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.advertising.api.dto.AdvertisingResponses.CostResponse;
-import com.kizuna.advertising.api.dto.AdvertisingResponses.MediumResponse;
-import com.kizuna.advertising.api.dto.AdvertisingResponses.MonthResponse;
 import com.kizuna.advertising.application.AdvertisingMediaComparison;
 import com.kizuna.advertising.application.AdvertisingMediaComparison.Basis;
 import com.kizuna.advertising.application.AdvertisingMediaComparison.Cost;
 import com.kizuna.advertising.application.AdvertisingMediaComparison.Fact;
 import com.kizuna.advertising.application.AdvertisingService;
 import com.kizuna.advertising.application.AdvertisingService.ExportSnapshot;
+import com.kizuna.advertising.application.AdvertisingService.ExportedCost;
+import com.kizuna.advertising.application.AdvertisingService.MonthTotals;
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingMedium;
 import com.kizuna.medium.lookup.MediumLookup;
@@ -45,27 +44,23 @@ class AdvertisingMediaComparisonTest {
   AppProperties properties = new AppProperties();
   AdvertisingMediaComparison comparison = new AdvertisingMediaComparison(costs, lookup, properties);
 
-  static CostResponse cost(AdvertisingCategory category, String mediumId, String name, int amount) {
-    return new CostResponse(
+  static ExportedCost cost(AdvertisingCategory category, String mediumId, String name, int amount) {
+    return new ExportedCost(
         "c" + mediumId + amount,
-        1L,
-        "2026-09",
+        1,
         category,
-        new MediumResponse(mediumId, name),
+        new AdvertisingMedium(mediumId, name),
         null,
         null,
         category == AdvertisingCategory.SALES ? 3 : null,
-        amount,
-        1,
-        AT,
-        AT);
+        amount);
   }
 
-  void costs(CostResponse... rows) {
+  void costs(ExportedCost... rows) {
     when(costs.snapshot(1L, "2026-09"))
         .thenReturn(
             new ExportSnapshot(
-                new MonthResponse(1L, "2026-09", 7, rows.length, 0, 0, 0, AT), List.of(rows)));
+                new MonthTotals(1L, "2026-09", 7, rows.length, 0, 0, 0, AT), List.of(rows)));
   }
 
   static DocumentBudget budget() {

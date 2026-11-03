@@ -2,15 +2,14 @@ package com.kizuna.advertising;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.kizuna.advertising.api.dto.AdvertisingResponses.CostResponse;
-import com.kizuna.advertising.api.dto.AdvertisingResponses.MediumResponse;
-import com.kizuna.advertising.api.dto.AdvertisingResponses.MonthResponse;
 import com.kizuna.advertising.application.AdvertisingMediaRenderer;
 import com.kizuna.advertising.application.AdvertisingMediaService;
 import com.kizuna.advertising.application.AdvertisingOrderCostRenderer;
 import com.kizuna.advertising.application.AdvertisingOrderCostService;
 import com.kizuna.advertising.application.AdvertisingRenderer;
 import com.kizuna.advertising.application.AdvertisingService.ExportSnapshot;
+import com.kizuna.advertising.application.AdvertisingService.ExportedCost;
+import com.kizuna.advertising.application.AdvertisingService.MonthTotals;
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingMediaReport;
 import com.kizuna.advertising.domain.AdvertisingMediaReport.Entry;
@@ -129,7 +128,7 @@ class AdvertisingRendererGoldenTest {
     return new DocumentBudget(new AppProperties.OperationalReport());
   }
 
-  private static CostResponse cost(
+  private static ExportedCost cost(
       String id,
       AdvertisingCategory category,
       String mediumName,
@@ -137,24 +136,20 @@ class AdvertisingRendererGoldenTest {
       String plan,
       Integer inquiryCount,
       int amount) {
-    return new CostResponse(
+    return new ExportedCost(
         id,
-        7L,
-        "2026-09",
+        3,
         category,
-        new MediumResponse("m-" + id, mediumName),
+        new AdvertisingMedium("m-" + id, mediumName),
         agency,
         plan,
         inquiryCount,
-        amount,
-        3L,
-        AT,
-        AT);
+        amount);
   }
 
   private static ExportSnapshot costs() {
     return new ExportSnapshot(
-        new MonthResponse(7L, "2026-09", 4, 4, 2600, 1000, 3600, AT),
+        new MonthTotals(7L, "2026-09", 4, 4, 2600, 1000, 3600, AT),
         List.of(
             cost("00001", AdvertisingCategory.SALES, "=媒体,\"試験\"", null, "上位枠", null, 100),
             cost("00002", AdvertisingCategory.SALES, "00123", "代理店A", null, 0, 0),
@@ -163,7 +158,7 @@ class AdvertisingRendererGoldenTest {
   }
 
   private static ExportSnapshot emptyCosts() {
-    return new ExportSnapshot(new MonthResponse(7L, "2026-10", 0, 0, 0, 0, 0, AT), List.of());
+    return new ExportSnapshot(new MonthTotals(7L, "2026-10", 0, 0, 0, 0, 0, AT), List.of());
   }
 
   private static AdvertisingMedium medium(String id, String name) {
