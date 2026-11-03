@@ -378,6 +378,24 @@ class RemunerationIntegrationTest {
   }
 
   @Test
+  void replayAfterACorrectionReturnsTheCurrentBonusAndTheCreationsOwnChangeId() {
+    var request = new BonusCreateRequest(personId, DAY, 1000, "付与", UUID.randomUUID());
+    var created = management.createBonus(storeId, request, email);
+    var corrected =
+        management.correctBonus(
+            storeId,
+            created.bonus().id(),
+            new BonusCorrectionRequest(
+                DAY, 2000, "付与", "金額訂正", created.bonus().version(), UUID.randomUUID()),
+            email);
+
+    var replay = management.createBonus(storeId, request, email);
+
+    assertThat(replay.bonus()).isEqualTo(corrected.bonus());
+    assertThat(replay.changeId()).isEqualTo(created.changeId());
+  }
+
+  @Test
   void allPersonAndResourcePathsRejectForeignStore() {
     var bonus =
         management
