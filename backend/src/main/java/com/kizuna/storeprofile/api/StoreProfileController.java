@@ -1,6 +1,7 @@
 package com.kizuna.storeprofile.api;
 
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.storeprofile.api.dto.StoreProfileMapper;
 import com.kizuna.storeprofile.api.dto.StoreProfileResponse;
 import com.kizuna.storeprofile.api.dto.StoreProfileUpdateRequest;
 import com.kizuna.storeprofile.application.StoreProfileService;
@@ -21,23 +22,26 @@ import org.springframework.web.bind.annotation.RestController;
 public class StoreProfileController {
 
   private final StoreProfileService storeProfileService;
+  private final StoreProfileMapper storeProfileMapper;
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_STORE_PROFILE_MANAGE')")
   public ResponseEntity<StoreProfileResponse> get(@CurrentStore Long storeId) {
-    return ResponseEntity.ok(storeProfileService.get(storeId));
+    return ResponseEntity.ok(storeProfileMapper.toResponse(storeProfileService.get(storeId)));
   }
 
   @PutMapping
   @PreAuthorize("hasAuthority('PERM_STORE_PROFILE_MANAGE')")
   public ResponseEntity<StoreProfileResponse> update(
       @CurrentStore Long storeId, @Valid @RequestBody StoreProfileUpdateRequest request) {
-    return ResponseEntity.ok(storeProfileService.update(storeId, request));
+    return ResponseEntity.ok(
+        storeProfileMapper.toResponse(
+            storeProfileService.update(storeId, storeProfileMapper.toPatch(request))));
   }
 
   @GetMapping("/public")
   @PermitAll
   public ResponseEntity<StoreProfileResponse> getPublic(@CurrentStore Long storeId) {
-    return ResponseEntity.ok(storeProfileService.get(storeId));
+    return ResponseEntity.ok(storeProfileMapper.toResponse(storeProfileService.get(storeId)));
   }
 }
