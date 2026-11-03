@@ -1,5 +1,6 @@
 package com.kizuna.store.api.dto;
 
+import com.kizuna.store.application.StoreCreateCommand;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -43,4 +44,8 @@ public class StoreCreateDTO {
   @Size(max = 128, message = "domain is too long")
   @Pattern(regexp = DOMAIN_PATTERN, message = "domain must be a hostname")
   private String domain;
+
+  public StoreCreateCommand command() {
+    return new StoreCreateCommand(name, shortName, domain);
+  }
 }

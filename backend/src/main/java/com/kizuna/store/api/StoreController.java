@@ -43,7 +43,8 @@ public class StoreController {
   @GetMapping("/me")
   @PreAuthorize("@permissionHolder.check(authentication)")
   public ResponseEntity<List<AdminStoreResponse>> listAuthorized() {
-    return ResponseEntity.ok(adminStoreService.listAuthorizedStores());
+    return ResponseEntity.ok(
+        adminStoreService.listAuthorizedStores().stream().map(AdminStoreResponse::of).toList());
   }
 
   // この一覧は副キー id も降順で揃える。補完で付く id は昇順のため、既定の並びに明示している。
@@ -55,13 +56,13 @@ public class StoreController {
               sort = {"createdAt", "id"},
               direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return ResponseEntity.ok(storeRegistryService.list(search, pageable));
+    return ResponseEntity.ok(storeRegistryService.list(search, pageable).map(StoreVO::of));
   }
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_STORE_MANAGE')")
   public ResponseEntity<StoreVO> getById(@PathVariable String id) {
-    return ResponseEntity.ok(storeRegistryService.getById(id));
+    return ResponseEntity.ok(StoreVO.of(storeRegistryService.getById(id)));
   }
 
   /**
@@ -75,6 +76,7 @@ public class StoreController {
   public ResponseEntity<StoreVO> getByDomain(@RequestParam String domain) {
     return storeRegistryService
         .getByDomain(domain)
+        .map(StoreVO::of)
         .map(ResponseEntity::ok)
         .orElseGet(() -> ResponseEntity.notFound().build());
   }
@@ -83,7 +85,7 @@ public class StoreController {
   @PreAuthorize("hasAuthority('PERM_STORE_MANAGE')")
   public ResponseEntity<AdminStoreCreationResponse> create(
       @Valid @RequestBody StoreCreateDTO store) {
-    Long id = storeRegistryService.create(store);
+    Long id = storeRegistryService.create(store.command());
     return ResponseEntity.status(HttpStatus.CREATED).body(new AdminStoreCreationResponse(id));
   }
 
@@ -91,7 +93,7 @@ public class StoreController {
   @PreAuthorize("hasAuthority('PERM_STORE_MANAGE')")
   public ResponseEntity<Void> update(
       @PathVariable String id, @Valid @RequestBody StoreUpdateDTO store) {
-    storeRegistryService.update(id, store);
+    storeRegistryService.update(id, store.patch());
     return ResponseEntity.noContent().build();
   }
 
@@ -105,6 +107,6 @@ public class StoreController {
   @GetMapping("/stats")
   @PreAuthorize("hasAuthority('PERM_STORE_MANAGE')")
   public ResponseEntity<StoreStatusVO> stats() {
-    return ResponseEntity.ok(storeRegistryService.stats());
+    return ResponseEntity.ok(new StoreStatusVO(storeRegistryService.count()));
   }
 }

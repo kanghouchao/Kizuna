@@ -11,10 +11,9 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.store.StoreShortNames;
-import com.kizuna.store.api.dto.StoreCreateDTO;
-import com.kizuna.store.api.dto.StoreUpdateDTO;
 import com.kizuna.store.domain.AttendanceRecordCheck;
 import com.kizuna.store.domain.CompletedOrderCheck;
+import com.kizuna.store.domain.StorePatch;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.storeprofile.domain.StoreProfileRepository;
 import com.kizuna.user.application.BusinessAudit;
@@ -124,9 +123,7 @@ class StoreDeleteAuditIntegrationTest {
   void createUpdateDeleteCommitAuditWithCascadeKindsAndCounts() {
     long id = create();
     jdbc.update("insert into t_cascade_child(store_id) values (?), (?)", id, id);
-    var rename = new StoreUpdateDTO();
-    rename.setName("改名後");
-    rename.setShortName(StoreShortNames.next());
+    var rename = new StorePatch("改名後", StoreShortNames.next());
     stores.update(String.valueOf(id), rename);
     stores.update(String.valueOf(id), rename);
 
@@ -193,11 +190,9 @@ class StoreDeleteAuditIntegrationTest {
   }
 
   private long create() {
-    var request = new StoreCreateDTO();
-    request.setName("検証店");
-    request.setShortName(StoreShortNames.next());
-    request.setDomain(UUID.randomUUID() + ".example.test");
-    return stores.create(request);
+    var command =
+        new StoreCreateCommand("検証店", StoreShortNames.next(), UUID.randomUUID() + ".example.test");
+    return stores.create(command);
   }
 
   private long count(String sql, long id) {

@@ -2,7 +2,6 @@ package com.kizuna.store.application;
 
 import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
-import com.kizuna.store.api.dto.AdminStoreResponse;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import java.util.Comparator;
@@ -26,7 +25,7 @@ public class AdminStoreService {
 
   /** 授権店舗を id 昇順で返す。ALL_STORES は全店、SPECIFIC_STORES は授権集合のみ。 */
   @Transactional(readOnly = true)
-  public List<AdminStoreResponse> listAuthorizedStores() {
+  public List<StoreView> listAuthorizedStores() {
     StoreScope scope = storeScopeHolder.current();
     if (scope == null) {
       throw new AccessDeniedException("授権店舗集合を解決できません");
@@ -37,10 +36,7 @@ public class AdminStoreService {
             : storeRepository.findAllById(scope.storeIds());
     return StreamSupport.stream(stores.spliterator(), false)
         .sorted(Comparator.comparing(Store::getId))
-        .map(
-            store ->
-                new AdminStoreResponse(
-                    store.getId(), store.getName(), store.getShortName(), store.getStatus()))
+        .map(StoreView::of)
         .toList();
   }
 }

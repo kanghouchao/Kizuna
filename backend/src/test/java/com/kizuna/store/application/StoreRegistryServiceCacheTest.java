@@ -41,6 +41,8 @@ class StoreRegistryServiceCacheTest {
       ConcurrentMapCacheManager manager = new ConcurrentMapCacheManager();
       // 本番設定（SPRING_CACHE_NULL_VALUES:false）と同じ null 拒否契約
       manager.setAllowNullValues(false);
+      // 本番の Redis は値を JDK 直列化で保存する。値を直列化して持たせ、直列化できない型の混入をここで落とす
+      manager.setStoreByValue(true);
       return manager;
     }
 

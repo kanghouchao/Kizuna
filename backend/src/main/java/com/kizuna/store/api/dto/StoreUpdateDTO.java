@@ -1,5 +1,6 @@
 package com.kizuna.store.api.dto;
 
+import com.kizuna.store.domain.StorePatch;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -21,5 +22,9 @@ public class StoreUpdateDTO {
 
   public void setShortName(String shortName) {
     this.shortName = ShortNameText.trim(shortName);
+  }
+
+  public StorePatch patch() {
+    return new StorePatch(name, shortName);
   }
 }
