@@ -7,10 +7,6 @@ import com.kizuna.recruitment.domain.Applicant;
 import com.kizuna.recruitment.domain.ApplicantAnonymizationTarget;
 import com.kizuna.recruitment.domain.ApplicantRepository;
 import com.kizuna.recruitment.domain.ApplicantStatus;
-import com.kizuna.recruitment.domain.AttachmentUpload;
-import com.kizuna.recruitment.domain.AttachmentUploadRepository;
-import com.kizuna.recruitment.infrastructure.AttachmentObject;
-import com.kizuna.recruitment.infrastructure.PrivateAttachmentStorage;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
@@ -34,7 +30,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 保持期間を過ぎた終端の応募者を匿名化する。添付の実体を先に消し、DB 側は実行基盤の一つのトランザクションで確定する。
+ * 保持期間を過ぎた終端の応募者を匿名化する。添付は保存モジュールが実体を先に消し、DB 側は実行基盤の一つのトランザクションで確定する。
  *
  * <p>途中で失敗すると DB 側は全件巻き戻り、実体だけが消えた応募者は次回の実行で同じく対象になる（実体の不在は成功扱い）。
  */
@@ -43,8 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ApplicantAnonymizationTask implements TaskHandler {
   public static final String NAME = "APPLICANT_ANONYMIZATION";
   private final ApplicantRepository applicants;
-  private final AttachmentUploadRepository uploads;
-  private final PrivateAttachmentStorage storage;
+  private final ApplicantAttachmentStore attachments;
   private final SystemConfigService systemConfigs;
   private final ServiceExecutionIdentityService identities;
   private final AuditWriter audit;
@@ -117,16 +112,10 @@ public class ApplicantAnonymizationTask implements TaskHandler {
 
   private boolean anonymize(
       ApplicantAnonymizationTarget target, AuditActor actor, TaskContext context) {
-    // 保存完了処理は添付行をロックしたまま実体を書くので、行を先に取って書き込みの終了を待ってから実体を消す。
-    var attachments = uploads.findByStoreIdAndApplicantIdForUpdate(target.storeId(), target.id());
-    Applicant applicant =
-        applicants
-            .findByIdAndStoreIdForUpdate(target.id(), target.storeId())
-            .orElseThrow(() -> new IllegalStateException("匿名化対象の応募者が見つかりません"));
+    // 匿名化済みの応募者は終端なので添付が増えず、消去は何も消さない。
+    Applicant applicant = attachments.purge(target.storeId(), target.id());
     if (applicant.getAnonymizedAt() != null) return false;
     var before = auditValues(applicant);
-    for (AttachmentUpload upload : attachments) storage.delete(object(upload));
-    attachments.forEach(uploads::delete);
     applicant.anonymize(OffsetDateTime.now(clock));
     applicant.recordEditor(context.serviceUserId());
     applicants.flush();
@@ -148,14 +137,6 @@ public class ApplicantAnonymizationTask implements TaskHandler {
   private static Map<String, String> auditValues(Applicant applicant) {
     return Map.of(
         "status", applicant.getStatus().name(), "version", String.valueOf(applicant.getVersion()));
-  }
-
-  private static AttachmentObject object(AttachmentUpload upload) {
-    return new AttachmentObject(
-        upload.getObjectId(),
-        upload.getMediaType(),
-        upload.getSizeBytes(),
-        upload.getCanonicalSha256());
   }
 
   private AuditActor requireIdentity(TaskContext context) {

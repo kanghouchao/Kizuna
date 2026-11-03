@@ -3,30 +3,27 @@ package com.kizuna.recruitment.application;
 import com.kizuna.recruitment.api.dto.AttachmentPolicyResponse;
 import com.kizuna.recruitment.api.dto.AttachmentSummaryResponse;
 import com.kizuna.recruitment.api.dto.AttachmentUploadResponse;
+import com.kizuna.recruitment.domain.ApplicantRepository;
+import com.kizuna.recruitment.domain.AttachmentObject;
 import com.kizuna.recruitment.domain.AttachmentUpload;
-import com.kizuna.recruitment.infrastructure.AttachmentObject;
-import com.kizuna.recruitment.infrastructure.NormalizedImage;
+import com.kizuna.recruitment.domain.AttachmentUploadRepository;
+import com.kizuna.recruitment.infrastructure.AttachmentBodyReceiver;
 import com.kizuna.recruitment.infrastructure.PrivateAttachmentFile;
 import com.kizuna.recruitment.infrastructure.PrivateAttachmentStorage;
-import com.kizuna.recruitment.infrastructure.RasterImageNormalizer;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
-import com.kizuna.shared.exception.StaleSessionException;
-import java.io.IOException;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.access.AccessDeniedException;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.AuthenticationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
@@ -35,9 +32,10 @@ public class AttachmentService {
       "hasAuthority('PERM_RECRUITMENT_VIEW') and hasAuthority('PERM_RECRUITMENT_ATTACHMENT_VIEW')";
   public static final String WRITE =
       READ + " and hasAuthority('PERM_RECRUITMENT_ATTACHMENT_MANAGE')";
-  private final AttachmentTransactions transactions;
+  private final ApplicantAttachmentStore store;
+  private final ApplicantRepository applicants;
+  private final AttachmentUploadRepository uploads;
   private final PrivateAttachmentStorage storage;
-  private final RasterImageNormalizer normalizer;
   private final AppProperties properties;
 
   @PreAuthorize(READ)
@@ -58,15 +56,32 @@ public class AttachmentService {
   public UUID preflight(Long storeId, String applicantId, String uploadId, String rawKey) {
     storage.requireConfigured();
     UUID key = operationKey(rawKey);
-    transactions.preflight(storeId, applicantId, uploadId, key);
+    store.preflight(storeId, applicantId, uploadId, key);
     return key;
   }
 
   @PreAuthorize(WRITE)
+  public ApplicantAttachmentStore.Receipt receive(
+      Long storeId,
+      String applicantId,
+      String uploadId,
+      UUID key,
+      AttachmentBodyReceiver.Received image,
+      String actorEmail) {
+    storage.requireConfigured();
+    return store.receive(storeId, applicantId, uploadId, key, image, actorEmail);
+  }
+
+  @PreAuthorize(WRITE)
+  @Transactional(readOnly = true)
   public AttachmentUploadResponse operation(Long storeId, String applicantId, String rawKey) {
     storage.requireConfigured();
-    return AttachmentUploadResponse.from(
-        transactions.operation(storeId, applicantId, operationKey(rawKey)));
+    UUID key = operationKey(rawKey);
+    requireApplicant(storeId, applicantId);
+    return uploads
+        .findByStoreIdAndApplicantIdAndIdempotencyKey(storeId, applicantId, key)
+        .map(AttachmentUploadResponse::from)
+        .orElseThrow(AttachmentService::missing);
   }
 
   private static UUID operationKey(String rawKey) {
@@ -81,85 +96,41 @@ public class AttachmentService {
   }
 
   @PreAuthorize(READ)
+  @Transactional(readOnly = true)
   public Page<AttachmentSummaryResponse> list(Long storeId, String id, Pageable pageable) {
     storage.requireConfigured();
-    return transactions.list(storeId, id, true, pageable).map(AttachmentSummaryResponse::from);
+    return page(storeId, id, true, pageable).map(AttachmentSummaryResponse::from);
   }
 
   @PreAuthorize(WRITE)
+  @Transactional(readOnly = true)
   public Page<AttachmentUploadResponse> uploads(Long storeId, String id, Pageable pageable) {
     storage.requireConfigured();
-    return transactions.list(storeId, id, false, pageable).map(AttachmentUploadResponse::from);
+    return page(storeId, id, false, pageable).map(AttachmentUploadResponse::from);
   }
 
-  @PreAuthorize(WRITE)
-  public AttachmentTransactions.Completion upload(
-      Long storeId,
-      String id,
-      String uploadId,
-      UUID key,
-      Path original,
-      String originalHash,
-      String mediaType,
-      String actorEmail) {
-    storage.requireConfigured();
-    AttachmentUpload reserved = null;
-    boolean normalizing = false;
-    try {
-      reserved =
-          transactions.lookup(storeId, id, uploadId, key, originalHash, mediaType).orElse(null);
-      if (reserved != null) {
-        if (reserved.getStatus() == AttachmentUpload.Status.READY)
-          return new AttachmentTransactions.Completion(
-              false, AttachmentSummaryResponse.from(reserved));
-        var completed =
-            transactions.complete(
-                storeId, id, reserved.getId(), key, originalHash, mediaType, null, actorEmail);
-        if (completed != null) return completed;
-        if (!reserved.getNormalizerVersion().equals(RasterImageNormalizer.VERSION))
-          throw new AttachmentNormalizationException("元の画像変換方式を利用できません。回復を待ってください");
-      }
-      normalizing = true;
-      try (NormalizedImage content = normalizer.normalize(original, mediaType)) {
-        normalizing = false;
-        if (!originalHash.equals(content.originalSha256()))
-          throw new ConflictException("受信画像の一致を確認できません。再選択してください");
-        if (reserved == null)
-          reserved = transactions.reserve(storeId, id, key, content, actorEmail);
-        return transactions.complete(
-            storeId, id, reserved.getId(), key, originalHash, mediaType, content, actorEmail);
-      }
-    } catch (PessimisticLockingFailureException exception) {
-      throw new ConflictException("同じアップロードを処理中です。時間をおいて再試行してください");
-    } catch (AuthenticationException | AccessDeniedException | StaleSessionException exception) {
-      throw exception;
-    } catch (RuntimeException exception) {
-      if (reserved != null)
-        markFailure(
-            storeId,
-            id,
-            reserved.getId(),
-            exception instanceof AttachmentNormalizationException || normalizing
-                ? AttachmentUpload.Failure.NORMALIZER_UNAVAILABLE
-                : exception instanceof ConflictException
-                    ? AttachmentUpload.Failure.CONTENT_MISMATCH
-                    : AttachmentUpload.Failure.STORAGE_UNAVAILABLE);
-      if (exception instanceof ServiceException
-          || exception instanceof ConflictException
-          || exception instanceof NotFoundException
-          || exception instanceof ServiceUnavailableException) throw exception;
-      throw unavailable();
-    } catch (IOException exception) {
-      if (reserved != null)
-        markFailure(storeId, id, reserved.getId(), AttachmentUpload.Failure.STORAGE_UNAVAILABLE);
-      throw unavailable();
-    }
+  private Page<AttachmentUpload> page(
+      Long storeId, String applicantId, boolean completed, Pageable pageable) {
+    requireApplicant(storeId, applicantId);
+    Specification<AttachmentUpload> specification =
+        (root, query, cb) ->
+            cb.and(
+                cb.equal(root.get("storeId"), storeId),
+                cb.equal(root.get("applicantId"), applicantId),
+                completed
+                    ? cb.equal(root.get("status"), AttachmentUpload.Status.READY)
+                    : cb.notEqual(root.get("status"), AttachmentUpload.Status.READY));
+    return uploads.findAll(specification, pageable);
+  }
+
+  private void requireApplicant(Long storeId, String id) {
+    if (applicants.findByIdAndStoreId(id, storeId).isEmpty()) throw missing();
   }
 
   @PreAuthorize(READ)
   public Download download(Long storeId, String id, String attachmentId, boolean head) {
     storage.requireConfigured();
-    AttachmentObject object = transactions.download(storeId, id, attachmentId);
+    AttachmentObject object = store.stored(storeId, id, attachmentId);
     try {
       if (head) {
         storage.verifyMetadata(object);
@@ -171,13 +142,8 @@ public class AttachmentService {
     }
   }
 
-  private void markFailure(
-      Long storeId, String id, String uploadId, AttachmentUpload.Failure failure) {
-    try {
-      transactions.recordFailure(storeId, id, uploadId, failure);
-    } catch (RuntimeException ignored) {
-      // 保存失敗時にも、先行確定したPENDINGの所有記録を残して回復可能にする。
-    }
+  private static NotFoundException missing() {
+    return new NotFoundException("応募者または添付が見つかりません");
   }
 
   private static ServiceUnavailableException unavailable() {

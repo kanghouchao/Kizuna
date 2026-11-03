@@ -22,8 +22,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.kizuna.recruitment.api.dto.AttachmentPolicyResponse;
 import com.kizuna.recruitment.api.dto.AttachmentSummaryResponse;
 import com.kizuna.recruitment.api.dto.AttachmentUploadResponse;
+import com.kizuna.recruitment.application.ApplicantAttachmentStore;
 import com.kizuna.recruitment.application.AttachmentService;
-import com.kizuna.recruitment.application.AttachmentTransactions;
 import com.kizuna.recruitment.domain.AttachmentUpload;
 import com.kizuna.recruitment.infrastructure.AttachmentBodyReceiver;
 import com.kizuna.settings.application.SystemConfigService;
@@ -145,11 +145,11 @@ class AttachmentControllerTest {
     var admission = mock(AttachmentBodyReceiver.Admission.class);
     when(service.preflight(7L, "a", null, key.toString())).thenReturn(key);
     when(receiver.admit(any())).thenReturn(admission);
-    when(admission.receive(any()))
-        .thenReturn(new AttachmentBodyReceiver.Received(received, "hash", "image/png"));
-    when(service.upload(7L, "a", null, key, received, "hash", "image/png", "actor"))
+    var image = new AttachmentBodyReceiver.Received(received, "hash", "image/png");
+    when(admission.receive(any())).thenReturn(image);
+    when(service.receive(7L, "a", null, key, image, "actor"))
         .thenReturn(
-            new AttachmentTransactions.Completion(
+            new ApplicantAttachmentStore.Receipt(
                 true,
                 new AttachmentSummaryResponse("image", "image/png", 3, OffsetDateTime.now())));
     var started =
@@ -167,7 +167,7 @@ class AttachmentControllerTest {
             .andExpect(request().asyncStarted())
             .andReturn();
     mvc.perform(asyncDispatch(started)).andExpect(status().isCreated());
-    verify(service).upload(7L, "a", null, key, received, "hash", "image/png", "actor");
+    verify(service).receive(7L, "a", null, key, image, "actor");
   }
 
   @Test
