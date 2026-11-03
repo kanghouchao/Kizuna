@@ -9,8 +9,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shift.api.dto.ShiftDetailResponse;
-import com.kizuna.shift.api.dto.ShiftRequestLineageResponse;
+import com.kizuna.shift.application.ShiftViews.RequestLineage;
+import com.kizuna.shift.application.ShiftViews.ShiftDetail;
 import com.kizuna.shift.domain.Attendance;
 import com.kizuna.shift.domain.AttendanceRepository;
 import com.kizuna.shift.domain.Shift;
@@ -148,17 +148,17 @@ class ShiftLineageServiceTest {
     when(userRepository.findAllById(any()))
         .thenReturn(List.of(user(APPROVER_ID, "承認した店長"), user(RECORDER_ID, "記録した店員")));
 
-    ShiftDetailResponse detail = shiftLineageService.detail(STORE_ID, SHIFT_ID);
+    ShiftDetail detail = shiftLineageService.detail(STORE_ID, SHIFT_ID);
 
-    assertThat(detail.getCreatedBy().getId()).isEqualTo(APPROVER_ID);
-    assertThat(detail.getCreatedBy().getName()).as("実行主体は id だけでなく名前まで解決すること").isEqualTo("承認した店長");
-    assertThat(detail.getUpdatedBy()).as("書き換えの無い行では最終更新者を出さないこと").isNull();
+    assertThat(detail.createdBy().id()).isEqualTo(APPROVER_ID);
+    assertThat(detail.createdBy().name()).as("実行主体は id だけでなく名前まで解決すること").isEqualTo("承認した店長");
+    assertThat(detail.updatedBy()).as("書き換えの無い行では最終更新者を出さないこと").isNull();
 
-    ShiftRequestLineageResponse origin = detail.getOrigin();
-    assertThat(origin.getType()).as("出生の希望が背骨で辿れること").isEqualTo("NEW");
-    assertThat(origin.getCastId()).as("申請の実行主体はキャスト本人").isEqualTo(CAST_ID);
-    assertThat(origin.getProcessedBy().getName()).isEqualTo("承認した店長");
-    assertThat(origin.getProcessedAt()).isNotNull();
+    RequestLineage origin = detail.origin();
+    assertThat(origin.type()).as("出生の希望が背骨で辿れること").isEqualTo("NEW");
+    assertThat(origin.castId()).as("申請の実行主体はキャスト本人").isEqualTo(CAST_ID);
+    assertThat(origin.processedBy().name()).isEqualTo("承認した店長");
+    assertThat(origin.processedAt()).isNotNull();
 
     ArgumentCaptor<Iterable<Long>> requestedIds = ArgumentCaptor.captor();
     verify(userRepository).findAllById(requestedIds.capture());
@@ -166,9 +166,9 @@ class ShiftLineageServiceTest {
         .as("実行主体は系列全体で一度に引くこと")
         .containsExactlyInAnyOrder(APPROVER_ID, RECORDER_ID);
 
-    assertThat(detail.getAttendance().getCreatedBy().getName()).isEqualTo("記録した店員");
-    assertThat(detail.getAttendance().getWaitingPlace()).isEqualTo("1番待機室");
-    assertThat(detail.getAttendance().getBusinessDate()).isEqualTo(WORK_DATE);
+    assertThat(detail.attendance().createdBy().name()).isEqualTo("記録した店員");
+    assertThat(detail.attendance().waitingPlace()).isEqualTo("1番待機室");
+    assertThat(detail.attendance().businessDate()).isEqualTo(WORK_DATE);
   }
 
   @Test
@@ -179,10 +179,10 @@ class ShiftLineageServiceTest {
     when(attendanceRepository.findByStoreIdAndShiftIdAndCancelledAtIsNull(STORE_ID, SHIFT_ID))
         .thenReturn(Optional.empty());
 
-    ShiftDetailResponse detail = shiftLineageService.detail(STORE_ID, SHIFT_ID);
+    ShiftDetail detail = shiftLineageService.detail(STORE_ID, SHIFT_ID);
 
-    assertThat(detail.getAttendance()).isNull();
-    assertThat(detail.getOrigin()).as("店舗が直接作成したシフトでは出生の希望が無いこと").isNull();
+    assertThat(detail.attendance()).isNull();
+    assertThat(detail.origin()).as("店舗が直接作成したシフトでは出生の希望が無いこと").isNull();
   }
 
   @Test
@@ -202,9 +202,9 @@ class ShiftLineageServiceTest {
     when(attendanceRepository.findByStoreIdAndShiftIdAndCancelledAtIsNull(STORE_ID, SHIFT_ID))
         .thenReturn(Optional.empty());
 
-    ShiftDetailResponse detail = shiftLineageService.detail(STORE_ID, SHIFT_ID);
+    ShiftDetail detail = shiftLineageService.detail(STORE_ID, SHIFT_ID);
 
-    assertThat(detail.getCreatedBy()).isNull();
+    assertThat(detail.createdBy()).isNull();
     verify(userRepository, never()).findAllById(any());
   }
 
@@ -226,14 +226,13 @@ class ShiftLineageServiceTest {
         .thenReturn(new PageImpl<>(List.of(newer, older), pageable, 3));
     when(userRepository.findAllById(any())).thenReturn(List.of(user(APPROVER_ID, "承認した店長")));
 
-    Page<ShiftRequestLineageResponse> page =
-        shiftLineageService.changeRequests(STORE_ID, SHIFT_ID, pageable);
+    Page<RequestLineage> page = shiftLineageService.changeRequests(STORE_ID, SHIFT_ID, pageable);
 
     assertThat(page.getContent())
-        .extracting(ShiftRequestLineageResponse::getId)
+        .extracting(RequestLineage::id)
         .containsExactly("request-newer", "request-older");
     assertThat(page.getTotalElements()).isEqualTo(3);
-    assertThat(page.getContent().getFirst().getProcessedBy().getName()).isEqualTo("承認した店長");
+    assertThat(page.getContent().getFirst().processedBy().name()).isEqualTo("承認した店長");
   }
 
   @Test

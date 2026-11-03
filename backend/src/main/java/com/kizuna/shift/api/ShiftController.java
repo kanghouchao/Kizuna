@@ -4,6 +4,7 @@ import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.shift.api.dto.PublicShiftResponse;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
 import com.kizuna.shift.api.dto.ShiftDetailResponse;
+import com.kizuna.shift.api.dto.ShiftMapper;
 import com.kizuna.shift.api.dto.ShiftPublicationRequest;
 import com.kizuna.shift.api.dto.ShiftRequestLineageResponse;
 import com.kizuna.shift.api.dto.ShiftResponse;
@@ -41,6 +42,7 @@ public class ShiftController {
 
   private final ShiftService shiftService;
   private final ShiftLineageService shiftLineageService;
+  private final ShiftMapper shiftMapper;
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
@@ -48,7 +50,8 @@ public class ShiftController {
       @CurrentStore Long storeId,
       @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
       @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-    return ResponseEntity.ok(shiftService.list(storeId, from, to));
+    return ResponseEntity.ok(
+        shiftService.list(storeId, from, to).stream().map(shiftMapper::toResponse).toList());
   }
 
   /** 1 本のシフトを系列ごと返す。字面の {@code /public} とは値空間が交わらない（シフト id は数字だけの Snowflake）。 */
@@ -56,7 +59,7 @@ public class ShiftController {
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
   public ResponseEntity<ShiftDetailResponse> detail(
       @CurrentStore Long storeId, @PathVariable String id) {
-    return ResponseEntity.ok(shiftLineageService.detail(storeId, id));
+    return ResponseEntity.ok(ShiftDetailResponse.of(shiftLineageService.detail(storeId, id)));
   }
 
   /**
@@ -73,7 +76,10 @@ public class ShiftController {
               sort = {"createdAt", "id"},
               direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return ResponseEntity.ok(shiftLineageService.changeRequests(storeId, id, pageable));
+    return ResponseEntity.ok(
+        shiftLineageService
+            .changeRequests(storeId, id, pageable)
+            .map(ShiftRequestLineageResponse::of));
   }
 
   @PostMapping
@@ -83,7 +89,9 @@ public class ShiftController {
       @Valid @RequestBody ShiftCreateRequest request,
       Principal principal) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(shiftService.create(storeId, request, principal.getName()));
+        .body(
+            shiftMapper.toResponse(
+                shiftService.create(storeId, request.command(), principal.getName())));
   }
 
   @PutMapping("/{id}")
@@ -93,7 +101,9 @@ public class ShiftController {
       @PathVariable String id,
       @Valid @RequestBody ShiftUpdateRequest request,
       Principal principal) {
-    return ResponseEntity.ok(shiftService.update(storeId, id, request, principal.getName()));
+    return ResponseEntity.ok(
+        shiftMapper.toResponse(
+            shiftService.update(storeId, id, request.command(), principal.getName())));
   }
 
   @PutMapping("/{id}/publication")
@@ -104,7 +114,9 @@ public class ShiftController {
       @Valid @RequestBody ShiftPublicationRequest request,
       Principal principal) {
     return ResponseEntity.ok(
-        shiftService.changePublication(storeId, id, request.getPublished(), principal.getName()));
+        shiftMapper.toResponse(
+            shiftService.changePublication(
+                storeId, id, request.getPublished(), principal.getName())));
   }
 
   @DeleteMapping("/{id}")
@@ -117,6 +129,7 @@ public class ShiftController {
   @GetMapping("/public")
   @PermitAll
   public ResponseEntity<List<PublicShiftResponse>> listPublic(@CurrentStore Long storeId) {
-    return ResponseEntity.ok(shiftService.listPublicToday(storeId));
+    return ResponseEntity.ok(
+        shiftService.listPublicToday(storeId).stream().map(PublicShiftResponse::of).toList());
   }
 }

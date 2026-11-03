@@ -9,13 +9,12 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shift.api.dto.PublicShiftResponse;
-import com.kizuna.shift.api.dto.ShiftCreateRequest;
-import com.kizuna.shift.api.dto.ShiftMapper;
-import com.kizuna.shift.api.dto.ShiftResponse;
-import com.kizuna.shift.api.dto.ShiftUpdateRequest;
+import com.kizuna.shift.application.ShiftCommand.CreateShift;
+import com.kizuna.shift.application.ShiftViews.PublicShift;
+import com.kizuna.shift.application.ShiftViews.ShiftView;
 import com.kizuna.shift.domain.AttendanceRepository;
 import com.kizuna.shift.domain.Shift;
+import com.kizuna.shift.domain.ShiftPatch;
 import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.shift.domain.ShiftRequestRepository;
 import com.kizuna.shift.domain.ShiftStatus;
@@ -41,7 +40,6 @@ public class ShiftService {
 
   private final ShiftRepository shiftRepository;
   private final AttendanceRepository attendanceRepository;
-  private final ShiftMapper shiftMapper;
   private final CastEnrollmentRepository enrollments;
   private final StoreRepository storeRepository;
   private final CastProfileRepository castRepository;
@@ -51,20 +49,20 @@ public class ShiftService {
   private final ShiftRequestRepository requests;
 
   @Transactional(readOnly = true)
-  public List<ShiftResponse> list(Long storeId, LocalDate from, LocalDate to) {
+  public List<ShiftView> list(Long storeId, LocalDate from, LocalDate to) {
     return shiftRepository.findByStoreIdAndWorkDateBetween(storeId, from, to).stream()
-        .map(this::toResponse)
+        .map(this::toView)
         .toList();
   }
 
   /**
    * 公開出勤表用に「現在の営業日」の露出可能（CONFIRMED ∧ 公開可）なシフトを start_time 昇順で返す。 公開条件（PUBLISHED ∧
    * ENROLLED）を満たさないキャストのシフトは公開一覧 ({@code /casts/public}) に整合させて除外する。cast 表示情報は公開されている
-   * cast.domain（{@code CastProfile}）を 直接参照して結合する（cast.api.dto は公開面ではないため）。t_cast_enrollments の参照は
+   * cast.domain（{@code CastProfile}）を 直接参照して結合する（cast の応答 DTO は公開面ではないため）。t_cast_enrollments の参照は
    * {@code findPublished} の店舗条件で現店舗に絞られる。
    */
   @Transactional(readOnly = true)
-  public List<PublicShiftResponse> listPublicToday(Long storeId) {
+  public List<PublicShift> listPublicToday(Long storeId) {
     List<Shift> shifts =
         shiftRepository.findByStoreIdAndWorkDateAndStatusAndPublishedTrueOrderByStartTimeAsc(
             storeId, businessDateService.currentBusinessDate(), ShiftStatus.CONFIRMED);
@@ -79,25 +77,33 @@ public class ShiftService {
         .map(
             shift -> {
               CastProfile cast = activeCasts.get(shift.getCastId());
-              return PublicShiftResponse.builder()
-                  .castId(shift.getCastId())
-                  .castName(cast.getName())
-                  .castPhotoUrl(cast.getPhotoUrl())
-                  .startTime(shift.getStartTime())
-                  .endTime(shift.getEndTime())
-                  .build();
+              return new PublicShift(
+                  shift.getCastId(),
+                  cast.getName(),
+                  cast.getPhotoUrl(),
+                  shift.getStartTime(),
+                  shift.getEndTime());
             })
         .toList();
   }
 
   @Transactional
-  public ShiftResponse create(Long storeId, ShiftCreateRequest request, String actorEmail) {
-    if (request.getStartTime().equals(request.getEndTime())) {
+  public ShiftView create(Long storeId, CreateShift command, String actorEmail) {
+    if (command.startTime().equals(command.endTime())) {
       throw new ServiceException("開始時刻と終了時刻が同一です");
     }
-    requireActiveMembership(lockEnrollment(storeId, request.getCastId()));
+    requireActiveMembership(lockEnrollment(storeId, command.castId()));
 
-    Shift shift = shiftMapper.toEntity(request, resolveActorId(actorEmail));
+    Shift shift =
+        Shift.builder()
+            .castId(command.castId())
+            .workDate(command.workDate())
+            .startTime(command.startTime())
+            .endTime(command.endTime())
+            .status(command.status() == null ? ShiftStatus.TENTATIVE : command.status())
+            .published(command.published() == null || command.published())
+            .createdBy(resolveActorId(actorEmail))
+            .build();
     shift.setStoreId(storeId);
     shiftRepository.save(shift);
     shiftRepository.flush();
@@ -111,14 +117,12 @@ public class ShiftService {
         null,
         Map.of(),
         ShiftAuditSnapshot.of(shift).values());
-    return toResponse(shift);
+    return toView(shift);
   }
 
   @Transactional
-  public ShiftResponse update(
-      Long storeId, String id, ShiftUpdateRequest request, String actorEmail) {
-    CastEnrollment target =
-        request.getCastId() == null ? null : lockEnrollment(storeId, request.getCastId());
+  public ShiftView update(Long storeId, String id, ShiftPatch patch, String actorEmail) {
+    CastEnrollment target = patch.castId() == null ? null : lockEnrollment(storeId, patch.castId());
 
     // 実績の有無を読んで可否を決める以上、実績の記録・訂正と直列でなければ守衛は素通りされる。
     // ロックはこの取引でのシフトの最初の読み込みでなければならない（{@link ShiftRepository#findByIdAndStoreIdForUpdate}）。
@@ -128,10 +132,8 @@ public class ShiftService {
     }
 
     // 部分更新のマージ結果（実効の開始・終了）で判定する。片方だけ来て既存値と一致する穴を塞ぐ。
-    LocalTime effectiveStart =
-        request.getStartTime() != null ? request.getStartTime() : shift.getStartTime();
-    LocalTime effectiveEnd =
-        request.getEndTime() != null ? request.getEndTime() : shift.getEndTime();
+    LocalTime effectiveStart = patch.startTime() != null ? patch.startTime() : shift.getStartTime();
+    LocalTime effectiveEnd = patch.endTime() != null ? patch.endTime() : shift.getEndTime();
     if (effectiveStart != null && effectiveStart.equals(effectiveEnd)) {
       throw new ServiceException("開始時刻と終了時刻が同一です");
     }
@@ -139,12 +141,12 @@ public class ShiftService {
     // 未取消の実績が付いたシフトは勤務日とキャストを変えられない。実績は記録時に営業日とキャストを物化して
     // おり、事後の付け替えはその事実と食い違う（ADR 0014）。逃げ道は実績の取消 → 変更 → 再記録。
     // 時刻・status は実績の有無と無関係に通す。
-    if (movesAttribution(shift, request) && attendanceRepository.hasActiveAttendance(storeId, id)) {
+    if (movesAttribution(shift, patch) && attendanceRepository.hasActiveAttendance(storeId, id)) {
       throw new ServiceException("実績が記録されているシフトの勤務日とキャストは変更できません。実績を取り消してから変更してください");
     }
 
     var before = ShiftAuditSnapshot.of(shift);
-    shift.apply(shiftMapper.toPatch(request));
+    shift.apply(patch);
     shift.stampUpdatedBy(resolveActorId(actorEmail));
 
     boolean changed = !before.equals(ShiftAuditSnapshot.of(shift));
@@ -161,7 +163,7 @@ public class ShiftService {
           null,
           before.values(),
           ShiftAuditSnapshot.of(shift).values());
-    return toResponse(shift);
+    return toView(shift);
   }
 
   /** 店舗・在籍・シフトの順序を守り、作成と付け替えを退店から直列化する。 */
@@ -179,14 +181,14 @@ public class ShiftService {
   }
 
   /** 実績が物化した帰属（営業日・キャスト）を動かす更新か。現行と同値の再送は変更ではないので通す。 */
-  private static boolean movesAttribution(Shift shift, ShiftUpdateRequest request) {
-    return (request.getWorkDate() != null && !request.getWorkDate().equals(shift.getWorkDate()))
-        || (request.getCastId() != null && !request.getCastId().equals(shift.getCastId()));
+  private static boolean movesAttribution(Shift shift, ShiftPatch patch) {
+    return (patch.workDate() != null && !patch.workDate().equals(shift.getWorkDate()))
+        || (patch.castId() != null && !patch.castId().equals(shift.getCastId()));
   }
 
   /** 店外への露出可否は承認と独立した軸なので、状態や時間帯の更新とは別の口で受ける。 */
   @Transactional
-  public ShiftResponse changePublication(
+  public ShiftView changePublication(
       Long storeId, String id, boolean published, String actorEmail) {
     Shift shift = findShift(storeId, id);
     var before = ShiftAuditSnapshot.of(shift);
@@ -206,7 +208,7 @@ public class ShiftService {
           null,
           before.values(),
           ShiftAuditSnapshot.of(shift).values());
-    return toResponse(shift);
+    return toView(shift);
   }
 
   @Transactional
@@ -259,9 +261,8 @@ public class ShiftService {
    * 予定を暦日付きの時刻ごと返す。境界は勤務日ごとに解決する — 日付変更時刻は夏時間の進みで飛ばされる帯に置くと その暦日だけ実際の境界が前へ送られる（{@link
    * BusinessDateService#effectiveDateChangeTimeOn}）。
    */
-  private ShiftResponse toResponse(Shift shift) {
-    return shiftMapper.toResponse(
-        shift, businessDateService.effectiveDateChangeTimeOn(shift.getWorkDate()));
+  private ShiftView toView(Shift shift) {
+    return new ShiftView(shift, businessDateService.effectiveDateChangeTimeOn(shift.getWorkDate()));
   }
 
   private Shift findShift(Long storeId, String id) {

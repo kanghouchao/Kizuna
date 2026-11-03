@@ -1,5 +1,6 @@
 package com.kizuna.shift.api.dto;
 
+import com.kizuna.shift.application.ShiftViews.PublicShift;
 import java.time.LocalTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -17,4 +18,14 @@ public class PublicShiftResponse {
   private String castPhotoUrl;
   private LocalTime startTime;
   private LocalTime endTime;
+
+  public static PublicShiftResponse of(PublicShift shift) {
+    return PublicShiftResponse.builder()
+        .castId(shift.castId())
+        .castName(shift.castName())
+        .castPhotoUrl(shift.castPhotoUrl())
+        .startTime(shift.startTime())
+        .endTime(shift.endTime())
+        .build();
+  }
 }

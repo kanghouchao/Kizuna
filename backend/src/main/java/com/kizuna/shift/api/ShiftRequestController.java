@@ -2,6 +2,7 @@ package com.kizuna.shift.api;
 
 import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.shift.api.dto.ShiftApprovalRequest;
+import com.kizuna.shift.api.dto.ShiftRequestMapper;
 import com.kizuna.shift.api.dto.StoreShiftRequestResponse;
 import com.kizuna.shift.application.ShiftRequestService;
 import java.security.Principal;
@@ -24,12 +25,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class ShiftRequestController {
 
   private final ShiftRequestService shiftRequestService;
+  private final ShiftRequestMapper shiftRequestMapper;
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
   public ResponseEntity<List<StoreShiftRequestResponse>> list(
       @CurrentStore Long storeId, @RequestParam(required = false) String status) {
-    return ResponseEntity.ok(shiftRequestService.list(storeId, status));
+    return ResponseEntity.ok(
+        shiftRequestService.list(storeId, status).stream()
+            .map(shiftRequestMapper::toStoreResponse)
+            .toList());
   }
 
   /** 承認。本体は任意で、新規希望を非公開のまま出生させたいときだけ公開可否を明示する。 */
@@ -42,13 +47,16 @@ public class ShiftRequestController {
       Principal principal) {
     Boolean published = request == null ? null : request.getPublished();
     return ResponseEntity.ok(
-        shiftRequestService.approve(storeId, id, published, principal.getName()));
+        shiftRequestMapper.toStoreResponse(
+            shiftRequestService.approve(storeId, id, published, principal.getName())));
   }
 
   @PostMapping("/{id}/rejection")
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
   public ResponseEntity<StoreShiftRequestResponse> decline(
       @CurrentStore Long storeId, @PathVariable String id, Principal principal) {
-    return ResponseEntity.ok(shiftRequestService.decline(storeId, id, principal.getName()));
+    return ResponseEntity.ok(
+        shiftRequestMapper.toStoreResponse(
+            shiftRequestService.decline(storeId, id, principal.getName())));
   }
 }

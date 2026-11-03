@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.shift.api.dto.ShiftRequestMapperImpl;
 import com.kizuna.shift.application.CastShiftRequestService;
 import com.kizuna.shift.domain.ShiftRequest;
 import com.kizuna.user.application.StoreScopeResolver;
@@ -29,7 +30,11 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(SelfShiftRequestController.class)
-@Import({SelfShiftRequestControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
+@Import({
+  SelfShiftRequestControllerTest.MethodSecurityConfig.class,
+  StoreScopeHolder.class,
+  ShiftRequestMapperImpl.class
+})
 class SelfShiftRequestControllerTest {
 
   @TestConfiguration

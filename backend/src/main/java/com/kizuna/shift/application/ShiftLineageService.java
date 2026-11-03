@@ -1,10 +1,10 @@
 package com.kizuna.shift.application;
 
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shift.api.dto.ActorResponse;
-import com.kizuna.shift.api.dto.AttendanceLineageResponse;
-import com.kizuna.shift.api.dto.ShiftDetailResponse;
-import com.kizuna.shift.api.dto.ShiftRequestLineageResponse;
+import com.kizuna.shift.application.ShiftViews.Actor;
+import com.kizuna.shift.application.ShiftViews.AttendanceLineage;
+import com.kizuna.shift.application.ShiftViews.RequestLineage;
+import com.kizuna.shift.application.ShiftViews.ShiftDetail;
 import com.kizuna.shift.domain.Attendance;
 import com.kizuna.shift.domain.AttendanceRepository;
 import com.kizuna.shift.domain.Shift;
@@ -49,7 +49,7 @@ public class ShiftLineageService {
    * の群読み口と同じ選択である。
    */
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public ShiftDetailResponse detail(Long storeId, String id) {
+  public ShiftDetail detail(Long storeId, String id) {
     Shift shift =
         shiftRepository
             .findByIdAndStoreId(id, storeId)
@@ -64,63 +64,57 @@ public class ShiftLineageService {
 
     Map<Long, String> actorNames =
         resolveActorNames(shift, origin == null ? List.of() : List.of(origin), attendance);
-    return ShiftDetailResponse.builder()
-        .id(shift.getId())
-        .castId(shift.getCastId())
-        .workDate(shift.getWorkDate())
-        .startTime(shift.getStartTime())
-        .endTime(shift.getEndTime())
-        .status(shift.getStatus().name())
-        .published(shift.isPublished())
-        .createdBy(actor(shift.getCreatedBy(), actorNames))
-        .updatedBy(actor(shift.getUpdatedBy(), actorNames))
-        .createdAt(shift.getCreatedAt())
-        .updatedAt(shift.getUpdatedAt())
-        .origin(origin == null ? null : toLineage(origin, actorNames))
-        .attendance(attendance == null ? null : toLineage(attendance, actorNames))
-        .build();
+    return new ShiftDetail(
+        shift.getId(),
+        shift.getCastId(),
+        shift.getWorkDate(),
+        shift.getStartTime(),
+        shift.getEndTime(),
+        shift.getStatus().name(),
+        shift.isPublished(),
+        actor(shift.getCreatedBy(), actorNames),
+        actor(shift.getUpdatedBy(), actorNames),
+        shift.getCreatedAt(),
+        shift.getUpdatedAt(),
+        origin == null ? null : toLineage(origin, actorNames),
+        attendance == null ? null : toLineage(attendance, actorNames));
   }
 
-  private static ShiftRequestLineageResponse toLineage(
-      ShiftRequest request, Map<Long, String> actorNames) {
-    return ShiftRequestLineageResponse.builder()
-        .id(request.getId())
-        .type(request.getType().name())
-        .status(request.getStatus().name())
-        .castId(request.getCastId())
-        .workDate(request.getWorkDate())
-        .startTime(request.getStartTime())
-        .endTime(request.getEndTime())
-        .note(request.getNote())
-        .originalWorkDate(request.getOriginalWorkDate())
-        .originalStartTime(request.getOriginalStartTime())
-        .originalEndTime(request.getOriginalEndTime())
-        .createdAt(request.getCreatedAt())
-        .processedBy(actor(request.getProcessedBy(), actorNames))
-        .processedAt(request.getProcessedAt())
-        .build();
+  private static RequestLineage toLineage(ShiftRequest request, Map<Long, String> actorNames) {
+    return new RequestLineage(
+        request.getId(),
+        request.getType().name(),
+        request.getStatus().name(),
+        request.getCastId(),
+        request.getWorkDate(),
+        request.getStartTime(),
+        request.getEndTime(),
+        request.getNote(),
+        request.getOriginalWorkDate(),
+        request.getOriginalStartTime(),
+        request.getOriginalEndTime(),
+        request.getCreatedAt(),
+        actor(request.getProcessedBy(), actorNames),
+        request.getProcessedAt());
   }
 
-  private static AttendanceLineageResponse toLineage(
-      Attendance attendance, Map<Long, String> actorNames) {
-    return AttendanceLineageResponse.builder()
-        .id(attendance.getId())
-        .castId(attendance.getCastId())
-        .businessDate(attendance.getBusinessDate())
-        .actualStartAt(attendance.getActualStartAt())
-        .actualEndAt(attendance.getActualEndAt())
-        .waitingPlace(attendance.getWaitingPlace())
-        .createdBy(actor(attendance.getCreatedBy(), actorNames))
-        .updatedBy(actor(attendance.getUpdatedBy(), actorNames))
-        .createdAt(attendance.getCreatedAt())
-        .updatedAt(attendance.getUpdatedAt())
-        .build();
+  private static AttendanceLineage toLineage(Attendance attendance, Map<Long, String> actorNames) {
+    return new AttendanceLineage(
+        attendance.getId(),
+        attendance.getCastId(),
+        attendance.getBusinessDate(),
+        attendance.getActualStartAt(),
+        attendance.getActualEndAt(),
+        attendance.getWaitingPlace(),
+        actor(attendance.getCreatedBy(), actorNames),
+        actor(attendance.getUpdatedBy(), actorNames),
+        attendance.getCreatedAt(),
+        attendance.getUpdatedAt());
   }
 
   /** 変更申請の履歴を 1 ページ分返す。 履歴と実行主体を別々に取得するため、途中の承認で同じ応答内の状態が食い違わないよう断面を固定する。 */
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public Page<ShiftRequestLineageResponse> changeRequests(
-      Long storeId, String shiftId, Pageable pageable) {
+  public Page<RequestLineage> changeRequests(Long storeId, String shiftId, Pageable pageable) {
     // シフトの存在と作用域はここで確かめる。履歴だけを問い合わせると、他店舗のシフト id に対して
     // 「空の履歴」を返してしまい、存在しないことと区別が付かなくなる。
     if (!shiftRepository.existsByIdAndStoreId(shiftId, storeId)) {
@@ -168,7 +162,7 @@ public class ShiftLineageService {
   }
 
   /** 実行主体の欄。利用者が削除された行は id ごと欠ける（FK が SET NULL）ので、節点そのものが null になる。 */
-  private static ActorResponse actor(Long id, Map<Long, String> actorNames) {
-    return id == null ? null : ActorResponse.builder().id(id).name(actorNames.get(id)).build();
+  private static Actor actor(Long id, Map<Long, String> actorNames) {
+    return id == null ? null : new Actor(id, actorNames.get(id));
   }
 }

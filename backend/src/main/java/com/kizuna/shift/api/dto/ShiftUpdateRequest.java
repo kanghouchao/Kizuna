@@ -1,5 +1,6 @@
 package com.kizuna.shift.api.dto;
 
+import com.kizuna.shift.domain.ShiftPatch;
 import com.kizuna.shift.domain.ShiftStatus;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -12,4 +13,9 @@ public class ShiftUpdateRequest {
   private LocalTime startTime;
   private LocalTime endTime;
   private ShiftStatus status;
+
+  /** null フィールドは「変更しない」。 */
+  public ShiftPatch command() {
+    return new ShiftPatch(castId, workDate, startTime, endTime, status);
+  }
 }

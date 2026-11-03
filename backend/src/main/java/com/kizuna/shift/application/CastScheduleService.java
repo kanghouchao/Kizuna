@@ -3,8 +3,7 @@ package com.kizuna.shift.application;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shift.api.dto.CastScheduleResponse;
-import com.kizuna.shift.api.dto.ShiftMapper;
+import com.kizuna.shift.domain.CastScheduleView;
 import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.user.domain.UserRepository;
 import java.time.LocalDate;
@@ -29,10 +28,9 @@ public class CastScheduleService {
   private final UserRepository userRepository;
   private final CastEnrollmentRepository castRepository;
   private final ShiftRepository shiftRepository;
-  private final ShiftMapper shiftMapper;
 
   @Transactional(readOnly = true)
-  public List<CastScheduleResponse> myWeek(String email, LocalDate from, LocalDate to) {
+  public List<CastScheduleView> myWeek(String email, LocalDate from, LocalDate to) {
     if (to.isBefore(from) || ChronoUnit.DAYS.between(from, to) > MAX_SPAN_DAYS) {
       throw new ServiceException("取得範囲が不正です");
     }
@@ -45,8 +43,6 @@ public class CastScheduleService {
     if (castIds.isEmpty()) {
       return List.of();
     }
-    return shiftRepository.findConfirmedSchedule(castIds, from, to).stream()
-        .map(shiftMapper::toScheduleResponse)
-        .toList();
+    return shiftRepository.findConfirmedSchedule(castIds, from, to);
   }
 }

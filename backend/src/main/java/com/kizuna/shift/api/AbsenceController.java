@@ -32,6 +32,7 @@ public class AbsenceController {
       @CurrentStore Long storeId,
       @RequestParam(name = "business_date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
           LocalDate businessDate) {
-    return ResponseEntity.ok(absenceService.list(storeId, businessDate));
+    return ResponseEntity.ok(
+        absenceService.list(storeId, businessDate).stream().map(AbsenceResponse::of).toList());
   }
 }

@@ -9,11 +9,8 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.persistence.Timestamps;
-import com.kizuna.shift.api.dto.AttendanceCancellationRequest;
-import com.kizuna.shift.api.dto.AttendanceCorrectionRequest;
-import com.kizuna.shift.api.dto.AttendanceCreateRequest;
-import com.kizuna.shift.api.dto.AttendanceMapper;
-import com.kizuna.shift.api.dto.AttendanceResponse;
+import com.kizuna.shift.application.ShiftCommand.CorrectAttendance;
+import com.kizuna.shift.application.ShiftCommand.RecordAttendance;
 import com.kizuna.shift.domain.Attendance;
 import com.kizuna.shift.domain.AttendanceCorrection;
 import com.kizuna.shift.domain.AttendanceCorrectionRepository;
@@ -56,7 +53,6 @@ public class AttendanceService {
 
   private final AttendanceRepository attendanceRepository;
   private final AttendanceCorrectionRepository correctionRepository;
-  private final AttendanceMapper attendanceMapper;
   private final ShiftRepository shiftRepository;
   private final CastService castService;
   private final UserRepository userRepository;
@@ -65,36 +61,33 @@ public class AttendanceService {
 
   /** （キャスト・店舗・営業日）での照会。取消済みは常に除外される。 */
   @Transactional(readOnly = true)
-  public List<AttendanceResponse> list(Long storeId, LocalDate businessDate, String castId) {
-    List<Attendance> rows =
-        castId == null
-            ? attendanceRepository
-                .findByStoreIdAndBusinessDateAndCancelledAtIsNullOrderByActualStartAtAscIdAsc(
-                    storeId, businessDate)
-            : attendanceRepository
-                .findByStoreIdAndBusinessDateAndCastIdAndCancelledAtIsNullOrderByActualStartAtAscIdAsc(
-                    storeId, businessDate, castId);
-    return rows.stream().map(attendanceMapper::toResponse).toList();
+  public List<Attendance> list(Long storeId, LocalDate businessDate, String castId) {
+    return castId == null
+        ? attendanceRepository
+            .findByStoreIdAndBusinessDateAndCancelledAtIsNullOrderByActualStartAtAscIdAsc(
+                storeId, businessDate)
+        : attendanceRepository
+            .findByStoreIdAndBusinessDateAndCastIdAndCancelledAtIsNullOrderByActualStartAtAscIdAsc(
+                storeId, businessDate, castId);
   }
 
   @Transactional
-  public AttendanceResponse record(
-      Long storeId, AttendanceCreateRequest request, String actorEmail) {
+  public Attendance record(Long storeId, RecordAttendance command, String actorEmail) {
     Long actorId = resolveActorId(actorEmail);
     // 実績行はキャストとシフトの両方を指す。押さえる順序は系全体で キャスト → シフト に揃える
     // （逆順に押さえるとキャスト削除の連鎖と環になる。契約は CastEnrollmentRepository#findByIdAndStoreIdForUpdate）。
-    if (!castService.existsInStoreForUpdate(storeId, request.getCastId())) {
-      throw new NotFoundException("キャストが見つかりません: " + request.getCastId());
+    if (!castService.existsInStoreForUpdate(storeId, command.castId())) {
+      throw new NotFoundException("キャストが見つかりません: " + command.castId());
     }
     Attendance attendance =
         Attendance.record(
             storeId,
-            request.getCastId(),
-            request.getShiftId(),
-            resolveBusinessDate(storeId, request),
-            request.getActualStartAt(),
-            request.getActualEndAt(),
-            request.getWaitingPlace(),
+            command.castId(),
+            command.shiftId(),
+            resolveBusinessDate(storeId, command),
+            command.actualStartAt(),
+            command.actualEndAt(),
+            command.waitingPlace(),
             actorId);
     saveWithinUniqueness(attendance);
     audit.recordById(
@@ -107,26 +100,25 @@ public class AttendanceService {
         null,
         Map.of(),
         ShiftAuditSnapshot.of(attendance).after(null));
-    return attendanceMapper.toResponse(attendance);
+    return attendance;
   }
 
   /** 記入の誤りを訂正し、同一トランザクションで編集前の姿を訂正履歴へ残す。 */
   @Transactional
-  public AttendanceResponse correct(
-      Long storeId, String id, AttendanceCorrectionRequest request, String actorEmail) {
+  public Attendance correct(Long storeId, String id, CorrectAttendance command, String actorEmail) {
     Long actorId = resolveActorId(actorEmail);
     Attendance attendance = findAttendance(storeId, id);
-    requireInheritedBusinessDate(storeId, attendance, request.getBusinessDate());
+    requireInheritedBusinessDate(storeId, attendance, command.businessDate());
 
     var before = ShiftAuditSnapshot.of(attendance);
     var correction =
         correctionRepository.save(
             AttendanceCorrection.snapshotOf(attendance, actorId, Timestamps.now()));
     attendance.correct(
-        request.getBusinessDate(),
-        request.getActualStartAt(),
-        request.getActualEndAt(),
-        request.getWaitingPlace(),
+        command.businessDate(),
+        command.actualStartAt(),
+        command.actualEndAt(),
+        command.waitingPlace(),
         actorId);
     saveWithinUniqueness(attendance);
     audit.recordById(
@@ -139,17 +131,16 @@ public class AttendanceService {
         correction.getId(),
         before.values(),
         ShiftAuditSnapshot.of(attendance).after(before));
-    return attendanceMapper.toResponse(attendance);
+    return attendance;
   }
 
   /** 誤建の実績に取消標記を付ける。行は残り、導出・照会から外れるだけである。 */
   @Transactional
-  public void cancel(
-      Long storeId, String id, AttendanceCancellationRequest request, String actorEmail) {
+  public void cancel(Long storeId, String id, String reason, String actorEmail) {
     Long actorId = resolveActorId(actorEmail);
     Attendance attendance = findAttendance(storeId, id);
     var before = ShiftAuditSnapshot.of(attendance);
-    attendance.cancel(request.getReason(), actorId, Timestamps.now());
+    attendance.cancel(reason, actorId, Timestamps.now());
     attendanceRepository.save(attendance);
     attendanceRepository.flush();
     audit.recordById(
@@ -165,12 +156,12 @@ public class AttendanceService {
   }
 
   /** 帰属営業日を決める。優先順があり、シフトに紐づく実績はシフトの勤務日を継承する — 実開始が日付変更時刻を跨いでも 予実は同じ営業日に居る。飛び込みだけが実開始時刻から判定される。 */
-  private LocalDate resolveBusinessDate(Long storeId, AttendanceCreateRequest request) {
-    if (request.getShiftId() == null) {
-      return businessDateService.businessDateOf(request.getActualStartAt());
+  private LocalDate resolveBusinessDate(Long storeId, RecordAttendance command) {
+    if (command.shiftId() == null) {
+      return businessDateService.businessDateOf(command.actualStartAt());
     }
-    Shift shift = findShiftForUpdate(storeId, request.getShiftId());
-    if (!shift.getCastId().equals(request.getCastId())) {
+    Shift shift = findShiftForUpdate(storeId, command.shiftId());
+    if (!shift.getCastId().equals(command.castId())) {
       throw new ServiceException("シフトのキャストと実績のキャストが一致しません");
     }
     // 実績が指せるのは確定シフトだけ（ADR 0014）。下書きに実績を付けると、店舗内で消せるはずの

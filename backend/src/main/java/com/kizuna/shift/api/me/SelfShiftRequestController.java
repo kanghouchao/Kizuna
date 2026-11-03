@@ -3,6 +3,7 @@ package com.kizuna.shift.api.me;
 import com.kizuna.shift.api.dto.CastShiftRequestResponse;
 import com.kizuna.shift.api.dto.ShiftChangeRequestCreateRequest;
 import com.kizuna.shift.api.dto.ShiftRequestCreateRequest;
+import com.kizuna.shift.api.dto.ShiftRequestMapper;
 import com.kizuna.shift.api.dto.ShiftRequestResponse;
 import com.kizuna.shift.application.CastShiftRequestService;
 import jakarta.validation.Valid;
@@ -28,13 +29,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class SelfShiftRequestController {
 
   private final CastShiftRequestService castShiftRequestService;
+  private final ShiftRequestMapper shiftRequestMapper;
 
   @PostMapping
   @PreAuthorize("hasRole('CAST')")
   public ResponseEntity<ShiftRequestResponse> submit(
       Principal principal, @Valid @RequestBody ShiftRequestCreateRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(castShiftRequestService.submit(principal.getName(), request));
+        .body(
+            shiftRequestMapper.toResponse(
+                castShiftRequestService.submit(principal.getName(), request.command())));
   }
 
   /** 確定シフトへの変更申請を提出する（type=CHANGE の出勤希望として同一正本に載る）。 */
@@ -43,7 +47,9 @@ public class SelfShiftRequestController {
   public ResponseEntity<ShiftRequestResponse> submitChange(
       Principal principal, @Valid @RequestBody ShiftChangeRequestCreateRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(castShiftRequestService.submitChange(principal.getName(), request));
+        .body(
+            shiftRequestMapper.toResponse(
+                castShiftRequestService.submitChange(principal.getName(), request.command())));
   }
 
   @GetMapping
@@ -55,6 +61,9 @@ public class SelfShiftRequestController {
               sort = {"createdAt", "id"},
               direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return ResponseEntity.ok(castShiftRequestService.history(principal.getName(), pageable));
+    return ResponseEntity.ok(
+        castShiftRequestService
+            .history(principal.getName(), pageable)
+            .map(shiftRequestMapper::toHistoryResponse));
   }
 }

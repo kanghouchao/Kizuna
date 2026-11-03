@@ -1,7 +1,7 @@
 package com.kizuna.shift.application;
 
 import com.kizuna.settings.application.BusinessDateService;
-import com.kizuna.shift.api.dto.AbsenceResponse;
+import com.kizuna.shift.application.ShiftViews.Absence;
 import com.kizuna.shift.domain.AttendanceRepository;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
@@ -45,7 +45,7 @@ public class AbsenceService {
    * 断面を取り直すので、シフトを読んだ後・実績を読む前に「確定を取り消して実績も取り消す」が commit されると、 変更前にも変更後にも存在しない欠勤を報告する。
    */
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public List<AbsenceResponse> list(Long storeId, LocalDate businessDate) {
+  public List<Absence> list(Long storeId, LocalDate businessDate) {
     if (!businessDateService.hasEnded(businessDate)) {
       return List.of();
     }
@@ -73,9 +73,7 @@ public class AbsenceService {
     return latestScheduledEndByCast.entrySet().stream()
         .filter(entry -> !attendedCastIds.contains(entry.getKey()))
         .filter(entry -> !now.isBefore(entry.getValue()))
-        .map(
-            entry ->
-                AbsenceResponse.builder().castId(entry.getKey()).businessDate(businessDate).build())
+        .map(entry -> new Absence(entry.getKey(), businessDate))
         .toList();
   }
 

@@ -20,12 +20,9 @@ import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shift.api.dto.AttendanceCancellationRequest;
 import com.kizuna.shift.api.dto.AttendanceCorrectionRequest;
 import com.kizuna.shift.api.dto.AttendanceCreateRequest;
-import com.kizuna.shift.api.dto.AttendanceMapperImpl;
 import com.kizuna.shift.api.dto.ShiftChangeRequestCreateRequest;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
-import com.kizuna.shift.api.dto.ShiftMapperImpl;
 import com.kizuna.shift.api.dto.ShiftRequestCreateRequest;
-import com.kizuna.shift.api.dto.ShiftRequestMapperImpl;
 import com.kizuna.shift.api.dto.ShiftUpdateRequest;
 import com.kizuna.shift.domain.Attendance;
 import com.kizuna.shift.domain.AttendanceCorrection;
@@ -133,26 +130,10 @@ class ShiftAuditTest {
         .thenAnswer(call -> Optional.ofNullable(requestRows.get(call.getArgument(0))));
     ownRequests =
         new CastShiftRequestService(
-            users,
-            enrollments,
-            requests,
-            shifts,
-            attendances,
-            new ShiftRequestMapperImpl(),
-            dates,
-            stores,
-            audit);
+            users, enrollments, requests, shifts, attendances, dates, stores, audit);
     decisions =
         new ShiftRequestService(
-            requests,
-            enrollments,
-            shifts,
-            attendances,
-            new ShiftRequestMapperImpl(),
-            users,
-            dates,
-            stores,
-            audit);
+            requests, enrollments, shifts, attendances, users, dates, stores, audit);
     when(requests.findLinkedForUpdate(eq(1L), anyString(), anyString(), any()))
         .thenAnswer(
             call ->
@@ -185,19 +166,11 @@ class ShiftAuditTest {
     when(castService.existsInStoreForUpdate(1L, "cast")).thenReturn(true);
     actuals =
         new AttendanceService(
-            attendances,
-            correctionRepository,
-            new AttendanceMapperImpl(),
-            shifts,
-            castService,
-            users,
-            dates,
-            audit);
+            attendances, correctionRepository, shifts, castService, users, dates, audit);
     service =
         new ShiftService(
             shifts,
             attendances,
-            new ShiftMapperImpl(),
             enrollments,
             stores,
             mock(CastProfileRepository.class),
@@ -218,11 +191,11 @@ class ShiftAuditTest {
 
   @Test
   void directCreationIsTraceableByActorStoreAndSafeState() {
-    var created = service.create(1L, createRequest(), "operator@example.test");
+    var created = service.create(1L, createRequest().command(), "operator@example.test");
     assertThat(events).hasSize(1);
     var event = events.getFirst();
     assertThat(event.getAction()).isEqualTo("SHIFT_CREATED");
-    assertThat(event.getTargetId()).isEqualTo(created.getId());
+    assertThat(event.getTargetId()).isEqualTo(created.shift().getId());
     assertThat(event.getActorId()).isEqualTo(9L);
     assertThat(event.getOriginatingStoreId()).isEqualTo(1L);
     assertThat(event.getBeforeValues()).isEmpty();
@@ -239,12 +212,12 @@ class ShiftAuditTest {
 
   @Test
   void editingPublicationAndDeletionRetainOnlyActualBusinessChanges() {
-    service.create(1L, createRequest(), "operator@example.test");
+    service.create(1L, createRequest().command(), "operator@example.test");
     events.clear();
     var patch = new ShiftUpdateRequest();
     patch.setStartTime(LocalTime.of(11, 0));
-    service.update(1L, "shift", patch, "operator@example.test");
-    service.update(1L, "shift", patch, "operator@example.test");
+    service.update(1L, "shift", patch.command(), "operator@example.test");
+    service.update(1L, "shift", patch.command(), "operator@example.test");
     service.changePublication(1L, "shift", false, "operator@example.test");
     service.changePublication(1L, "shift", false, "operator@example.test");
     service.delete(1L, "shift");
@@ -267,7 +240,7 @@ class ShiftAuditTest {
     request.setStartTime(LocalTime.of(10, 0));
     request.setEndTime(LocalTime.of(18, 0));
     request.setNote("秘密希望");
-    var submitted = ownRequests.submit("operator@example.test", request);
+    var submitted = ownRequests.submit("operator@example.test", request.command());
     decisions.approve(1L, submitted.getId(), false, "operator@example.test");
     var change = new ShiftChangeRequestCreateRequest();
     change.setShiftId("shift");
@@ -275,9 +248,9 @@ class ShiftAuditTest {
     change.setStartTime(LocalTime.of(11, 0));
     change.setEndTime(request.getEndTime());
     change.setNote("秘密変更");
-    var revised = ownRequests.submitChange("operator@example.test", change);
+    var revised = ownRequests.submitChange("operator@example.test", change.command());
     decisions.approve(1L, revised.getId(), null, "operator@example.test");
-    var declined = ownRequests.submit("operator@example.test", request);
+    var declined = ownRequests.submit("operator@example.test", request.command());
     decisions.decline(1L, declined.getId(), "operator@example.test");
     assertThat(events)
         .extracting(AuditEvent::getAction)
@@ -306,18 +279,19 @@ class ShiftAuditTest {
     request.setCastId("cast");
     request.setActualStartAt(LocalDate.of(2030, 1, 2).atTime(10, 0));
     request.setWaitingPlace("秘密待機場所");
-    actuals.record(1L, request, "operator@example.test");
+    actuals.record(1L, request.command(), "operator@example.test");
     var correction = new AttendanceCorrectionRequest();
     correction.setBusinessDate(LocalDate.of(2030, 1, 2));
     correction.setActualStartAt(request.getActualStartAt());
     correction.setWaitingPlace("新しい秘密待機場所");
-    actuals.correct(1L, "attendance", correction, "operator@example.test");
-    actuals.correct(1L, "attendance", correction, "operator@example.test");
+    actuals.correct(1L, "attendance", correction.command(), "operator@example.test");
+    actuals.correct(1L, "attendance", correction.command(), "operator@example.test");
     var cancellation = new AttendanceCancellationRequest();
     cancellation.setReason("秘密取消理由");
-    actuals.cancel(1L, "attendance", cancellation, "operator@example.test");
+    actuals.cancel(1L, "attendance", cancellation.getReason(), "operator@example.test");
     assertThatThrownBy(
-            () -> actuals.cancel(1L, "attendance", cancellation, "operator@example.test"))
+            () ->
+                actuals.cancel(1L, "attendance", cancellation.getReason(), "operator@example.test"))
         .isInstanceOf(RuntimeException.class);
     assertThat(events)
         .extracting(AuditEvent::getAction)
@@ -345,7 +319,7 @@ class ShiftAuditTest {
     request.setWorkDate(LocalDate.of(2030, 1, 2));
     request.setStartTime(LocalTime.of(10, 0));
     request.setEndTime(LocalTime.of(18, 0));
-    var submitted = ownRequests.submit("operator@example.test", request);
+    var submitted = ownRequests.submit("operator@example.test", request.command());
     decisions.approve(1L, submitted.getId(), false, "operator@example.test");
     events.clear();
     service.delete(1L, "shift");

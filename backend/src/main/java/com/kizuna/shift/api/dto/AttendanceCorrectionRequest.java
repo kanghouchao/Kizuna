@@ -1,5 +1,6 @@
 package com.kizuna.shift.api.dto;
 
+import com.kizuna.shift.application.ShiftCommand.CorrectAttendance;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
@@ -23,4 +24,8 @@ public class AttendanceCorrectionRequest {
 
   @Size(max = 200)
   private String waitingPlace;
+
+  public CorrectAttendance command() {
+    return new CorrectAttendance(businessDate, actualStartAt, actualEndAt, waitingPlace);
+  }
 }

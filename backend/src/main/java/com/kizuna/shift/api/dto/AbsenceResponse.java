@@ -1,5 +1,6 @@
 package com.kizuna.shift.api.dto;
 
+import com.kizuna.shift.application.ShiftViews.Absence;
 import java.time.LocalDate;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -14,4 +15,11 @@ import lombok.NoArgsConstructor;
 public class AbsenceResponse {
   private String castId;
   private LocalDate businessDate;
+
+  public static AbsenceResponse of(Absence absence) {
+    return AbsenceResponse.builder()
+        .castId(absence.castId())
+        .businessDate(absence.businessDate())
+        .build();
+  }
 }

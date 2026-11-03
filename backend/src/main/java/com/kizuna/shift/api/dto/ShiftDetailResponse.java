@@ -1,5 +1,6 @@
 package com.kizuna.shift.api.dto;
 
+import com.kizuna.shift.application.ShiftViews.ShiftDetail;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
@@ -46,4 +47,22 @@ public class ShiftDetailResponse {
 
   /** 未取消の当日実績。未記録・取消済みしか無い場合は null。 */
   private AttendanceLineageResponse attendance;
+
+  public static ShiftDetailResponse of(ShiftDetail d) {
+    return ShiftDetailResponse.builder()
+        .id(d.id())
+        .castId(d.castId())
+        .workDate(d.workDate())
+        .startTime(d.startTime())
+        .endTime(d.endTime())
+        .status(d.status())
+        .published(d.published())
+        .createdBy(ActorResponse.of(d.createdBy()))
+        .updatedBy(ActorResponse.of(d.updatedBy()))
+        .createdAt(d.createdAt())
+        .updatedAt(d.updatedAt())
+        .origin(ShiftRequestLineageResponse.of(d.origin()))
+        .attendance(AttendanceLineageResponse.of(d.attendance()))
+        .build();
+  }
 }

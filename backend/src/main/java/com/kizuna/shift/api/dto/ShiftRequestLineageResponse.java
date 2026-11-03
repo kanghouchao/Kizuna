@@ -1,5 +1,6 @@
 package com.kizuna.shift.api.dto;
 
+import com.kizuna.shift.application.ShiftViews.RequestLineage;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
@@ -42,4 +43,26 @@ public class ShiftRequestLineageResponse {
 
   private ActorResponse processedBy;
   private OffsetDateTime processedAt;
+
+  public static ShiftRequestLineageResponse of(RequestLineage r) {
+    if (r == null) {
+      return null;
+    }
+    return ShiftRequestLineageResponse.builder()
+        .id(r.id())
+        .type(r.type())
+        .status(r.status())
+        .castId(r.castId())
+        .workDate(r.workDate())
+        .startTime(r.startTime())
+        .endTime(r.endTime())
+        .note(r.note())
+        .originalWorkDate(r.originalWorkDate())
+        .originalStartTime(r.originalStartTime())
+        .originalEndTime(r.originalEndTime())
+        .createdAt(r.createdAt())
+        .processedBy(ActorResponse.of(r.processedBy()))
+        .processedAt(r.processedAt())
+        .build();
+  }
 }

@@ -13,8 +13,6 @@ import static org.mockito.Mockito.when;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shift.api.dto.CastScheduleResponse;
-import com.kizuna.shift.api.dto.ShiftMapper;
 import com.kizuna.shift.domain.CastScheduleView;
 import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.user.domain.User;
@@ -34,7 +32,6 @@ class CastScheduleServiceTest {
   @Mock private UserRepository userRepository;
   @Mock private CastEnrollmentRepository castRepository;
   @Mock private ShiftRepository shiftRepository;
-  @Mock private ShiftMapper shiftMapper;
 
   @InjectMocks private CastScheduleService service;
 
@@ -56,7 +53,7 @@ class CastScheduleServiceTest {
         .isInstanceOf(StaleSessionException.class)
         .hasMessageContaining("認証セッションの主体が存在しません");
 
-    verifyNoInteractions(castRepository, shiftRepository, shiftMapper);
+    verifyNoInteractions(castRepository, shiftRepository);
   }
 
   @Test
@@ -65,7 +62,7 @@ class CastScheduleServiceTest {
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("取得範囲が不正です");
 
-    verifyNoInteractions(userRepository, castRepository, shiftRepository, shiftMapper);
+    verifyNoInteractions(userRepository, castRepository, shiftRepository);
   }
 
   @Test
@@ -77,7 +74,7 @@ class CastScheduleServiceTest {
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("取得範囲が不正です");
 
-    verifyNoInteractions(userRepository, castRepository, shiftRepository, shiftMapper);
+    verifyNoInteractions(userRepository, castRepository, shiftRepository);
   }
 
   @Test
@@ -86,10 +83,10 @@ class CastScheduleServiceTest {
     when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByUserId(42L)).thenReturn(List.of());
 
-    List<CastScheduleResponse> result = service.myWeek(EMAIL, FROM, TO);
+    List<CastScheduleView> result = service.myWeek(EMAIL, FROM, TO);
 
     assertThat(result).isEmpty();
-    verifyNoInteractions(shiftRepository, shiftMapper);
+    verifyNoInteractions(shiftRepository);
   }
 
   @Test
@@ -101,13 +98,9 @@ class CastScheduleServiceTest {
 
     CastScheduleView view = mock(CastScheduleView.class);
     when(shiftRepository.findConfirmedSchedule(castIds, FROM, TO)).thenReturn(List.of(view));
-    CastScheduleResponse response =
-        CastScheduleResponse.builder().storeId(1L).storeName("店舗A").build();
-    when(shiftMapper.toScheduleResponse(view)).thenReturn(response);
+    List<CastScheduleView> result = service.myWeek(EMAIL, FROM, TO);
 
-    List<CastScheduleResponse> result = service.myWeek(EMAIL, FROM, TO);
-
-    assertThat(result).containsExactly(response);
+    assertThat(result).containsExactly(view);
     verify(shiftRepository).findConfirmedSchedule(eq(castIds), eq(FROM), eq(TO));
     verify(shiftRepository, never()).findByStoreIdAndWorkDateBetween(any(), any(), any());
   }

@@ -1,6 +1,7 @@
 package com.kizuna.shift.api.me;
 
 import com.kizuna.shift.api.dto.CastScheduleResponse;
+import com.kizuna.shift.api.dto.ShiftMapper;
 import com.kizuna.shift.application.CastScheduleService;
 import java.security.Principal;
 import java.time.LocalDate;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class SelfScheduleController {
 
   private final CastScheduleService castScheduleService;
+  private final ShiftMapper shiftMapper;
 
   @GetMapping
   @PreAuthorize("hasRole('CAST')")
@@ -28,6 +30,9 @@ public class SelfScheduleController {
       Principal principal,
       @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
       @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
-    return ResponseEntity.ok(castScheduleService.myWeek(principal.getName(), from, to));
+    return ResponseEntity.ok(
+        castScheduleService.myWeek(principal.getName(), from, to).stream()
+            .map(shiftMapper::toScheduleResponse)
+            .toList());
   }
 }
