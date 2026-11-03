@@ -16,6 +16,7 @@ import com.kizuna.advertising.application.AdvertisingMediaService;
 import com.kizuna.advertising.application.AdvertisingService;
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingChangeRepository;
+import com.kizuna.advertising.domain.AdvertisingMedium;
 import com.kizuna.advertising.infrastructure.AdvertisingRecords;
 import com.kizuna.medium.application.MediumService;
 import com.kizuna.medium.domain.MediumRepository;
@@ -168,6 +169,12 @@ class AdvertisingMediumIntegrationTest {
         .filteredOn(c -> c.medium().id().equals(id))
         .hasSize(2)
         .allSatisfy(c -> assertThat(c.medium().name()).isEqualTo("新名"));
+    assertThat(costs.snapshot(store, "2026-09").costs())
+        .extracting(c -> c.medium())
+        .containsExactlyInAnyOrder(
+            new AdvertisingMedium(id, "新名"),
+            new AdvertisingMedium(id, "新名"),
+            new AdvertisingMedium(sibling, "別媒体"));
     var report = context.getBean(AdvertisingMediaService.class).view(store, "2026-09").report();
     assertThat(report.rows())
         .extracting(r -> r.medium().id() + ":" + r.medium().name() + ":" + r.entryCount())
