@@ -14,13 +14,10 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.store.api.dto.StoreCreateDTO;
-import com.kizuna.store.api.dto.StoreStatusVO;
-import com.kizuna.store.api.dto.StoreUpdateDTO;
-import com.kizuna.store.api.dto.StoreVO;
 import com.kizuna.store.domain.AttendanceRecordCheck;
 import com.kizuna.store.domain.CompletedOrderCheck;
 import com.kizuna.store.domain.Store;
+import com.kizuna.store.domain.StorePatch;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.storeprofile.domain.StoreProfileRepository;
 import com.kizuna.user.application.BusinessAudit;
@@ -65,16 +62,13 @@ class StoreRegistryServiceTest {
 
   @Test
   void create_savesStoreAndDefaultStoreProfileAndReturnsTheNewId() {
-    StoreCreateDTO req = new StoreCreateDTO();
-    req.setName("T1");
-    req.setShortName("新宿西");
-    req.setDomain("d1.com");
+    var command = new StoreCreateCommand("T1", "新宿西", "d1.com");
 
     Store t = new Store("T1", "新", "d1.com");
     t.setId(1L);
     when(storeRepository.saveAndFlush(any())).thenReturn(t);
 
-    assertThat(storeRegistryService.create(req)).isEqualTo(1L);
+    assertThat(storeRegistryService.create(command)).isEqualTo(1L);
 
     ArgumentCaptor<Store> saved = ArgumentCaptor.forClass(Store.class);
     verify(storeRepository).saveAndFlush(saved.capture());
@@ -85,13 +79,11 @@ class StoreRegistryServiceTest {
   @Test
   void create_duplicateDomain_rejectedBeforeInsert() {
     // 重複判定は一意制約違反の捕捉ではなく事前照会で行う（制約違反は競合に敗れた場合の兜底）。
-    StoreCreateDTO req = new StoreCreateDTO();
-    req.setName("T2");
-    req.setDomain("taken.example.com");
+    var command = new StoreCreateCommand("T2", null, "taken.example.com");
     when(storeRepository.findByDomain("taken.example.com"))
         .thenReturn(Optional.of(createStore(9L, "既存", "taken.example.com")));
 
-    assertThatThrownBy(() -> storeRegistryService.create(req))
+    assertThatThrownBy(() -> storeRegistryService.create(command))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("既に登録されています");
 
@@ -101,13 +93,10 @@ class StoreRegistryServiceTest {
 
   @Test
   void create_duplicateShortName_mapsUniqueViolationToConflict() {
-    StoreCreateDTO req = new StoreCreateDTO();
-    req.setName("T3");
-    req.setShortName("新宿");
-    req.setDomain("fresh.example.com");
+    var command = new StoreCreateCommand("T3", "新宿", "fresh.example.com");
     when(storeRepository.saveAndFlush(any())).thenThrow(shortNameViolation());
 
-    assertThatThrownBy(() -> storeRegistryService.create(req))
+    assertThatThrownBy(() -> storeRegistryService.create(command))
         .isInstanceOf(ConflictException.class)
         .hasMessage("この略称は既に使われています");
 
@@ -119,11 +108,9 @@ class StoreRegistryServiceTest {
     Store t = createStore(1L, "Old", "old.com");
     when(storeRepository.findById(1L)).thenReturn(Optional.of(t));
     when(storeRepository.saveAndFlush(t)).thenThrow(shortNameViolation());
-    StoreUpdateDTO req = new StoreUpdateDTO();
-    req.setName("New");
-    req.setShortName("新宿");
+    var patch = new StorePatch("New", "新宿");
 
-    assertThatThrownBy(() -> storeRegistryService.update("1", req))
+    assertThatThrownBy(() -> storeRegistryService.update("1", patch))
         .isInstanceOf(ConflictException.class)
         .hasMessage("この略称は既に使われています");
   }
@@ -148,15 +135,15 @@ class StoreRegistryServiceTest {
   }
 
   @Test
-  void getById_returnsStoreVO() {
+  void getById_returnsStoreView() {
     Store t = createStore(1L, "Store1", "store1.com");
     when(storeRepository.findById(1L)).thenReturn(Optional.of(t));
 
-    StoreVO result = storeRegistryService.getById("1");
+    StoreView result = storeRegistryService.getById("1");
 
-    assertThat(result.getName()).isEqualTo("Store1");
-    assertThat(result.getDomain()).isEqualTo("store1.com");
-    assertThat(result.getCreatedAt()).isEqualTo(t.getCreatedAt());
+    assertThat(result.name()).isEqualTo("Store1");
+    assertThat(result.domain()).isEqualTo("store1.com");
+    assertThat(result.createdAt()).isEqualTo(t.getCreatedAt());
   }
 
   @Test
@@ -175,14 +162,14 @@ class StoreRegistryServiceTest {
   }
 
   @Test
-  void getByDomain_returnsStoreVO() {
+  void getByDomain_returnsStoreView() {
     Store t = createStore(2L, "Store2", "store2.com");
     when(storeRepository.findByDomain("store2.com")).thenReturn(Optional.of(t));
 
-    Optional<StoreVO> result = storeRegistryService.getByDomain("store2.com");
+    Optional<StoreView> result = storeRegistryService.getByDomain("store2.com");
 
     assertThat(result).isPresent();
-    assertThat(result.get().getDomain()).isEqualTo("store2.com");
+    assertThat(result.get().domain()).isEqualTo("store2.com");
   }
 
   @Test
@@ -197,11 +184,9 @@ class StoreRegistryServiceTest {
     Store t = createStore(1L, "Old", "old.com");
     when(storeRepository.findById(1L)).thenReturn(Optional.of(t));
 
-    StoreUpdateDTO req = new StoreUpdateDTO();
-    req.setName("New");
-    req.setShortName("新");
+    var patch = new StorePatch("New", "新");
 
-    storeRegistryService.update("1", req);
+    storeRegistryService.update("1", patch);
 
     assertThat(t.getName()).isEqualTo("New");
     assertThat(t.getShortName()).isEqualTo("新");
@@ -212,10 +197,9 @@ class StoreRegistryServiceTest {
   void update_throwsWhenNotFound() {
     when(storeRepository.findById(99L)).thenReturn(Optional.empty());
 
-    StoreUpdateDTO req = new StoreUpdateDTO();
-    req.setName("New");
+    var patch = new StorePatch("New", null);
 
-    assertThatThrownBy(() -> storeRegistryService.update("99", req))
+    assertThatThrownBy(() -> storeRegistryService.update("99", patch))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("店舗が見つかりません");
   }
@@ -340,12 +324,10 @@ class StoreRegistryServiceTest {
   }
 
   @Test
-  void stats_returnsStatusVO() {
+  void count_returnsStoreCount() {
     when(storeRepository.count()).thenReturn(5L);
 
-    StoreStatusVO result = storeRegistryService.stats();
-
-    assertThat(result.total()).isEqualTo(5L);
+    assertThat(storeRegistryService.count()).isEqualTo(5L);
   }
 
   private Store createStore(Long id, String name, String domain) {

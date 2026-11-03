@@ -2,6 +2,7 @@ package com.kizuna.store.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -9,7 +10,6 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
-import com.kizuna.store.api.dto.AdminStoreResponse;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.store.domain.StoreStatus;
@@ -61,12 +61,13 @@ class AdminStoreServiceTest {
     // 意図的に降順で返し、サービスが id 昇順へ整列することを確認する。
     when(storeRepository.findAll()).thenReturn(List.of(store(2L, "B店"), store(1L, "A店")));
 
-    List<AdminStoreResponse> result = service.listAuthorizedStores();
+    List<StoreView> result = service.listAuthorizedStores();
 
     assertThat(result)
+        .extracting(StoreView::id, StoreView::name, StoreView::shortName, StoreView::status)
         .containsExactly(
-            new AdminStoreResponse(1L, "A店", "A", StoreStatus.PREPARING),
-            new AdminStoreResponse(2L, "B店", "B", StoreStatus.PREPARING));
+            tuple(1L, "A店", "A", StoreStatus.PREPARING),
+            tuple(2L, "B店", "B", StoreStatus.PREPARING));
     verify(storeRepository).findAll();
     verify(storeRepository, never()).findAllById(any());
   }
@@ -76,10 +77,11 @@ class AdminStoreServiceTest {
     authenticate("SPECIFIC_STORES", List.of(1L));
     when(storeRepository.findAllById(Set.of(1L))).thenReturn(List.of(store(1L, "A店")));
 
-    List<AdminStoreResponse> result = service.listAuthorizedStores();
+    List<StoreView> result = service.listAuthorizedStores();
 
     assertThat(result)
-        .containsExactly(new AdminStoreResponse(1L, "A店", "A", StoreStatus.PREPARING));
+        .extracting(StoreView::id, StoreView::name, StoreView::shortName, StoreView::status)
+        .containsExactly(tuple(1L, "A店", "A", StoreStatus.PREPARING));
     verify(storeRepository).findAllById(Set.of(1L));
     verify(storeRepository, never()).findAll();
   }

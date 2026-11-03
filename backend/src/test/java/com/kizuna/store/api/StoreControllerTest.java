@@ -9,16 +9,21 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kizuna.shared.storescope.PermissionHolderGuard;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
-import com.kizuna.store.api.dto.StoreVO;
 import com.kizuna.store.application.AdminStoreService;
 import com.kizuna.store.application.StoreRegistryService;
+import com.kizuna.store.application.StoreView;
+import com.kizuna.store.domain.StoreStatus;
 import com.kizuna.user.application.StoreScopeResolver;
+import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -35,11 +40,16 @@ import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.servlet.MockMvc;
 
 /** グループ級店舗 API のうち、ハンドラ層で閉じている約束（ページングの全順序・要求本文の検査）の単体テスト。 */
 @WebMvcTest(StoreController.class)
-@Import({StoreControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
+@Import({
+  StoreControllerTest.MethodSecurityConfig.class,
+  StoreScopeHolder.class,
+  PermissionHolderGuard.class
+})
 class StoreControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -62,7 +72,7 @@ class StoreControllerTest {
   @WithMockUser(authorities = "PERM_STORE_MANAGE")
   void listAppendsIdTiebreakerWhenCallerOverridesSort() throws Exception {
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-    Page<StoreVO> empty = new PageImpl<>(List.of());
+    Page<StoreView> empty = new PageImpl<>(List.of());
     when(storeRegistryService.list(any(), pageableCaptor.capture())).thenReturn(empty);
 
     mockMvc.perform(get("/stores?sort=name")).andExpect(status().isOk());
@@ -169,5 +179,73 @@ class StoreControllerTest {
     return "{\"name\": \"新店舗\", \"short_name\": \""
         + shortName
         + "\", \"domain\": \"new-store.kizuna.test\"}";
+  }
+
+  private static final StoreView STORE =
+      new StoreView(
+          7L,
+          "新宿店",
+          "新",
+          "shinjuku.example.test",
+          StoreStatus.ACTIVE,
+          OffsetDateTime.parse("2026-01-02T03:04:05Z"));
+
+  // 公開のドメイン照会は frontend の middleware が読む。id は文字列で返す。
+  @Test
+  @DisplayName("GET /stores/lookup は店舗を id 文字列・snake_case の全項目で返すこと")
+  void lookupWritesStoreFields() throws Exception {
+    when(storeRegistryService.getByDomain("shinjuku.example.test")).thenReturn(Optional.of(STORE));
+
+    mockMvc
+        .perform(get("/stores/lookup?domain=shinjuku.example.test"))
+        .andExpect(status().isOk())
+        .andExpect(
+            content()
+                .json(
+                    """
+                    {"id":"7","name":"新宿店","short_name":"新","domain":"shinjuku.example.test",
+                     "status":"ACTIVE","created_at":"2026-01-02T03:04:05Z"}
+                    """,
+                    JsonCompareMode.STRICT));
+  }
+
+  @Test
+  @DisplayName("GET /stores/lookup は未登録ドメインに 404 を返すこと")
+  void lookupUnknownDomainIsNotFound() throws Exception {
+    when(storeRegistryService.getByDomain("unknown.example.test")).thenReturn(Optional.empty());
+
+    mockMvc
+        .perform(get("/stores/lookup?domain=unknown.example.test"))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  @DisplayName("GET /stores/me は授権店舗を id・name・short_name・status だけで返すこと")
+  @WithMockUser(authorities = "PERM_STORE_MANAGE")
+  void listAuthorizedWritesOnlySummaryFields() throws Exception {
+    when(adminStoreService.listAuthorizedStores()).thenReturn(List.of(STORE));
+
+    mockMvc
+        .perform(get("/stores/me"))
+        .andExpect(status().isOk())
+        .andExpect(
+            content()
+                .json(
+                    """
+                    [{"id":7,"name":"新宿店","short_name":"新","status":"ACTIVE"}]
+                    """,
+                    JsonCompareMode.STRICT));
+  }
+
+  @Test
+  @DisplayName("GET /stores/stats は店舗数を total で返すこと")
+  @WithMockUser(authorities = "PERM_STORE_MANAGE")
+  void statsWritesTotal() throws Exception {
+    when(storeRegistryService.count()).thenReturn(5L);
+
+    mockMvc
+        .perform(get("/stores/stats"))
+        .andExpect(status().isOk())
+        .andExpect(content().json("{\"total\":5}", JsonCompareMode.STRICT));
   }
 }

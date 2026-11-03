@@ -6,10 +6,6 @@ import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.store.api.dto.StoreCreateDTO;
-import com.kizuna.store.api.dto.StoreStatusVO;
-import com.kizuna.store.api.dto.StoreUpdateDTO;
-import com.kizuna.store.api.dto.StoreVO;
 import com.kizuna.store.domain.AttendanceRecordCheck;
 import com.kizuna.store.domain.CompletedOrderCheck;
 import com.kizuna.store.domain.Store;
@@ -65,26 +61,26 @@ public class StoreRegistryService {
           () -> new ServiceException("ボーナスの記録が存在する店舗は削除できません"));
 
   @Transactional(readOnly = true)
-  public Page<StoreVO> list(String search, Pageable pageable) {
+  public Page<StoreView> list(String search, Pageable pageable) {
     // 派生クエリの Containing は null を渡せないため、絞り込み無し（null）は空パターンで表す。
     String term = search == null ? "" : search;
     return storeRepository
         .findByNameContainingIgnoreCaseOrDomainContainingIgnoreCase(term, term, pageable)
-        .map(this::toDto);
+        .map(StoreView::of);
   }
 
   @Transactional(readOnly = true)
-  public StoreVO getById(String id) {
-    return storeRepository.findById(parseId(id)).map(this::toDto).orElseThrow(() -> notFound(id));
+  public StoreView getById(String id) {
+    return storeRepository.findById(parseId(id)).map(StoreView::of).orElseThrow(() -> notFound(id));
   }
 
   @Transactional(readOnly = true)
   // Optional は unwrap されるため未登録ドメインは null。cache-null-values=false の Redis に
   // null を書くと IllegalArgumentException → 500 になるのでキャッシュ対象外にする
   @Cacheable(value = "storeByDomain", key = "#domain", unless = "#result == null")
-  public Optional<StoreVO> getByDomain(String domain) {
+  public Optional<StoreView> getByDomain(String domain) {
     log.debug("店舗をデータベースから検索 domain: {}", domain);
-    return storeRepository.findByDomain(domain).map(this::toDto);
+    return storeRepository.findByDomain(domain).map(StoreView::of);
   }
 
   /**
@@ -93,12 +89,12 @@ public class StoreRegistryService {
    * <p>ドメインの重複は、制約違反を捕まえるのではなく事前に照会して判定する — 一意制約はここを擦り抜けた競合を受け止める 最後の一枚（409）であり、業務上の重複判定を委ねる先ではない。
    */
   @Transactional
-  public Long create(StoreCreateDTO req) {
-    if (storeRepository.findByDomain(req.getDomain()).isPresent()) {
+  public Long create(StoreCreateCommand command) {
+    if (storeRepository.findByDomain(command.domain()).isPresent()) {
       throw new ServiceException("このドメインは既に登録されています");
     }
     Store saved =
-        saveShortNameUnique(new Store(req.getName(), req.getShortName(), req.getDomain()));
+        saveShortNameUnique(new Store(command.name(), command.shortName(), command.domain()));
     storeProfileRepository.save(StoreProfile.createDefault(saved.getId()));
     record(
         saved.getId(),
@@ -117,12 +113,12 @@ public class StoreRegistryService {
   // domain はメソッド本体のローカルにしか現れずキーとして書けない。delete と同じ全件失効に揃える。
   @Transactional
   @CacheEvict(value = "storeByDomain", allEntries = true)
-  public void update(String id, StoreUpdateDTO req) {
+  public void update(String id, StorePatch patch) {
     var store = storeRepository.findById(parseId(id)).orElseThrow(() -> notFound(id));
     String versionBefore = String.valueOf(store.getVersion());
-    boolean renamed = !Objects.equals(store.getName(), req.getName());
-    boolean shortNameChanged = !Objects.equals(store.getShortName(), req.getShortName());
-    store.apply(new StorePatch(req.getName(), req.getShortName()));
+    boolean renamed = !Objects.equals(store.getName(), patch.name());
+    boolean shortNameChanged = !Objects.equals(store.getShortName(), patch.shortName());
+    store.apply(patch);
     saveShortNameUnique(store);
     List<String> changed = new ArrayList<>();
     if (renamed) {
@@ -203,8 +199,8 @@ public class StoreRegistryService {
   }
 
   @Transactional(readOnly = true)
-  public StoreStatusVO stats() {
-    return new StoreStatusVO(storeRepository.count());
+  public long count() {
+    return storeRepository.count();
   }
 
   private static NotFoundException notFound(String id) {
@@ -217,15 +213,5 @@ public class StoreRegistryService {
     } catch (NumberFormatException e) {
       throw new ServiceException("店舗 ID の形式が不正です: " + id);
     }
-  }
-
-  private StoreVO toDto(Store t) {
-    return new StoreVO(
-        String.valueOf(t.getId()),
-        t.getName(),
-        t.getShortName(),
-        t.getDomain(),
-        t.getStatus(),
-        t.getCreatedAt());
   }
 }

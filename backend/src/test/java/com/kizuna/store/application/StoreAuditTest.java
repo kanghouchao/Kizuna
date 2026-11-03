@@ -14,11 +14,10 @@ import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.store.api.dto.StoreCreateDTO;
-import com.kizuna.store.api.dto.StoreUpdateDTO;
 import com.kizuna.store.domain.AttendanceRecordCheck;
 import com.kizuna.store.domain.CompletedOrderCheck;
 import com.kizuna.store.domain.Store;
+import com.kizuna.store.domain.StorePatch;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.storeprofile.domain.StoreProfileRepository;
 import com.kizuna.user.application.BusinessAudit;
@@ -113,12 +112,9 @@ class StoreAuditTest {
 
   @Test
   void createRecordsStateVersionAndDomainUnderTheNewStoreId() {
-    var request = new StoreCreateDTO();
-    request.setName("新店舗");
-    request.setShortName("新");
-    request.setDomain("new.example.test");
+    var command = new StoreCreateCommand("新店舗", "新", "new.example.test");
 
-    registry.create(request);
+    registry.create(command);
 
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("STORE_CREATED");
@@ -139,22 +135,18 @@ class StoreAuditTest {
   @Test
   void duplicateDomainCreationRecordsNothing() {
     when(stores.findByDomain("old.example.test")).thenReturn(Optional.of(store));
-    var request = new StoreCreateDTO();
-    request.setName("重複");
-    request.setDomain("old.example.test");
+    var command = new StoreCreateCommand("重複", null, "old.example.test");
 
-    assertThatThrownBy(() -> registry.create(request)).isInstanceOf(ServiceException.class);
+    assertThatThrownBy(() -> registry.create(command)).isInstanceOf(ServiceException.class);
 
     assertThat(recorded).isEmpty();
   }
 
   @Test
   void renameRecordsFieldNameAndVersionsButNeverNames() {
-    var request = new StoreUpdateDTO();
-    request.setName("新名称");
-    request.setShortName("旧");
+    var patch = new StorePatch("新名称", "旧");
 
-    registry.update("7", request);
+    registry.update("7", patch);
 
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("STORE_UPDATED");
@@ -167,22 +159,18 @@ class StoreAuditTest {
 
   @Test
   void sameNameUpdateRecordsNothing() {
-    var request = new StoreUpdateDTO();
-    request.setName("旧名称");
-    request.setShortName("旧");
+    var patch = new StorePatch("旧名称", "旧");
 
-    registry.update("7", request);
+    registry.update("7", patch);
 
     assertThat(recorded).isEmpty();
   }
 
   @Test
   void shortNameChangeRecordsFieldNameOnly() {
-    var request = new StoreUpdateDTO();
-    request.setName("旧名称");
-    request.setShortName("新");
+    var patch = new StorePatch("旧名称", "新");
 
-    registry.update("7", request);
+    registry.update("7", patch);
 
     var event = recorded.getFirst();
     assertThat(event.getAfterValues())
