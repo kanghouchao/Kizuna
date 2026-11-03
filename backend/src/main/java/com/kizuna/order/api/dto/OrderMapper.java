@@ -67,9 +67,7 @@ public interface OrderMapper {
   @Mapping(target = "totalDurationMinutes", ignore = true)
   @Mapping(target = "totalRemuneration", ignore = true)
   @Mapping(target = "specialServices", ignore = true)
-  @Mapping(
-      target = "medium",
-      expression = "java(OrderMediumResponse.of(view.getMediumId(), view.getMediumName()))")
+  @Mapping(target = "medium", ignore = true)
   OrderResponse toResponse(OrderView view);
 
   List<OrderFeeLineInput> toFeeLineInputs(List<OrderFeeLineRequest> requests);
@@ -208,6 +206,7 @@ public interface OrderMapper {
   /** 詳細は読み側 projection に、集約から取り出した行の集合と応答時点の現況を載せて組む。 */
   default OrderResponse toResponse(OrderDetail detail) {
     OrderResponse response = toResponse(detail.view());
+    response.setMedium(OrderMediumResponse.of(detail.view().getMediumId(), detail.mediumName()));
     response.setBusinessContactPermissions(
         detail.businessContactPermissions().stream().map(this::toResponse).toList());
     response.setSpecialServices(detail.specialServices().stream().map(this::toResponse).toList());

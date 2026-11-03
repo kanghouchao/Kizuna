@@ -16,6 +16,8 @@ import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerContactRepository;
 import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.medium.lookup.MediumLookup;
+import com.kizuna.medium.lookup.MediumReference;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderApplicationRepository;
 import com.kizuna.order.domain.OrderApplicationStatus;
@@ -72,6 +74,7 @@ class OrderQueryServiceTest {
   @Mock BusinessContactPermissions businessContactPermissions;
   @Mock BusinessDateService businessDateService;
   @Mock private OrderSpecialServices specialServices;
+  @Mock MediumLookup mediumLookup;
   private final UserRepository userRepository = Mockito.mock(UserRepository.class);
   private final RoleRepository roleRepository = Mockito.mock(RoleRepository.class);
 
@@ -192,6 +195,27 @@ class OrderQueryServiceTest {
     assertThat(queryService.get(STORE_ID, "o1").view()).isSameAs(view);
     assertThatThrownBy(() -> queryService.get(STORE_ID, "o2"))
         .isInstanceOf(NotFoundException.class);
+  }
+
+  @Test
+  void detailNamesTheMediumThroughTheLookupOnlyWhenTheOrderHasOne() {
+    var order =
+        Order.builder()
+            .status(OrderStatus.CONFIRMED)
+            .course(OrderCourses.course("基本", 60, 0))
+            .build();
+    OrderView withMedium = mock(OrderView.class);
+    when(withMedium.getMediumId()).thenReturn("m1");
+    OrderView withoutMedium = mock(OrderView.class);
+    when(orderRepository.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
+    when(orderRepository.findViewById(eq(STORE_ID), nullable(String.class)))
+        .thenReturn(Optional.of(withMedium), Optional.of(withoutMedium));
+    when(mediumLookup.find(STORE_ID, "m1"))
+        .thenReturn(Optional.of(new MediumReference("m1", "現在の名前", false)));
+
+    assertThat(queryService.get(STORE_ID, "o1").mediumName()).isEqualTo("現在の名前");
+    assertThat(queryService.get(STORE_ID, "o1").mediumName()).isNull();
+    verify(mediumLookup).find(STORE_ID, "m1");
   }
 
   @Test

@@ -6,6 +6,7 @@ import com.kizuna.customer.domain.CustomerContact;
 import com.kizuna.customer.domain.CustomerContactRepository;
 import com.kizuna.customer.domain.CustomerContactSearch;
 import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.medium.lookup.MediumLookup;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderApplication;
 import com.kizuna.order.domain.OrderApplicationRepository;
@@ -51,6 +52,7 @@ public class OrderQueryService {
   private final GuestApplicationConsent guestConsent;
   private final BusinessContactPermissions businessContactPermissions;
   private final OrderSpecialServices specialServices;
+  private final MediumLookup mediumLookup;
 
   @Transactional(readOnly = true)
   public Page<OrderView> list(Long storeId, String customerId, Pageable pageable) {
@@ -226,6 +228,9 @@ public class OrderQueryService {
             .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + order.getId()));
     return new OrderDetail(
         view,
+        view.getMediumId() == null
+            ? null
+            : MediumLookup.referenced(mediumLookup.find(storeId, view.getMediumId())).name(),
         order.getFeeLines().stream().map(OrderFeeLineSnapshot::of).toList(),
         order.getTotalRemuneration(),
         order.getTotalDurationMinutes(),

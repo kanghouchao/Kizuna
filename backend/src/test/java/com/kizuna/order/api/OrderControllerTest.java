@@ -495,7 +495,7 @@ class OrderControllerTest {
     when(orderService.update(any(), any(), any(), any(), anyBoolean()))
         .thenReturn(
             new OrderDetail(
-                view("o1", OrderStatus.CONFIRMED), List.of(), 0, 0, List.of(), List.of()));
+                view("o1", OrderStatus.CONFIRMED), null, List.of(), 0, 0, List.of(), List.of()));
 
     // 省略を契約で撥ねると、指名・受付担当が未設定のまま確定した受注が編集できなくなる。
     // 「既にある指名・受付担当は外せない」判定は受注の状態を見るサービス層が持つ（OrderServiceTest）。
@@ -884,7 +884,7 @@ class OrderControllerTest {
     when(orderService.create(any(), any(), any(), anyBoolean()))
         .thenReturn(
             new OrderDetail(
-                view("o1", OrderStatus.CONFIRMED), List.of(), 0, 0, List.of(), List.of()));
+                view("o1", OrderStatus.CONFIRMED), null, List.of(), 0, 0, List.of(), List.of()));
 
     when(orderService.previewCreate(any(), any(), any(), anyBoolean())).thenReturn(emptyPreview());
 
@@ -903,7 +903,7 @@ class OrderControllerTest {
     when(orderService.create(any(), any(), any(), anyBoolean()))
         .thenReturn(
             new OrderDetail(
-                view("o1", OrderStatus.CONFIRMED), List.of(), 0, 0, List.of(), List.of()));
+                view("o1", OrderStatus.CONFIRMED), null, List.of(), 0, 0, List.of(), List.of()));
 
     when(orderService.previewCreate(any(), any(), any(), anyBoolean())).thenReturn(emptyPreview());
 

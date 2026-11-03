@@ -177,7 +177,8 @@ class OrderServiceTest {
             businessDateService,
             guestConsent,
             businessContactPermissions,
-            specialServices));
+            specialServices,
+            mediumLookup));
     ReflectionTestUtils.setField(
         service,
         "customerProvisioningService",
