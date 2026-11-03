@@ -16,6 +16,7 @@ import com.kizuna.shared.config.RedisConfig;
 import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.user.api.dto.RoleUpdateRequest;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.application.CredentialOperations;
@@ -487,7 +488,7 @@ class CredentialRevocationIntegrationTest {
     var user = createUser(UserType.MEMBER);
     var session = authService().issueSessionFor(user);
     String sessionId =
-        decoder.decode(session.access().value()).getClaimAsString(TokenType.SESSION_ID_CLAIM);
+        decoder.decode(session.access().value()).getClaimAsString(TokenClaims.SESSION_ID);
     String expired = expiredAccessToken(user, sessionId);
 
     assertThat(refresh(session.refresh().value(), "Bearer " + expired).getStatus()).isEqualTo(200);
@@ -540,10 +541,10 @@ class CredentialRevocationIntegrationTest {
             .subject(user.getEmail())
             .issuedAt(now.minusSeconds(20))
             .expiresAt(now.minusSeconds(10))
-            .claim(CredentialVersionService.CLAIM, 0L)
-            .claim(CredentialVersionService.USER_ID_CLAIM, user.getId())
-            .claim(TokenType.CLAIM, TokenType.ACCESS.claimValue())
-            .claim(TokenType.SESSION_ID_CLAIM, sessionId)
+            .claim(TokenClaims.CREDENTIAL_VERSION, 0L)
+            .claim(JwtClaims.USER_ID, user.getId())
+            .claim(TokenClaims.TYPE, TokenType.ACCESS.claimValue())
+            .claim(TokenClaims.SESSION_ID, sessionId)
             .build();
     return context
         .getBean(JwtEncoder.class)
@@ -657,9 +658,9 @@ class CredentialRevocationIntegrationTest {
             TokenType.ACCESS,
             user.getEmail(),
             Map.of(
-                CredentialVersionService.CLAIM,
+                TokenClaims.CREDENTIAL_VERSION,
                 version,
-                CredentialVersionService.USER_ID_CLAIM,
+                JwtClaims.USER_ID,
                 user.getId(),
                 "authorities",
                 List.of("PERM_TEST")),

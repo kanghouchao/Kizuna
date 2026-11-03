@@ -16,7 +16,7 @@ class TokenTypeValidator implements OAuth2TokenValidator<Jwt> {
 
   @Override
   public OAuth2TokenValidatorResult validate(Jwt jwt) {
-    return expected.claimValue().equals(jwt.getClaimAsString(TokenType.CLAIM))
+    return expected.claimValue().equals(jwt.getClaimAsString(TokenClaims.TYPE))
         ? OAuth2TokenValidatorResult.success()
         : OAuth2TokenValidatorResult.failure(INVALID_TOKEN);
   }

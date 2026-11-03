@@ -5,6 +5,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.shared.web.JwtClaims;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
@@ -26,10 +27,10 @@ class CredentialVersionValidatorTest {
     Jwt.Builder builder =
         Jwt.withTokenValue("token").header("alg", "HS256").subject("user@example.com");
     if (credentialVersionClaim != null) {
-      builder.claim(CredentialVersionService.CLAIM, credentialVersionClaim);
+      builder.claim(TokenClaims.CREDENTIAL_VERSION, credentialVersionClaim);
     }
     if (userIdClaim != null) {
-      builder.claim(CredentialVersionService.USER_ID_CLAIM, userIdClaim);
+      builder.claim(JwtClaims.USER_ID, userIdClaim);
     }
     return builder.build();
   }

@@ -81,8 +81,7 @@ describe('Header 操作', () => {
   });
 });
 
-// 利用者表示は /me の共有 seam から読む（display_name は token claim に無い —
-// wire 契約は authorities / userType のみ）。取得・差し替えのライフサイクルは
+// 利用者表示は /me の共有 seam から読む（フロントは token を解読しない）。取得・差し替えのライフサイクルは
 // MeContext.test.tsx が担い、ここでは seam 出力に対する表示・失敗時の名乗り・再試行の委譲を
 // 検証する。
 describe('Header 利用者表示（/me の共有 seam）', () => {

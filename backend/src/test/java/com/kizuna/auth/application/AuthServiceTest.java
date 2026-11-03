@@ -13,17 +13,18 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.auth.api.dto.MeResponse;
-import com.kizuna.auth.infrastructure.CredentialVersionService;
 import com.kizuna.auth.infrastructure.IssuedJwt;
 import com.kizuna.auth.infrastructure.JwtIssuer;
 import com.kizuna.auth.infrastructure.RefreshTokenRejectedException;
 import com.kizuna.auth.infrastructure.RefreshTokenRejectedException.Reason;
 import com.kizuna.auth.infrastructure.SessionTokenDecoder;
+import com.kizuna.auth.infrastructure.TokenClaims;
 import com.kizuna.auth.infrastructure.TokenType;
 import com.kizuna.auth.infrastructure.UserPrincipal;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.user.application.CredentialOperations;
 import com.kizuna.user.application.RoleManageHolderGuard;
 import com.kizuna.user.domain.Permission;
@@ -192,14 +193,14 @@ class AuthServiceTest {
                 "PERM_STORE_MANAGE",
                 "PERM_STORE_VIEW",
                 "PERM_SYSTEM_CONFIG_MANAGE"));
-    assertThat(claims.get("userType")).isEqualTo("STAFF");
+    assertThat(claims).doesNotContainKey("userType");
     assertThat(claims).doesNotContainKey("role");
     // 店舗集合は claim に載せない — 要求ごとに DB から解決する。
     assertThat(claims).doesNotContainKeys("storeBridge", "storeScopeType", "storeIds");
     // 発行時点の資格情報の版が claim に載る（ADR 0022 — 検証側が相等比較する前提値）。
     assertThat(claims.get("credentialVersion")).isEqualTo(0L);
     // 版の鍵は利用者 ID。subject の電子メールは退会で解放されて別人へ移りうる（ADR 0029）。
-    assertThat(claims).containsKey(CredentialVersionService.USER_ID_CLAIM);
+    assertThat(claims).containsKey(JwtClaims.USER_ID);
   }
 
   @Test
@@ -292,7 +293,7 @@ class AuthServiceTest {
     @SuppressWarnings("unchecked")
     List<String> authorities = (List<String>) claims.get("authorities");
     assertThat(authorities).isEqualTo(List.of("ROLE_CAST"));
-    assertThat(claims.get("userType")).isEqualTo("CAST");
+    assertThat(claims).doesNotContainKey("userType");
   }
 
   @Test
@@ -444,8 +445,8 @@ class AuthServiceTest {
     assertThat(refreshSid.getValue()).isNotBlank().isEqualTo(accessSid.getValue());
     // リフレッシュトークンは権限を運ばない — リフレッシュのたびに DB から組み立て直す。
     assertThat(claimsCaptor.getValue())
-        .containsOnlyKeys(CredentialVersionService.CLAIM, CredentialVersionService.USER_ID_CLAIM)
-        .containsEntry(CredentialVersionService.USER_ID_CLAIM, 1L);
+        .containsOnlyKeys(TokenClaims.CREDENTIAL_VERSION, JwtClaims.USER_ID)
+        .containsEntry(JwtClaims.USER_ID, 1L);
     assertThat(session.userId()).isEqualTo(1L);
     assertThat(session.refresh().value()).isEqualTo("refresh-token");
     assertThat(session.toToken().refreshExpiresAt()).isEqualTo(EXPIRES_AT);
@@ -454,9 +455,9 @@ class AuthServiceTest {
   private static Jwt refreshJwt(long userId, long version) {
     return Jwt.withTokenValue("refresh")
         .header("alg", "HS256")
-        .claim(CredentialVersionService.USER_ID_CLAIM, userId)
-        .claim(CredentialVersionService.CLAIM, version)
-        .claim(TokenType.SESSION_ID_CLAIM, "session-1")
+        .claim(JwtClaims.USER_ID, userId)
+        .claim(TokenClaims.CREDENTIAL_VERSION, version)
+        .claim(TokenClaims.SESSION_ID, "session-1")
         .build();
   }
 

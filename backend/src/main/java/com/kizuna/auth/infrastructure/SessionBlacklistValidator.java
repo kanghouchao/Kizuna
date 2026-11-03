@@ -18,7 +18,7 @@ public class SessionBlacklistValidator implements OAuth2TokenValidator<Jwt> {
 
   @Override
   public OAuth2TokenValidatorResult validate(Jwt jwt) {
-    String sessionId = jwt.getClaimAsString(TokenType.SESSION_ID_CLAIM);
+    String sessionId = jwt.getClaimAsString(TokenClaims.SESSION_ID);
     if (sessionId == null || tokenBlacklistService.isSessionBlacklisted(sessionId)) {
       return OAuth2TokenValidatorResult.failure(INVALID_TOKEN);
     }

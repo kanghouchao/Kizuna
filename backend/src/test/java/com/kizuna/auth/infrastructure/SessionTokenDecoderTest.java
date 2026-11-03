@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.auth.infrastructure.RefreshTokenRejectedException.Reason;
 import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.web.JwtClaims;
 import java.time.Instant;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,7 +60,7 @@ class SessionTokenDecoderTest {
   }
 
   private static Map<String, Object> claims() {
-    return Map.of(CredentialVersionService.CLAIM, 3L, CredentialVersionService.USER_ID_CLAIM, 7L);
+    return Map.of(TokenClaims.CREDENTIAL_VERSION, 3L, JwtClaims.USER_ID, 7L);
   }
 
   private String expiredRefreshToken() {
@@ -76,8 +77,8 @@ class SessionTokenDecoderTest {
             .issuedAt(issuedAt)
             .expiresAt(expiresAt)
             .claims(c -> c.putAll(claims()))
-            .claim(TokenType.CLAIM, TokenType.REFRESH.claimValue())
-            .claim(TokenType.SESSION_ID_CLAIM, "session-1")
+            .claim(TokenClaims.TYPE, TokenType.REFRESH.claimValue())
+            .claim(TokenClaims.SESSION_ID, "session-1")
             .build();
     return encoder
         .encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims))
@@ -98,8 +99,8 @@ class SessionTokenDecoderTest {
   void decodesValidRefreshToken() {
     Jwt jwt = decoder.decodeRefresh(token(TokenType.REFRESH));
 
-    assertThat(jwt.getClaimAsString(TokenType.SESSION_ID_CLAIM)).isEqualTo("session-1");
-    assertThat(jwt.getClaims().get(CredentialVersionService.USER_ID_CLAIM)).isEqualTo(7L);
+    assertThat(jwt.getClaimAsString(TokenClaims.SESSION_ID)).isEqualTo("session-1");
+    assertThat(jwt.getClaims().get(JwtClaims.USER_ID)).isEqualTo(7L);
   }
 
   @Test
