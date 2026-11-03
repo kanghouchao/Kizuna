@@ -11,6 +11,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.web.JwtClaims;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -85,11 +86,11 @@ class JwtDecoderConfigTest {
             .expiresAt(now.plusMillis(expirationMillis))
             .claim("authorities", List.of("PERM_TEST"));
     if (withCredentialVersion) {
-      claims.claim(CredentialVersionService.CLAIM, 0L);
+      claims.claim(TokenClaims.CREDENTIAL_VERSION, 0L);
     }
-    claims.claim(CredentialVersionService.USER_ID_CLAIM, 42L);
+    claims.claim(JwtClaims.USER_ID, 42L);
     if (type != null) {
-      claims.claim(TokenType.CLAIM, type);
+      claims.claim(TokenClaims.TYPE, type);
     }
     JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
     return encoder.encode(JwtEncoderParameters.from(header, claims.build())).getTokenValue();

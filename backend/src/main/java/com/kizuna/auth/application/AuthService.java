@@ -1,17 +1,18 @@
 package com.kizuna.auth.application;
 
 import com.kizuna.auth.api.dto.MeResponse;
-import com.kizuna.auth.infrastructure.CredentialVersionService;
 import com.kizuna.auth.infrastructure.IssuedJwt;
 import com.kizuna.auth.infrastructure.JwtIssuer;
 import com.kizuna.auth.infrastructure.RefreshTokenRejectedException;
 import com.kizuna.auth.infrastructure.RefreshTokenRejectedException.Reason;
 import com.kizuna.auth.infrastructure.SessionTokenDecoder;
+import com.kizuna.auth.infrastructure.TokenClaims;
 import com.kizuna.auth.infrastructure.TokenType;
 import com.kizuna.auth.infrastructure.UserPrincipal;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.user.application.CredentialOperations;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
@@ -87,7 +88,7 @@ public class AuthService {
   }
 
   /**
-   * リフレッシュトークンで同じセッションのトークンを発行し直す。権限・利用者種別は DB から組み立て、旧いトークンの claim を写さない。
+   * リフレッシュトークンで同じセッションのトークンを発行し直す。権限は DB から組み立て、旧いトークンの claim を写さない。
    *
    * <p>{@code sessionUserId} はタブが名乗る本人で、cookie の本人と違えば 409（別タブで別アカウントにログインされた）。
    */
@@ -95,9 +96,8 @@ public class AuthService {
   public IssuedSession refresh(String refreshToken, Long sessionUserId) {
     Jwt jwt = sessionTokenDecoder.decodeRefresh(refreshToken);
     // 検証の連鎖が両 claim の型を確かめ済み。
-    long userId =
-        ((Number) jwt.getClaims().get(CredentialVersionService.USER_ID_CLAIM)).longValue();
-    long version = ((Number) jwt.getClaims().get(CredentialVersionService.CLAIM)).longValue();
+    long userId = ((Number) jwt.getClaims().get(JwtClaims.USER_ID)).longValue();
+    long version = ((Number) jwt.getClaims().get(TokenClaims.CREDENTIAL_VERSION)).longValue();
     if (sessionUserId != null && sessionUserId != userId) {
       throw new ConflictException("別のアカウントでログインされました。画面を開き直してください。");
     }
@@ -110,7 +110,7 @@ public class AuthService {
       throw new RefreshTokenRejectedException(Reason.CREDENTIAL_CHANGED);
     }
     try {
-      return issueSession(user, jwt.getClaimAsString(TokenType.SESSION_ID_CLAIM));
+      return issueSession(user, jwt.getClaimAsString(TokenClaims.SESSION_ID));
     } catch (AuthenticationException ex) {
       // 停止・SERVICE は版の照合で先に止まるはずだが、発行の守衛に届いても契約どおり cookie を消す 401 にする。
       throw new RefreshTokenRejectedException(Reason.INVALID);
@@ -125,10 +125,10 @@ public class AuthService {
             TokenType.REFRESH,
             user.getEmail(),
             Map.of(
-                CredentialVersionService.CLAIM,
-                claims.get(CredentialVersionService.CLAIM),
-                CredentialVersionService.USER_ID_CLAIM,
-                claims.get(CredentialVersionService.USER_ID_CLAIM)),
+                TokenClaims.CREDENTIAL_VERSION,
+                claims.get(TokenClaims.CREDENTIAL_VERSION),
+                JwtClaims.USER_ID,
+                claims.get(JwtClaims.USER_ID)),
             sessionId);
     return new IssuedSession(user.getId(), access, refresh);
   }
@@ -145,13 +145,12 @@ public class AuthService {
       throw new DisabledException("アカウントが無効化されています");
     }
     Map<String, Object> claims = new HashMap<>();
-    claims.put("authorities", buildAuthorities(user, permissions));
-    claims.put("userType", user.getUserType().name());
+    claims.put(TokenClaims.AUTHORITIES, buildAuthorities(user, permissions));
     // 発行時点の資格情報の版。検証時に現在の版と相等比較され、パスワード変更・再設定・停止・実効権限の変更で
     // 即時に不一致となる（ADR 0022）。
-    claims.put(CredentialVersionService.CLAIM, user.getCredentialVersion());
+    claims.put(TokenClaims.CREDENTIAL_VERSION, user.getCredentialVersion());
     // 版の照合の鍵。subject の電子メールは退会で解放されて別人が引き継ぎうる（ADR 0029）。
-    claims.put(CredentialVersionService.USER_ID_CLAIM, user.getId());
+    claims.put(JwtClaims.USER_ID, user.getId());
     return claims;
   }
 

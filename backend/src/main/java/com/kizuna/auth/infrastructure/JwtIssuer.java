@@ -37,8 +37,8 @@ public class JwtIssuer {
             .issuedAt(now)
             .expiresAt(exp)
             .claims(c -> c.putAll(claims))
-            .claim(TokenType.CLAIM, type.claimValue())
-            .claim(TokenType.SESSION_ID_CLAIM, sessionId)
+            .claim(TokenClaims.TYPE, type.claimValue())
+            .claim(TokenClaims.SESSION_ID, sessionId)
             .build();
     JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
     Jwt jwt = jwtEncoder.encode(JwtEncoderParameters.from(header, claimsSet));

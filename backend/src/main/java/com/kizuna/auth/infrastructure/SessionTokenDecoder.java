@@ -82,7 +82,7 @@ public class SessionTokenDecoder {
     }
     try {
       return Optional.ofNullable(
-          signatureOnlyDecoder.decode(token).getClaimAsString(TokenType.SESSION_ID_CLAIM));
+          signatureOnlyDecoder.decode(token).getClaimAsString(TokenClaims.SESSION_ID));
     } catch (JwtException ex) {
       return Optional.empty();
     }

@@ -49,7 +49,7 @@ class JwtIssuerTest {
         issuer.issue(
             TokenType.ACCESS,
             "user@kizuna.test",
-            Map.of("authorities", List.of("PERM_TEST"), "userType", "STAFF"),
+            Map.of("authorities", List.of("PERM_TEST")),
             "session-1");
 
     Jwt decoded = decoder.decode(issued.value());
@@ -70,10 +70,10 @@ class JwtIssuerTest {
     Jwt refresh =
         decoder.decode(issuer.issue(TokenType.REFRESH, "u", Map.of(), "session-1").value());
 
-    assertThat(access.getClaimAsString(TokenType.CLAIM)).isEqualTo("access");
-    assertThat(refresh.getClaimAsString(TokenType.CLAIM)).isEqualTo("refresh");
-    assertThat(access.getClaimAsString(TokenType.SESSION_ID_CLAIM)).isEqualTo("session-1");
-    assertThat(refresh.getClaimAsString(TokenType.SESSION_ID_CLAIM)).isEqualTo("session-1");
+    assertThat(access.getClaimAsString(TokenClaims.TYPE)).isEqualTo("access");
+    assertThat(refresh.getClaimAsString(TokenClaims.TYPE)).isEqualTo("refresh");
+    assertThat(access.getClaimAsString(TokenClaims.SESSION_ID)).isEqualTo("session-1");
+    assertThat(refresh.getClaimAsString(TokenClaims.SESSION_ID)).isEqualTo("session-1");
   }
 
   @Test

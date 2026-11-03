@@ -1,7 +1,6 @@
 package com.kizuna.auth.infrastructure;
 
 import com.kizuna.shared.config.AppProperties;
-import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.user.domain.UserRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -16,15 +15,6 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class CredentialVersionService {
-
-  /** トークン claim 名。発行（AuthService）と検証（CredentialVersionValidator）の単一の合意点。 */
-  public static final String CLAIM = "credentialVersion";
-
-  /**
-   * 版の鍵となる利用者 ID の claim 名。subject の電子メールで鍵を取らないのは、退会で解放された電子メールを後継の身分が引き継ぐと、
-   * 退会前のトークンの版が後継の版と一致しうるため（ADR 0029）。
-   */
-  public static final String USER_ID_CLAIM = JwtClaims.USER_ID;
 
   private static final String KEY_PREFIX = "credential-version:";
 

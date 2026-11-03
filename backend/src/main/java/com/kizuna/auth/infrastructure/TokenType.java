@@ -9,12 +9,6 @@ public enum TokenType {
   ACCESS("access"),
   REFRESH("refresh");
 
-  /** 種別 claim 名。 */
-  public static final String CLAIM = "typ";
-
-  /** ログインごとに採番するセッション ID の claim 名。リフレッシュで発行し直すトークンも同じ値を引き継ぎ、ログアウトはこの単位で失効させる。 */
-  public static final String SESSION_ID_CLAIM = "sid";
-
   private final String claimValue;
 
   TokenType(String claimValue) {

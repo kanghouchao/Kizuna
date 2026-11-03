@@ -32,7 +32,7 @@ public class JwtAuthoritiesConverter implements Converter<Jwt, AbstractAuthentic
 
   public JwtAuthoritiesConverter() {
     authoritiesConverter.setAuthorityPrefix("");
-    authoritiesConverter.setAuthoritiesClaimName("authorities");
+    authoritiesConverter.setAuthoritiesClaimName(TokenClaims.AUTHORITIES);
     delegate.setJwtGrantedAuthoritiesConverter(authoritiesConverter);
   }
 
