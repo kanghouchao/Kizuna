@@ -1,14 +1,18 @@
 package com.kizuna.shared.config;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
 import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
+import org.springframework.validation.annotation.Validated;
 
 @Getter
 @Setter
 @Component
+@Validated
 @ConfigurationProperties(prefix = "app")
 public class AppProperties {
 
@@ -55,6 +59,15 @@ public class AppProperties {
   public static class Tasks {
     private int timeoutSeconds = 60;
     private int interruptionMinimumAgeSeconds = 300;
+  }
+
+  @Valid private Receipt receipt = new Receipt();
+
+  @Getter
+  @Setter
+  public static class Receipt {
+    // 受領のキーの助言ロックを待つ上限。PostgreSQL の lock_timeout は 0 で無制限になるので正の値だけを許す。
+    @Positive private int lockTimeoutSeconds = 5;
   }
 
   private MonthlyPdf monthlyPdf = new MonthlyPdf();
