@@ -7,11 +7,10 @@ import com.kizuna.notificationdelivery.api.dto.DeliveryResponse;
 import com.kizuna.notificationdelivery.api.dto.DeliverySummary;
 import com.kizuna.notificationdelivery.application.NotificationService;
 import com.kizuna.shared.exception.DbConstraint;
-import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.Replays;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -40,14 +39,11 @@ public class NotificationDeliveryController {
       Authentication auth,
       @Valid @RequestBody DeliveryRequest request) {
     var content = request.content();
-    NotificationService.Created created;
-    try {
-      created = notifications.create(storeId, auth.getName(), content);
-    } catch (DataIntegrityViolationException conflict) {
-      if (!IntegrityViolations.violates(conflict, DbConstraint.UQ_T_NOTIFICATION_DELIVERIES_KEY))
-        throw conflict;
-      created = notifications.replay(storeId, auth.getName(), content);
-    }
+    var created =
+        Replays.write(
+            DbConstraint.UQ_T_NOTIFICATION_DELIVERIES_KEY,
+            () -> notifications.create(storeId, auth.getName(), content),
+            () -> notifications.replay(storeId, auth.getName(), content));
     return ResponseEntity.status(created.created() ? 201 : 200).body(created.delivery());
   }
 
