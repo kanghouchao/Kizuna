@@ -404,6 +404,8 @@ class ArticleIntegrationTest {
     var now = OffsetDateTime.ofInstant(NOW, ZoneOffset.UTC);
     publish(create("次", BODY), true, null, null, 1, 0);
     publish(create("先頭", BODY), true, now.toString(), null, 0, 0);
+    publish(create("開始前", BODY), true, now.plusMinutes(1).toString(), null, 0, 0);
+    publish(create("終了", BODY), true, now.minusDays(1).toString(), now.toString(), 0, 0);
     publish(create("非公開", BODY), false, null, null, 0, 0);
     currentStore = otherStore;
     publish(create("foreign", BODY), true, null, null, 0, 0);
