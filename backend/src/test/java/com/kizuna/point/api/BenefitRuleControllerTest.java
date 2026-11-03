@@ -1,5 +1,6 @@
 package com.kizuna.point.api;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -108,7 +109,7 @@ class BenefitRuleControllerTest {
     ArgumentCaptor<BenefitRuleDefinition> captor =
         ArgumentCaptor.forClass(BenefitRuleDefinition.class);
     verify(benefitRuleService).create(eq(BenefitRuleType.VISIT), captor.capture());
-    org.assertj.core.api.Assertions.assertThat(captor.getValue().points()).isEqualTo(500);
+    assertThat(captor.getValue().points()).isEqualTo(500);
   }
 
   @Test
@@ -185,7 +186,7 @@ class BenefitRuleControllerTest {
     ArgumentCaptor<BenefitRuleDefinition> captor =
         ArgumentCaptor.forClass(BenefitRuleDefinition.class);
     verify(benefitRuleService).update(eq(1L), eq(0L), captor.capture());
-    org.assertj.core.api.Assertions.assertThat(captor.getValue().name()).isEqualTo("来店ボーナス");
+    assertThat(captor.getValue().name()).isEqualTo("来店ボーナス");
   }
 
   @Test
@@ -229,7 +230,7 @@ class BenefitRuleControllerTest {
   void noDeleteHandlerIsDeclared() {
     // HTTP で確かめられない — 未対応メソッドは全域ハンドラの兜底に落ちて 500 になり、
     // 「口が無い」ことと「口が壊れている」ことを区別できないため、宣言そのものを見る。
-    org.assertj.core.api.Assertions.assertThat(BenefitRuleController.class.getDeclaredMethods())
+    assertThat(BenefitRuleController.class.getDeclaredMethods())
         .noneMatch(
             method ->
                 method.isAnnotationPresent(

@@ -18,10 +18,12 @@ import com.kizuna.survey.application.SurveyReadService;
 import com.kizuna.survey.application.SurveyService;
 import com.kizuna.survey.application.SurveyViews.RevisionWritten;
 import com.kizuna.survey.domain.SurveyCommand;
+import com.kizuna.survey.domain.SurveyDefinition;
 import com.kizuna.survey.domain.SurveyHistory;
 import com.kizuna.survey.domain.SurveyRevision;
 import com.kizuna.survey.domain.SurveySeries;
 import com.kizuna.survey.domain.SurveyValues.Operation;
+import com.kizuna.survey.domain.SurveyValues.QuestionType;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +43,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
 /** handler が X-Store-ID で名乗られた店舗をそのまま service へ渡すことの単体テスト。 */
@@ -101,7 +104,7 @@ class SurveyControllerTest {
     when(service.write(eq(STORE_ID), eq("user"), any()))
         .thenReturn(
             new RevisionWritten(
-                null,
+                revision(),
                 new Receipt(
                     "op",
                     Operation.DRAFT_CREATED.receiptName(),
@@ -119,7 +122,10 @@ class SurveyControllerTest {
                     """
                     {"title":"利用後アンケート","questions":[{"question_key":"q1","type":"TEXT","prompt":"ご意見","required":true,"options":[]}],"dedupe_key":"create"}
                     """))
-        .andExpect(status().isCreated());
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.revision.id").value("r1"))
+        .andExpect(jsonPath("$.revision.survey_id").value("s1"))
+        .andExpect(jsonPath("$.operation.resource_id").value("r1"));
 
     verify(service).write(eq(STORE_ID), eq("user"), any(SurveyCommand.Create.class));
   }
@@ -228,5 +234,24 @@ class SurveyControllerTest {
                     SurveyRevision::getId)));
     assertThat(answers.getValue().getPageNumber()).isEqualTo(2);
     assertThat(answers.getValue().getPageSize()).isEqualTo(20);
+  }
+
+  private static SurveyRevision revision() {
+    var series = SurveySeries.create(STORE_ID, 1L, "担当者");
+    ReflectionTestUtils.setField(series, "id", "s1");
+    var revision =
+        SurveyRevision.draft(
+            series,
+            1,
+            null,
+            new SurveyDefinition(
+                "利用後アンケート",
+                List.of(
+                    new SurveyDefinition.Question(
+                        "q1", QuestionType.TEXT, "ご意見", true, List.of()))),
+            1L,
+            "担当者");
+    ReflectionTestUtils.setField(revision, "id", "r1");
+    return revision;
   }
 }
