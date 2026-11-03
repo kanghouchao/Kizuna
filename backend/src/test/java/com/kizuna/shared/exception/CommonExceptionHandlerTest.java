@@ -224,6 +224,21 @@ class CommonExceptionHandlerTest {
     assertThat(response.getBody().toString()).doesNotContain("com.kizuna");
   }
 
+  record Counted(Integer count) {}
+
+  @Test
+  @DisplayName("数値の範囲外も details にワイヤ上のフィールド名を載せる")
+  void numericOverflowExposesWireField() {
+    HttpMessageNotReadableException ex = unreadable("{\"count\":2147483648}", Counted.class);
+
+    ResponseEntity<Map<String, Object>> response = handler.handle(ex);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(response.getBody())
+        .extracting("details")
+        .isEqualTo(Map.of("count", "値の形式が正しくありません"));
+  }
+
   @Test
   @DisplayName("構文自体が壊れた JSON は対象フィールドが無いので details を付けない")
   void malformedJsonHasNoDetails() {
@@ -307,10 +322,14 @@ class CommonExceptionHandlerTest {
    * が返す名前がワイヤ形かどうかが、この検証の対象そのものであるため。
    */
   private HttpMessageNotReadableException unreadable(String json) {
+    return unreadable(json, AdminStaffCreateRequest.class);
+  }
+
+  private HttpMessageNotReadableException unreadable(String json, Class<?> type) {
     JsonMapper mapper =
         JsonMapper.builder().propertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE).build();
     try {
-      mapper.readValue(json, AdminStaffCreateRequest.class);
+      mapper.readValue(json, type);
       throw new IllegalStateException("前提: この JSON は解釈に失敗するはず");
     } catch (RuntimeException cause) {
       return new HttpMessageNotReadableException(

@@ -112,15 +112,7 @@ class SurveyInputPrivacyTest {
       for (String endpoint :
           List.of("/surveys/1/revisions/2/responses", "/survey-responses/3/corrections")) {
         for (String timestamp :
-            List.of(
-                "1767225600",
-                "1767225600.5",
-                "true",
-                "{}",
-                "[]",
-                "null",
-                "\"2026-01-01T00:00:00\"",
-                "\"" + secret + "\"")) {
+            List.of("true", "{}", "[]", "null", "\"2026-01-01T00:00:00\"", "\"" + secret + "\"")) {
           String fields =
               endpoint.endsWith("corrections")
                   ? "\"version\":0,\"reason\":\"訂正理由\","

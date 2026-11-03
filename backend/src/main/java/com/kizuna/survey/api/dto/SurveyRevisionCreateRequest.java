@@ -5,13 +5,12 @@ import com.kizuna.survey.domain.SurveyDefinition;
 import com.kizuna.survey.domain.SurveyInput;
 import java.util.List;
 import java.util.Objects;
-import tools.jackson.databind.annotation.JsonDeserialize;
 
 public record SurveyRevisionCreateRequest(
-    @JsonDeserialize(using = SurveyStringDeserializer.class) String basedOnRevisionId,
-    @JsonDeserialize(using = SurveyStringDeserializer.class) String title,
+    String basedOnRevisionId,
+    String title,
     List<SurveyQuestionRequest> questions,
-    @JsonDeserialize(using = SurveyStringDeserializer.class) String dedupeKey) {
+    String dedupeKey) {
   @JsonAnySetter
   public void unknown(String key, Object value) {
     throw SurveyInput.invalid();

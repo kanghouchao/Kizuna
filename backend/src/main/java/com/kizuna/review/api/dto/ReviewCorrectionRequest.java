@@ -4,10 +4,9 @@ import com.kizuna.review.domain.ReviewCommand;
 import com.kizuna.review.domain.ReviewInput;
 import com.kizuna.review.domain.ReviewValues.ReceivedVia;
 import java.time.OffsetDateTime;
-import tools.jackson.databind.annotation.JsonDeserialize;
 
 public record ReviewCorrectionRequest(
-    @JsonDeserialize(using = ReviewVersionDeserializer.class) Long version,
+    Long version,
     String reason,
     String body,
     String displayName,

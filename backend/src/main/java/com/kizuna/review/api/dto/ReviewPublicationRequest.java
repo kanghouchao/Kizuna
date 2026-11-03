@@ -4,10 +4,9 @@ import com.kizuna.review.domain.ReviewCommand;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.publication.Publication;
 import java.time.OffsetDateTime;
-import tools.jackson.databind.annotation.JsonDeserialize;
 
 public record ReviewPublicationRequest(
-    @JsonDeserialize(using = ReviewVersionDeserializer.class) Long version,
+    Long version,
     Boolean published,
     OffsetDateTime publishFrom,
     OffsetDateTime publishUntil,

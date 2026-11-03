@@ -7,15 +7,14 @@ import com.kizuna.survey.domain.SurveyValues.ReceivedVia;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
-import tools.jackson.databind.annotation.JsonDeserialize;
 
 public record SurveyAnswerCorrectionRequest(
-    @JsonDeserialize(using = SurveyVersionDeserializer.class) Long version,
-    @JsonDeserialize(using = SurveyStringDeserializer.class) String reason,
-    @JsonDeserialize(using = SurveyStringDeserializer.class) String receivedVia,
-    @JsonDeserialize(using = SurveyDateTimeDeserializer.class) OffsetDateTime receivedAt,
+    Long version,
+    String reason,
+    String receivedVia,
+    OffsetDateTime receivedAt,
     List<SurveyAnswerInputRequest> answers,
-    @JsonDeserialize(using = SurveyStringDeserializer.class) String dedupeKey) {
+    String dedupeKey) {
   @JsonAnySetter
   public void unknown(String key, Object value) {
     throw SurveyInput.invalid();

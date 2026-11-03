@@ -6,13 +6,12 @@ import com.kizuna.survey.domain.SurveyInput;
 import com.kizuna.survey.domain.SurveyValues.QuestionType;
 import java.util.List;
 import java.util.Objects;
-import tools.jackson.databind.annotation.JsonDeserialize;
 
 public record SurveyQuestionRequest(
-    @JsonDeserialize(using = SurveyStringDeserializer.class) String questionKey,
-    @JsonDeserialize(using = SurveyStringDeserializer.class) String type,
-    @JsonDeserialize(using = SurveyStringDeserializer.class) String prompt,
-    @JsonDeserialize(using = SurveyBooleanDeserializer.class) Boolean required,
+    String questionKey,
+    String type,
+    String prompt,
+    Boolean required,
     List<SurveyOptionRequest> options) {
   @JsonAnySetter
   public void unknown(String key, Object value) {

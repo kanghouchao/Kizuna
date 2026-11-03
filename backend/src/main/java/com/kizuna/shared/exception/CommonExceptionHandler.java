@@ -31,7 +31,7 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
-import tools.jackson.databind.DatabindException;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.util.NamingStrategyImpls;
 
 @Slf4j
@@ -174,8 +174,8 @@ public class CommonExceptionHandler {
   /**
    * 要求本文を解釈できない（壊れた JSON、列挙に無い値など）ことを、クライアント誤りとして 400 へ映射する。
    *
-   * <p>原因が値の不一致であればワイヤ上のフィールド名を {@code details} に載せる。構文自体が壊れている場合は対象フィールドが 存在しないため {@code details}
-   * を省く。
+   * <p>原因が特定の項目の値にあればワイヤ上のフィールド名を {@code details} に載せる（値の途中で構文が壊れた場合も含む）。
+   * 項目の外で構文が壊れている場合は対象フィールドが無いため {@code details} を省く。
    */
   @ExceptionHandler(HttpMessageNotReadableException.class)
   public ResponseEntity<Map<String, Object>> handle(HttpMessageNotReadableException ex) {
@@ -194,16 +194,17 @@ public class CommonExceptionHandler {
   /**
    * 解釈失敗の原因からワイヤ上のフィールド名を取り出す。取り出せなければ {@code null}。
    *
-   * <p>{@link DatabindException#getPath()} は Jackson の命名戦略適用後の名前（本アプリでは snake_case）を返すため、 そのまま
-   * {@code details} のキーに使える。配列添字の要素は名前を持たないので除く。
+   * <p>{@link JacksonException#getPath()} は Jackson の命名戦略適用後の名前（本アプリでは snake_case）を返すため、 そのまま
+   * {@code details} のキーに使える。型の不一致だけでなく数値の範囲外（{@code InputCoercionException}）も経路を持つ。
+   * 配列添字の要素は名前を持たないので除く。
    */
   private static String wireFieldOf(HttpMessageNotReadableException ex) {
-    if (!(ex.getCause() instanceof DatabindException cause)) {
+    if (!(ex.getCause() instanceof JacksonException cause)) {
       return null;
     }
     String path =
         cause.getPath().stream()
-            .map(DatabindException.Reference::getPropertyName)
+            .map(JacksonException.Reference::getPropertyName)
             .filter(Objects::nonNull)
             .collect(Collectors.joining("."));
     return path.isEmpty() ? null : path;
