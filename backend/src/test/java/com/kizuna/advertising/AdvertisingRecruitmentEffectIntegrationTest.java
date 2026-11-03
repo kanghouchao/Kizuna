@@ -198,8 +198,9 @@ class AdvertisingRecruitmentEffectIntegrationTest {
       long store, String month, AdvertisingCategory category, String mediumId, int amount) {
     costs.create(
         store,
-        new CreateRequest(month, category, mediumId, null, null, null, amount, UUID.randomUUID()),
-        "effect@example.test");
+        new CreateRequest(month, category, mediumId, null, null, null, amount, UUID.randomUUID())
+            .command(),
+        ("effect@example.test"));
   }
 
   private void hire(

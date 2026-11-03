@@ -137,14 +137,14 @@ class AdvertisingServiceTest {
     known(new MediumReference("m1", "媒体", true));
     var key = UUID.randomUUID();
 
-    var created = service.create(STORE_ID, create("m1", key), "actor");
+    var created = service.create(STORE_ID, create("m1", key).command(), "actor");
 
     assertThat(created.storeId()).isEqualTo(STORE_ID);
     assertThat(created.medium().name()).isEqualTo("媒体");
     verify(operations)
         .once(
             eq(new ReceiptKey(STORE_ID, 42L, key.toString())),
-            eq(create("m1", key).fingerprint()),
+            eq(create("m1", key).command().fingerprint()),
             any(),
             any());
     verify(media, atLeastOnce()).findAll(STORE_ID, Set.of("m1"));
@@ -174,7 +174,7 @@ class AdvertisingServiceTest {
     known();
 
     assertThatThrownBy(
-            () -> service.create(STORE_ID, create("foreign", UUID.randomUUID()), "actor"))
+            () -> service.create(STORE_ID, create("foreign", UUID.randomUUID()).command(), "actor"))
         .isInstanceOf(ServiceException.class)
         .hasMessage("媒体が見つかりません。一覧から選択してください");
     verify(records, never()).persist(any());
@@ -184,7 +184,8 @@ class AdvertisingServiceTest {
   void createRejectsAStoppedMedium() {
     known(new MediumReference("m1", "停止中", false));
 
-    assertThatThrownBy(() -> service.create(STORE_ID, create("m1", UUID.randomUUID()), "actor"))
+    assertThatThrownBy(
+            () -> service.create(STORE_ID, create("m1", UUID.randomUUID()).command(), "actor"))
         .isInstanceOf(ServiceException.class)
         .hasMessage("停止中の媒体は選択できません");
     verify(records, never()).persist(any());
@@ -200,7 +201,8 @@ class AdvertisingServiceTest {
         .when(records)
         .flush();
 
-    assertThatThrownBy(() -> service.create(STORE_ID, create("m1", UUID.randomUUID()), "actor"))
+    assertThatThrownBy(
+            () -> service.create(STORE_ID, create("m1", UUID.randomUUID()).command(), "actor"))
         .isInstanceOf(ServiceException.class)
         .hasMessage("媒体が見つかりません。一覧から選択してください");
   }
@@ -210,10 +212,10 @@ class AdvertisingServiceTest {
     known(new MediumReference("m1", "現在", true), new MediumReference("m2", "停止中", false));
     lockedCost("m1");
 
-    assertThatThrownBy(() -> service.replace(STORE_ID, "c", replace("m2"), "actor"))
+    assertThatThrownBy(() -> service.replace(STORE_ID, replace("m2").command("c"), "actor"))
         .isInstanceOf(ServiceException.class)
         .hasMessage("停止中の媒体は選択できません");
-    assertThatThrownBy(() -> service.replace(STORE_ID, "c", replace("foreign"), "actor"))
+    assertThatThrownBy(() -> service.replace(STORE_ID, replace("foreign").command("c"), "actor"))
         .isInstanceOf(ServiceException.class)
         .hasMessage("媒体が見つかりません。一覧から選択してください");
     verify(records, never()).persist(any());
@@ -224,7 +226,7 @@ class AdvertisingServiceTest {
     known(new MediumReference("m1", "停止中", false), new MediumReference("m2", "新媒体", true));
     lockedCost("m1");
 
-    var kept = service.replace(STORE_ID, "c", replace("m1"), "actor");
+    var kept = service.replace(STORE_ID, replace("m1").command("c"), "actor");
 
     assertThat(kept.medium().id()).isEqualTo("m1");
     assertThat(kept.medium().name()).isEqualTo("停止中");
@@ -245,7 +247,9 @@ class AdvertisingServiceTest {
 
     var copied =
         service.copy(
-            STORE_ID, "2026-10", new CopyRequest(0L, 0L, "引継ぎ", UUID.randomUUID()), "actor");
+            STORE_ID,
+            new CopyRequest(0L, 0L, "引継ぎ", UUID.randomUUID()).command("2026-10"),
+            "actor");
 
     assertThat(copied.copiedCount()).isEqualTo(1);
     var persisted = ArgumentCaptor.forClass(Object.class);
@@ -261,7 +265,7 @@ class AdvertisingServiceTest {
     lockedCost("m1");
     replayed(new Receipt("r", "ADVERTISING_COST_UPDATED", "c", Map.of(), true));
 
-    var current = service.replace(STORE_ID, "c", replace("m1"), "actor");
+    var current = service.replace(STORE_ID, replace("m1").command("c"), "actor");
 
     assertThat(current.medium().name()).isEqualTo("現在名");
     verify(records, never()).lockMonth(any(), any());
@@ -291,7 +295,9 @@ class AdvertisingServiceTest {
 
     var copied =
         service.copy(
-            STORE_ID, "2026-10", new CopyRequest(3L, 0L, "引継ぎ", UUID.randomUUID()), "actor");
+            STORE_ID,
+            new CopyRequest(3L, 0L, "引継ぎ", UUID.randomUUID()).command("2026-10"),
+            "actor");
 
     assertThat(copied)
         .isEqualTo(

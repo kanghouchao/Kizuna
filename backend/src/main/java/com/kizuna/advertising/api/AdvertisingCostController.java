@@ -71,14 +71,13 @@ public class AdvertisingCostController {
       "hasAuthority('PERM_ADVERTISING_COST_VIEW') and hasAuthority('PERM_ADVERTISING_COST_MANAGE')")
   public CostResponse create(
       @CurrentStore Long storeId, @Valid @RequestBody CreateRequest request, Principal actor) {
+    var command = request.command();
     return AdvertisingFailures.run(
         () ->
             Replays.write(
                 DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-                () -> service.create(storeId, request, actor.getName()),
-                () ->
-                    service.replayCost(
-                        storeId, request.requestId(), request.fingerprint(), actor.getName())));
+                () -> service.create(storeId, command, actor.getName()),
+                () -> service.replayCost(storeId, command, actor.getName())));
   }
 
   @PutMapping("/advertising-costs/{id}")
@@ -89,14 +88,13 @@ public class AdvertisingCostController {
       @PathVariable String id,
       @Valid @RequestBody ReplaceRequest request,
       Principal actor) {
+    var command = request.command(id);
     return AdvertisingFailures.run(
         () ->
             Replays.write(
                 DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-                () -> service.replace(storeId, id, request, actor.getName()),
-                () ->
-                    service.replayCost(
-                        storeId, request.requestId(), request.fingerprint(id), actor.getName())));
+                () -> service.replace(storeId, command, actor.getName()),
+                () -> service.replayCost(storeId, command, actor.getName())));
   }
 
   @DeleteMapping("/advertising-costs/{id}")
@@ -108,16 +106,17 @@ public class AdvertisingCostController {
       @PathVariable String id,
       @Valid @RequestBody DeleteRequest request,
       Principal actor) {
+    var command = request.command(id);
     AdvertisingFailures.run(
         () ->
             Replays.write(
                 DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
                 () -> {
-                  service.delete(storeId, id, request, actor.getName());
+                  service.delete(storeId, command, actor.getName());
                   return true;
                 },
                 () -> {
-                  service.replayDelete(storeId, id, request, actor.getName());
+                  service.replayDelete(storeId, command, actor.getName());
                   return true;
                 }));
   }
@@ -140,12 +139,13 @@ public class AdvertisingCostController {
       @PathVariable String month,
       @Valid @RequestBody CopyRequest request,
       Principal actor) {
+    var command = request.command(month);
     return AdvertisingFailures.run(
         () ->
             Replays.write(
                 DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-                () -> service.copy(storeId, month, request, actor.getName()),
-                () -> service.replayCopy(storeId, month, request, actor.getName())));
+                () -> service.copy(storeId, command, actor.getName()),
+                () -> service.replayCopy(storeId, command, actor.getName())));
   }
 
   @GetMapping("/advertising-cost-months/{month}/changes")

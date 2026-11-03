@@ -130,7 +130,9 @@ class AdvertisingMediumIntegrationTest {
     String id = media.create(store, "削除済みから参照");
     var cost = create(store, id);
     costs.delete(
-        store, cost.id(), new DeleteRequest(cost.version(), "誤入力", UUID.randomUUID()), ACTOR);
+        store,
+        new DeleteRequest(cost.version(), "誤入力", UUID.randomUUID()).command(cost.id()),
+        ACTOR);
 
     assertThatThrownBy(() -> media.delete(store, id, 0L))
         .isInstanceOf(ConflictException.class)
@@ -150,17 +152,17 @@ class AdvertisingMediumIntegrationTest {
     create(store, sibling);
     costs.replace(
         store,
-        cost.id(),
         new ReplaceRequest(
-            AdvertisingCategory.SALES,
-            id,
-            null,
-            null,
-            null,
-            200,
-            cost.version(),
-            "修正",
-            UUID.randomUUID()),
+                AdvertisingCategory.SALES,
+                id,
+                null,
+                null,
+                null,
+                200,
+                cost.version(),
+                "修正",
+                UUID.randomUUID())
+            .command(cost.id()),
         ACTOR);
 
     media.rename(store, id, "新名", 0L);
@@ -193,14 +195,15 @@ class AdvertisingMediumIntegrationTest {
     return costs.create(
         store,
         new CreateRequest(
-            "2026-09",
-            AdvertisingCategory.SALES,
-            mediumId,
-            null,
-            null,
-            null,
-            100,
-            UUID.randomUUID()),
+                "2026-09",
+                AdvertisingCategory.SALES,
+                mediumId,
+                null,
+                null,
+                null,
+                100,
+                UUID.randomUUID())
+            .command(),
         ACTOR);
   }
 

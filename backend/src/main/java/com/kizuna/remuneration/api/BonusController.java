@@ -55,12 +55,11 @@ public class BonusController {
       @CurrentStore Long storeId,
       @Valid @RequestBody BonusCreateRequest request,
       Principal principal) {
+    var command = request.command();
     return Replays.write(
         DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-        () -> service.createBonus(storeId, request, principal.getName()),
-        () ->
-            service.replayBonus(
-                storeId, request.requestId(), request.fingerprint(), principal.getName()));
+        () -> service.createBonus(storeId, command, principal.getName()),
+        () -> service.replayBonus(storeId, command, principal.getName()));
   }
 
   @PostMapping("/{id}/corrections")
@@ -72,12 +71,11 @@ public class BonusController {
       @PathVariable String id,
       @Valid @RequestBody BonusCorrectionRequest request,
       Principal principal) {
+    var command = request.command(id);
     return Replays.write(
         DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-        () -> service.correctBonus(storeId, id, request, principal.getName()),
-        () ->
-            service.replayBonus(
-                storeId, request.requestId(), request.fingerprint(id), principal.getName()));
+        () -> service.correctBonus(storeId, command, principal.getName()),
+        () -> service.replayBonus(storeId, command, principal.getName()));
   }
 
   @PostMapping("/{id}/cancellation")
@@ -88,12 +86,11 @@ public class BonusController {
       @PathVariable String id,
       @Valid @RequestBody CancellationRequest request,
       Principal principal) {
+    var command = request.bonusCommand(id);
     return Replays.write(
         DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-        () -> service.cancelBonus(storeId, id, request, principal.getName()),
-        () ->
-            service.replayBonus(
-                storeId, request.requestId(), request.bonusFingerprint(id), principal.getName()));
+        () -> service.cancelBonus(storeId, command, principal.getName()),
+        () -> service.replayBonus(storeId, command, principal.getName()));
   }
 
   @GetMapping("/{id}/changes")

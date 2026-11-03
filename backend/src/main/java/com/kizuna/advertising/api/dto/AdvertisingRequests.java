@@ -2,8 +2,8 @@ package com.kizuna.advertising.api.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.kizuna.advertising.domain.AdvertisingCategory;
+import com.kizuna.advertising.domain.AdvertisingCommand;
 import com.kizuna.advertising.domain.AdvertisingValues;
-import com.kizuna.receipt.once.Fingerprint;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
 import java.util.UUID;
@@ -28,13 +28,9 @@ public final class AdvertisingRequests {
       planName = AdvertisingValues.text(planName, 200);
     }
 
-    public AdvertisingValues values() {
-      return new AdvertisingValues(category, mediumId, agencyName, planName, inquiryCount, amount);
-    }
-
-    public String fingerprint() {
-      return Fingerprint.of(
-          "CREATE", month, category, mediumId, agencyName, planName, inquiryCount, amount);
+    public AdvertisingCommand.Create command() {
+      return new AdvertisingCommand.Create(
+          month, category, mediumId, agencyName, planName, inquiryCount, amount, requestId);
     }
   }
 
@@ -55,22 +51,18 @@ public final class AdvertisingRequests {
       reason = AdvertisingValues.reason(reason);
     }
 
-    public AdvertisingValues values() {
-      return new AdvertisingValues(category, mediumId, agencyName, planName, inquiryCount, amount);
-    }
-
-    public String fingerprint(String id) {
-      return Fingerprint.of(
-          "REPLACE",
+    public AdvertisingCommand.Replace command(String id) {
+      return new AdvertisingCommand.Replace(
           id,
-          version,
           category,
           mediumId,
           agencyName,
           planName,
           inquiryCount,
           amount,
-          reason);
+          version,
+          reason,
+          requestId);
     }
   }
 
@@ -82,8 +74,8 @@ public final class AdvertisingRequests {
       reason = AdvertisingValues.reason(reason);
     }
 
-    public String fingerprint(String id) {
-      return Fingerprint.of("DELETE", id, version, reason);
+    public AdvertisingCommand.Delete command(String id) {
+      return new AdvertisingCommand.Delete(id, version, reason, requestId);
     }
   }
 
@@ -98,8 +90,9 @@ public final class AdvertisingRequests {
       reason = AdvertisingValues.reason(reason);
     }
 
-    public String fingerprint(String targetMonth) {
-      return Fingerprint.of("COPY", targetMonth, sourceVersion, targetVersion, reason);
+    public AdvertisingCommand.Copy command(String targetMonth) {
+      return new AdvertisingCommand.Copy(
+          targetMonth, sourceVersion, targetVersion, reason, requestId);
     }
   }
 }

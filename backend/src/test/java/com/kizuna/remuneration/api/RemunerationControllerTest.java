@@ -205,7 +205,7 @@ class RemunerationControllerTest {
     verify(operations)
         .once(
             eq(new ReceiptKey(7L, 12L, requestId.toString())),
-            eq(new BonusCreateRequest(34L, DAY, 1000, "付与", requestId).fingerprint()),
+            eq(new BonusCreateRequest(34L, DAY, 1000, "付与", requestId).command().fingerprint()),
             any(),
             any());
     var persisted = ArgumentCaptor.forClass(Object.class);

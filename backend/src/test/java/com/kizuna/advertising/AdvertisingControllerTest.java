@@ -21,7 +21,6 @@ import com.kizuna.advertising.api.AdvertisingMediaController;
 import com.kizuna.advertising.api.AdvertisingOrderCostController;
 import com.kizuna.advertising.api.AdvertisingRecruitmentEffectController;
 import com.kizuna.advertising.api.dto.AdvertisingRecruitmentEffectResponse;
-import com.kizuna.advertising.api.dto.AdvertisingRequests.CreateRequest;
 import com.kizuna.advertising.api.dto.AdvertisingResponses.CostResponse;
 import com.kizuna.advertising.api.dto.AdvertisingResponses.MediumResponse;
 import com.kizuna.advertising.application.AdvertisingExportService;
@@ -30,6 +29,7 @@ import com.kizuna.advertising.application.AdvertisingOrderCostService;
 import com.kizuna.advertising.application.AdvertisingRecruitmentEffectService;
 import com.kizuna.advertising.application.AdvertisingService;
 import com.kizuna.advertising.domain.AdvertisingCategory;
+import com.kizuna.advertising.domain.AdvertisingCommand;
 import com.kizuna.advertising.domain.AdvertisingMediaReport;
 import com.kizuna.advertising.domain.AdvertisingMedium;
 import com.kizuna.advertising.domain.AdvertisingOrderCostReport;
@@ -177,7 +177,7 @@ class AdvertisingControllerTest {
             .andReturn();
     assertThat(result.getResponse().getContentAsString())
         .contains("\"inquiry_count\":null", "\"agency_name\":null", "\"plan_name\":null");
-    var request = ArgumentCaptor.forClass(CreateRequest.class);
+    var request = ArgumentCaptor.forClass(AdvertisingCommand.Create.class);
     verify(service).create(eq(1L), request.capture(), anyString());
     assertThat(request.getValue().mediumId()).isEqualTo("m1");
   }

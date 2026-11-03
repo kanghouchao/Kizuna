@@ -152,7 +152,7 @@ class AdvertisingIntegrationTest {
   @Test
   void lifecycleReplaysTheCurrentStateAndRetainsDeletedHistory() {
     var request = create("2026-09", null, 100, UUID.randomUUID());
-    var first = service.create(1L, request, "actor");
+    var first = service.create(1L, request.command(), "actor");
     assertThat(first.inquiryCount()).isNull();
     var update =
         new ReplaceRequest(
@@ -165,15 +165,15 @@ class AdvertisingIntegrationTest {
             first.version(),
             "修正",
             UUID.randomUUID());
-    var second = service.replace(1L, first.id(), update, "actor");
+    var second = service.replace(1L, update.command(first.id()), "actor");
     assertThat(second.version()).isGreaterThan(first.version());
     assertThat(second.inquiryCount()).isZero();
-    assertThat(service.create(1L, request, "actor")).isEqualTo(second);
-    assertThat(service.replace(1L, first.id(), update, "actor")).isEqualTo(second);
+    assertThat(service.create(1L, request.command(), "actor")).isEqualTo(second);
+    assertThat(service.replace(1L, update.command(first.id()), "actor")).isEqualTo(second);
     var deletion = new DeleteRequest(second.version(), "誤入力", UUID.randomUUID());
-    service.delete(1L, first.id(), deletion, "actor");
-    service.delete(1L, first.id(), deletion, "actor");
-    assertThat(service.replace(1L, first.id(), update, "actor").version())
+    service.delete(1L, deletion.command(first.id()), "actor");
+    service.delete(1L, deletion.command(first.id()), "actor");
+    assertThat(service.replace(1L, update.command(first.id()), "actor").version())
         .isGreaterThan(second.version());
     assertThatThrownBy(() -> service.get(1L, first.id())).isInstanceOf(NotFoundException.class);
     assertThat(service.month(1L, "2026-09").recordedTotalAmount()).isZero();
@@ -193,22 +193,23 @@ class AdvertisingIntegrationTest {
 
   @Test
   void writeResponsesCarryTheTimesThatAReadReturns() {
-    var created = service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()), "actor");
+    var created =
+        service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()).command(), "actor");
     assertThat(service.get(1L, created.id())).isEqualTo(created);
     var replaced =
         service.replace(
             1L,
-            created.id(),
             new ReplaceRequest(
-                AdvertisingCategory.SALES,
-                medium,
-                null,
-                null,
-                0,
-                200,
-                created.version(),
-                "修正",
-                UUID.randomUUID()),
+                    AdvertisingCategory.SALES,
+                    medium,
+                    null,
+                    null,
+                    0,
+                    200,
+                    created.version(),
+                    "修正",
+                    UUID.randomUUID())
+                .command(created.id()),
             "actor");
     assertThat(service.get(1L, created.id())).isEqualTo(replaced);
   }
@@ -216,56 +217,62 @@ class AdvertisingIntegrationTest {
   @Test
   void rejectsKeyReuseAndStaleVersions() {
     UUID key = UUID.randomUUID();
-    var c = service.create(1L, create("2026-09", 0, 0, key), "actor");
-    assertThatThrownBy(() -> service.create(1L, create("2026-09", 0, 1, key), "actor"))
+    var c = service.create(1L, create("2026-09", 0, 0, key).command(), "actor");
+    assertThatThrownBy(() -> service.create(1L, create("2026-09", 0, 1, key).command(), "actor"))
         .isInstanceOf(ConflictException.class);
     service.replace(
         1L,
-        c.id(),
         new ReplaceRequest(
-            AdvertisingCategory.SALES,
-            medium,
-            null,
-            null,
-            null,
-            0,
-            c.version(),
-            "修正",
-            UUID.randomUUID()),
+                AdvertisingCategory.SALES,
+                medium,
+                null,
+                null,
+                null,
+                0,
+                c.version(),
+                "修正",
+                UUID.randomUUID())
+            .command(c.id()),
         "actor");
     assertThatThrownBy(
             () ->
                 service.delete(
-                    1L, c.id(), new DeleteRequest(c.version(), "削除", UUID.randomUUID()), "actor"))
+                    1L,
+                    new DeleteRequest(c.version(), "削除", UUID.randomUUID()).command(c.id()),
+                    "actor"))
         .isInstanceOf(ConflictException.class);
   }
 
   @Test
   void copiesOnlyEmptyMonthAndClearsInquiryCounts() {
-    service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()), "actor");
-    service.create(1L, create("2026-09", 5, 200, UUID.randomUUID()), "actor");
+    service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()).command(), "actor");
+    service.create(1L, create("2026-09", 5, 200, UUID.randomUUID()).command(), "actor");
     var request = new CopyRequest(2L, 0L, "引継ぎ", UUID.randomUUID());
-    var copied = service.copy(1L, "2026-10", request, "actor");
+    var copied = service.copy(1L, request.command("2026-10"), "actor");
     assertThat(copied.copiedCount()).isEqualTo(2);
-    assertThat(service.copy(1L, "2026-10", request, "actor")).isEqualTo(copied);
+    assertThat(service.copy(1L, request.command("2026-10"), "actor")).isEqualTo(copied);
     assertThat(service.list(1L, "2026-10", PageRequest.of(0, 100)).getContent())
         .allSatisfy(c -> assertThat(c.inquiryCount()).isNull());
     assertThat(service.month(1L, "2026-10").recordedTotalAmount()).isEqualTo(300);
     assertThatThrownBy(
             () ->
                 service.copy(
-                    1L, "2026-10", new CopyRequest(2L, 1L, "再度", UUID.randomUUID()), "actor"))
+                    1L,
+                    new CopyRequest(2L, 1L, "再度", UUID.randomUUID()).command("2026-10"),
+                    "actor"))
         .isInstanceOf(ConflictException.class);
     assertThatThrownBy(
             () ->
                 service.copy(
-                    1L, "2026-12", new CopyRequest(0L, 0L, "空月", UUID.randomUUID()), "actor"))
+                    1L,
+                    new CopyRequest(0L, 0L, "空月", UUID.randomUUID()).command("2026-12"),
+                    "actor"))
         .isInstanceOf(ServiceException.class);
   }
 
   @Test
   void filtersAllStoreResourcesAndHistories() {
-    var c = service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()), "actor");
+    var c = service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()).command(), "actor");
     var change =
         service.changes(1L, "2026-09", PageRequest.of(0, 20, NEWEST_FIRST)).getContent().getFirst();
     assertThat(service.list(2L, "2026-09", PageRequest.of(0, 20)).getContent()).isEmpty();
@@ -284,7 +291,8 @@ class AdvertisingIntegrationTest {
         .when((BusinessAudit) AopTestUtils.getTargetObject(context.getBean(BusinessAudit.class)))
         .record(any(), any(), any(), any(), any(), any(), any(), any(), any());
     assertThatThrownBy(
-            () -> service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()), "actor"))
+            () ->
+                service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()).command(), "actor"))
         .isInstanceOf(IllegalStateException.class);
     for (var table :
         List.of(
@@ -300,7 +308,8 @@ class AdvertisingIntegrationTest {
     var request = create("2026-09", 0, 100, UUID.randomUUID());
     var result =
         race(
-            () -> service.create(1L, request, "actor"), () -> service.create(1L, request, "actor"));
+            () -> service.create(1L, request.command(), "actor"),
+            () -> service.create(1L, request.command(), "actor"));
     assertThat(result.get(0)).isEqualTo(result.get(1));
     assertThat(service.month(1L, "2026-09").entryCount()).isEqualTo(1);
     assertThat(service.changes(1L, "2026-09", PageRequest.of(0, 20, NEWEST_FIRST)).getContent())
@@ -309,15 +318,19 @@ class AdvertisingIntegrationTest {
 
   @Test
   void competingCopiesAndEditsRejectOneOperation() throws Exception {
-    var c = service.create(1L, create("2026-09", 1, 100, UUID.randomUUID()), "actor");
+    var c = service.create(1L, create("2026-09", 1, 100, UUID.randomUUID()).command(), "actor");
     var copies =
         race(
             () ->
                 service.copy(
-                    1L, "2026-10", new CopyRequest(1L, 0L, "複製", UUID.randomUUID()), "actor"),
+                    1L,
+                    new CopyRequest(1L, 0L, "複製", UUID.randomUUID()).command("2026-10"),
+                    "actor"),
             () ->
                 service.copy(
-                    1L, "2026-10", new CopyRequest(1L, 0L, "複製", UUID.randomUUID()), "actor"));
+                    1L,
+                    new CopyRequest(1L, 0L, "複製", UUID.randomUUID()).command("2026-10"),
+                    "actor"));
     assertThat(copies.stream().filter(v -> v instanceof ConflictException)).hasSize(1);
     assertThat(service.month(1L, "2026-10").entryCount()).isEqualTo(1);
     var edits =
@@ -325,32 +338,32 @@ class AdvertisingIntegrationTest {
             () ->
                 service.replace(
                     1L,
-                    c.id(),
                     new ReplaceRequest(
-                        AdvertisingCategory.SALES,
-                        medium,
-                        null,
-                        null,
-                        0,
-                        200,
-                        c.version(),
-                        "変更",
-                        UUID.randomUUID()),
+                            AdvertisingCategory.SALES,
+                            medium,
+                            null,
+                            null,
+                            0,
+                            200,
+                            c.version(),
+                            "変更",
+                            UUID.randomUUID())
+                        .command(c.id()),
                     "actor"),
             () ->
                 service.replace(
                     1L,
-                    c.id(),
                     new ReplaceRequest(
-                        AdvertisingCategory.SALES,
-                        medium,
-                        null,
-                        null,
-                        0,
-                        300,
-                        c.version(),
-                        "変更",
-                        UUID.randomUUID()),
+                            AdvertisingCategory.SALES,
+                            medium,
+                            null,
+                            null,
+                            0,
+                            300,
+                            c.version(),
+                            "変更",
+                            UUID.randomUUID())
+                        .command(c.id()),
                     "actor"));
     assertThat(edits.stream().filter(v -> v instanceof ConflictException)).hasSize(1);
     assertThat(service.month(1L, "2026-09").recordedTotalAmount()).isIn(200L, 300L);
@@ -358,18 +371,22 @@ class AdvertisingIntegrationTest {
 
   @Test
   void changedSourceAndCopyLimitNeverPartiallyWrite() {
-    service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()), "actor");
-    service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()), "actor");
+    service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()).command(), "actor");
+    service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()).command(), "actor");
     assertThatThrownBy(
             () ->
                 service.copy(
-                    1L, "2026-10", new CopyRequest(1L, 0L, "複製", UUID.randomUUID()), "actor"))
+                    1L,
+                    new CopyRequest(1L, 0L, "複製", UUID.randomUUID()).command("2026-10"),
+                    "actor"))
         .isInstanceOf(ConflictException.class);
     context.getBean(AppProperties.class).getAdvertisingCost().setMaxOrders(1);
     assertThatThrownBy(
             () ->
                 service.copy(
-                    1L, "2026-10", new CopyRequest(2L, 0L, "複製", UUID.randomUUID()), "actor"))
+                    1L,
+                    new CopyRequest(2L, 0L, "複製", UUID.randomUUID()).command("2026-10"),
+                    "actor"))
         .isInstanceOf(ServiceUnavailableException.class);
     assertThat(service.month(1L, "2026-10").entryCount()).isZero();
     assertThat(service.month(1L, "2026-10").version()).isZero();
@@ -377,14 +394,17 @@ class AdvertisingIntegrationTest {
 
   @Test
   void exportKeepsRowsAndTotalsInTheSameSnapshotDuringWrites() {
-    service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()), "actor");
+    service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()).command(), "actor");
     doAnswer(
             invocation -> {
               var rows = invocation.callRealMethod();
               try (var pool = Executors.newSingleThreadExecutor()) {
                 pool.submit(
                         () -> {
-                          service.create(1L, create("2026-09", 0, 200, UUID.randomUUID()), "actor");
+                          service.create(
+                              1L,
+                              create("2026-09", 0, 200, UUID.randomUUID()).command(),
+                              ("actor"));
                         })
                     .get(5, TimeUnit.SECONDS);
               }
@@ -401,7 +421,7 @@ class AdvertisingIntegrationTest {
 
   @Test
   void mediaSummaryKeepsInquiryAmountAndRevisionTogetherAndRecalculatesAfterDeletion() {
-    var first = service.create(1L, create("2026-09", 5, 100, UUID.randomUUID()), "actor");
+    var first = service.create(1L, create("2026-09", 5, 100, UUID.randomUUID()).command(), "actor");
     var media =
         new AdvertisingMediaService(
             context.getBean(AdvertisingMediaComparison.class),
@@ -409,15 +429,16 @@ class AdvertisingIntegrationTest {
     service.create(
         2L,
         new CreateRequest(
-            "2026-09",
-            AdvertisingCategory.SALES,
-            otherStoreMedium,
-            null,
-            null,
-            100,
-            10000,
-            UUID.randomUUID()),
-        "actor");
+                "2026-09",
+                AdvertisingCategory.SALES,
+                otherStoreMedium,
+                null,
+                null,
+                100,
+                10000,
+                UUID.randomUUID())
+            .command(),
+        ("actor"));
     doAnswer(
             invocation -> {
               var rows = invocation.callRealMethod();
@@ -425,7 +446,9 @@ class AdvertisingIntegrationTest {
                 pool.submit(
                         () -> {
                           service.create(
-                              1L, create("2026-09", null, 200, UUID.randomUUID()), "actor");
+                              1L,
+                              create("2026-09", null, 200, UUID.randomUUID()).command(),
+                              ("actor"));
                         })
                     .get(5, TimeUnit.SECONDS);
               }
@@ -444,20 +467,22 @@ class AdvertisingIntegrationTest {
     assertThat(after.report().recordedTotalAmount()).isEqualTo(300);
     assertThat(after.report().rows().getFirst().unrecordedInquiryEntryCount()).isEqualTo(1);
     service.delete(
-        1L, first.id(), new DeleteRequest(first.version(), "修正", UUID.randomUUID()), "actor");
+        1L,
+        new DeleteRequest(first.version(), "修正", UUID.randomUUID()).command(first.id()),
+        "actor");
     var deleted = media.view(1L, "2026-09");
     assertThat(deleted.report().recordedTotalAmount()).isEqualTo(200);
     assertThat(deleted.report().rows().getFirst().recordedInquiryCountSum()).isNull();
     context.getBean(AppProperties.class).getAdvertisingCost().setMaxOrders(1);
-    service.create(1L, create("2026-09", 0, 0, UUID.randomUUID()), "actor");
+    service.create(1L, create("2026-09", 0, 0, UUID.randomUUID()).command(), "actor");
     assertThatThrownBy(() -> media.view(1L, "2026-09"))
         .isInstanceOf(ServiceUnavailableException.class);
   }
 
   @Test
   void copyAuditFailureRollsBackEveryCopiedRowAndAllowsRetry() {
-    service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()), "actor");
-    service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()), "actor");
+    service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()).command(), "actor");
+    service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()).command(), "actor");
     var audits = (BusinessAudit) AopTestUtils.getTargetObject(context.getBean(BusinessAudit.class));
     var count = new AtomicInteger();
     doAnswer(
@@ -468,14 +493,14 @@ class AdvertisingIntegrationTest {
         .when(audits)
         .record(any(), any(), any(), any(), any(), any(), any(), any(), any());
     var request = new CopyRequest(2L, 0L, "引継ぎ", UUID.randomUUID());
-    assertThatThrownBy(() -> service.copy(1L, "2026-10", request, "actor"))
+    assertThatThrownBy(() -> service.copy(1L, request.command("2026-10"), "actor"))
         .isInstanceOf(IllegalStateException.class);
     assertThat(service.month(1L, "2026-10").entryCount()).isZero();
     assertThat(service.month(1L, "2026-10").version()).isZero();
     assertThat(service.changes(1L, "2026-10", PageRequest.of(0, 20, NEWEST_FIRST)).getContent())
         .isEmpty();
     reset(audits);
-    assertThat(service.copy(1L, "2026-10", request, "actor").copiedCount()).isEqualTo(2);
+    assertThat(service.copy(1L, request.command("2026-10"), "actor").copiedCount()).isEqualTo(2);
   }
 
   List<Object> race(Callable<?> first, Callable<?> second) throws Exception {
@@ -532,19 +557,21 @@ class AdvertisingIntegrationTest {
 
   @Test
   void orderComparisonUsesOriginalMonthValidOrdersAndExcludesRecruitment() {
-    var cost = service.create(1L, create("2026-09", 999, 100, UUID.randomUUID()), "actor");
+    var cost =
+        service.create(1L, create("2026-09", 999, 100, UUID.randomUUID()).command(), "actor");
     service.create(
         1L,
         new CreateRequest(
-            "2026-09",
-            AdvertisingCategory.RECRUITMENT,
-            medium,
-            null,
-            null,
-            null,
-            10000,
-            UUID.randomUUID()),
-        "actor");
+                "2026-09",
+                AdvertisingCategory.RECRUITMENT,
+                medium,
+                null,
+                null,
+                null,
+                10000,
+                UUID.randomUUID())
+            .command(),
+        ("actor"));
     var viaMedium = new OrderAcquisition(AcquisitionSource.MEDIA, medium);
     order(1, "2026-09", viaMedium, OrderStatus.COMPLETED, false, 100);
     var free = order(1, "2026-09", viaMedium, OrderStatus.COMPLETED, false, 0);
@@ -585,13 +612,13 @@ class AdvertisingIntegrationTest {
     assertThat(compare.view(1L, "2026-09").report().rows().getFirst().costPerOrder())
         .isEqualTo("100.00");
     service.delete(
-        1L, cost.id(), new DeleteRequest(cost.version(), "訂正", UUID.randomUUID()), "actor");
+        1L, new DeleteRequest(cost.version(), "訂正", UUID.randomUUID()).command(cost.id()), "actor");
     assertThat(compare.view(1L, "2026-09").report().recordedSalesAmount()).isNull();
   }
 
   @Test
   void orderAndCostChangesShareOneSnapshotAndReadLimitFailsClosed() throws Exception {
-    service.create(1L, create("2026-09", null, 100, UUID.randomUUID()), "actor");
+    service.create(1L, create("2026-09", null, 100, UUID.randomUUID()).command(), "actor");
     order(1, "2026-09", OrderAcquisition.UNSET, OrderStatus.COMPLETED, false, 100);
     var changed = new AtomicInteger();
     doAnswer(
@@ -602,7 +629,9 @@ class AdvertisingIntegrationTest {
                   pool.submit(
                           () -> {
                             service.create(
-                                1L, create("2026-09", null, 200, UUID.randomUUID()), "actor");
+                                1L,
+                                create("2026-09", null, 200, UUID.randomUUID()).command(),
+                                ("actor"));
                             order(
                                 1,
                                 "2026-09",
