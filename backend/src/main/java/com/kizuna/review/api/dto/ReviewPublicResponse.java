@@ -1,12 +1,10 @@
 package com.kizuna.review.api.dto;
 
-import com.kizuna.review.domain.ReviewPublicView;
+import com.kizuna.review.application.ReviewViews;
 import java.time.LocalDate;
-import java.time.ZoneId;
 
 public record ReviewPublicResponse(String displayName, String body, LocalDate receivedOn) {
-  public static ReviewPublicResponse of(ReviewPublicView r, ZoneId zone) {
-    return new ReviewPublicResponse(
-        r.getDisplayName(), r.getBody(), r.getReceivedAt().atZoneSameInstant(zone).toLocalDate());
+  public static ReviewPublicResponse of(ReviewViews.PublicEntry entry) {
+    return new ReviewPublicResponse(entry.displayName(), entry.body(), entry.receivedOn());
   }
 }

@@ -21,6 +21,7 @@ import com.kizuna.receipt.once.Committed;
 import com.kizuna.receipt.once.OperationReceipts;
 import com.kizuna.receipt.once.Receipt;
 import com.kizuna.receipt.once.ReceiptKey;
+import com.kizuna.review.api.dto.ReviewWriteResponse;
 import com.kizuna.review.application.ReviewActors;
 import com.kizuna.review.application.ReviewService;
 import com.kizuna.review.domain.ReviewCommand;
@@ -138,7 +139,7 @@ class ReviewWriteTest {
 
   @Test
   void firstWriteRecordsHistoryAuditAndTheReceiptOfTheCommittedVersion() {
-    var result = service.write(STORE_ID, "actor", approve("approve"));
+    var result = ReviewWriteResponse.of(service.write(STORE_ID, "actor", approve("approve")));
 
     verify(operations)
         .once(

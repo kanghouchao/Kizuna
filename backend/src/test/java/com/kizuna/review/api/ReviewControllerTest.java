@@ -12,15 +12,23 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kizuna.receipt.once.Receipt;
 import com.kizuna.review.application.ReviewService;
+import com.kizuna.review.application.ReviewViews;
 import com.kizuna.review.domain.ReviewCommand;
+import com.kizuna.review.domain.ReviewDetailsView;
 import com.kizuna.review.domain.ReviewHistory;
+import com.kizuna.review.domain.ReviewInput;
 import com.kizuna.review.domain.ReviewRecord;
 import com.kizuna.review.domain.ReviewSearch;
+import com.kizuna.review.domain.ReviewValues.Operation;
+import com.kizuna.review.domain.ReviewValues.ReceivedVia;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
+import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -33,12 +41,14 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.projection.SpelAwareProxyProjectionFactory;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.test.context.support.WithAnonymousUser;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
 /** handler が X-Store-ID で名乗られた店舗をそのまま service へ渡すことの単体テスト。 */
@@ -72,6 +82,7 @@ class ReviewControllerTest {
   @WithMockUser(authorities = "PERM_REVIEW_VIEW")
   void detailPassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(reviews.detail(STORE_ID, "user", "101")).thenReturn(detail());
 
     mockMvc
         .perform(
@@ -86,6 +97,16 @@ class ReviewControllerTest {
   @WithMockUser(authorities = {"PERM_REVIEW_VIEW", "PERM_REVIEW_MODERATE"})
   void decisionPassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(reviews.write(eq(STORE_ID), eq("user"), any(ReviewCommand.Decide.class)))
+        .thenReturn(
+            new ReviewViews.Written(
+                detail(),
+                new Receipt(
+                    "50",
+                    Operation.APPROVED.receiptName(),
+                    "101",
+                    Map.of("committed_version", 1L),
+                    false)));
 
     mockMvc
         .perform(
@@ -191,5 +212,24 @@ class ReviewControllerTest {
 
     assertThat(pageable.getValue().getPageNumber()).isEqualTo(2);
     assertThat(pageable.getValue().getPageSize()).isEqualTo(10);
+  }
+
+  private static ReviewViews.Detail detail() {
+    var row =
+        ReviewRecord.receive(
+            STORE_ID,
+            new ReviewInput(
+                "本文", null, ReceivedVia.PAPER, OffsetDateTime.parse("2026-01-01T00:00:00Z"), null),
+            1L,
+            "担当者",
+            null,
+            null);
+    row.setId("101");
+    row.setCreatedAt(OffsetDateTime.parse("2026-01-01T00:00:00Z"));
+    ReflectionTestUtils.setField(row, "version", 0L);
+    return new ReviewViews.Detail(
+        new SpelAwareProxyProjectionFactory().createProjection(ReviewDetailsView.class, row),
+        null,
+        false);
   }
 }

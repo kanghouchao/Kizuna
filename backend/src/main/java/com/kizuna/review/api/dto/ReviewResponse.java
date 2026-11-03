@@ -1,8 +1,7 @@
 package com.kizuna.review.api.dto;
 
-import com.kizuna.review.domain.ReviewDetailsView;
+import com.kizuna.review.application.ReviewViews;
 import com.kizuna.review.domain.ReviewInput;
-import com.kizuna.review.domain.ReviewPermissionView;
 import com.kizuna.review.domain.ReviewValues.PermissionStatus;
 import com.kizuna.review.domain.ReviewValues.ReceivedVia;
 import com.kizuna.review.domain.ReviewValues.Status;
@@ -35,8 +34,8 @@ public record ReviewResponse(
     boolean displayed) {
   public record Actor(String id, String displayName) {}
 
-  public static ReviewResponse of(
-      ReviewDetailsView r, ReviewPermissionView permission, OffsetDateTime now) {
+  public static ReviewResponse of(ReviewViews.Detail detail) {
+    var r = detail.review();
     return new ReviewResponse(
         r.getId(),
         "STAFF_RECORDED",
@@ -54,11 +53,11 @@ public record ReviewResponse(
         new Actor(r.getRecordedBy().toString(), r.getRecorderName()),
         r.getSupersedesId(),
         r.getSupersededById(),
-        ReviewPermissionResponse.of(permission),
+        ReviewPermissionResponse.of(detail.permission()),
         r.publicationBlockers().isEmpty(),
         r.publicationBlockers(),
         "NOT_CONFIGURED",
         r.getPublication(),
-        r.displayedAt(now));
+        detail.displayed());
   }
 }

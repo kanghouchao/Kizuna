@@ -6,11 +6,6 @@ import com.kizuna.receipt.once.Committed;
 import com.kizuna.receipt.once.OperationReceipts;
 import com.kizuna.receipt.once.Receipt;
 import com.kizuna.receipt.once.ReceiptKey;
-import com.kizuna.review.api.dto.ReviewHistoryResponse;
-import com.kizuna.review.api.dto.ReviewPublicResponse;
-import com.kizuna.review.api.dto.ReviewResponse;
-import com.kizuna.review.api.dto.ReviewSummaryResponse;
-import com.kizuna.review.api.dto.ReviewWriteResponse;
 import com.kizuna.review.domain.ReviewCommand;
 import com.kizuna.review.domain.ReviewDetailsView;
 import com.kizuna.review.domain.ReviewHistory;
@@ -54,7 +49,7 @@ public class ReviewService {
   private final Clock clock;
 
   @Transactional
-  public ReviewWriteResponse write(Long storeId, String email, ReviewCommand command) {
+  public ReviewViews.Written write(Long storeId, String email, ReviewCommand command) {
     var actor = actor(storeId, email, command);
     return receipts.once(
         key(storeId, actor, command),
@@ -80,43 +75,40 @@ public class ReviewService {
   }
 
   @Transactional(readOnly = true)
-  public ReviewWriteResponse replayOnly(Long storeId, String email, ReviewCommand command) {
+  public ReviewViews.Written replayOnly(Long storeId, String email, ReviewCommand command) {
     var actor = actor(storeId, email, command);
     return receipts.replayOnly(
         key(storeId, actor, command), command.fingerprint(), receipt -> respond(storeId, receipt));
   }
 
   @Transactional(readOnly = true)
-  public ReviewResponse detail(Long storeId, String email, String id) {
+  public ReviewViews.Detail detail(Long storeId, String email, String id) {
     actors.require(storeId, email, PermissionCode.REVIEW_VIEW);
     return response(storeId, find(storeId, id));
   }
 
   @Transactional(readOnly = true)
-  public Page<ReviewHistoryResponse> history(
-      Long storeId, String email, String id, Pageable pageable) {
+  public Page<ReviewHistoryView> history(Long storeId, String email, String id, Pageable pageable) {
     actors.require(storeId, email, PermissionCode.REVIEW_VIEW);
     find(storeId, id);
     Specification<ReviewHistory> spec =
         (root, query, cb) ->
             cb.and(cb.equal(root.get("storeId"), storeId), cb.equal(root.get("reviewId"), id));
-    return history
-        .findBy(spec, q -> q.as(ReviewHistoryView.class).page(pageable))
-        .map(ReviewHistoryResponse::of);
+    return history.findBy(spec, q -> q.as(ReviewHistoryView.class).page(pageable));
   }
 
   @Transactional(readOnly = true)
-  public Page<ReviewSummaryResponse> list(Long storeId, String email, ReviewSearch search) {
+  public Page<ReviewViews.Summary> list(Long storeId, String email, ReviewSearch search) {
     actors.require(storeId, email, PermissionCode.REVIEW_VIEW);
     return reviews
         .findBy(
             search.specification(storeId),
             q -> q.as(ReviewSummaryView.class).page(search.pageable()))
-        .map(r -> ReviewSummaryResponse.of(r, OffsetDateTime.now(clock)));
+        .map(r -> new ReviewViews.Summary(r, r.displayedAt(OffsetDateTime.now(clock))));
   }
 
   @Transactional(readOnly = true)
-  public Page<ReviewPublicResponse> listPublic(Long storeId, Pageable pageable) {
+  public Page<ReviewViews.PublicEntry> listPublic(Long storeId, Pageable pageable) {
     var listing =
         Publication.listing(
             ReviewRecord::getPublication,
@@ -126,7 +118,12 @@ public class ReviewService {
             pageable);
     return reviews
         .findBy(listing.specification(), q -> q.as(ReviewPublicView.class).page(listing.pageable()))
-        .map(r -> ReviewPublicResponse.of(r, clock.getZone()));
+        .map(
+            r ->
+                new ReviewViews.PublicEntry(
+                    r.getDisplayName(),
+                    r.getBody(),
+                    r.getReceivedAt().atZoneSameInstant(clock.getZone()).toLocalDate()));
   }
 
   private ReviewDetailsView find(Long storeId, String id) {
@@ -308,23 +305,23 @@ public class ReviewService {
     return values;
   }
 
-  private ReviewResponse response(Long storeId, ReviewDetailsView row) {
-    return ReviewResponse.of(
+  private ReviewViews.Detail response(Long storeId, ReviewDetailsView row) {
+    return new ReviewViews.Detail(
         row,
         permissions.findProjectedByStoreIdAndReviewId(storeId, row.getId()).orElse(null),
-        OffsetDateTime.now(clock));
+        row.displayedAt(OffsetDateTime.now(clock)));
   }
 
   private static ReceiptKey key(Long storeId, AuditActor actor, ReviewCommand command) {
     return new ReceiptKey(storeId, actor.id(), command.key());
   }
 
-  private ReviewWriteResponse respond(Long storeId, Receipt receipt) {
+  private ReviewViews.Written respond(Long storeId, Receipt receipt) {
     // 受領を持つ口コミは物理削除しないので、対象が無いのは不変条件の破れであって業務拒否ではない。
     var row =
         reviews
             .findProjectedByIdAndStoreId(receipt.targetId(), storeId)
             .orElseThrow(() -> new IllegalStateException("受領の対象の口コミが見つかりません"));
-    return ReviewWriteResponse.of(response(storeId, row), receipt);
+    return new ReviewViews.Written(response(storeId, row), receipt);
   }
 }
