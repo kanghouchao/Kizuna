@@ -73,6 +73,7 @@ class AdvertisingOrderCostRendererTest {
       assertThat(sheet.getLastRowNum()).isEqualTo(2002);
       assertThat(sheet.getRow(1001).getCell(9).getStringCellValue()).isEqualTo("01000");
       assertThat(sheet.getRow(2001).getCell(9).getStringCellValue()).isEqualTo("02000");
+      assertThat(sheet.getRow(2001).getCell(11).getNumericCellValue()).isEqualTo(100);
     }
   }
 }
