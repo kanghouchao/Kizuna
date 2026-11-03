@@ -1,13 +1,17 @@
 import Cookies from 'js-cookie';
 
-// 値はセッション種別（admin / cast / member — ログイン時に /me の user_type から決める）。
+// session-kind cookie の値。従業員は単一の管理画面 admin に入り、キャスト・会員はそれぞれの portal に入る。
+const SESSION_KINDS = ['admin', 'cast', 'member'] as const;
+export type SessionKind = (typeof SESSION_KINDS)[number];
+
 const SESSION_KIND_COOKIE = 'session-kind';
 const CURRENT_STORE_ID_COOKIE = 'current-store-id';
 const MEMBER_RETURN_PATH_COOKIE = 'member-return-path';
 
-/** セッションの cookie 読み書きの唯一の入口。 */
-export function getSessionKind(): string | undefined {
-  return Cookies.get(SESSION_KIND_COOKIE);
+/** セッションの cookie 読み書きの唯一の入口。種別でない値（手で書き替えられた cookie など）は無いものとして扱う。 */
+export function getSessionKind(): SessionKind | undefined {
+  const value = Cookies.get(SESSION_KIND_COOKIE);
+  return SESSION_KINDS.find(kind => kind === value);
 }
 
 export function getCurrentStoreId(): string | undefined {
@@ -15,7 +19,7 @@ export function getCurrentStoreId(): string | undefined {
 }
 
 /** expiresAt（epoch millis）にはリフレッシュトークンの期限を渡し、ログインが続く間だけ session-kind を残す。 */
-export function startSession(sessionKind: string, expiresAt?: number): void {
+export function startSession(sessionKind: SessionKind, expiresAt?: number): void {
   Cookies.set(
     SESSION_KIND_COOKIE,
     sessionKind,

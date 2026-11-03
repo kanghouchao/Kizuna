@@ -4,6 +4,7 @@ import {
   clearSession,
   getSessionKind,
   rememberMemberReturnPath,
+  type SessionKind,
   startSession,
   takeMemberReturnPath,
 } from '@/shared/lib/session';
@@ -28,8 +29,7 @@ export function getSessionUserId(): number | undefined {
   return current?.userId;
 }
 
-// session-kind cookie の値。従業員は単一の管理画面 admin に入り、キャスト・会員はそれぞれの portal に入る。
-export type SessionKind = 'admin' | 'cast' | 'member';
+export type { SessionKind };
 
 /**
  * トークンを持った後のセッションを始め、着地パスを返す。session-kind の期限はリフレッシュトークンに揃える。
