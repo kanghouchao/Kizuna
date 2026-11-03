@@ -47,7 +47,11 @@ When("本人がサービス条件を開く", async ({ page }) => {
   await page.getByLabel("パスワード", { exact: true }).fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();
   await page.getByRole("link", { name: "サービス条件", exact: true }).click();
-  // 共有の店舗では他の機能が作ったサービスが先に並ぶため、用意したサービスが載るページまで送る
+  await pageToService(page);
+});
+// 共有の店舗では他の機能が作ったサービスが先に並ぶため、用意したサービスが載るページまで送る。
+// ページ番号は画面の状態にしか無く、再読込で 1 ページ目に戻るので、読み直すたびに送り直す。
+async function pageToService(page: Page) {
   const heading = page.getByRole("heading", { name: serviceName, exact: true });
   const next = page
     .getByRole("button", { name: "次へ", exact: true })
@@ -60,7 +64,7 @@ When("本人がサービス条件を開く", async ({ page }) => {
     ]);
     await expect(heading.or(next).first()).toBeVisible();
   }
-});
+}
 Then("特殊サービスの顧客価格と固定報酬が表示される", async ({ page }) => {
   const card = page
     .getByRole("heading", { name: serviceName, exact: true })
@@ -115,6 +119,7 @@ When(
       serviceName,
     );
     await page.reload();
+    await pageToService(page);
   },
 );
 When("本人が特殊サービスを拒否する", async ({ page }) => {
