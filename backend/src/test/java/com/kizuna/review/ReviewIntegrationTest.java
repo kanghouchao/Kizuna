@@ -792,6 +792,13 @@ class ReviewIntegrationTest {
                 String.class,
                 id))
         .isEqualTo("3");
+    // 未設定の公開設定は記事と同じく空文字で残る
+    assertThat(
+            jdbc.queryForObject(
+                "select after_values->>'publish_from' from t_audit_events where target_id=? and action='REVIEW_PUBLICATION_CHANGED' order by id limit 1",
+                String.class,
+                id))
+        .isEmpty();
   }
 
   @Test
@@ -880,29 +887,11 @@ class ReviewIntegrationTest {
     assertThat(read("/" + id, 200).get("version").asLong()).isEqualTo(1);
   }
 
+  /** 並びと半開区間は PublicationIntegrationTest が持つ。ここは口コミの前提・店舗・応答の形だけを見る。 */
   @Test
-  void publicEndpointKeepsStartExcludesEndAndOrdersTotallyWithinTheNamedStore() throws Exception {
-    var now = OffsetDateTime.parse("2026-06-01T00:00:00Z");
-    clock.set(now.toInstant());
-    String older = now.minusDays(2).toString();
-    String newer = now.minusDays(1).toString();
-    List<String> publications =
-        List.of(
-            "\"published\":true",
-            "\"published\":true,\"publish_from\":\"" + older + "\"",
-            "\"published\":true,\"publish_from\":\"" + newer + "\"",
-            "\"published\":true,\"display_order\":2",
-            "\"published\":true,\"publish_from\":\"" + older + "\",\"display_order\":1",
-            "\"published\":true,\"display_order\":1",
-            "\"published\":false,\"display_order\":0",
-            "\"published\":true,\"publish_from\":\"" + now + "\",\"display_order\":0",
-            "\"published\":true,\"publish_until\":\"" + now + "\",\"display_order\":0",
-            "\"published\":true,\"publish_from\":\""
-                + now.plusMinutes(1)
-                + "\",\"display_order\":0",
-            "\"published\":true");
-    for (int i = 0; i < publications.size(); i++)
-      approveGrantAndPublish("order-" + i, publications.get(i));
+  void publicEndpointShowsOnlyEligibleReviewsOfTheNamedStore() throws Exception {
+    approveGrantAndPublish("first", "\"published\":true,\"display_order\":0");
+    approveGrantAndPublish("next", "\"published\":true,\"display_order\":1");
     String pending = intake("pending-published");
     publish(pending, "{\"version\":0,\"published\":true,\"dedupe_key\":\"pending-publish\"}", 200);
     String withdrawn = approveGrantAndPublish("withdrawn", "\"published\":true");
@@ -915,21 +904,9 @@ class ReviewIntegrationTest {
     var all = publicReviews(storeId, "?size=100");
     assertThat(all.get("content"))
         .extracting(r -> r.get("body").asString())
-        .containsExactly(
-            "order-7",
-            "order-4",
-            "order-5",
-            "order-3",
-            "order-2",
-            "order-1",
-            "order-0",
-            "order-10");
+        .containsExactly("first", "next");
+    assertThat(all.get("total_elements").asLong()).isEqualTo(2);
     assertThat(all.get("content").get(0).get("received_on").asString()).isEqualTo("2026-01-02");
-    var second = publicReviews(storeId, "?page=1&size=3");
-    assertThat(second.get("content"))
-        .extracting(r -> r.get("body").asString())
-        .containsExactly("order-3", "order-2", "order-1");
-    assertThat(second.get("total_elements").asLong()).isEqualTo(8);
     assertThat(publicReviews(otherStore, "").get("content"))
         .extracting(r -> r.get("body").asString())
         .containsExactly("foreign");

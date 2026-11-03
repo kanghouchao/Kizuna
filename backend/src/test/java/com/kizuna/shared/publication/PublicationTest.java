@@ -2,6 +2,7 @@ package com.kizuna.shared.publication;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.entry;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -90,6 +91,22 @@ class PublicationTest {
     verify(root).get("settings");
     verifyNoMoreInteractions(root);
     verify(settings).get("published");
+  }
+
+  @Test
+  void auditValuesWriteEveryKeyAndUnsetValuesAsEmpty() {
+    assertThat(Publication.HIDDEN.auditValues())
+        .containsExactly(
+            entry("published", "false"),
+            entry("publish_from", ""),
+            entry("publish_until", ""),
+            entry("display_order", ""));
+    assertThat(new Publication(true, FROM, UNTIL, 2).auditValues())
+        .containsExactly(
+            entry("published", "true"),
+            entry("publish_from", "2026-11-01T11:00Z"),
+            entry("publish_until", "2026-11-01T18:00Z"),
+            entry("display_order", "2"));
   }
 
   @Getter
