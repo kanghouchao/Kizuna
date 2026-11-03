@@ -1,7 +1,11 @@
-import { apiClient } from '@/shared/api';
+import { apiClient, fetchBlob, spreadsheetTypes } from '@/shared/api';
 import { downloadReport, fetchReport, type ReportCriteria } from '../reports';
 
-jest.mock('@/shared/api', () => ({ apiClient: { get: jest.fn() } }));
+jest.mock('@/shared/api', () => ({
+  apiClient: { get: jest.fn() },
+  fetchBlob: jest.fn(),
+  spreadsheetTypes: jest.requireActual('@/shared/api/blob').spreadsheetTypes,
+}));
 const get = jest.mocked(apiClient.get);
 const criteria: ReportCriteria = {
   from: '2026-09-30',
@@ -44,24 +48,18 @@ test('store scope queries the current-store report', async () => {
 });
 
 test.each([
-  ['csv', 'text/csv', 'store', '/operational-reports/exports'],
-  [
-    'xlsx',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'admin',
-    '/operational-reports/cross-store/exports',
-  ],
+  ['csv', 'store', '/operational-reports/exports'],
+  ['xlsx', 'admin', '/operational-reports/cross-store/exports'],
 ] as const)(
   '%s exports pass the same complete criteria and cancellation signal',
-  async (format, type, scope, path) => {
-    const blob = new Blob(['report'], { type });
-    get.mockResolvedValueOnce({ data: blob });
+  async (format, scope, path) => {
     const signal = new AbortController().signal;
-    expect(await downloadReport(scope, criteria, format, signal)).toBe(blob);
-    expect(get).toHaveBeenCalledWith(path, {
+    await downloadReport(scope, criteria, format, signal);
+    expect(fetchBlob).toHaveBeenCalledWith(path, {
       params: { ...criteria, format },
-      responseType: 'blob',
       signal,
+      types: [spreadsheetTypes[format]],
+      fallback: expect.stringContaining('帳票を取得できませんでした'),
     });
   }
 );

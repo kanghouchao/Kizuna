@@ -13,6 +13,8 @@ export {
 } from './session';
 export type { EndReason, SessionAlert, SessionKind } from './session';
 export { fileApi } from './file';
+export { fetchBlob, spreadsheetTypes } from './blob';
+export type { BlobRequest } from './blob';
 export * from './types';
 export { fromSpringPage, toSpringPageParams } from './page';
 export type { PageResult } from './page';

@@ -1,4 +1,4 @@
-import { apiClient, type Page } from '@/shared/api';
+import { apiClient, fetchBlob, spreadsheetTypes, type Page } from '@/shared/api';
 
 export interface ReportCriteria {
   from: string;
@@ -58,38 +58,18 @@ export async function fetchReport(scope: ReportScope, criteria: ReportCriteria, 
     })
   ).data;
 }
-export async function downloadReport(
+export function downloadReport(
   scope: ReportScope,
   criteria: ReportCriteria,
   format: 'csv' | 'xlsx',
   signal: AbortSignal
 ): Promise<Blob> {
-  try {
-    const response = await apiClient.get<Blob>(`${reportPath[scope]}/exports`, {
-      params: { ...criteria, format },
-      responseType: 'blob',
-      signal,
-    });
-    const type =
-      format === 'csv'
-        ? 'text/csv'
-        : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-    if (!response.data.type.startsWith(type)) throw new Error();
-    return response.data;
-  } catch (failure) {
-    if (signal.aborted) throw failure;
-    const data = (failure as { response?: { data?: unknown } }).response?.data;
-    if (data instanceof Blob && data.type.includes('application/json')) {
-      let message: unknown;
-      try {
-        message = JSON.parse(await data.text()).error;
-      } catch {
-        message = null;
-      }
-      if (typeof message === 'string') throw new Error(message);
-    }
-    throw new Error('帳票を取得できませんでした。条件または通信状態を確認してください。');
-  }
+  return fetchBlob(`${reportPath[scope]}/exports`, {
+    params: { ...criteria, format },
+    signal,
+    types: [spreadsheetTypes[format]],
+    fallback: '帳票を取得できませんでした。条件または通信状態を確認してください。',
+  });
 }
 export function validReportPeriod(from: string, to: string): boolean {
   if (![from, to].every(value => /^(?!0000)[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value))) return false;
