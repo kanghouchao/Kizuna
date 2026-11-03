@@ -1,5 +1,6 @@
 package com.kizuna.user.api.dto;
 
+import com.kizuna.user.application.RoleViews;
 import java.util.List;
 
 /**
@@ -7,4 +8,9 @@ import java.util.List;
  * は既定ロール（改名・削除不可、権限は編集可）。 version は楽観ロックの往復用（編集リクエストがそのまま返送し、不一致は 409）。
  */
 public record RoleResponse(
-    Long id, String name, boolean system, List<String> permissions, long version) {}
+    Long id, String name, boolean system, List<String> permissions, long version) {
+
+  public static RoleResponse of(RoleViews.Detail d) {
+    return new RoleResponse(d.id(), d.name(), d.system(), d.permissions(), d.version());
+  }
+}

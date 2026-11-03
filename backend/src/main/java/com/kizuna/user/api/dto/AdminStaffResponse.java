@@ -1,5 +1,7 @@
 package com.kizuna.user.api.dto;
 
+import com.kizuna.user.application.RoleViews;
+import com.kizuna.user.application.StaffView;
 import com.kizuna.user.domain.StoreScopeType;
 import java.util.List;
 import java.util.Set;
@@ -23,6 +25,24 @@ public record AdminStaffResponse(
     long version,
     boolean editable) {
 
+  public static AdminStaffResponse of(StaffView v) {
+    return new AdminStaffResponse(
+        v.id(),
+        v.email(),
+        v.displayName(),
+        v.enabled(),
+        v.roles().stream().map(RoleRef::of).toList(),
+        v.storeScopeType(),
+        v.storeIds(),
+        v.version(),
+        v.editable());
+  }
+
   /** ロールへの参照（id と名称）。 */
-  public record RoleRef(Long id, String name) {}
+  public record RoleRef(Long id, String name) {
+
+    static RoleRef of(RoleViews.Ref r) {
+      return new RoleRef(r.id(), r.name());
+    }
+  }
 }

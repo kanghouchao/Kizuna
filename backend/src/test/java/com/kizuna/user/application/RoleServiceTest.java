@@ -14,10 +14,6 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.user.api.dto.RoleCreateRequest;
-import com.kizuna.user.api.dto.RoleResponse;
-import com.kizuna.user.api.dto.RoleSummaryResponse;
-import com.kizuna.user.api.dto.RoleUpdateRequest;
 import com.kizuna.user.domain.LastRoleManageHolderException;
 import com.kizuna.user.domain.Permission;
 import com.kizuna.user.domain.PermissionCode;
@@ -108,19 +104,12 @@ class RoleServiceTest {
     return role;
   }
 
-  private RoleCreateRequest createRequest(String name, Set<String> permissions) {
-    RoleCreateRequest req = new RoleCreateRequest();
-    req.setName(name);
-    req.setPermissions(permissions);
-    return req;
+  private RoleCommand.Create createRequest(String name, Set<String> permissions) {
+    return new RoleCommand.Create(name, permissions);
   }
 
-  private RoleUpdateRequest updateRequest(String name, Set<String> permissions, long version) {
-    RoleUpdateRequest req = new RoleUpdateRequest();
-    req.setName(name);
-    req.setPermissions(permissions);
-    req.setVersion(version);
-    return req;
+  private RoleCommand.Update updateRequest(String name, Set<String> permissions, long version) {
+    return new RoleCommand.Update(name, permissions, version);
   }
 
   private RoleSummary summary(long id, String name, boolean systemRole, long permissionCount) {
@@ -151,7 +140,7 @@ class RoleServiceTest {
   void list_returnsSummariesWithoutTouchingPermissionCatalog() {
     when(roleRepository.findAllSummaries()).thenReturn(List.of(summary(1L, "受付", false, 2L)));
 
-    List<RoleSummaryResponse> res = service.list();
+    List<RoleViews.Summary> res = service.list();
 
     assertThat(res).hasSize(1);
     assertThat(res.get(0).name()).isEqualTo("受付");
@@ -172,7 +161,7 @@ class RoleServiceTest {
                 permission(ORDER_MANAGE_ID, PermissionCode.ORDER_MANAGE),
                 permission(CUSTOMER_MANAGE_ID, PermissionCode.CUSTOMER_MANAGE)));
 
-    RoleResponse res = service.get(1L);
+    RoleViews.Detail res = service.get(1L);
 
     assertThat(res.name()).isEqualTo("受付");
     assertThat(res.system()).isFalse();
@@ -199,7 +188,7 @@ class RoleServiceTest {
               return saved;
             });
 
-    RoleResponse res = service.create(createRequest("受付", Set.of("ORDER_MANAGE")));
+    RoleViews.Detail res = service.create(createRequest("受付", Set.of("ORDER_MANAGE")));
 
     assertThat(roleCaptor.getValue().getName()).isEqualTo("受付");
     assertThat(roleCaptor.getValue().getSystemRole()).as("API 経由の作成は常に自作ロール").isFalse();
@@ -245,7 +234,8 @@ class RoleServiceTest {
     when(roleRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(existing));
     when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
 
-    RoleResponse res = service.update(7L, updateRequest("受付リーダー", Set.of("CUSTOMER_MANAGE"), 0L));
+    RoleViews.Detail res =
+        service.update(7L, updateRequest("受付リーダー", Set.of("CUSTOMER_MANAGE"), 0L));
 
     assertThat(existing.getName()).isEqualTo("受付リーダー");
     assertThat(existing.getPermissionIds()).containsExactly(CUSTOMER_MANAGE_ID);

@@ -16,7 +16,7 @@ import com.kizuna.auth.infrastructure.SecurityConfig;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
-import com.kizuna.user.api.dto.InitialSetupRequest;
+import com.kizuna.user.application.InitialSetupCommand;
 import com.kizuna.user.application.InitialSetupService;
 import com.kizuna.user.application.StoreScopeResolver;
 import org.junit.jupiter.api.BeforeEach;
@@ -89,7 +89,7 @@ class InitialSetupControllerTest {
   @Test
   @DisplayName("POST は匿名要求で受理され、201 で新しい id を返すこと")
   void registerAcceptsAnonymousPostWithoutCsrfToken() throws Exception {
-    ArgumentCaptor<InitialSetupRequest> captor = ArgumentCaptor.forClass(InitialSetupRequest.class);
+    ArgumentCaptor<InitialSetupCommand> captor = ArgumentCaptor.forClass(InitialSetupCommand.class);
     when(initialSetupService.register(captor.capture())).thenReturn(42L);
 
     mockMvc
@@ -97,9 +97,9 @@ class InitialSetupControllerTest {
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.id").value(42));
 
-    assertThat(captor.getValue().getEmail()).isEqualTo("owner@kizuna.test");
-    assertThat(captor.getValue().getPassword()).isEqualTo("password123");
-    assertThat(captor.getValue().getDisplayName()).isEqualTo("管理者");
+    assertThat(captor.getValue().email()).isEqualTo("owner@kizuna.test");
+    assertThat(captor.getValue().password()).isEqualTo("password123");
+    assertThat(captor.getValue().displayName()).isEqualTo("管理者");
   }
 
   @Test

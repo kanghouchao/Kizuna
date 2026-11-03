@@ -1,5 +1,6 @@
 package com.kizuna.user.api.dto;
 
+import com.kizuna.user.application.ServiceIdentityViews;
 import com.kizuna.user.domain.StoreScopeType;
 import java.util.List;
 import java.util.Set;
@@ -16,4 +17,16 @@ public record ServiceIdentityResponse(
     List<ServiceIdentityRoleRef> roles,
     StoreScopeType storeScopeType,
     Set<Long> storeIds,
-    long version) {}
+    long version) {
+
+  public static ServiceIdentityResponse of(ServiceIdentityViews.Detail d) {
+    return new ServiceIdentityResponse(
+        d.id(),
+        d.displayName(),
+        d.enabled(),
+        d.roles().stream().map(ServiceIdentityRoleRef::of).toList(),
+        d.storeScopeType(),
+        d.storeIds(),
+        d.version());
+  }
+}

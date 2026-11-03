@@ -45,20 +45,25 @@ public class StaffController {
       @PageableDefault(sort = {"displayName", "id"}) Pageable pageable,
       Principal principal) {
     return ResponseEntity.ok(
-        adminStaffService.list(search, storeId, pageable, principal.getName()));
+        adminStaffService
+            .list(search, storeId, pageable, principal.getName())
+            .map(AdminStaffResponse::of));
   }
 
   /** 行使者が付与できるロールの目録。有界（ロール目録）なので裸の List で返す。 */
   @GetMapping("/grantable-roles")
   @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
   public ResponseEntity<List<RoleSummaryResponse>> grantableRoles(Principal principal) {
-    return ResponseEntity.ok(adminStaffService.grantableRoles(principal.getName()));
+    return ResponseEntity.ok(
+        adminStaffService.grantableRoles(principal.getName()).stream()
+            .map(RoleSummaryResponse::of)
+            .toList());
   }
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
   public ResponseEntity<AdminStaffResponse> get(@PathVariable Long id, Principal principal) {
-    return ResponseEntity.ok(adminStaffService.get(id, principal.getName()));
+    return ResponseEntity.ok(AdminStaffResponse.of(adminStaffService.get(id, principal.getName())));
   }
 
   @PostMapping
@@ -66,14 +71,15 @@ public class StaffController {
   public ResponseEntity<AdminStaffResponse> create(
       @Valid @RequestBody AdminStaffCreateRequest req, Principal principal) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(adminStaffService.create(req, principal.getName()));
+        .body(AdminStaffResponse.of(adminStaffService.create(req.command(), principal.getName())));
   }
 
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
   public ResponseEntity<AdminStaffResponse> update(
       @PathVariable Long id, @Valid @RequestBody AdminStaffUpdateRequest req, Principal principal) {
-    return ResponseEntity.ok(adminStaffService.update(id, req, principal.getName()));
+    return ResponseEntity.ok(
+        AdminStaffResponse.of(adminStaffService.update(id, req.command(), principal.getName())));
   }
 
   @PostMapping("/{id}/suspension")

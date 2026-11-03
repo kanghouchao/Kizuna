@@ -10,7 +10,6 @@ import static org.mockito.Mockito.spy;
 
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
-import com.kizuna.user.api.dto.RoleUpdateRequest;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.Role;
@@ -143,14 +142,11 @@ class RoleRowLockPremiseIntegrationTest {
     }
   }
 
-  private RoleUpdateRequest request(long role, PermissionCode permission) {
-    var request = new RoleUpdateRequest();
-    request.setName(
-        jdbc.queryForObject("select name from t_roles where id = ?", String.class, role));
-    request.setPermissions(Set.of(permission.name()));
-    request.setVersion(
+  private RoleCommand.Update request(long role, PermissionCode permission) {
+    return new RoleCommand.Update(
+        jdbc.queryForObject("select name from t_roles where id = ?", String.class, role),
+        Set.of(permission.name()),
         jdbc.queryForObject("select version from t_roles where id = ?", Long.class, role));
-    return request;
   }
 
   private long permissionId(PermissionCode permission) {

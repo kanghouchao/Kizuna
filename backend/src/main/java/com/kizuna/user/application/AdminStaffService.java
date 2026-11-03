@@ -7,10 +7,6 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
-import com.kizuna.user.api.dto.AdminStaffCreateRequest;
-import com.kizuna.user.api.dto.AdminStaffResponse;
-import com.kizuna.user.api.dto.AdminStaffUpdateRequest;
-import com.kizuna.user.api.dto.RoleSummaryResponse;
 import com.kizuna.user.domain.DuplicateStaffEmailException;
 import com.kizuna.user.domain.HqPasswordResetNotAllowedException;
 import com.kizuna.user.domain.InvalidRoleGrantException;
@@ -90,8 +86,7 @@ public class AdminStaffService {
   }
 
   @Transactional(readOnly = true)
-  public Page<AdminStaffResponse> list(
-      String search, Long storeId, Pageable pageable, String actorEmail) {
+  public Page<StaffView> list(String search, Long storeId, Pageable pageable, String actorEmail) {
     Actor actor = actor(actorEmail);
     Page<User> staff = repository.findAll(staffSpec(search, storeId, actor.scope()), pageable);
     Map<Long, Role> roles =
@@ -99,7 +94,7 @@ public class AdminStaffService {
             staff.getContent().stream()
                 .flatMap(user -> user.getRoleIds().stream())
                 .collect(Collectors.toSet()));
-    return staff.map(user -> toResponse(user, roles, actor));
+    return staff.map(user -> toView(user, roles, actor));
   }
 
   /**
@@ -144,22 +139,22 @@ public class AdminStaffService {
 
   /** 1 件取得。編集中に競合（409）が起きたとき、一覧の現在ページに対象が居なくても最新の版を取り直せるようにするための経路。 */
   @Transactional(readOnly = true)
-  public AdminStaffResponse get(Long id, String actorEmail) {
+  public StaffView get(Long id, String actorEmail) {
     Actor actor = actor(actorEmail);
     User user = requireVisible(id, actor);
-    return toResponse(user, rolesOf(user.getRoleIds()), actor);
+    return toView(user, rolesOf(user.getRoleIds()), actor);
   }
 
   /** 行使者が付与できるロールの目録 — 権限集合が行使者の権限並集に収まるもの（ROLE_MANAGE 保持者は全ロール）。判定の単源をサーバに置く。 */
   @Transactional(readOnly = true)
-  public List<RoleSummaryResponse> grantableRoles(String actorEmail) {
+  public List<RoleViews.Summary> grantableRoles(String actorEmail) {
     Actor actor = actor(actorEmail);
     return roleRepository.findAll().stream()
         .filter(role -> actor.covers(role.getPermissionIds()))
         .sorted(Comparator.comparing(Role::getName))
         .map(
             role ->
-                new RoleSummaryResponse(
+                new RoleViews.Summary(
                     role.getId(),
                     role.getName(),
                     Boolean.TRUE.equals(role.getSystemRole()),
@@ -168,24 +163,24 @@ public class AdminStaffService {
   }
 
   @Transactional
-  public AdminStaffResponse create(AdminStaffCreateRequest req, String actorEmail) {
+  public StaffView create(StaffCommand.Create command, String actorEmail) {
     Actor actor = actor(actorEmail);
-    Map<Long, Role> roles = requireRoles(req.getRoleIds());
+    Map<Long, Role> roles = requireRoles(command.roleIds());
     requireGrantable(roles.values(), actor);
-    requireStoresWithinActorScope(req.getStoreScopeType(), req.getStoreIds(), actor.scope());
-    if (repository.findByEmail(req.getEmail().toLowerCase(Locale.ROOT)).isPresent()) {
+    requireStoresWithinActorScope(command.storeScopeType(), command.storeIds(), actor.scope());
+    if (repository.findByEmail(command.email().toLowerCase(Locale.ROOT)).isPresent()) {
       throw new DuplicateStaffEmailException("このメールアドレスは既に登録されています");
     }
     User user =
         User.builder()
-            .email(req.getEmail())
-            .password(passwordEncoder.encode(req.getPassword()))
-            .displayName(req.getDisplayName())
+            .email(command.email())
+            .password(passwordEncoder.encode(command.password()))
+            .displayName(command.displayName())
             .enabled(true)
             .userType(UserType.STAFF)
-            .roleIds(req.getRoleIds())
-            .storeScopeType(req.getStoreScopeType())
-            .storeIds(req.getStoreIds())
+            .roleIds(command.roleIds())
+            .storeScopeType(command.storeScopeType())
+            .storeIds(command.storeIds())
             .build();
     user = save(user);
     businessAudit.recordCurrent(
@@ -195,30 +190,30 @@ public class AdminStaffService {
         user.getId().toString(),
         Map.of(),
         BusinessAudit.grants(user));
-    return toResponse(user, roles, actor);
+    return toView(user, roles, actor);
   }
 
   /** 授権（ロール×店舗集合）だけを更新する。停止・再開は専用の操作で、この面は enabled を受け取らない。 */
   @Transactional
-  public AdminStaffResponse update(Long id, AdminStaffUpdateRequest req, String actorEmail) {
+  public StaffView update(Long id, StaffCommand.UpdateGrants command, String actorEmail) {
     Actor actor = actor(actorEmail);
     User user = requireVisible(id, actor);
     // 陳腐化した編集フォームの提出は JPA の @Version では捕まらない（再読込後の正当な更新に見える）
     // ため、応答で往復させた version を明示比対して 409 で拒否する。
-    if (!user.getVersion().equals(req.getVersion())) {
+    if (!user.getVersion().equals(command.version())) {
       throw new StaleStaffUpdateException("他の担当者が更新しました。最新の内容を確認してください");
     }
     requireEditable(user, actor);
-    Map<Long, Role> roles = requireRoles(req.getRoleIds());
+    Map<Long, Role> roles = requireRoles(command.roleIds());
     requireGrantable(roles.values(), actor);
-    requireStoresWithinActorScope(req.getStoreScopeType(), req.getStoreIds(), actor.scope());
+    requireStoresWithinActorScope(command.storeScopeType(), command.storeIds(), actor.scope());
     // 供給ロールの追加は並行しうるため、ロック前は要求に既存ロールの除去があるかだけで判断する。
-    if (user.getEnabled() && !req.getRoleIds().containsAll(user.getRoleIds())) {
-      roleManageHolderGuard.requireAfterGrantChange(user, req.getRoleIds());
+    if (user.getEnabled() && !command.roleIds().containsAll(user.getRoleIds())) {
+      roleManageHolderGuard.requireAfterGrantChange(user, command.roleIds());
     }
     var before = BusinessAudit.grants(user);
     credentialOperations.reassignGrants(
-        user, req.getRoleIds(), req.getStoreScopeType(), req.getStoreIds());
+        user, command.roleIds(), command.storeScopeType(), command.storeIds());
     user = save(user);
     if (!before.equals(BusinessAudit.grants(user)))
       businessAudit.recordCurrent(
@@ -228,7 +223,7 @@ public class AdminStaffService {
           user.getId().toString(),
           before,
           BusinessAudit.grants(user));
-    return toResponse(user, roles, actor);
+    return toView(user, roles, actor);
   }
 
   /**
@@ -450,19 +445,14 @@ public class AdminStaffService {
             () -> new ServiceException("指定されたロールが存在しません")));
   }
 
-  private static AdminStaffResponse toResponse(User user, Map<Long, Role> roles, Actor actor) {
-    List<AdminStaffResponse.RoleRef> refs =
+  private static StaffView toView(User user, Map<Long, Role> roles, Actor actor) {
+    List<RoleViews.Ref> refs =
         user.getRoleIds().stream()
             .map(
-                id ->
-                    new AdminStaffResponse.RoleRef(
-                        id, roles.containsKey(id) ? roles.get(id).getName() : null))
-            .sorted(
-                Comparator.comparing(
-                    AdminStaffResponse.RoleRef::name,
-                    Comparator.nullsLast(Comparator.naturalOrder())))
+                id -> new RoleViews.Ref(id, roles.containsKey(id) ? roles.get(id).getName() : null))
+            .sorted(RoleViews.Ref.ORDER)
             .toList();
-    return new AdminStaffResponse(
+    return new StaffView(
         user.getId(),
         user.getEmail(),
         user.getDisplayName(),

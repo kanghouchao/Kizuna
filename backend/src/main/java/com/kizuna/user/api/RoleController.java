@@ -32,26 +32,27 @@ public class RoleController {
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_ROLE_MANAGE')")
   public ResponseEntity<List<RoleSummaryResponse>> list() {
-    return ResponseEntity.ok(roleService.list());
+    return ResponseEntity.ok(roleService.list().stream().map(RoleSummaryResponse::of).toList());
   }
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_ROLE_MANAGE')")
   public ResponseEntity<RoleResponse> get(@PathVariable Long id) {
-    return ResponseEntity.ok(roleService.get(id));
+    return ResponseEntity.ok(RoleResponse.of(roleService.get(id)));
   }
 
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_ROLE_MANAGE')")
   public ResponseEntity<RoleResponse> create(@Valid @RequestBody RoleCreateRequest req) {
-    return ResponseEntity.status(HttpStatus.CREATED).body(roleService.create(req));
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(RoleResponse.of(roleService.create(req.command())));
   }
 
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_ROLE_MANAGE')")
   public ResponseEntity<RoleResponse> update(
       @PathVariable Long id, @Valid @RequestBody RoleUpdateRequest req) {
-    return ResponseEntity.ok(roleService.update(id, req));
+    return ResponseEntity.ok(RoleResponse.of(roleService.update(id, req.command())));
   }
 
   @DeleteMapping("/{id}")

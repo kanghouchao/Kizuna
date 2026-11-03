@@ -38,7 +38,7 @@ public class InitialSetupController {
   @PermitAll
   public ResponseEntity<InitialSetupCreationResponse> register(
       @Valid @RequestBody InitialSetupRequest request) {
-    Long id = initialSetupService.register(request);
+    Long id = initialSetupService.register(request.command());
     return ResponseEntity.status(HttpStatus.CREATED).body(new InitialSetupCreationResponse(id));
   }
 }

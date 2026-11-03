@@ -12,7 +12,6 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.user.api.dto.InitialSetupRequest;
 import com.kizuna.user.domain.DuplicateStaffEmailException;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
@@ -57,12 +56,8 @@ class InitialSetupServiceTest {
             userRepository, roleRepository, passwordEncoder, businessAudit, appProperties);
   }
 
-  private static InitialSetupRequest request() {
-    InitialSetupRequest request = new InitialSetupRequest();
-    request.setEmail("Owner@Kizuna.test");
-    request.setPassword("password123");
-    request.setDisplayName("管理者 太郎");
-    return request;
+  private static InitialSetupCommand request() {
+    return new InitialSetupCommand("Owner@Kizuna.test", "password123", "管理者 太郎");
   }
 
   private void adminRoleExists() {

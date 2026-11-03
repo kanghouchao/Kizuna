@@ -1,6 +1,7 @@
 package com.kizuna.user.api.dto;
 
 import com.kizuna.shared.validation.Password;
+import com.kizuna.user.application.InitialSetupCommand;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -30,4 +31,8 @@ public class InitialSetupRequest {
   @NotBlank(message = "display_name is required")
   @Size(max = 150)
   private String displayName;
+
+  public InitialSetupCommand command() {
+    return new InitialSetupCommand(email, password, displayName);
+  }
 }

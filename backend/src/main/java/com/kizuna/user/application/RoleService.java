@@ -4,10 +4,6 @@ import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.user.api.dto.RoleCreateRequest;
-import com.kizuna.user.api.dto.RoleResponse;
-import com.kizuna.user.api.dto.RoleSummaryResponse;
-import com.kizuna.user.api.dto.RoleUpdateRequest;
 import com.kizuna.user.domain.Permission;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
@@ -48,11 +44,11 @@ public class RoleService {
 
   /** 一覧は権限の個数だけを返す要約。権限コードの列挙が要るのは編集時のみで、それは {@link #get(Long)} が担う。 */
   @Transactional(readOnly = true)
-  public List<RoleSummaryResponse> list() {
+  public List<RoleViews.Summary> list() {
     return roleRepository.findAllSummaries().stream()
         .map(
             summary ->
-                new RoleSummaryResponse(
+                new RoleViews.Summary(
                     summary.getId(),
                     summary.getName(),
                     Boolean.TRUE.equals(summary.getSystemRole()),
@@ -61,38 +57,38 @@ public class RoleService {
   }
 
   @Transactional(readOnly = true)
-  public RoleResponse get(Long id) {
+  public RoleViews.Detail get(Long id) {
     Role role = roleRepository.findById(id).orElseThrow(() -> notFound(id));
-    return toResponse(role, codesById(role.getPermissionIds()));
+    return toDetail(role, codesById(role.getPermissionIds()));
   }
 
   @Transactional
-  public RoleResponse create(RoleCreateRequest req) {
-    Map<Long, String> codesById = requirePermissions(req.getPermissions());
+  public RoleViews.Detail create(RoleCommand.Create command) {
+    Map<Long, String> codesById = requirePermissions(command.permissions());
     Role role =
         Role.builder()
-            .name(req.getName())
+            .name(command.name())
             .systemRole(false)
             .permissionIds(codesById.keySet())
             .build();
     save(role);
     businessAudit.recordCurrent(
         null, "ROLE_CREATED", "ROLE", role.getId().toString(), Map.of(), snapshot(role));
-    return toResponse(role, codesById);
+    return toDetail(role, codesById);
   }
 
   @Transactional
-  public RoleResponse update(Long id, RoleUpdateRequest req) {
-    Map<Long, String> codesById = requirePermissions(req.getPermissions());
+  public RoleViews.Detail update(Long id, RoleCommand.Update command) {
+    Map<Long, String> codesById = requirePermissions(command.permissions());
     // ロックはロール行から取る（順序は RoleRepository#findByIdForUpdate）。
     Role role = roleRepository.findByIdForUpdate(id).orElseThrow(() -> notFound(id));
     // 陳腐化した編集フォームの提出は JPA の @Version では捕まらない（再読込後の正当な更新に見える）
     // ため、応答で往復させた version を明示比対して 409 で拒否する。
-    if (!role.getVersion().equals(req.getVersion())) {
+    if (!role.getVersion().equals(command.version())) {
       throw new StaleRoleUpdateException("他の管理者が更新しました。最新の内容を確認してください");
     }
     // 既定ロールも権限を編集できるので ROLE_MANAGE 保持者をゼロにしない検査から外さない。
-    if (!req.getPermissions().contains(ROLE_MANAGE)
+    if (!command.permissions().contains(ROLE_MANAGE)
         && roleRepository.findIdsByPermissionCode(ROLE_MANAGE).contains(role.getId())) {
       roleManageHolderGuard.requireAfterRolePermissionRemoval(role.getId());
     }
@@ -100,12 +96,12 @@ public class RoleService {
     // 先の行ロックは PG では FOR NO KEY UPDATE。改名の保存は一意列の更新でそれを FOR UPDATE に上げ、
     // 外部キー検査の KEY SHARE を締め出すが、付与はその前の FOR SHARE で既に待っている。
     credentialOperations.replaceRolePermissions(role, codesById.keySet());
-    role.rename(req.getName());
+    role.rename(command.name());
     save(role);
     if (!before.equals(snapshot(role)))
       businessAudit.recordCurrent(
           null, "ROLE_CHANGED", "ROLE", role.getId().toString(), before, snapshot(role));
-    return toResponse(role, codesById);
+    return toDetail(role, codesById);
   }
 
   @Transactional
@@ -166,8 +162,8 @@ public class RoleService {
         .collect(Collectors.toMap(Permission::getId, Permission::getCode));
   }
 
-  private static RoleResponse toResponse(Role role, Map<Long, String> codesById) {
-    return new RoleResponse(
+  private static RoleViews.Detail toDetail(Role role, Map<Long, String> codesById) {
+    return new RoleViews.Detail(
         role.getId(),
         role.getName(),
         Boolean.TRUE.equals(role.getSystemRole()),

@@ -43,33 +43,37 @@ public class ServiceIdentityController {
   public ResponseEntity<Page<ServiceIdentitySummaryResponse>> list(
       @RequestParam(required = false) String search,
       @PageableDefault(sort = {"displayName", "id"}) Pageable pageable) {
-    return ResponseEntity.ok(serviceIdentityService.list(search, pageable));
+    return ResponseEntity.ok(
+        serviceIdentityService.list(search, pageable).map(ServiceIdentitySummaryResponse::of));
   }
 
   @GetMapping("/grantable-roles")
   @PreAuthorize("hasAuthority('PERM_SERVICE_ID_MANAGE')")
   public ResponseEntity<List<RoleSummaryResponse>> grantableRoles() {
-    return ResponseEntity.ok(serviceIdentityService.grantableRoles());
+    return ResponseEntity.ok(
+        serviceIdentityService.grantableRoles().stream().map(RoleSummaryResponse::of).toList());
   }
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_SERVICE_ID_MANAGE')")
   public ResponseEntity<ServiceIdentityResponse> get(@PathVariable Long id) {
-    return ResponseEntity.ok(serviceIdentityService.get(id));
+    return ResponseEntity.ok(ServiceIdentityResponse.of(serviceIdentityService.get(id)));
   }
 
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_SERVICE_ID_MANAGE')")
   public ResponseEntity<ServiceIdentityResponse> create(
       @Valid @RequestBody ServiceIdentityCreateRequest req) {
-    return ResponseEntity.status(HttpStatus.CREATED).body(serviceIdentityService.create(req));
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(ServiceIdentityResponse.of(serviceIdentityService.create(req.command())));
   }
 
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_SERVICE_ID_MANAGE')")
   public ResponseEntity<ServiceIdentityResponse> update(
       @PathVariable Long id, @Valid @RequestBody ServiceIdentityUpdateRequest req) {
-    return ResponseEntity.ok(serviceIdentityService.update(id, req));
+    return ResponseEntity.ok(
+        ServiceIdentityResponse.of(serviceIdentityService.update(id, req.command())));
   }
 
   @PostMapping("/{id}/suspension")
