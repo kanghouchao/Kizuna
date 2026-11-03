@@ -3,18 +3,13 @@ package com.kizuna.storeprofile.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.storeprofile.api.dto.StoreProfileMapper;
-import com.kizuna.storeprofile.api.dto.StoreProfileResponse;
-import com.kizuna.storeprofile.api.dto.StoreProfileUpdateRequest;
 import com.kizuna.storeprofile.domain.PartnerLink;
 import com.kizuna.storeprofile.domain.SnsLink;
 import com.kizuna.storeprofile.domain.StoreProfile;
+import com.kizuna.storeprofile.domain.StoreProfilePatch;
 import com.kizuna.storeprofile.domain.StoreProfileRepository;
 import com.kizuna.user.application.BusinessAudit;
 import java.time.OffsetDateTime;
@@ -31,7 +26,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class StoreProfileServiceTest {
 
   @Mock private StoreProfileRepository storeProfileRepository;
-  @Mock private StoreProfileMapper storeProfileMapper;
   @Mock private BusinessAudit businessAudit;
   @InjectMocks private StoreProfileService storeProfileService;
 
@@ -40,15 +34,9 @@ class StoreProfileServiceTest {
   @Test
   void get_returnsExistingConfig() {
     StoreProfile config = createTestConfig();
-    StoreProfileResponse expected = createTestResponse();
     when(storeProfileRepository.findByStoreId(STORE_ID)).thenReturn(Optional.of(config));
-    when(storeProfileMapper.toResponse(config)).thenReturn(expected);
 
-    StoreProfileResponse response = storeProfileService.get(STORE_ID);
-
-    assertThat(response.getId()).isEqualTo("1");
-    assertThat(response.getTemplateKey()).isEqualTo("default");
-    assertThat(response.getLogoUrl()).isEqualTo("https://example.com/logo.png");
+    assertThat(storeProfileService.get(STORE_ID)).isSameAs(config);
   }
 
   @Test
@@ -66,31 +54,13 @@ class StoreProfileServiceTest {
     when(storeProfileRepository.findByStoreId(STORE_ID)).thenReturn(Optional.of(config));
     when(storeProfileRepository.saveAndFlush(any())).thenReturn(config);
 
-    StoreProfileUpdateRequest request = new StoreProfileUpdateRequest();
-    request.setLogoUrl("https://example.com/new-logo.png");
-    request.setDescription("Updated description");
+    StoreProfile saved =
+        storeProfileService.update(
+            STORE_ID, patch("https://example.com/new-logo.png", "Updated description", null, null));
 
-    doAnswer(
-            invocation -> {
-              StoreProfileUpdateRequest req = invocation.getArgument(0);
-              StoreProfile target = invocation.getArgument(1);
-              if (req.getLogoUrl() != null) target.setLogoUrl(req.getLogoUrl());
-              if (req.getDescription() != null) target.setDescription(req.getDescription());
-              return null;
-            })
-        .when(storeProfileMapper)
-        .updateEntityFromRequest(eq(request), eq(config));
-
-    StoreProfileResponse expected = createTestResponse();
-    expected.setLogoUrl("https://example.com/new-logo.png");
-    expected.setDescription("Updated description");
-    when(storeProfileMapper.toResponse(config)).thenReturn(expected);
-
-    StoreProfileResponse response = storeProfileService.update(STORE_ID, request);
-
-    assertThat(response.getLogoUrl()).isEqualTo("https://example.com/new-logo.png");
-    assertThat(response.getDescription()).isEqualTo("Updated description");
-    verify(storeProfileMapper).updateEntityFromRequest(request, config);
+    assertThat(saved.getLogoUrl()).isEqualTo("https://example.com/new-logo.png");
+    assertThat(saved.getDescription()).isEqualTo("Updated description");
+    assertThat(saved.getTemplateKey()).isEqualTo("default");
   }
 
   @Test
@@ -99,20 +69,13 @@ class StoreProfileServiceTest {
     when(storeProfileRepository.findByStoreId(STORE_ID)).thenReturn(Optional.of(config));
     when(storeProfileRepository.saveAndFlush(any())).thenReturn(config);
 
-    StoreProfileUpdateRequest request = new StoreProfileUpdateRequest();
     List<SnsLink> newSnsLinks =
         List.of(SnsLink.builder().platform("twitter").url("https://twitter.com/test").build());
-    request.setSnsLinks(newSnsLinks);
 
-    StoreProfileResponse expected = createTestResponse();
-    expected.setSnsLinks(newSnsLinks);
-    when(storeProfileMapper.toResponse(config)).thenReturn(expected);
+    StoreProfile saved = storeProfileService.update(STORE_ID, patch(null, null, newSnsLinks, null));
 
-    StoreProfileResponse response = storeProfileService.update(STORE_ID, request);
-
-    assertThat(response.getSnsLinks()).hasSize(1);
-    assertThat(response.getSnsLinks().get(0).getPlatform()).isEqualTo("twitter");
-    verify(storeProfileMapper).updateEntityFromRequest(request, config);
+    assertThat(saved.getSnsLinks()).hasSize(1);
+    assertThat(saved.getSnsLinks().get(0).getPlatform()).isEqualTo("twitter");
   }
 
   @Test
@@ -121,29 +84,21 @@ class StoreProfileServiceTest {
     when(storeProfileRepository.findByStoreId(STORE_ID)).thenReturn(Optional.of(config));
     when(storeProfileRepository.saveAndFlush(any())).thenReturn(config);
 
-    StoreProfileUpdateRequest request = new StoreProfileUpdateRequest();
     List<PartnerLink> newPartnerLinks =
         List.of(PartnerLink.builder().name("Partner1").url("https://partner.com").build());
-    request.setPartnerLinks(newPartnerLinks);
 
-    StoreProfileResponse expected = createTestResponse();
-    expected.setPartnerLinks(newPartnerLinks);
-    when(storeProfileMapper.toResponse(config)).thenReturn(expected);
+    StoreProfile saved =
+        storeProfileService.update(STORE_ID, patch(null, null, null, newPartnerLinks));
 
-    StoreProfileResponse response = storeProfileService.update(STORE_ID, request);
-
-    assertThat(response.getPartnerLinks()).hasSize(1);
-    assertThat(response.getPartnerLinks().get(0).getName()).isEqualTo("Partner1");
-    verify(storeProfileMapper).updateEntityFromRequest(request, config);
+    assertThat(saved.getPartnerLinks()).hasSize(1);
+    assertThat(saved.getPartnerLinks().get(0).getName()).isEqualTo("Partner1");
   }
 
   @Test
   void update_throwsExceptionIfNotExists() {
     when(storeProfileRepository.findByStoreId(STORE_ID)).thenReturn(Optional.empty());
 
-    StoreProfileUpdateRequest request = new StoreProfileUpdateRequest();
-
-    assertThatThrownBy(() -> storeProfileService.update(STORE_ID, request))
+    assertThatThrownBy(() -> storeProfileService.update(STORE_ID, patch(null, null, null, null)))
         .isInstanceOf(NotFoundException.class)
         .hasMessage("店舗設定が見つかりません");
   }
@@ -161,16 +116,22 @@ class StoreProfileServiceTest {
     return config;
   }
 
-  private StoreProfileResponse createTestResponse() {
-    return StoreProfileResponse.builder()
-        .id("1")
-        .templateKey("default")
-        .logoUrl("https://example.com/logo.png")
-        .mvType("image")
-        .snsLinks(List.of())
-        .partnerLinks(List.of())
-        .createdAt(OffsetDateTime.now())
-        .updatedAt(OffsetDateTime.now())
-        .build();
+  private static StoreProfilePatch patch(
+      String logoUrl, String description, List<SnsLink> snsLinks, List<PartnerLink> partnerLinks) {
+    return new StoreProfilePatch(
+        null,
+        logoUrl,
+        null,
+        null,
+        null,
+        description,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        snsLinks,
+        partnerLinks);
   }
 }

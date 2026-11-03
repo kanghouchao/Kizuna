@@ -11,8 +11,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
-import com.kizuna.storeprofile.api.dto.StoreProfileUpdateRequest;
+import com.kizuna.storeprofile.api.dto.StoreProfileMapperImpl;
 import com.kizuna.storeprofile.application.StoreProfileService;
+import com.kizuna.storeprofile.domain.StoreProfilePatch;
 import com.kizuna.user.application.StoreScopeResolver;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,7 +30,11 @@ import org.springframework.test.web.servlet.MockMvc;
 
 /** handler が X-Store-ID で名乗られた店舗をそのまま service へ渡すことの単体テスト。 */
 @WebMvcTest(StoreProfileController.class)
-@Import({StoreProfileControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
+@Import({
+  StoreProfileControllerTest.MethodSecurityConfig.class,
+  StoreScopeHolder.class,
+  StoreProfileMapperImpl.class
+})
 class StoreProfileControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -75,7 +80,7 @@ class StoreProfileControllerTest {
                 .content("{\"description\":\"店舗紹介\"}"))
         .andExpect(status().isOk());
 
-    verify(storeProfileService).update(eq(STORE_ID), any(StoreProfileUpdateRequest.class));
+    verify(storeProfileService).update(eq(STORE_ID), any(StoreProfilePatch.class));
   }
 
   @Test

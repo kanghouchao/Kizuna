@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.kizuna.audit.domain.AuditEvent;
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
+import com.kizuna.storeprofile.api.dto.StoreProfileMapper;
 import com.kizuna.storeprofile.api.dto.StoreProfileMapperImpl;
 import com.kizuna.storeprofile.api.dto.StoreProfileUpdateRequest;
 import com.kizuna.storeprofile.domain.SnsLink;
@@ -37,6 +38,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 class StoreProfileAuditTest {
   private static final Long STORE_ID = 7L;
+  private static final StoreProfileMapper MAPPER = new StoreProfileMapperImpl();
   private final StoreProfileRepository profiles = mock(StoreProfileRepository.class);
   private final UserRepository users = mock(UserRepository.class);
   private final AuditEventRepository events = mock(AuditEventRepository.class);
@@ -51,9 +53,7 @@ class StoreProfileAuditTest {
             new UsernamePasswordAuthenticationToken("operator@example.test", null, List.of()));
     service =
         new StoreProfileService(
-            profiles,
-            new StoreProfileMapperImpl(),
-            new BusinessAudit(users, new AuditWriter(events, Clock.systemUTC())));
+            profiles, new BusinessAudit(users, new AuditWriter(events, Clock.systemUTC())));
     var actor =
         User.builder()
             .email("operator@example.test")
@@ -97,7 +97,7 @@ class StoreProfileAuditTest {
     request.setDescription("新しい紹介文");
     request.setMvType("image");
 
-    service.update(STORE_ID, request);
+    service.update(STORE_ID, MAPPER.toPatch(request));
 
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
@@ -113,12 +113,12 @@ class StoreProfileAuditTest {
   }
 
   @Test
-  void collectionChangesAreDetectedEvenWhenMapperMutatesInPlace() {
+  void collectionChangesAreDetected() {
     var request = new StoreProfileUpdateRequest();
     request.setCustomTexts(Map.of("greeting", "ようこそ"));
     request.setSnsLinks(List.of(new SnsLink("x", "https://x.example.test/a", null)));
 
-    service.update(STORE_ID, request);
+    service.update(STORE_ID, MAPPER.toPatch(request));
 
     assertThat(recorded.getFirst().getAfterValues())
         .containsEntry("changed_fields", "custom_texts,sns_links");
@@ -130,7 +130,7 @@ class StoreProfileAuditTest {
     var request = new StoreProfileUpdateRequest();
     request.setSnsLinks(new ArrayList<>());
 
-    service.update(STORE_ID, request);
+    service.update(STORE_ID, MAPPER.toPatch(request));
 
     assertThat(recorded.getFirst().getAfterValues()).containsEntry("changed_fields", "sns_links");
   }
@@ -142,8 +142,8 @@ class StoreProfileAuditTest {
     same.setDescription("元の紹介文");
     same.setSnsLinks(new ArrayList<>());
 
-    service.update(STORE_ID, same);
-    service.update(STORE_ID, new StoreProfileUpdateRequest());
+    service.update(STORE_ID, MAPPER.toPatch(same));
+    service.update(STORE_ID, MAPPER.toPatch(new StoreProfileUpdateRequest()));
 
     assertThat(recorded).isEmpty();
   }
@@ -154,7 +154,7 @@ class StoreProfileAuditTest {
     var request = new StoreProfileUpdateRequest();
     request.setPhone("03-0000-0000");
 
-    assertThatThrownBy(() -> service.update(STORE_ID, request))
+    assertThatThrownBy(() -> service.update(STORE_ID, MAPPER.toPatch(request)))
         .isInstanceOf(IllegalStateException.class);
 
     assertThat(recorded).isEmpty();
@@ -166,7 +166,7 @@ class StoreProfileAuditTest {
     var request = new StoreProfileUpdateRequest();
     request.setPhone("03-0000-0000");
 
-    assertThatThrownBy(() -> service.update(STORE_ID, request))
+    assertThatThrownBy(() -> service.update(STORE_ID, MAPPER.toPatch(request)))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("audit");
   }

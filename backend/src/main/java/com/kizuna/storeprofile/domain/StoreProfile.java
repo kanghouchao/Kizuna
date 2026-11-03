@@ -7,6 +7,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import lombok.AllArgsConstructor;
@@ -92,5 +93,23 @@ public class StoreProfile extends StoreScopedEntity {
             .build();
     profile.setStoreId(storeId);
     return profile;
+  }
+
+  /** 集合は中身を書き換えず写しで置き換える。更新前に読んだ集合は参照のまま比べられる。 */
+  public void apply(StoreProfilePatch patch) {
+    if (patch.templateKey() != null) templateKey = patch.templateKey();
+    if (patch.logoUrl() != null) logoUrl = patch.logoUrl();
+    if (patch.bannerUrl() != null) bannerUrl = patch.bannerUrl();
+    if (patch.mvUrl() != null) mvUrl = patch.mvUrl();
+    if (patch.mvType() != null) mvType = patch.mvType();
+    if (patch.description() != null) description = patch.description();
+    if (patch.catchCopy() != null) catchCopy = patch.catchCopy();
+    if (patch.address() != null) address = patch.address();
+    if (patch.phone() != null) phone = patch.phone();
+    if (patch.businessHours() != null) businessHours = patch.businessHours();
+    if (patch.pricingDescription() != null) pricingDescription = patch.pricingDescription();
+    if (patch.customTexts() != null) customTexts = new LinkedHashMap<>(patch.customTexts());
+    if (patch.snsLinks() != null) snsLinks = new ArrayList<>(patch.snsLinks());
+    if (patch.partnerLinks() != null) partnerLinks = new ArrayList<>(patch.partnerLinks());
   }
 }

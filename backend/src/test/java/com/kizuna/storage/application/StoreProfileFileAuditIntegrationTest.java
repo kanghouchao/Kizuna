@@ -17,6 +17,7 @@ import com.kizuna.storeprofile.api.dto.StoreProfileMapperImpl;
 import com.kizuna.storeprofile.api.dto.StoreProfileUpdateRequest;
 import com.kizuna.storeprofile.application.StoreProfileService;
 import com.kizuna.storeprofile.domain.StoreProfile;
+import com.kizuna.storeprofile.domain.StoreProfilePatch;
 import com.kizuna.storeprofile.domain.StoreProfileRepository;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.StoreScopeType;
@@ -273,11 +274,11 @@ class StoreProfileFileAuditIntegrationTest {
     return new MockMultipartFile("file", name, "image/jpeg", "abc".getBytes());
   }
 
-  private static StoreProfileUpdateRequest profile(String logo, String description) {
+  private static StoreProfilePatch profile(String logo, String description) {
     var request = new StoreProfileUpdateRequest();
     request.setLogoUrl(logo);
     request.setDescription(description);
-    return request;
+    return new StoreProfileMapperImpl().toPatch(request);
   }
 
   private void failAuditFor(String action) {
@@ -308,7 +309,6 @@ class StoreProfileFileAuditIntegrationTest {
     AuditWriter.class,
     BusinessAudit.class,
     StoreProfileService.class,
-    StoreProfileMapperImpl.class,
     StoredFileAudit.class
   })
   static class Config {
