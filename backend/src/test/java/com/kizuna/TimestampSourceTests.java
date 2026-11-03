@@ -31,30 +31,35 @@ class TimestampSourceTests {
               + "|System\\.currentTimeMillis\\(\\)"
               + "|import static java\\.time\\.\\w+\\.(?:now|system\\w*|\\*);");
 
-  // 時刻源そのものと、業務判定でも応答に出る時刻でもない JVM 時計の読み手。理由を値に持つ。
-  private static final Map<Path, String> ALLOWED =
+  // 時刻源そのものと、業務判定でも応答に出る時刻でもない JVM 時計の読み手。読む箇所の数まで固定し、
+  // 許可したファイルへ新たな読み手が加わっても検出する。
+  private record Allowance(int reads, String reason) {}
+
+  private static final Map<Path, Allowance> ALLOWED =
       Map.of(
-          Paths.get("com/kizuna/shared/persistence/Timestamps.java"), "行に書く時刻の時刻源",
-          Paths.get("com/kizuna/shared/config/ClockConfig.java"), "業務の時計の時刻源",
+          Paths.get("com/kizuna/shared/persistence/Timestamps.java"),
+              new Allowance(1, "行に書く時刻の時刻源"),
+          Paths.get("com/kizuna/shared/config/ClockConfig.java"), new Allowance(1, "業務の時計の時刻源"),
           Paths.get("com/kizuna/auth/infrastructure/JwtIssuer.java"),
-              "JWT の iat/exp。検証側の JwtTimestampValidator は setClock せず既定の時計で読むので揃える",
+              new Allowance(
+                  1, "JWT の iat/exp。検証側の JwtTimestampValidator は setClock せず既定の時計で読むので揃える"),
           Paths.get("com/kizuna/auth/infrastructure/SessionTokenDecoder.java"),
-              "refresh JWT の有効期間の検証。発行側と同じ JVM の時計で読む",
+              new Allowance(1, "refresh JWT の有効期間の検証。発行側と同じ JVM の時計で読む"),
           Paths.get("com/kizuna/auth/infrastructure/RefreshTokenCookies.java"),
-              "refresh cookie の Max-Age。JWT の exp までの残り秒",
+              new Allowance(1, "refresh cookie の Max-Age。JWT の exp までの残り秒"),
           Paths.get("com/kizuna/auth/infrastructure/TokenBlacklistService.java"),
-              "失効キーの TTL。JWT の exp までの残りミリ秒",
+              new Allowance(1, "失効キーの TTL。JWT の exp までの残りミリ秒"),
           Paths.get("com/kizuna/shared/persistence/SnowflakeIdGenerator.java"),
-              "ID の採番に埋める epoch ミリ秒。時刻としては保存も応答もしない");
+              new Allowance(3, "ID の採番に埋める epoch ミリ秒。時刻としては保存も応答もしない"));
 
   // 期限・有効期間の判定を名乗るドメインのメソッド。判定の時刻を引数で受け、自分では「今」を読まない。
   private static final Pattern DOMAIN_JUDGEMENT =
       Pattern.compile("boolean\\s+(isExpired|isWithin\\w*|is\\w+At|is\\w+On)\\s*\\(([^)]*)\\)");
 
-  // 行に書く時刻で期限を判じる呼び出し。判定の口は業務の時計に限る。
+  // 行に書く時刻で期限を判じる呼び出し。引数のどこにあっても拾う（入れ子の括弧は一段まで）。
   private static final Pattern JUDGED_BY_RECORD_TIME =
       Pattern.compile(
-          "\\b(?:isExpired|isWithin\\w*|is\\w+At|is\\w+On)\\(\\s*Timestamps\\.now\\(\\)");
+          "\\b(?:isExpired|isWithin\\w*|is\\w+At|is\\w+On)\\((?:[^()]|\\([^()]*\\))*?Timestamps\\.now\\(\\)");
 
   private static final Pattern TIME_PARAMETER =
       Pattern.compile(
@@ -68,20 +73,25 @@ class TimestampSourceTests {
     List<String> offenders = new ArrayList<>();
     for (Path file : javaFiles) {
       var relative = MAIN_SOURCES.relativize(file);
-      if (!ALLOWED.containsKey(relative) && UNBOUNDED_NOW.matcher(Files.readString(file)).find()) {
-        offenders.add(relative.toString());
+      var allowance = ALLOWED.get(relative);
+      long reads = UNBOUNDED_NOW.matcher(Files.readString(file)).results().count();
+      if (reads > (allowance == null ? 0 : allowance.reads())) {
+        offenders.add(relative + "（" + reads + " 箇所）");
       }
     }
 
-    // 暗黙の no-op 防止: 走査が実際にソースを読めており、許可の各行が今も JVM の時計を読んでいることを担保する。
+    // 暗黙の no-op 防止: 走査が実際にソースを読めており、許可した箇所が今もその数だけ JVM の時計を読んでいることを担保する。
     assertThat(javaFiles).as("src/main/java 配下の .java ソース").isNotEmpty();
-    for (Path allowed : ALLOWED.keySet()) {
-      assertThat(UNBOUNDED_NOW.matcher(Files.readString(MAIN_SOURCES.resolve(allowed))).find())
-          .as("許可した %s が今も JVM の時計を読むこと（読まなくなったら許可から外す）", allowed)
-          .isTrue();
+    for (var allowed : ALLOWED.entrySet()) {
+      var source = Files.readString(MAIN_SOURCES.resolve(allowed.getKey()));
+      assertThat(UNBOUNDED_NOW.matcher(source).results())
+          .as(
+              "許可した %s が今も %d 箇所で JVM の時計を読むこと（増減したら許可を見直す）",
+              allowed.getKey(), allowed.getValue().reads())
+          .hasSize(allowed.getValue().reads());
     }
 
-    assertThat(offenders).as("JVM の時計を時刻源の外で読むソース").isEmpty();
+    assertThat(offenders).as("JVM の時計を時刻源の外で、または許可した数を超えて読むソース").isEmpty();
   }
 
   @Test
