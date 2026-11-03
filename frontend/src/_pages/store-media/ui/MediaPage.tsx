@@ -174,6 +174,7 @@ function MediaList({ manage }: { manage: boolean }) {
                       >
                         名前を変更
                       </Button>
+                      {/* disabled にすると押したボタンのフォーカスが落ちる。処理中の押下は writer が送らずに拒む */}
                       <Button
                         variant="outline"
                         size="sm"
