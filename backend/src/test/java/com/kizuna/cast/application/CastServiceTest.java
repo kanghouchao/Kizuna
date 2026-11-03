@@ -152,6 +152,7 @@ class CastServiceTest {
     assertThat(savedProfile.getValue().getEnrollmentId()).isEqualTo("e1");
     assertThat(savedProfile.getValue().getPublicationStatus())
         .isEqualTo(CastPublicationStatus.UNPUBLISHED);
+    assertThat(savedProfile.getValue().getDisplayOrder()).isZero();
     var savedHistory = ArgumentCaptor.forClass(CastEnrollmentStatusHistory.class);
     verify(histories).save(savedHistory.capture());
     assertThat(
