@@ -69,7 +69,10 @@ class AdvertisingOrderCostRendererTest {
     assertThat(ExportCells.letterRuns(csv)).containsExactlyInAnyOrder("ID", "ROI");
     try (var book =
         new XSSFWorkbook(new ByteArrayInputStream(renderer.render(report, "xlsx", budget())))) {
-      assertThat(book.getSheet("受注あたり記録広告費").getLastRowNum()).isEqualTo(2002);
+      var sheet = book.getSheet("受注あたり記録広告費");
+      assertThat(sheet.getLastRowNum()).isEqualTo(2002);
+      assertThat(sheet.getRow(1001).getCell(9).getStringCellValue()).isEqualTo("01000");
+      assertThat(sheet.getRow(2001).getCell(9).getStringCellValue()).isEqualTo("02000");
     }
   }
 }
