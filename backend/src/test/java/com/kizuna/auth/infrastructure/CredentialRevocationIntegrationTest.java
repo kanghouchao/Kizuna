@@ -17,9 +17,9 @@ import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.shared.web.JwtClaims;
-import com.kizuna.user.api.dto.RoleUpdateRequest;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.application.CredentialOperations;
+import com.kizuna.user.application.RoleCommand;
 import com.kizuna.user.application.RoleManageHolderGuard;
 import com.kizuna.user.application.RoleService;
 import com.kizuna.user.domain.PermissionCode;
@@ -376,10 +376,11 @@ class CredentialRevocationIntegrationTest {
                         users.saveAndFlush(user);
                       }));
       assertThat(shared.await(10, TimeUnit.SECONDS)).isTrue();
-      var request = new RoleUpdateRequest();
-      request.setName("失効検証-" + UUID.randomUUID());
-      request.setPermissions(Set.of(PermissionCode.CUSTOMER_MANAGE.name()));
-      request.setVersion(roleVersion);
+      var request =
+          new RoleCommand.Update(
+              "失効検証-" + UUID.randomUUID(),
+              Set.of(PermissionCode.CUSTOMER_MANAGE.name()),
+              roleVersion);
       Future<?> change =
           executor.submit(() -> context.getBean(RoleService.class).update(changed, request));
       awaitLockWait();

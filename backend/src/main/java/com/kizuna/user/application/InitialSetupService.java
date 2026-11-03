@@ -4,7 +4,6 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.user.api.dto.InitialSetupRequest;
 import com.kizuna.user.domain.DuplicateStaffEmailException;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
@@ -44,7 +43,7 @@ public class InitialSetupService {
 
   /** 行為者は登録されたアカウント自身として監査する（匿名の要求には認証主体が無い）。 */
   @Transactional
-  public Long register(InitialSetupRequest request) {
+  public Long register(InitialSetupCommand command) {
     // 並行登録の排他は持たない（異なるメールアドレスの同時送信で根管理者が 2 人できうるのは既知の制約）。
     if (staffExists()) {
       throw new NotFoundException("初期設定は完了しています");
@@ -53,9 +52,9 @@ public class InitialSetupService {
     User user =
         save(
             User.builder()
-                .email(request.getEmail())
-                .password(passwordEncoder.encode(request.getPassword()))
-                .displayName(request.getDisplayName())
+                .email(command.email())
+                .password(passwordEncoder.encode(command.password()))
+                .displayName(command.displayName())
                 .enabled(true)
                 .userType(UserType.STAFF)
                 .roleIds(Set.of(admin.getId()))

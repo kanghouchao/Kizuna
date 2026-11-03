@@ -4,12 +4,6 @@ import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.user.api.dto.RoleSummaryResponse;
-import com.kizuna.user.api.dto.ServiceIdentityCreateRequest;
-import com.kizuna.user.api.dto.ServiceIdentityResponse;
-import com.kizuna.user.api.dto.ServiceIdentityRoleRef;
-import com.kizuna.user.api.dto.ServiceIdentitySummaryResponse;
-import com.kizuna.user.api.dto.ServiceIdentityUpdateRequest;
 import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
 import com.kizuna.user.domain.Role;
@@ -20,7 +14,6 @@ import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -55,7 +48,7 @@ public class ServiceIdentityService {
   private final RoleRepository roleRepository;
 
   @Transactional(readOnly = true)
-  public Page<ServiceIdentitySummaryResponse> list(String search, Pageable pageable) {
+  public Page<ServiceIdentityViews.Summary> list(String search, Pageable pageable) {
     Page<User> identities = repository.findAll(identitySpec(search), pageable);
     Map<Long, String> roleNames =
         roleNamesOf(
@@ -64,7 +57,7 @@ public class ServiceIdentityService {
                 .collect(Collectors.toSet()));
     return identities.map(
         user ->
-            new ServiceIdentitySummaryResponse(
+            new ServiceIdentityViews.Summary(
                 user.getId(),
                 user.getDisplayName(),
                 user.getEnabled(),
@@ -94,22 +87,22 @@ public class ServiceIdentityService {
 
   /** 1 件取得。編集中に競合（409）が起きたとき、一覧の現在ページに対象が居なくても最新の版を取り直せるようにするための経路。 */
   @Transactional(readOnly = true)
-  public ServiceIdentityResponse get(Long id) {
+  public ServiceIdentityViews.Detail get(Long id) {
     User user = requireServiceIdentity(id);
-    return toResponse(user, roleNamesOf(user.getRoleIds()));
+    return toDetail(user, roleNamesOf(user.getRoleIds()));
   }
 
   @Transactional
-  public ServiceIdentityResponse create(ServiceIdentityCreateRequest req) {
-    Map<Long, String> roleNames = requireCustomRoles(req.getRoleIds());
+  public ServiceIdentityViews.Detail create(ServiceIdentityCommand.Create command) {
+    Map<Long, String> roleNames = requireCustomRoles(command.roleIds());
     User user =
         User.builder()
-            .displayName(req.getDisplayName())
+            .displayName(command.displayName())
             .enabled(true)
             .userType(UserType.SERVICE)
-            .roleIds(req.getRoleIds())
-            .storeScopeType(req.getStoreScopeType())
-            .storeIds(req.getStoreIds())
+            .roleIds(command.roleIds())
+            .storeScopeType(command.storeScopeType())
+            .storeIds(command.storeIds())
             .build();
     user = save(user);
     businessAudit.recordCurrent(
@@ -119,22 +112,22 @@ public class ServiceIdentityService {
         user.getId().toString(),
         Map.of(),
         BusinessAudit.grants(user));
-    return toResponse(user, roleNames);
+    return toDetail(user, roleNames);
   }
 
   /** 授権（ロール×店舗集合）だけを更新する。停止・再開は専用端点の領分で、この面は enabled を受け取らない。 */
   @Transactional
-  public ServiceIdentityResponse update(Long id, ServiceIdentityUpdateRequest req) {
-    Map<Long, String> roleNames = requireCustomRoles(req.getRoleIds());
+  public ServiceIdentityViews.Detail update(Long id, ServiceIdentityCommand.UpdateGrants command) {
+    Map<Long, String> roleNames = requireCustomRoles(command.roleIds());
     User user = requireServiceIdentity(id);
     // 陳腐化した編集フォームの提出は JPA の @Version では捕まらない（再読込後の正当な更新に見える）
     // ため、応答で往復させた version を明示比対して 409 で拒否する。
-    if (!user.getVersion().equals(req.getVersion())) {
+    if (!user.getVersion().equals(command.version())) {
       throw new StaleServiceIdentityUpdateException("他の管理者が更新しました。最新の内容を確認してください");
     }
     var before = BusinessAudit.grants(user);
     credentialOperations.reassignGrants(
-        user, req.getRoleIds(), req.getStoreScopeType(), req.getStoreIds());
+        user, command.roleIds(), command.storeScopeType(), command.storeIds());
     user = save(user);
     if (!before.equals(BusinessAudit.grants(user)))
       businessAudit.recordCurrent(
@@ -144,7 +137,7 @@ public class ServiceIdentityService {
           user.getId().toString(),
           before,
           BusinessAudit.grants(user));
-    return toResponse(user, roleNames);
+    return toDetail(user, roleNames);
   }
 
   /**
@@ -189,12 +182,12 @@ public class ServiceIdentityService {
 
   /** 行使者が付与できるロール（自作ロール）の目録。付与可否の述語をサーバ側の単源に置き、前端に判定を複製させないための読み口である。 */
   @Transactional(readOnly = true)
-  public List<RoleSummaryResponse> grantableRoles() {
+  public List<RoleViews.Summary> grantableRoles() {
     return roleRepository.findAllSummaries().stream()
         .filter(summary -> !Boolean.TRUE.equals(summary.getSystemRole()))
         .map(
             summary ->
-                new RoleSummaryResponse(
+                new RoleViews.Summary(
                     summary.getId(), summary.getName(), false, summary.getPermissionCount()))
         .toList();
   }
@@ -247,8 +240,8 @@ public class ServiceIdentityService {
             () -> new ServiceException("指定されたロールが存在しません")));
   }
 
-  private static ServiceIdentityResponse toResponse(User user, Map<Long, String> roleNames) {
-    return new ServiceIdentityResponse(
+  private static ServiceIdentityViews.Detail toDetail(User user, Map<Long, String> roleNames) {
+    return new ServiceIdentityViews.Detail(
         user.getId(),
         user.getDisplayName(),
         user.getEnabled(),
@@ -258,12 +251,10 @@ public class ServiceIdentityService {
         user.getVersion());
   }
 
-  private static List<ServiceIdentityRoleRef> rolesOf(User user, Map<Long, String> roleNames) {
+  private static List<RoleViews.Ref> rolesOf(User user, Map<Long, String> roleNames) {
     return user.getRoleIds().stream()
-        .map(id -> new ServiceIdentityRoleRef(id, roleNames.get(id)))
-        .sorted(
-            Comparator.comparing(
-                ServiceIdentityRoleRef::name, Comparator.nullsLast(Comparator.naturalOrder())))
+        .map(id -> new RoleViews.Ref(id, roleNames.get(id)))
+        .sorted(RoleViews.Ref.ORDER)
         .toList();
   }
 

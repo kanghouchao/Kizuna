@@ -1,6 +1,7 @@
 package com.kizuna.user.api.dto;
 
 import com.kizuna.shared.validation.Password;
+import com.kizuna.user.application.StaffCommand;
 import com.kizuna.user.domain.StoreScopeType;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -45,4 +46,8 @@ public class AdminStaffCreateRequest {
 
   // null 要素は永続化時に黙って捨てられ、非空検証を通ったのに店舗ゼロの行が残るため要素単位で拒む。
   private Set<@NotNull(message = "store_ids must not contain null") Long> storeIds;
+
+  public StaffCommand.Create command() {
+    return new StaffCommand.Create(email, password, displayName, roleIds, storeScopeType, storeIds);
+  }
 }

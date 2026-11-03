@@ -1,5 +1,6 @@
 package com.kizuna.user.api.dto;
 
+import com.kizuna.user.application.RoleCommand;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
@@ -20,4 +21,8 @@ public class RoleCreateRequest {
 
   @NotEmpty(message = "permissions is required")
   private Set<String> permissions;
+
+  public RoleCommand.Create command() {
+    return new RoleCommand.Create(name, permissions);
+  }
 }

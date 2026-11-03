@@ -12,11 +12,6 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.user.api.dto.RoleSummaryResponse;
-import com.kizuna.user.api.dto.ServiceIdentityCreateRequest;
-import com.kizuna.user.api.dto.ServiceIdentityResponse;
-import com.kizuna.user.api.dto.ServiceIdentityRoleRef;
-import com.kizuna.user.api.dto.ServiceIdentityUpdateRequest;
 import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
@@ -85,22 +80,14 @@ class ServiceIdentityServiceTest {
     return user;
   }
 
-  private ServiceIdentityCreateRequest createRequest(Set<Long> roleIds) {
-    ServiceIdentityCreateRequest req = new ServiceIdentityCreateRequest();
-    req.setDisplayName("夜間バッチ");
-    req.setRoleIds(roleIds);
-    req.setStoreScopeType(StoreScopeType.SPECIFIC_STORES);
-    req.setStoreIds(Set.of(1L));
-    return req;
+  private ServiceIdentityCommand.Create createRequest(Set<Long> roleIds) {
+    return new ServiceIdentityCommand.Create(
+        "夜間バッチ", roleIds, StoreScopeType.SPECIFIC_STORES, Set.of(1L));
   }
 
-  private ServiceIdentityUpdateRequest updateRequest(Set<Long> roleIds, long version) {
-    ServiceIdentityUpdateRequest req = new ServiceIdentityUpdateRequest();
-    req.setRoleIds(roleIds);
-    req.setStoreScopeType(StoreScopeType.SPECIFIC_STORES);
-    req.setStoreIds(Set.of(2L));
-    req.setVersion(version);
-    return req;
+  private ServiceIdentityCommand.UpdateGrants updateRequest(Set<Long> roleIds, long version) {
+    return new ServiceIdentityCommand.UpdateGrants(
+        roleIds, StoreScopeType.SPECIFIC_STORES, Set.of(2L), version);
   }
 
   @Test
@@ -118,7 +105,7 @@ class ServiceIdentityServiceTest {
               return saved;
             });
 
-    ServiceIdentityResponse res = service.create(createRequest(Set.of(CUSTOM_ROLE)));
+    ServiceIdentityViews.Detail res = service.create(createRequest(Set.of(CUSTOM_ROLE)));
 
     User saved = userCaptor.getValue();
     var order = inOrder(roleRepository, repository);
@@ -130,7 +117,7 @@ class ServiceIdentityServiceTest {
     assertThat(saved.getEnabled()).isTrue();
     assertThat(saved.getRoleIds()).containsExactly(CUSTOM_ROLE);
     assertThat(res.displayName()).isEqualTo("夜間バッチ");
-    assertThat(res.roles()).extracting(ServiceIdentityRoleRef::name).containsExactly("バッチ実行");
+    assertThat(res.roles()).extracting(RoleViews.Ref::name).containsExactly("バッチ実行");
   }
 
   @Test
@@ -164,7 +151,7 @@ class ServiceIdentityServiceTest {
     when(repository.findById(5L)).thenReturn(Optional.of(existing));
     when(repository.saveAndFlush(existing)).thenReturn(existing);
 
-    ServiceIdentityResponse res = service.update(5L, updateRequest(Set.of(CUSTOM_ROLE), 0L));
+    ServiceIdentityViews.Detail res = service.update(5L, updateRequest(Set.of(CUSTOM_ROLE), 0L));
 
     assertThat(existing.getStoreIds()).containsExactly(2L);
     assertThat(res.storeIds()).containsExactly(2L);
@@ -255,10 +242,10 @@ class ServiceIdentityServiceTest {
     when(roleRepository.findAllSummaries())
         .thenReturn(List.of(summary(1L, "HQ管理者", true), summary(2L, "バッチ実行", false)));
 
-    List<RoleSummaryResponse> roles = service.grantableRoles();
+    List<RoleViews.Summary> roles = service.grantableRoles();
 
     assertThat(roles)
-        .extracting(RoleSummaryResponse::name)
+        .extracting(RoleViews.Summary::name)
         .containsExactly("バッチ実行")
         .doesNotContain("HQ管理者");
   }

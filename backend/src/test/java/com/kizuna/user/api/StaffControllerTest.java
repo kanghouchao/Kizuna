@@ -8,8 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
-import com.kizuna.user.api.dto.AdminStaffResponse;
 import com.kizuna.user.application.AdminStaffService;
+import com.kizuna.user.application.StaffView;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -54,7 +54,7 @@ class StaffControllerTest {
   @WithMockUser(authorities = "PERM_STAFF_MANAGE")
   void listAppendsIdTiebreakerWhenCallerOverridesSort() throws Exception {
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-    Page<AdminStaffResponse> empty = new PageImpl<>(List.of());
+    Page<StaffView> empty = new PageImpl<>(List.of());
     when(adminStaffService.list(any(), any(), pageableCaptor.capture(), any())).thenReturn(empty);
 
     mockMvc.perform(get("/staff?sort=displayName").principal(ACTOR)).andExpect(status().isOk());
@@ -67,7 +67,7 @@ class StaffControllerTest {
   @WithMockUser(authorities = "PERM_STAFF_MANAGE")
   void listPassesStoreIdFilterToService() throws Exception {
     ArgumentCaptor<Long> storeIdCaptor = ArgumentCaptor.forClass(Long.class);
-    Page<AdminStaffResponse> empty = new PageImpl<>(List.of());
+    Page<StaffView> empty = new PageImpl<>(List.of());
     when(adminStaffService.list(any(), storeIdCaptor.capture(), any(), any())).thenReturn(empty);
 
     mockMvc.perform(get("/staff?storeId=7").principal(ACTOR)).andExpect(status().isOk());
@@ -80,7 +80,7 @@ class StaffControllerTest {
   @WithMockUser(authorities = "PERM_STAFF_MANAGE")
   void listPassesNullStoreIdWhenParamAbsent() throws Exception {
     ArgumentCaptor<Long> storeIdCaptor = ArgumentCaptor.forClass(Long.class);
-    Page<AdminStaffResponse> empty = new PageImpl<>(List.of());
+    Page<StaffView> empty = new PageImpl<>(List.of());
     when(adminStaffService.list(any(), storeIdCaptor.capture(), any(), any())).thenReturn(empty);
 
     mockMvc.perform(get("/staff").principal(ACTOR)).andExpect(status().isOk());

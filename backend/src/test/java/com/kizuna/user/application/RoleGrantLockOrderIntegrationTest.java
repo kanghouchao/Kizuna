@@ -7,10 +7,6 @@ import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
-import com.kizuna.user.api.dto.AdminStaffCreateRequest;
-import com.kizuna.user.api.dto.AdminStaffUpdateRequest;
-import com.kizuna.user.api.dto.ServiceIdentityCreateRequest;
-import com.kizuna.user.api.dto.ServiceIdentityUpdateRequest;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
@@ -142,40 +138,35 @@ class RoleGrantLockOrderIntegrationTest {
   private long grant(GrantPath path, User target, long kept, long granted) {
     return switch (path) {
       case STAFF_CREATE -> {
-        var request = new AdminStaffCreateRequest();
-        request.setEmail(UUID.randomUUID() + "@lock-order.test");
-        request.setPassword(UUID.randomUUID().toString());
-        request.setDisplayName("付与検証");
-        request.setRoleIds(Set.of(granted));
-        request.setStoreScopeType(StoreScopeType.ALL_STORES);
-        request.setStoreIds(Set.of());
+        var request =
+            new StaffCommand.Create(
+                UUID.randomUUID() + "@lock-order.test",
+                UUID.randomUUID().toString(),
+                "付与検証",
+                Set.of(granted),
+                StoreScopeType.ALL_STORES,
+                Set.of());
         yield context.getBean(AdminStaffService.class).create(request, actorEmail).id();
       }
       case STAFF_UPDATE -> {
-        var request = new AdminStaffUpdateRequest();
-        request.setRoleIds(Set.of(kept, granted));
-        request.setStoreScopeType(StoreScopeType.ALL_STORES);
-        request.setStoreIds(Set.of());
-        request.setVersion(target.getVersion());
+        var request =
+            new StaffCommand.UpdateGrants(
+                Set.of(kept, granted), StoreScopeType.ALL_STORES, Set.of(), target.getVersion());
         yield context
             .getBean(AdminStaffService.class)
             .update(target.getId(), request, actorEmail)
             .id();
       }
       case SERVICE_CREATE -> {
-        var request = new ServiceIdentityCreateRequest();
-        request.setDisplayName("付与検証");
-        request.setRoleIds(Set.of(granted));
-        request.setStoreScopeType(StoreScopeType.ALL_STORES);
-        request.setStoreIds(Set.of());
+        var request =
+            new ServiceIdentityCommand.Create(
+                "付与検証", Set.of(granted), StoreScopeType.ALL_STORES, Set.of());
         yield context.getBean(ServiceIdentityService.class).create(request).id();
       }
       case SERVICE_UPDATE -> {
-        var request = new ServiceIdentityUpdateRequest();
-        request.setRoleIds(Set.of(kept, granted));
-        request.setStoreScopeType(StoreScopeType.ALL_STORES);
-        request.setStoreIds(Set.of());
-        request.setVersion(target.getVersion());
+        var request =
+            new ServiceIdentityCommand.UpdateGrants(
+                Set.of(kept, granted), StoreScopeType.ALL_STORES, Set.of(), target.getVersion());
         yield context.getBean(ServiceIdentityService.class).update(target.getId(), request).id();
       }
     };

@@ -1,5 +1,6 @@
 package com.kizuna.user.api.dto;
 
+import com.kizuna.user.application.ServiceIdentityViews;
 import com.kizuna.user.domain.StoreScopeType;
 import java.util.List;
 import java.util.Set;
@@ -14,4 +15,15 @@ public record ServiceIdentitySummaryResponse(
     boolean enabled,
     List<ServiceIdentityRoleRef> roles,
     StoreScopeType storeScopeType,
-    Set<Long> storeIds) {}
+    Set<Long> storeIds) {
+
+  public static ServiceIdentitySummaryResponse of(ServiceIdentityViews.Summary s) {
+    return new ServiceIdentitySummaryResponse(
+        s.id(),
+        s.displayName(),
+        s.enabled(),
+        s.roles().stream().map(ServiceIdentityRoleRef::of).toList(),
+        s.storeScopeType(),
+        s.storeIds());
+  }
+}

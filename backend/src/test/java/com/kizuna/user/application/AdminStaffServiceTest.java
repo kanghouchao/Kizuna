@@ -15,10 +15,6 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
-import com.kizuna.user.api.dto.AdminStaffCreateRequest;
-import com.kizuna.user.api.dto.AdminStaffResponse;
-import com.kizuna.user.api.dto.AdminStaffUpdateRequest;
-import com.kizuna.user.api.dto.RoleSummaryResponse;
 import com.kizuna.user.domain.DuplicateStaffEmailException;
 import com.kizuna.user.domain.HqPasswordResetNotAllowedException;
 import com.kizuna.user.domain.InvalidRoleGrantException;
@@ -185,26 +181,15 @@ class AdminStaffServiceTest {
     return target;
   }
 
-  private static AdminStaffCreateRequest createRequest(
+  private static StaffCommand.Create createRequest(
       Set<Long> roleIds, StoreScopeType scopeType, Set<Long> storeIds) {
-    AdminStaffCreateRequest req = new AdminStaffCreateRequest();
-    req.setEmail("new@kizuna.test");
-    req.setPassword("rawpass");
-    req.setDisplayName("表示名");
-    req.setRoleIds(roleIds);
-    req.setStoreScopeType(scopeType);
-    req.setStoreIds(storeIds);
-    return req;
+    return new StaffCommand.Create(
+        "new@kizuna.test", "rawpass", "表示名", roleIds, scopeType, storeIds);
   }
 
-  private static AdminStaffUpdateRequest updateRequest(
+  private static StaffCommand.UpdateGrants updateRequest(
       Set<Long> roleIds, StoreScopeType scopeType, Set<Long> storeIds) {
-    AdminStaffUpdateRequest req = new AdminStaffUpdateRequest();
-    req.setRoleIds(roleIds);
-    req.setStoreScopeType(scopeType);
-    req.setStoreIds(storeIds);
-    req.setVersion(0L);
-    return req;
+    return new StaffCommand.UpdateGrants(roleIds, scopeType, storeIds, 0L);
   }
 
   @Test
@@ -241,10 +226,10 @@ class AdminStaffServiceTest {
     var page = service.list(null, null, PAGEABLE, ACTOR);
 
     assertThat(page.getContent())
-        .extracting(AdminStaffResponse::editable)
+        .extracting(StaffView::editable)
         .containsExactly(true, false, false);
     assertThat(page.getContent().get(1).roles())
-        .containsExactly(new AdminStaffResponse.RoleRef(ADMIN_ROLE, "統括"));
+        .containsExactly(new RoleViews.Ref(ADMIN_ROLE, "統括"));
   }
 
   @Test
@@ -252,10 +237,10 @@ class AdminStaffServiceTest {
   void grantableRolesAreSubsetsOfActorPermissions() {
     manager(Set.of(1L));
 
-    List<RoleSummaryResponse> roles = service.grantableRoles(ACTOR);
+    List<RoleViews.Summary> roles = service.grantableRoles(ACTOR);
 
     assertThat(roles)
-        .extracting(RoleSummaryResponse::id)
+        .extracting(RoleViews.Summary::id)
         .containsExactlyInAnyOrder(MANAGER_ROLE, STAFF_ROLE);
   }
 
@@ -300,7 +285,7 @@ class AdminStaffServiceTest {
     when(repository.findByEmail("new@kizuna.test")).thenReturn(Optional.empty());
     when(encoder.encode("rawpass")).thenReturn("ENCODED");
 
-    AdminStaffResponse res =
+    StaffView res =
         service.create(
             createRequest(Set.of(MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)), ACTOR);
 
@@ -320,7 +305,7 @@ class AdminStaffServiceTest {
     when(repository.findByEmail("new@kizuna.test")).thenReturn(Optional.empty());
     when(encoder.encode("rawpass")).thenReturn("ENCODED");
 
-    AdminStaffResponse res =
+    StaffView res =
         service.create(
             createRequest(Set.of(ADMIN_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR);
 
@@ -347,14 +332,12 @@ class AdminStaffServiceTest {
     when(encoder.encode("rawpass")).thenReturn("ENCODED");
 
     assertThat(service.grantableRoles(ACTOR))
-        .extracting(RoleSummaryResponse::id)
+        .extracting(RoleViews.Summary::id)
         .containsExactlyInAnyOrder(ADMIN_ROLE, MANAGER_ROLE, STAFF_ROLE);
-    AdminStaffResponse res =
+    StaffView res =
         service.create(
             createRequest(Set.of(MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)), ACTOR);
-    assertThat(res.roles())
-        .extracting(AdminStaffResponse.RoleRef::id)
-        .containsExactly(MANAGER_ROLE);
+    assertThat(res.roles()).extracting(RoleViews.Ref::id).containsExactly(MANAGER_ROLE);
     assertThat(res.editable()).isTrue();
   }
 
@@ -446,9 +429,9 @@ class AdminStaffServiceTest {
     manager(Set.of(1L, 2L));
     User target = target(2L, Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L));
 
-    AdminStaffUpdateRequest stale =
-        updateRequest(Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L));
-    stale.setVersion(5L);
+    StaffCommand.UpdateGrants stale =
+        new StaffCommand.UpdateGrants(
+            Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L), 5L);
     assertThatThrownBy(() -> service.update(2L, stale, ACTOR))
         .isInstanceOf(StaleStaffUpdateException.class);
 

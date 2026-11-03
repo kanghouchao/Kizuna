@@ -1,5 +1,6 @@
 package com.kizuna.user.api.dto;
 
+import com.kizuna.user.application.StaffCommand;
 import com.kizuna.user.domain.StoreScopeType;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -29,4 +30,8 @@ public class AdminStaffUpdateRequest {
   /** 楽観ロック用バージョン（応答の version をそのまま往復する。不一致は 409）。 */
   @NotNull(message = "version is required")
   private Long version;
+
+  public StaffCommand.UpdateGrants command() {
+    return new StaffCommand.UpdateGrants(roleIds, storeScopeType, storeIds, version);
+  }
 }
