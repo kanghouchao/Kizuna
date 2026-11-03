@@ -1,6 +1,7 @@
 package com.kizuna.survey.application;
 
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.persistence.Paging;
 import com.kizuna.survey.api.dto.SurveyActorResponse;
 import com.kizuna.survey.api.dto.SurveyAnswerHistoryResponse;
 import com.kizuna.survey.api.dto.SurveyAnswerSummaryResponse;
@@ -33,7 +34,6 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.core.TypedPropertyPath;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -247,7 +247,7 @@ public class SurveyReadService {
   }
 
   /** 並びは独自の sort 引数が決めるため、要求の Pageable からは page と size だけを使う。 */
-  private <T> PageRequest page(
+  private <T> Pageable page(
       Pageable pageable,
       String sort,
       TypedPropertyPath<T, ?> received,
@@ -257,12 +257,10 @@ public class SurveyReadService {
         || !List.of("CREATED_ASC", "CREATED_DESC").contains(sort)
             && (received == null || !List.of("RECEIVED_ASC", "RECEIVED_DESC").contains(sort)))
       throw SurveyInput.invalid();
-    return PageRequest.of(
-        pageable.getPageNumber(),
-        pageable.getPageSize(),
-        Sort.by(
-            sort.endsWith("ASC") ? Sort.Direction.ASC : Sort.Direction.DESC,
-            sort.startsWith("RECEIVED") ? received : created,
-            id));
+    Sort.Direction direction = sort.endsWith("ASC") ? Sort.Direction.ASC : Sort.Direction.DESC;
+    return Paging.totalOrder(
+        pageable,
+        Sort.by(direction, sort.startsWith("RECEIVED") ? received : created),
+        Sort.Order.by(id).with(direction));
   }
 }

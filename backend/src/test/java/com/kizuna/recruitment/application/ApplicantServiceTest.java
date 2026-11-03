@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -40,6 +41,7 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.persistence.FluentPageCaptor;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -57,6 +59,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -113,6 +117,19 @@ class ApplicantServiceTest {
 
   void lock() {
     when(applicants.findByIdAndStoreIdForUpdate("a", STORE_ID)).thenReturn(Optional.of(applicant));
+  }
+
+  @Test
+  void listPageIsNewestFirstEndingInIdWithClampedSize() {
+    var pages = new FluentPageCaptor();
+    doAnswer(pages.answer()).when(applicants).findBy(any(Specification.class), any());
+
+    service.list(STORE_ID, null, null, PageRequest.of(3, 500, Sort.by("name")));
+
+    assertThat(pages.captured().getSort())
+        .containsExactly(Sort.Order.desc("createdAt"), Sort.Order.desc("id"));
+    assertThat(pages.captured().getPageNumber()).isEqualTo(3);
+    assertThat(pages.captured().getPageSize()).isEqualTo(100);
   }
 
   @Test

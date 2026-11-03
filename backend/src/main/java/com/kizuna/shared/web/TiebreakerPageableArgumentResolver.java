@@ -1,9 +1,9 @@
 package com.kizuna.shared.web;
 
+import com.kizuna.shared.persistence.Paging;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.core.MethodParameter;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableArgumentResolver;
@@ -22,7 +22,7 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 public class TiebreakerPageableArgumentResolver implements PageableArgumentResolver {
 
   /** 全 aggregate が一意な id を持つため、副キーは id に固定する。 */
-  private static final String TIEBREAKER_PROPERTY = "id";
+  private static final Sort.Order TIEBREAKER = Sort.Order.asc("id");
 
   private final PageableArgumentResolver delegate;
 
@@ -43,12 +43,6 @@ public class TiebreakerPageableArgumentResolver implements PageableArgumentResol
       @Nullable WebDataBinderFactory binderFactory) {
     Pageable pageable =
         delegate.resolveArgument(parameter, mavContainer, webRequest, binderFactory);
-    Sort sort = pageable.getSort();
-    // 呼出側が向きまで指定している場合はその指定を尊重する。
-    if (sort.getOrderFor(TIEBREAKER_PROPERTY) != null) {
-      return pageable;
-    }
-    return PageRequest.of(
-        pageable.getPageNumber(), pageable.getPageSize(), sort.and(Sort.by(TIEBREAKER_PROPERTY)));
+    return Paging.totalOrder(pageable, pageable.getSort(), TIEBREAKER);
   }
 }
