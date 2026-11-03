@@ -14,8 +14,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * 主コードが「今」を読む口を {@code Timestamps.now()}（行に書く時刻）と業務の時計 {@code now(clock)}（期限・本日の判定）に限る。 それ以外は JVM
- * の時計を直接読み、ナノ秒が保存時に四捨五入されるか、固定時計の試験で判定を動かせなくなる。
+ * 主コードが「今」を読む口を二つに限る。行に書く時刻は {@code Timestamps.now()}、期限・本日の判定は業務の時計 {@code now(clock)}。
+ *
+ * <p>JVM の時計を直に読むと、ナノ秒が保存時に四捨五入されるか、固定時計の試験で判定を動かせなくなる。
  */
 class TimestampSourceTests {
 
@@ -36,7 +37,7 @@ class TimestampSourceTests {
           Paths.get("com/kizuna/shared/persistence/Timestamps.java"), "行に書く時刻の時刻源",
           Paths.get("com/kizuna/shared/config/ClockConfig.java"), "業務の時計の時刻源",
           Paths.get("com/kizuna/auth/infrastructure/JwtIssuer.java"),
-              "JWT の iat/exp。検証側の Spring Security が JVM の時計で読むので揃える",
+              "JWT の iat/exp。検証側の JwtTimestampValidator は setClock せず既定の時計で読むので揃える",
           Paths.get("com/kizuna/auth/infrastructure/SessionTokenDecoder.java"),
               "refresh JWT の有効期間の検証。発行側と同じ JVM の時計で読む",
           Paths.get("com/kizuna/auth/infrastructure/RefreshTokenCookies.java"),
@@ -49,6 +50,11 @@ class TimestampSourceTests {
   // 期限・有効期間の判定を名乗るドメインのメソッド。判定の時刻を引数で受け、自分では「今」を読まない。
   private static final Pattern DOMAIN_JUDGEMENT =
       Pattern.compile("boolean\\s+(isExpired|isWithin\\w*|is\\w+At|is\\w+On)\\s*\\(([^)]*)\\)");
+
+  // 行に書く時刻で期限を判じる呼び出し。判定の口は業務の時計に限る。
+  private static final Pattern JUDGED_BY_RECORD_TIME =
+      Pattern.compile(
+          "\\b(?:isExpired|isWithin\\w*|is\\w+At|is\\w+On)\\(\\s*Timestamps\\.now\\(\\)");
 
   private static final Pattern TIME_PARAMETER =
       Pattern.compile(
@@ -100,6 +106,19 @@ class TimestampSourceTests {
 
     assertThat(judgements).as("走査が既知の期限判定を拾うこと").contains("CastInvitation.java#isExpired");
     assertThat(offenders).as("判定の時刻を引数で受けない期限判定").isEmpty();
+  }
+
+  @Test
+  @DisplayName("期限判定に行に書く時刻（Timestamps.now()）を渡さないこと")
+  void judgementsDoNotReadTheRecordTime() throws Exception {
+    List<String> offenders = new ArrayList<>();
+    for (Path file : mainSources()) {
+      if (JUDGED_BY_RECORD_TIME.matcher(Files.readString(file)).find()) {
+        offenders.add(MAIN_SOURCES.relativize(file).toString());
+      }
+    }
+
+    assertThat(offenders).as("期限判定に Timestamps.now() を渡すソース").isEmpty();
   }
 
   private static List<Path> mainSources() throws Exception {
