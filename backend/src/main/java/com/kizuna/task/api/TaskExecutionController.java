@@ -53,7 +53,7 @@ public class TaskExecutionController {
               direction = Sort.Direction.DESC)
           Pageable pageable) {
     identities.requireOperator(auth.getName(), PermissionCode.TASK_MANAGE);
-    return query.list(pageable);
+    return query.list(pageable).map(ExecutionSummary::of);
   }
 
   @GetMapping("/service-identities")

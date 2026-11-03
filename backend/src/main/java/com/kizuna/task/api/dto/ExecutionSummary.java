@@ -1,5 +1,6 @@
 package com.kizuna.task.api.dto;
 
+import com.kizuna.task.execution.ExecutionResult;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
@@ -19,4 +20,24 @@ public record ExecutionSummary(
     OffsetDateTime startedAt,
     OffsetDateTime finishedAt,
     Long processedCount,
-    String failureCode) {}
+    String failureCode) {
+  public static ExecutionSummary of(ExecutionResult row) {
+    return new ExecutionSummary(
+        row.id(),
+        row.requestId(),
+        row.attemptNumber(),
+        row.taskName(),
+        row.serviceUserId(),
+        row.serviceName(),
+        row.storeId(),
+        row.storeName(),
+        row.periodStart(),
+        row.periodEnd(),
+        row.origin(),
+        row.status(),
+        row.startedAt(),
+        row.finishedAt(),
+        row.processedCount(),
+        row.failureCode());
+  }
+}
