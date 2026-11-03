@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { DownloadIcon, PrinterIcon } from 'lucide-react';
 import { fetchMonthlyPdf, type MonthlyPdfCriteria } from '@/entities/order';
+import { useBlobDownload } from '@/shared/lib';
 import { Button, RegionError } from '@/shared/ui';
 
 export function MonthlyPdfActions({ criteria }: { criteria: MonthlyPdfCriteria }) {
@@ -11,35 +12,22 @@ export function MonthlyPdfActions({ criteria }: { criteria: MonthlyPdfCriteria }
 }
 
 function Actions({ criteria }: { criteria: MonthlyPdfCriteria }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [url, setUrl] = useState<string | null>(null);
-  const request = useRef<AbortController | null>(null);
-  const objectUrl = useRef<string | null>(null);
+  const download = useBlobDownload();
   const popup = useRef<Window | null>(null);
   const lastMode = useRef<'download' | 'print'>('download');
-  useEffect(
-    () => () => {
-      request.current?.abort();
-      popup.current?.close();
-      if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
-    },
-    []
-  );
-  const cancel = () => {
-    request.current?.abort();
-    request.current = null;
+  useEffect(() => () => popup.current?.close(), []);
+  const closePopup = () => {
     popup.current?.close();
     popup.current = null;
-    setBusy(false);
   };
+  const cancel = () => {
+    download.cancel();
+    closePopup();
+  };
+  // 印刷用の窓はクリックの同期区間で開かないとポップアップとして遮断されるため、取得前に開く。
   const generate = async (mode: 'download' | 'print') => {
-    cancel();
+    closePopup();
     lastMode.current = mode;
-    const controller = new AbortController();
-    request.current = controller;
-    setBusy(true);
-    setError(null);
     if (mode === 'print') {
       popup.current = window.open('', '_blank');
       if (popup.current) {
@@ -48,36 +36,16 @@ function Actions({ criteria }: { criteria: MonthlyPdfCriteria }) {
         popup.current.document.body.textContent = 'PDF を生成しています...';
       }
     }
-    try {
-      const blob = await fetchMonthlyPdf(criteria, controller.signal);
-      if (controller.signal.aborted) return;
-      if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
-      const nextUrl = URL.createObjectURL(blob);
-      objectUrl.current = nextUrl;
-      setUrl(nextUrl);
-      if (mode === 'download') {
-        const link = document.createElement('a');
-        link.href = nextUrl;
-        link.download = `monthly-remuneration-${criteria.month}.pdf`;
-        link.click();
-      } else if (popup.current && !popup.current.closed) {
-        popup.current.location.replace(nextUrl);
-        popup.current = null;
-      }
-    } catch (failure) {
-      if (controller.signal.aborted) return;
-      popup.current?.close();
-      popup.current = null;
-      if (objectUrl.current) URL.revokeObjectURL(objectUrl.current);
-      objectUrl.current = null;
-      setUrl(null);
-      setError(failure instanceof Error ? failure.message : 'PDF を取得できませんでした。');
-    } finally {
-      if (!controller.signal.aborted) {
-        setBusy(false);
-        request.current = null;
-      }
-    }
+    const opened = popup.current;
+    const url = await download.run(
+      signal => fetchMonthlyPdf(criteria, signal),
+      mode === 'download' ? fileName(criteria) : undefined
+    );
+    // 取消や次の取得に置き換えられた窓は、その時点で閉じられている。
+    if (opened === null || opened !== popup.current) return;
+    popup.current = null;
+    if (url && !opened.closed) opened.location.replace(url);
+    else opened.close();
   };
   return (
     <section aria-label="月次明細の PDF" className="space-y-3">
@@ -85,7 +53,7 @@ function Actions({ criteria }: { criteria: MonthlyPdfCriteria }) {
         <Button
           type="button"
           variant="outline"
-          disabled={busy}
+          disabled={download.busy}
           onClick={() => void generate('download')}
         >
           <DownloadIcon aria-hidden="true" />
@@ -94,25 +62,27 @@ function Actions({ criteria }: { criteria: MonthlyPdfCriteria }) {
         <Button
           type="button"
           variant="outline"
-          disabled={busy}
+          disabled={download.busy}
           onClick={() => void generate('print')}
         >
           <PrinterIcon aria-hidden="true" />
           PDFを開いて印刷
         </Button>
-        {busy && (
+        {download.busy && (
           <Button type="button" variant="outline" onClick={cancel}>
             取得を中止
           </Button>
         )}
       </div>
-      {busy && <p role="status">全月の PDF を生成しています...</p>}
-      {error && <RegionError message={error} onRetry={() => void generate(lastMode.current)} />}
-      {url && (
+      {download.busy && <p role="status">全月の PDF を生成しています...</p>}
+      {download.error && (
+        <RegionError message={download.error} onRetry={() => void generate(lastMode.current)} />
+      )}
+      {download.url && (
         <p className="text-sm">
           <a
             className="text-primary-strong underline"
-            href={url}
+            href={download.url}
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -121,8 +91,8 @@ function Actions({ criteria }: { criteria: MonthlyPdfCriteria }) {
           {' / '}
           <a
             className="text-primary-strong underline"
-            href={url}
-            download={`monthly-remuneration-${criteria.month}.pdf`}
+            href={download.url}
+            download={fileName(criteria)}
           >
             保存する
           </a>
@@ -133,4 +103,8 @@ function Actions({ criteria }: { criteria: MonthlyPdfCriteria }) {
       )}
     </section>
   );
+}
+
+function fileName(criteria: MonthlyPdfCriteria) {
+  return `monthly-remuneration-${criteria.month}.pdf`;
 }

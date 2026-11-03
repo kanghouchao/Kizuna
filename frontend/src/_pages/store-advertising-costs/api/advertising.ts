@@ -1,5 +1,5 @@
 import type { AxiosRequestConfig } from 'axios';
-import { apiClient, type Page } from '@/shared/api';
+import { apiClient, fetchBlob, spreadsheetTypes, type Page } from '@/shared/api';
 export type Category = 'SALES' | 'RECRUITMENT';
 export interface MediumRef {
   id: string;
@@ -206,39 +206,18 @@ export const advertisingApi = {
       data: body,
     });
   },
-  async download(
+  download: (
     month: string,
     format: 'csv' | 'xlsx',
     signal: AbortSignal,
     kind: ExportKind = 'costs'
-  ) {
-    try {
-      const response = await apiClient.get<Blob>(`/${advertisingExports[kind].resource}/exports`, {
-        params: { month, format },
-        responseType: 'blob',
-        signal,
-      });
-      const type =
-        format === 'csv'
-          ? 'text/csv'
-          : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      if (!response.data.type.startsWith(type)) throw new Error('出力形式を確認できませんでした。');
-      return response.data;
-    } catch (error) {
-      if (signal.aborted) throw error;
-      const data = (error as { response?: { data?: unknown } }).response?.data;
-      if (data instanceof Blob && data.type.includes('application/json')) {
-        let message: unknown;
-        try {
-          message = JSON.parse(await data.text()).error;
-        } catch {
-          message = null;
-        }
-        if (typeof message === 'string') throw new Error(message);
-      }
-      throw new Error('広告費を出力できませんでした。権限と通信状態を確認してください。');
-    }
-  },
+  ) =>
+    fetchBlob(`/${advertisingExports[kind].resource}/exports`, {
+      params: { month, format },
+      signal,
+      types: [spreadsheetTypes[format]],
+      fallback: '広告費を出力できませんでした。権限と通信状態を確認してください。',
+    }),
 };
 export const categoryLabels: Record<Category, string> = {
   SALES: '営業広告',

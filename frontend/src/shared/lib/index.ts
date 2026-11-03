@@ -13,6 +13,7 @@ export { useManagedList } from './hooks/useManagedList';
 export { useListPage } from './hooks/useListPage';
 export { useResource } from './hooks/useResource';
 export { useDeleteAction } from './hooks/useDeleteAction';
+export { useBlobDownload } from './hooks/useBlobDownload';
 export { memoryOperationStore, sessionOperationStore } from './operation-store';
 export type { OperationStore } from './operation-store';
 export { useOperation, useOperationRevision } from './hooks/useOperation';

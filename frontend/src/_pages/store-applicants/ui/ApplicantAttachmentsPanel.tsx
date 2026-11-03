@@ -14,6 +14,7 @@ import {
   useListPage,
   useResource,
   createUuid,
+  useBlobDownload,
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import {
@@ -78,35 +79,17 @@ function AttachmentContents({
   const list = useListPage(page => applicantAttachmentApi.list(id, page));
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [completedKeys, setCompletedKeys] = useState<string[]>([]);
-  const lifetime = useTransferLifetime();
   // 有効な設定では全状態を合わせて最大20件なので、未完了一覧は一回で取得できる。
   const pending = useResource(canManage ? () => applicantAttachmentApi.uploads(id) : null, [
     id,
     canManage,
   ]);
-  const [downloading, setDownloading] = useState<string | null>(null);
-  const download = async (attachment: ApplicantAttachment) => {
-    if (downloading) return;
-    const signal = lifetime.current!.signal;
-    setDownloading(attachment.id);
-    try {
-      const blob = await applicantAttachmentApi.download(id, attachment.id, signal);
-      if (signal.aborted) return;
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `attachment-${attachment.id}.${attachment.media_type === 'image/png' ? 'png' : 'jpg'}`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch (error) {
-      if (!signal.aborted)
-        notify.error(getApiErrorMessage(error, '添付画像を取得できませんでした'));
-    } finally {
-      if (!signal.aborted) setDownloading(null);
-    }
-  };
+  const download = useBlobDownload();
+  const save = (attachment: ApplicantAttachment) =>
+    void download.run(
+      signal => applicantAttachmentApi.download(id, attachment.id, signal),
+      `attachment-${attachment.id}.${attachment.media_type === 'image/png' ? 'png' : 'jpg'}`
+    );
   const completed = (key: string) => {
     setCompletedKeys(previous => [...previous, key]);
     void list.reload();
@@ -135,16 +118,15 @@ function AttachmentContents({
                     {new Date(attachment.created_at).toLocaleString('ja-JP')}
                   </p>
                 </div>
-                <Button
-                  variant="outline"
-                  disabled={downloading !== null}
-                  onClick={() => void download(attachment)}
-                >
+                <Button variant="outline" disabled={download.busy} onClick={() => save(attachment)}>
                   ダウンロード
                 </Button>
               </li>
             ))}
           </ul>
+          {download.error && (
+            <RegionError message={download.error} onRetry={() => void download.retry()} />
+          )}
           {list.isLoading ? (
             <p>読み込み中...</p>
           ) : list.rows.length === 0 ? (

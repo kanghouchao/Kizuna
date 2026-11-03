@@ -358,27 +358,56 @@ test('空入力と不正形式は入力に紐づくエラーを表示し送信�
   expect(applicantAttachmentApi.upload).not.toHaveBeenCalled();
 });
 
-test('画面を離れた後のダウンロード応答は保存操作を開始しない', async () => {
-  (applicantAttachmentApi.list as jest.Mock).mockResolvedValue(
-    page([
-      { id: 'ready', media_type: 'image/png', size_bytes: 3, created_at: '2026-10-07T00:00:00Z' },
-    ])
-  );
-  let resolve: (value: Blob) => void = () => {};
-  (applicantAttachmentApi.download as jest.Mock).mockImplementation(
-    () =>
+describe('添付画像のダウンロード', () => {
+  let click: jest.SpyInstance;
+  beforeEach(() => {
+    readyList.mockResolvedValue(
+      page([
+        { id: 'p', media_type: 'image/png', size_bytes: 3, created_at: '2026-10-07T00:00:00Z' },
+        { id: 'j', media_type: 'image/jpeg', size_bytes: 3, created_at: '2026-10-07T00:00:00Z' },
+      ])
+    );
+    URL.createObjectURL = jest.fn(() => 'blob:image');
+    URL.revokeObjectURL = jest.fn();
+    click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+  });
+  afterEach(() => click.mockRestore());
+
+  test('押した行の画像を媒体型に合う拡張子で保存し、取得中は全行のダウンロードを止める', async () => {
+    let resolve!: (value: Blob) => void;
+    (applicantAttachmentApi.download as jest.Mock).mockReturnValue(
       new Promise(done => {
         resolve = done;
       })
-  );
-  URL.createObjectURL = jest.fn();
-  const view = render(<ApplicantAttachmentsPanel id="a" canManage={false} editable />);
-  fireEvent.click(await screen.findByRole('button', { name: 'ダウンロード' }));
-  view.unmount();
-  const signal = (applicantAttachmentApi.download as jest.Mock).mock.calls[0][2];
-  expect(signal.aborted).toBe(true);
-  resolve(new Blob(['png']));
-  await waitFor(() => expect(URL.createObjectURL).not.toHaveBeenCalled());
+    );
+    render(<ApplicantAttachmentsPanel id="a" canManage={false} editable />);
+    const [, jpeg] = await screen.findAllByRole('button', { name: 'ダウンロード' });
+    fireEvent.click(jpeg);
+    expect(applicantAttachmentApi.download).toHaveBeenCalledWith('a', 'j', expect.any(AbortSignal));
+    for (const button of screen.getAllByRole('button', { name: 'ダウンロード' }))
+      expect(button).toBeDisabled();
+    await act(async () => resolve(new Blob(['jpg'], { type: 'image/jpeg' })));
+    expect(click.mock.contexts[0]).toMatchObject({ download: 'attachment-j.jpg' });
+    expect(screen.getAllByRole('button', { name: 'ダウンロード' })[0]).toBeEnabled();
+  });
+
+  test('失敗は一覧の下にサーバの文言で示し、再試行で同じ画像を取り直す', async () => {
+    (applicantAttachmentApi.download as jest.Mock)
+      .mockRejectedValueOnce(new Error('画像処理が混み合っています'))
+      .mockResolvedValueOnce(new Blob(['png'], { type: 'image/png' }));
+    render(<ApplicantAttachmentsPanel id="a" canManage={false} editable />);
+    fireEvent.click((await screen.findAllByRole('button', { name: 'ダウンロード' }))[0]);
+    expect(await screen.findByRole('alert')).toHaveTextContent('画像処理が混み合っています');
+    fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+    await waitFor(() => expect(click).toHaveBeenCalledTimes(1));
+    expect(applicantAttachmentApi.download).toHaveBeenLastCalledWith(
+      'a',
+      'p',
+      expect.any(AbortSignal)
+    );
+    expect(click.mock.contexts[0]).toMatchObject({ download: 'attachment-p.png' });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
 });
 
 test('同じキーの古いREADY応答は新しい内容不一致を清掃しない', async () => {
