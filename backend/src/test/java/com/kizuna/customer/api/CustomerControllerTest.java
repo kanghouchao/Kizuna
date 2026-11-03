@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.customer.api.dto.CustomerMapperImpl;
@@ -128,7 +129,10 @@ class CustomerControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"name\": \"山田太郎\"}")
                 .header("X-Store-ID", STORE_ID.toString()))
-        .andExpect(status().isCreated());
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.id").value("c1"))
+        .andExpect(jsonPath("$.member_linked").value(false))
+        .andExpect(jsonPath("$.merged").doesNotExist());
   }
 
   @Test
