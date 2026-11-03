@@ -102,6 +102,8 @@ class AdvertisingRendererGoldenTest {
             .append(sheet.getSheetName())
             .append("\tfrozen-rows=")
             .append(pane == null ? 0 : pane.getHorizontalSplitPosition())
+            .append("\trows=")
+            .append(sheet.getPhysicalNumberOfRows())
             .append('\n');
         for (var row : sheet)
           for (var cell : row)
