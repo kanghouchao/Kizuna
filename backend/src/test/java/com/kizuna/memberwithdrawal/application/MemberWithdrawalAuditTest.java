@@ -88,7 +88,7 @@ class MemberWithdrawalAuditTest {
     assertThat(event.getAction()).isEqualTo("MEMBER_WITHDRAWN");
     assertThat(event.getTargetType()).isEqualTo("MEMBER");
     assertThat(event.getTargetId()).isEqualTo("77");
-    assertThat(event.getStoreId()).isNull();
+    assertThat(event.getOriginatingStoreId()).isNull();
     assertThat(event.getActorId()).isEqualTo(MEMBER_USER_ID);
     assertThat(event.getSourceType()).isEqualTo("POINT_LEDGER_ENTRY");
     assertThat(event.getSourceId()).isEqualTo("901");

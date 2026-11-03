@@ -219,8 +219,9 @@ class CastFieldAuditIntegrationTest {
   }
 
   private long count(String table) {
+    var column = "t_audit_events".equals(table) ? "originating_store_id" : "store_id";
     return jdbc.queryForObject(
-        "select count(*) from " + table + " where store_id=?", Long.class, storeId);
+        "select count(*) from " + table + " where " + column + "=?", Long.class, storeId);
   }
 
   private List<Long> counts() {
@@ -323,7 +324,7 @@ class CastFieldAuditIntegrationTest {
   private void assertNoSecrets() {
     assertThat(
             jdbc.queryForList(
-                    "select before_values,after_values from t_audit_events where store_id=?",
+                    "select before_values,after_values from t_audit_events where originating_store_id=?",
                     storeId)
                 .toString())
         .doesNotContain("秘密", "private-key", "public-key", ORDINARY, SECOND);
@@ -444,7 +445,7 @@ class CastFieldAuditIntegrationTest {
     fields.delete(storeId, definition, SECOND);
     var rows =
         jdbc.queryForList(
-            "select actor_id,actor_type,store_id from t_audit_events where target_id=? or source_id=? order by id",
+            "select actor_id,actor_type,originating_store_id from t_audit_events where target_id=? or source_id=? order by id",
             definition,
             definition);
     assertThat(rows)
@@ -454,7 +455,7 @@ class CastFieldAuditIntegrationTest {
                 assertThat(row)
                     .containsEntry("actor_id", secondId)
                     .containsEntry("actor_type", "STAFF")
-                    .containsEntry("store_id", storeId));
+                    .containsEntry("originating_store_id", storeId));
     assertThat(lifecycle.snapshots(storeId, id, PageRequest.of(0, 20)).getContent())
         .hasSize(2)
         .allSatisfy(snapshot -> assertThat(snapshot.actorId()).isEqualTo(secondId));
@@ -472,7 +473,9 @@ class CastFieldAuditIntegrationTest {
     var foreignBefore = stored(foreignCast);
     long foreignAudits =
         jdbc.queryForObject(
-            "select count(*) from t_audit_events where store_id=?", Long.class, otherStore);
+            "select count(*) from t_audit_events where originating_store_id=?",
+            Long.class,
+            otherStore);
     authenticate(storeId, ORDINARY);
     assertThatThrownBy(
             () -> fields.update(storeId, foreignDefinition, new CastFieldDefinitionUpdateRequest()))
@@ -484,7 +487,9 @@ class CastFieldAuditIntegrationTest {
     assertThat(stored(foreignCast)).isEqualTo(foreignBefore);
     assertThat(
             jdbc.queryForObject(
-                "select count(*) from t_audit_events where store_id=?", Long.class, otherStore))
+                "select count(*) from t_audit_events where originating_store_id=?",
+                Long.class,
+                otherStore))
         .isEqualTo(foreignAudits);
     assertThat(
             jdbc.queryForObject(

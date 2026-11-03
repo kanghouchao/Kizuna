@@ -371,7 +371,7 @@ class CastAuditIntegrationTest {
     assertVersions(id, 3, 2);
     var actors =
         jdbc.queryForList(
-            "select actor_id,actor_type,store_id from t_audit_events where target_id in (?,?) order by id",
+            "select actor_id,actor_type,originating_store_id from t_audit_events where target_id in (?,?) order by id",
             id,
             profile);
     assertThat(actors).hasSize(6);
@@ -380,7 +380,7 @@ class CastAuditIntegrationTest {
       assertThat(actor)
           .containsEntry("actor_id", secondId)
           .containsEntry("actor_type", "STAFF")
-          .containsEntry("store_id", storeId);
+          .containsEntry("originating_store_id", storeId);
     }
     var history =
         jdbc.queryForList(

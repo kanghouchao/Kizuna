@@ -125,7 +125,7 @@ class CastFieldAuditTest {
     assertThat(event.getTargetType()).isEqualTo("CAST_FIELD_DEFINITION");
     assertThat(event.getTargetId()).isEqualTo("definition");
     assertThat(event.getActorId()).isEqualTo(9L);
-    assertThat(event.getStoreId()).isEqualTo(STORE_ID);
+    assertThat(event.getOriginatingStoreId()).isEqualTo(STORE_ID);
     assertThat(event.getBeforeValues()).isEmpty();
     assertThat(event.getAfterValues())
         .containsOnlyKeys("exists", "is_public", "display_order", "version")

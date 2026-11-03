@@ -633,7 +633,7 @@ class ReviewIntegrationTest {
     send("/" + id + "/corrections", correction, 201);
     assertThat(
             jdbc.queryForObject(
-                "select string_agg(before_values::text || after_values::text, ' ') from t_audit_events where store_id=?",
+                "select string_agg(before_values::text || after_values::text, ' ') from t_audit_events where originating_store_id=?",
                 String.class,
                 storeId))
         .doesNotContain("機密", "本文", "訂正理由", "表示名");

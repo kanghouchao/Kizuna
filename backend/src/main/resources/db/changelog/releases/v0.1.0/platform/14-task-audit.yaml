@@ -30,7 +30,7 @@ databaseChangeLog:
                   constraints:
                     nullable: false
               - column:
-                  name: store_id
+                  name: target_store_id
                   type: BIGINT
               - column:
                   name: period_start
@@ -174,7 +174,7 @@ databaseChangeLog:
                   constraints:
                     nullable: false
               - column:
-                  name: store_id
+                  name: originating_store_id
                   type: BIGINT
               - column:
                   name: action

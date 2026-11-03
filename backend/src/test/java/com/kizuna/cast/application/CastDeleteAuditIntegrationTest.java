@@ -189,11 +189,11 @@ class CastDeleteAuditIntegrationTest {
     assertThat(count("t_cast_invitations", "cast_id", id)).isZero();
     var event =
         jdbc.queryForMap(
-            "select actor_id,store_id,before_values ->> 'exists' as old_exists,before_values ->> 'enrollment_version' as old_version,after_values ->> 'exists' as new_exists,after_values ->> 'deleted_status_histories' as h,after_values ->> 'deleted_snapshots' as s,after_values ->> 'deleted_invitations' as i,after_values ->> 'deleted_profiles' as p from t_audit_events where action='CAST_ENROLLMENT_DELETED' and target_id=?",
+            "select actor_id,originating_store_id,before_values ->> 'exists' as old_exists,before_values ->> 'enrollment_version' as old_version,after_values ->> 'exists' as new_exists,after_values ->> 'deleted_status_histories' as h,after_values ->> 'deleted_snapshots' as s,after_values ->> 'deleted_invitations' as i,after_values ->> 'deleted_profiles' as p from t_audit_events where action='CAST_ENROLLMENT_DELETED' and target_id=?",
             id);
     assertThat(event)
         .containsEntry("actor_id", ordinaryId)
-        .containsEntry("store_id", storeId)
+        .containsEntry("originating_store_id", storeId)
         .containsEntry("old_exists", "true")
         .containsEntry("old_version", "0")
         .containsEntry("new_exists", "false")

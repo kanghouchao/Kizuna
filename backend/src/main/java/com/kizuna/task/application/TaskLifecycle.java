@@ -81,7 +81,7 @@ public class TaskLifecycle {
                 reason,
                 OffsetDateTime.now(clock),
                 service.name(),
-                storeName(request.getStoreId())));
+                storeName(request.getTargetStoreId())));
     auditState(request, attempt, operator, "TASK_RETRIED", Map.of("retry_of", id.toString()));
     return new Started(attempt.getId(), true);
   }
@@ -117,7 +117,7 @@ public class TaskLifecycle {
     audit.append(
         new AuditChange(
             operator,
-            request.getStoreId(),
+            request.getTargetStoreId(),
             "TASK_INTERRUPTED",
             "TASK_EXECUTION",
             attempt.getId().toString(),
@@ -188,7 +188,7 @@ public class TaskLifecycle {
     audit.append(
         new AuditChange(
             actor,
-            request.getStoreId(),
+            request.getTargetStoreId(),
             action,
             "TASK_EXECUTION",
             attempt.getId().toString(),
@@ -219,7 +219,7 @@ public class TaskLifecycle {
         request.getLogicalKey(),
         request.getServiceUserId(),
         attempt.getServiceName(),
-        request.getStoreId(),
+        request.getTargetStoreId(),
         attempt.getStoreName(),
         request.getPeriodStart(),
         request.getPeriodEnd(),

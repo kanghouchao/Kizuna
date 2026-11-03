@@ -420,7 +420,7 @@ class SurveyIntegrationTest {
     send(answer + "/corrections", correction(0, "atomic"), 201);
     assertThat(
             jdbc.queryForObject(
-                "select string_agg(before_values::text || after_values::text,' ') from t_audit_events where store_id=?",
+                "select string_agg(before_values::text || after_values::text,' ') from t_audit_events where originating_store_id=?",
                 String.class,
                 storeId))
         .doesNotContain("機密", "担当者が入力した設問");

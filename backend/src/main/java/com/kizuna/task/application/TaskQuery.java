@@ -37,7 +37,7 @@ public class TaskQuery {
               request.getTaskName(),
               request.getServiceUserId(),
               attempt.getServiceName(),
-              request.getStoreId(),
+              request.getTargetStoreId(),
               attempt.getStoreName(),
               request.getPeriodStart(),
               request.getPeriodEnd(),

@@ -86,7 +86,7 @@ class StoredFileAuditTest {
     assertThat(event.getAction()).isEqualTo("FILE_UPLOADED");
     assertThat(event.getTargetType()).isEqualTo("STORED_FILE");
     assertThat(event.getTargetId()).isEqualTo("public/5/a.jpg");
-    assertThat(event.getStoreId()).isEqualTo(5L);
+    assertThat(event.getOriginatingStoreId()).isEqualTo(5L);
     assertThat(event.getAfterValues())
         .containsOnly(
             Map.entry("bucket", "public"),
