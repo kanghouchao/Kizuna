@@ -124,6 +124,39 @@ test('保存中に別編集へ移動させず失敗時の入力を保持する',
   expect(screen.getByLabelText('氏名')).toHaveValue('保存待ちの応募者');
   expect(screen.getByRole('button', { name: '面接記録を編集' })).toBeEnabled();
 });
+test('409 は入力を残したまま送信を止め、読み直した版で送り直させる', async () => {
+  (applicantApi.update as jest.Mock).mockRejectedValueOnce({
+    response: { status: 409, data: { error: '応募者情報が更新されています' } },
+  });
+  render(<ApplicantDetailPage />);
+  fireEvent.click(await screen.findByRole('button', { name: '受付情報を編集' }));
+  fireEvent.change(screen.getByLabelText('氏名'), { target: { value: '競合した応募者' } });
+  fireEvent.click(screen.getByRole('button', { name: '受付情報を保存' }));
+  expect(
+    await screen.findByText(
+      '応募者情報が更新されています。最新の内容を読み込んでから、改めて操作してください。'
+    )
+  ).toBeVisible();
+  expect(screen.getByLabelText('氏名')).toHaveValue('競合した応募者');
+  expect(screen.getByRole('button', { name: '受付情報を保存' })).toBeDisabled();
+
+  (applicantApi.get as jest.Mock).mockResolvedValue({
+    ...detail,
+    name: '他の人の変更',
+    version: 1,
+  });
+  fireEvent.click(screen.getByRole('button', { name: '最新の内容を読み込む' }));
+  fireEvent.click(await screen.findByRole('button', { name: '破棄して続ける' }));
+  expect(await screen.findByRole('heading', { name: '他の人の変更' })).toBeVisible();
+  expect(screen.queryByText(/最新の内容を読み込んでから/)).not.toBeInTheDocument();
+
+  (applicantApi.update as jest.Mock).mockResolvedValue({ ...detail, version: 2 });
+  fireEvent.click(screen.getByRole('button', { name: '受付情報を編集' }));
+  fireEvent.click(screen.getByRole('button', { name: '受付情報を保存' }));
+  await waitFor(() =>
+    expect(applicantApi.update).toHaveBeenLastCalledWith('a', 1, expect.anything())
+  );
+});
 
 test('状態変更の未保存理由も編集切替前に確認する', async () => {
   render(<ApplicantDetailPage />);

@@ -39,7 +39,7 @@ export default function RolesPage() {
     remove: role => roleApi.remove(role.id ?? 0),
     successMessage: 'ロールを削除しました',
     errorMessage: 'ロールの削除に失敗しました',
-    onDeleted: refetch,
+    reload: refetch,
   });
 
   return (

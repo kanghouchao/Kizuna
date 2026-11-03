@@ -34,7 +34,7 @@ export default function CastFieldsPage() {
     remove: definition => castFieldDefinitionApi.delete(definition.id),
     successMessage: 'フィールドを削除しました',
     errorMessage: 'フィールドの削除に失敗しました',
-    onDeleted: refetch,
+    reload: refetch,
   });
 
   return (

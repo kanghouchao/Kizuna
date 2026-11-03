@@ -2,9 +2,7 @@
 
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { MEDIUM_NAME_MAX, mediumApi, type MediumSummary } from '@/entities/medium';
-import { getApiErrorMessage } from '@/shared/lib';
-import { notify } from '@/shared/notify';
+import { MEDIUM_NAME_MAX, type MediumSummary } from '@/entities/medium';
 import {
   Button,
   Dialog,
@@ -21,46 +19,33 @@ import {
 
 interface MediumNameModalProps {
   open: boolean;
-  /** 改名する媒体。null なら新規作成。 */
+  /** 改名する媒体（開いた時点の写し）。null なら新規作成。 */
   medium: MediumSummary | null;
+  /** 改名対象が一覧から消えた */
+  gone: boolean;
+  busy: boolean;
   onClose: () => void;
-  /** 改名なら応答の媒体、新規作成なら引数なし。 */
-  onSaved: (updated?: MediumSummary) => void;
+  /** 前後の空白を除いた名前を渡す。閉じるかどうかは呼び出し側が決める。 */
+  onSubmit: (name: string) => Promise<void>;
 }
 
 const NAME_REQUIRED = '媒体名を入力してください';
 
 /** 媒体の作成・改名で共有する名前入力。前後の空白はサーバと同じく除いて数える。 */
-export function MediumNameModal({ open, medium, onClose, onSaved }: MediumNameModalProps) {
+export function MediumNameModal({
+  open,
+  medium,
+  gone,
+  busy,
+  onClose,
+  onSubmit,
+}: MediumNameModalProps) {
   const form = useForm<{ name: string }>({ defaultValues: { name: '' } });
-  const {
-    control,
-    handleSubmit,
-    reset,
-    formState: { isSubmitting },
-  } = form;
+  const { control, handleSubmit, reset } = form;
 
   useEffect(() => {
     if (open) reset({ name: medium?.name ?? '' });
   }, [open, medium, reset]);
-
-  const submit = async ({ name }: { name: string }) => {
-    try {
-      let updated: MediumSummary | undefined;
-      if (medium) updated = await mediumApi.rename(medium.id, name.trim(), medium.version);
-      else await mediumApi.create(name.trim());
-      notify.success(medium ? '媒体名を変更しました' : '媒体を登録しました');
-      onSaved(updated);
-      onClose();
-    } catch (error) {
-      notify.error(
-        getApiErrorMessage(
-          error,
-          medium ? '媒体名の変更に失敗しました' : '媒体の登録に失敗しました'
-        )
-      );
-    }
-  };
 
   return (
     <Dialog
@@ -71,41 +56,56 @@ export function MediumNameModal({ open, medium, onClose, onSaved }: MediumNameMo
     >
       <DialogContent aria-describedby={undefined} className="sm:max-w-md">
         <DialogTitle>{medium ? '媒体名を変更' : '媒体を登録'}</DialogTitle>
-        <Form {...form}>
-          {/* noValidate: 文言付きの rules が required / maxLength の原生制約を置き換える */}
-          <form onSubmit={handleSubmit(submit)} className="space-y-6" noValidate>
-            <FormField
-              control={control}
-              name="name"
-              rules={{
-                validate: value => {
-                  const trimmed = value.trim();
-                  if (trimmed === '') return NAME_REQUIRED;
-                  if (trimmed.length > MEDIUM_NAME_MAX)
-                    return `媒体名は${MEDIUM_NAME_MAX}文字以内で入力してください`;
-                  return true;
-                },
-              }}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>媒体名</FormLabel>
-                  <FormControl>
-                    <Input type="text" required autoComplete="off" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="flex justify-end gap-3">
+        {gone ? (
+          <div className="space-y-6">
+            <p role="alert">この媒体は削除されています。</p>
+            <div className="flex justify-end">
               <Button type="button" variant="outline" onClick={onClose}>
-                キャンセル
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? '保存中...' : '保存する'}
+                閉じる
               </Button>
             </div>
-          </form>
-        </Form>
+          </div>
+        ) : (
+          <Form {...form}>
+            {/* noValidate: 文言付きの rules が required / maxLength の原生制約を置き換える */}
+            <form
+              onSubmit={handleSubmit(({ name }) => onSubmit(name.trim()))}
+              className="space-y-6"
+              noValidate
+            >
+              <FormField
+                control={control}
+                name="name"
+                rules={{
+                  validate: value => {
+                    const trimmed = value.trim();
+                    if (trimmed === '') return NAME_REQUIRED;
+                    if (trimmed.length > MEDIUM_NAME_MAX)
+                      return `媒体名は${MEDIUM_NAME_MAX}文字以内で入力してください`;
+                    return true;
+                  },
+                }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>媒体名</FormLabel>
+                    <FormControl>
+                      <Input type="text" required autoComplete="off" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="flex justify-end gap-3">
+                <Button type="button" variant="outline" onClick={onClose}>
+                  キャンセル
+                </Button>
+                <Button type="submit" disabled={busy}>
+                  {busy ? '保存中...' : '保存する'}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        )}
       </DialogContent>
     </Dialog>
   );

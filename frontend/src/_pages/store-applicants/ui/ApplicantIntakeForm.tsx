@@ -51,8 +51,11 @@ export function ApplicantIntakeForm({
   initial,
   onSave,
   onDirtyChange,
+  busy = false,
 }: {
   onDirtyChange?: (dirty: boolean) => void;
+  /** 呼び出し側の事情で送らせないとき（送信中・競合中） */
+  busy?: boolean;
   /** 編集では詳細をそのまま渡す。媒体は ID だけを本文へ写し、停止中でも選択肢に残す。 */
   initial?: Omit<ApplicantIntake, 'medium_id'> & { medium: ApplicantMedium | null };
   onSave: (data: ApplicantIntake) => Promise<void>;
@@ -81,7 +84,7 @@ export function ApplicantIntakeForm({
         onSubmit={form.handleSubmit(onSave)}
         className="rounded-xl border bg-card p-6 space-y-6"
       >
-        <fieldset disabled={form.formState.isSubmitting} className="space-y-6">
+        <fieldset disabled={busy || form.formState.isSubmitting} className="space-y-6">
           <p className="text-sm text-muted-foreground">
             担当者・紹介者は記録用の名前です。システムの権限やアカウントを割り当てるものではありません。
           </p>
@@ -194,7 +197,7 @@ export function ApplicantIntakeForm({
                 />
               ))}
           </div>
-          <Button type="submit" disabled={form.formState.isSubmitting}>
+          <Button type="submit" disabled={busy || form.formState.isSubmitting}>
             受付情報を保存
           </Button>
         </fieldset>

@@ -109,7 +109,7 @@ export default function ServiceIdentitiesPage() {
     remove: identity => serviceIdentityApi.suspend(identity.id ?? 0),
     successMessage: 'サービスIDを停止しました',
     errorMessage: 'サービスIDの停止に失敗しました',
-    onDeleted: list.reload,
+    reload: list.reload,
   });
 
   // 再開は元に戻す操作なので確認を挟まない

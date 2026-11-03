@@ -92,7 +92,7 @@ export default function StaffPage() {
     remove: member => staffApi.suspend(member.id ?? 0),
     successMessage: 'アカウントを停止しました',
     errorMessage: 'アカウントの停止に失敗しました',
-    onDeleted: list.reload,
+    reload: list.reload,
   });
 
   // 再設定の確認対象と発行された仮パスワードはページに置く — 行に持たせると

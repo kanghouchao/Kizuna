@@ -10,8 +10,7 @@ import {
   publicationSummary,
   toPublicationFormValues,
 } from '@/features/publication-form';
-import { notify } from '@/shared/notify';
-import { getApiErrorMessage, isConflict, isNotFound, storePath, useResource } from '@/shared/lib';
+import { storePath, useResource, useVersionedWrite } from '@/shared/lib';
 import {
   Button,
   Card,
@@ -39,31 +38,8 @@ function ArticleEdit() {
   const id = useParams<{ id: string }>().id;
   const router = useRouter();
   const detail = useResource(() => articleApi.get(id), [id]);
-  const [busy, setBusy] = useState(false);
-  const [conflict, setConflict] = useState(false);
+  const writer = useVersionedWrite(detail.reload);
   const [deleting, setDeleting] = useState(false);
-
-  // 本文と公開設定は別々に保存するが版は一つなので、どちらの書き込みも表示中の版を送り、
-  // 応答で差し替えて次の書き込みに最新の版を渡す。
-  const write = async (
-    action: (article: Article) => Promise<Article | null>,
-    success: string,
-    failure: string
-  ) => {
-    if (!detail.data || busy) return;
-    setBusy(true);
-    try {
-      const result = await action(detail.data);
-      notify.success(success);
-      if (result) detail.setData(result);
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, failure));
-      if (isConflict(error)) setConflict(true);
-      else if (isNotFound(error)) void detail.reload();
-    } finally {
-      setBusy(false);
-    }
-  };
 
   if (detail.isLoading) return <p className="text-muted-foreground">読み込み中...</p>;
   if (detail.failure !== null || !detail.data)
@@ -82,7 +58,12 @@ function ArticleEdit() {
     );
 
   const article = detail.data;
-  const locked = busy || conflict;
+  // 本文と公開設定は別々に保存するが版は一つなので、どちらの書き込みも表示中の版を送り、
+  // 応答で差し替えて次の書き込みに最新の版を渡す。
+  const save = async (send: () => Promise<Article>, success: string, failure: string) => {
+    await writer.write(send, { success, failure, onSuccess: detail.setData });
+  };
+  const locked = writer.busy || writer.conflict;
   return (
     <div className="space-y-6">
       <PageHeader
@@ -93,16 +74,10 @@ function ArticleEdit() {
           </Button>
         }
       />
-      {conflict && (
+      {writer.conflict && (
         <div role="alert" className="space-y-3 rounded-lg border p-4">
           <p>記事が更新されています。最新の内容を読み込んでから、改めて操作してください。</p>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setConflict(false);
-              void detail.reload();
-            }}
-          >
+          <Button variant="outline" onClick={() => void writer.reload()}>
             最新の内容を読み込む
           </Button>
         </div>
@@ -119,8 +94,8 @@ function ArticleEdit() {
             busy={locked}
             submitLabel="記事を保存"
             onSubmit={(input: ArticleInput) =>
-              write(
-                current => articleApi.update(id, { ...input, version: current.version }),
+              save(
+                () => articleApi.update(id, { ...input, version: article.version }),
                 '記事を保存しました',
                 '記事を保存できませんでした'
               )
@@ -145,11 +120,11 @@ function ArticleEdit() {
             article={article}
             busy={locked}
             onSubmit={values =>
-              write(
-                current =>
+              save(
+                () =>
                   articleApi.updatePublication(id, {
                     ...fromPublicationFormValues(values),
-                    version: current.version,
+                    version: article.version,
                   }),
                 '公開設定を保存しました',
                 '公開設定を保存できませんでした'
@@ -164,15 +139,11 @@ function ArticleEdit() {
         description={`「${article.title}」を削除します。元に戻すことはできません。`}
         onClose={() => setDeleting(false)}
         onConfirm={() =>
-          void write(
-            async current => {
-              await articleApi.remove(id, current.version);
-              router.push(storePath('/articles'));
-              return null;
-            },
-            '記事を削除しました',
-            '記事を削除できませんでした'
-          )
+          void writer.write(() => articleApi.remove(id, article.version), {
+            success: '記事を削除しました',
+            failure: '記事を削除できませんでした',
+            onSuccess: () => router.push(storePath('/articles')),
+          })
         }
       />
     </div>

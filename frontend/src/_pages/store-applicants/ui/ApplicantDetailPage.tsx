@@ -13,8 +13,7 @@ import {
   sourceTypeLabels,
   type ApplicantDetail,
 } from '@/entities/applicant';
-import { getApiErrorMessage, storePath, useResource } from '@/shared/lib';
-import { notify } from '@/shared/notify';
+import { storePath, useResource, useVersionedWrite } from '@/shared/lib';
 import { Badge, Button, ConfirmDialog, RegionError } from '@/shared/ui';
 import { ApplicantAttachmentsPanel } from './ApplicantAttachmentsPanel';
 import { ApplicantDecisionForm } from './ApplicantDecisionForm';
@@ -37,7 +36,10 @@ export default function ApplicantDetailPage() {
     read: canReadAttachments,
     write: canReadAttachments && hasPermission(me, 'RECRUITMENT_ATTACHMENT_MANAGE'),
   };
-  const [saving, setSaving] = useState(false);
+  const writer = useVersionedWrite(resource.reload);
+  const saving = writer.busy;
+  // 競合中は取り直すまでどのフォームも送らせない。古い version の再送は同じ 409 を繰り返す
+  const locked = saving || writer.conflict;
   const [formDirty, setFormDirty] = useState(false);
   const [decisionDirty, setDecisionDirty] = useState(false);
   const dirty = formDirty || decisionDirty;
@@ -56,13 +58,13 @@ export default function ApplicantDetailPage() {
       return;
     }
     setMode(next === 'close' || next === 'reload' ? null : next);
-    if (next === 'reload') void resource.reload();
+    if (next === 'reload') void writer.reload();
   };
   const discardAndMove = () => {
     if (!pendingMode || saving) return;
     clearDirty();
     setMode(pendingMode === 'close' || pendingMode === 'reload' ? null : pendingMode);
-    if (pendingMode === 'reload') void resource.reload();
+    if (pendingMode === 'reload') void writer.reload();
     setPendingMode(null);
   };
   const applicant = resource.data;
@@ -72,16 +74,7 @@ export default function ApplicantDetailPage() {
     setMode(null);
   };
   const save = async (operation: () => Promise<ApplicantDetail>, success: string) => {
-    if (saving) return;
-    setSaving(true);
-    try {
-      changed(await operation());
-      notify.success(success);
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, '保存に失敗しました'));
-    } finally {
-      setSaving(false);
-    }
+    await writer.write(operation, { success, failure: '保存に失敗しました', onSuccess: changed });
   };
   const header = (
     <div className="flex items-center justify-between gap-3">
@@ -127,6 +120,14 @@ export default function ApplicantDetailPage() {
   return (
     <div className="space-y-6">
       {header}
+      {writer.conflict && (
+        <div role="alert" className="space-y-3 rounded-lg border p-4">
+          <p>応募者情報が更新されています。最新の内容を読み込んでから、改めて操作してください。</p>
+          <Button variant="outline" onClick={() => move('reload')}>
+            最新の内容を読み込む
+          </Button>
+        </div>
+      )}
       <section className="rounded-xl border bg-card p-6 space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -156,7 +157,7 @@ export default function ApplicantDetailPage() {
           {editable && (
             <Button
               variant="outline"
-              disabled={saving}
+              disabled={locked}
               onClick={() => move(mode === 'intake' ? 'close' : 'intake')}
             >
               {mode === 'intake' ? '編集を閉じる' : '受付情報を編集'}
@@ -192,6 +193,7 @@ export default function ApplicantDetailPage() {
           key={`intake:${id}:${applicant.version}`}
           initial={applicant}
           onDirtyChange={setFormDirty}
+          busy={locked}
           onSave={data =>
             save(() => applicantApi.update(id, applicant.version, data), '受付情報を保存しました')
           }
@@ -203,7 +205,7 @@ export default function ApplicantDetailPage() {
           {editable && (
             <Button
               variant="outline"
-              disabled={saving}
+              disabled={locked}
               onClick={() => move(mode === 'interview' ? 'close' : 'interview')}
             >
               {mode === 'interview' ? '編集を閉じる' : '面接記録を編集'}
@@ -218,6 +220,7 @@ export default function ApplicantDetailPage() {
             key={`interview:${id}:${applicant.version}`}
             initial={applicant.interview}
             onDirtyChange={setFormDirty}
+            busy={locked}
             onSave={data =>
               save(
                 () => applicantApi.interview(id, applicant.version, data),
@@ -252,7 +255,7 @@ export default function ApplicantDetailPage() {
           <ApplicantTransitionForm
             key={`transition:${id}:${applicant.version}`}
             applicant={applicant}
-            busy={saving}
+            busy={locked}
             onDirtyChange={setFormDirty}
             onSave={(status, reason) =>
               save(
@@ -270,7 +273,7 @@ export default function ApplicantDetailPage() {
             key={`decision:${id}:${applicant.version}`}
             applicant={applicant}
             canManage={canManage}
-            busy={saving}
+            busy={locked}
             onDirtyChange={setDecisionDirty}
             onSave={(status, reason) =>
               save(

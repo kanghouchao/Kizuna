@@ -82,7 +82,7 @@ export default function CustomersPage() {
     remove: customer => customerApi.delete(customer.id),
     successMessage: '顧客を削除しました',
     errorMessage: '顧客の削除に失敗しました',
-    onDeleted: list.reload,
+    reload: list.reload,
   });
 
   // 統合する 2 行の選択。行そのものではなく ID だけを持つので、ページ送りや検索で
