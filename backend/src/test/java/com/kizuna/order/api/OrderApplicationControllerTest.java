@@ -449,7 +449,7 @@ class OrderApplicationControllerTest {
                 "getId".equals(invocation.getMethod().getName())
                     ? "order-1"
                     : RETURNS_DEFAULTS.answer(invocation));
-    return new OrderDetail(view, List.of(), 0, 0, List.of(), List.of());
+    return new OrderDetail(view, null, List.of(), 0, 0, List.of(), List.of());
   }
 
   private static OrderApplicationItem pendingApplication() {
