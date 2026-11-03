@@ -24,6 +24,7 @@ import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.persistence.Paging;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
 import java.util.HashMap;
@@ -37,7 +38,6 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -78,12 +78,9 @@ public class CastService {
 
   @Transactional(readOnly = true)
   public Page<CastSummaryResponse> list(Long storeId, String search, Pageable pageable) {
-    Sort requestedSort = pageable.getSort();
-    if (requestedSort.getOrderFor("id") == null)
-      requestedSort = requestedSort.and(Sort.by(CastEnrollment::getId));
     Sort sort =
         Sort.by(
-            requestedSort.stream()
+            pageable.getSort().stream()
                 .map(
                     order -> {
                       String alias =
@@ -93,9 +90,7 @@ public class CastService {
                 .toList());
     Page<CastManagementView> page =
         profileRepository.search(
-            storeId,
-            pattern(search),
-            PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort));
+            storeId, pattern(search), Paging.totalOrder(pageable, sort, Sort.Order.asc("e.id")));
     Map<String, CastInvitationStatus> statuses =
         castInvitationService.deriveStatuses(
             storeId, page.getContent().stream().map(CastManagementView::enrollment).toList());

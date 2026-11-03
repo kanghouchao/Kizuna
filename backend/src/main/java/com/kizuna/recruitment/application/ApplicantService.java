@@ -25,6 +25,7 @@ import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.persistence.Paging;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.UserRepository;
 import jakarta.persistence.criteria.Predicate;
@@ -35,7 +36,6 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -80,10 +80,11 @@ public class ApplicantService {
           return cb.and(conditions.toArray(Predicate[]::new));
         };
     var bounded =
-        PageRequest.of(
+        Paging.totalOrder(
             pageable.getPageNumber(),
             Math.clamp(pageable.getPageSize(), 1, 100),
-            Sort.by(Sort.Direction.DESC, Applicant::getCreatedAt, Applicant::getId));
+            Sort.by(Sort.Direction.DESC, Applicant::getCreatedAt),
+            Sort.Order.desc(Applicant::getId));
     var page = applicants.findBy(spec, query -> query.as(ApplicantSummaryView.class).page(bounded));
     var media =
         mediumLookup.findAll(

@@ -45,8 +45,11 @@ import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -210,6 +213,18 @@ class CastServiceTest {
   void missingIs404() {
     assertThatThrownBy(() -> service.get(STORE_ID, "missing"))
         .isInstanceOf(NotFoundException.class);
+  }
+
+  @Test
+  void listPageEndsInEnrollmentIdAfterAliasedCallerSort() {
+    var captor = ArgumentCaptor.forClass(Pageable.class);
+    when(profiles.search(eq(STORE_ID), any(), captor.capture())).thenReturn(Page.empty());
+
+    service.list(STORE_ID, null, PageRequest.of(0, 20, Sort.by("name", "status")));
+
+    assertThat(captor.getValue().getSort())
+        .containsExactly(
+            Sort.Order.asc("p.name"), Sort.Order.asc("e.status"), Sort.Order.asc("e.id"));
   }
 
   @Test

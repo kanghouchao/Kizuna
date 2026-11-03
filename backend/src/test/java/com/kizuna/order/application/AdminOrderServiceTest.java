@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -22,6 +23,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 @ExtendWith(MockitoExtension.class)
 class AdminOrderServiceTest {
@@ -53,6 +55,18 @@ class AdminOrderServiceTest {
 
     verify(orderRepository).findGroupWideViewsInStores(eq(Set.of(3L, 5L)), any(Pageable.class));
     verify(orderRepository, never()).findGroupWideViews(any(Pageable.class));
+  }
+
+  @Test
+  void pageEndsInOrderIdAfterCallerSort() {
+    var captor = ArgumentCaptor.forClass(Pageable.class);
+    when(orderRepository.findGroupWideViews(captor.capture())).thenReturn(Page.empty());
+
+    service.list(new StoreScope(true, Set.of()), PageRequest.of(1, 10, Sort.by("createdAt")));
+
+    assertThat(captor.getValue().getSort())
+        .containsExactly(Sort.Order.asc("createdAt"), Sort.Order.desc("id"));
+    assertThat(captor.getValue().getPageNumber()).isEqualTo(1);
   }
 
   @Test

@@ -3,9 +3,9 @@ package com.kizuna.review.domain;
 import com.kizuna.review.domain.ReviewValues.PermissionStatus;
 import com.kizuna.review.domain.ReviewValues.Status;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.persistence.Paging;
 import java.util.Locale;
 import org.springframework.data.core.TypedPropertyPath;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
@@ -35,16 +35,15 @@ public record ReviewSearch(
     if (reviewId != null) reviewId = ReviewInput.id(reviewId);
   }
 
-  public PageRequest pageable() {
+  public Pageable pageable() {
     boolean asc = order == Order.RECEIVED_ASC || order == Order.CREATED_ASC;
     TypedPropertyPath<ReviewRecord, ?> field =
         order == Order.RECEIVED_ASC || order == Order.RECEIVED_DESC
             ? ReviewRecord::getReceivedAt
             : ReviewRecord::getCreatedAt;
-    return PageRequest.of(
-        page.getPageNumber(),
-        page.getPageSize(),
-        Sort.by(asc ? Sort.Direction.ASC : Sort.Direction.DESC, field, ReviewRecord::getId));
+    Sort.Direction direction = asc ? Sort.Direction.ASC : Sort.Direction.DESC;
+    return Paging.totalOrder(
+        page, Sort.by(direction, field), Sort.Order.by(ReviewRecord::getId).with(direction));
   }
 
   public Specification<ReviewRecord> specification(Long storeId) {
