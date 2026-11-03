@@ -1,3 +1,0 @@
-#
-#Tue Nov 03 16:14:40 JST 2026
-no\ classes\ that\ reside\ in\ a\ package\ '..application..'\ should\ depend\ on\ classes\ that\ reside\ in\ a\ package\ '..api.dto..'=ad3f376b-3c32-4e6a-a3e3-cdc26000cdfa
