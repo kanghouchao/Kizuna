@@ -8,6 +8,8 @@ import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.medium.application.MediumService;
 import com.kizuna.medium.domain.MediumRepository;
 import com.kizuna.medium.lookup.MediumLookup;
+import com.kizuna.order.api.dto.OrderMapperImpl;
+import com.kizuna.order.api.dto.OrderMediumResponse;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.infrastructure.OrderSearchQuery;
 import com.kizuna.settings.application.BusinessDateService;
@@ -33,7 +35,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-/** 実 PG（Liquibase の baseline）で、受注詳細の媒体名が媒体の改名・停止の後も現在名であることを確かめる。 */
+/** 実 PG（Liquibase の baseline）で、受注詳細の応答の媒体名が媒体の改名・停止の後も現在名であることを確かめる。 */
 @EnabledIfIntegration
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class OrderMediumNameIntegrationTest {
@@ -86,10 +88,9 @@ class OrderMediumNameIntegrationTest {
     media.rename(store, medium, "改名後", 0L);
     media.stop(store, medium, 1L);
 
-    var detail = orders.get(store, order);
-    assertThat(detail.view().getMediumId()).isEqualTo(medium);
-    assertThat(detail.mediumName()).isEqualTo("改名後");
-    assertThat(orders.get(store, none).mediumName()).isNull();
+    var response = new OrderMapperImpl().toResponse(orders.get(store, order));
+    assertThat(response.getMedium()).isEqualTo(new OrderMediumResponse(medium, "改名後"));
+    assertThat(new OrderMapperImpl().toResponse(orders.get(store, none)).getMedium()).isNull();
   }
 
   private String order(long store, String source, String mediumId) {
