@@ -1,5 +1,6 @@
 package com.kizuna.memberconsole.api.dto;
 
+import com.kizuna.memberconsole.application.MemberDetail;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -27,6 +28,46 @@ public record MemberDetailResponse(
     List<RankTransition> rankHistory,
     List<Link> links,
     long otherStoreLinkCount) {
+
+  public static MemberDetailResponse of(MemberDetail detail) {
+    var profile = detail.profile();
+    return new MemberDetailResponse(
+        profile.id(),
+        profile.memberCode(),
+        profile.displayName(),
+        profile.email(),
+        profile.lineLinked(),
+        profile.rank(),
+        profile.registeredAt(),
+        profile.withdrawnAt() == null
+            ? null
+            : new Withdrawal(
+                profile.withdrawnAt(),
+                profile.withdrawalReason(),
+                profile.withdrawnBySelf(),
+                profile.withdrawnByName()),
+        detail.balance(),
+        detail.balances().stream().map(b -> new ExpiryBalance(b.expiresOn(), b.points())).toList(),
+        profile.rankHistory().stream()
+            .map(t -> new RankTransition(t.previousRank(), t.newRank(), t.promotedAt()))
+            .toList(),
+        detail.links().segments().stream()
+            .map(
+                s ->
+                    new Link(
+                        s.id(),
+                        s.storeId(),
+                        s.storeName(),
+                        s.customerId(),
+                        s.customerName(),
+                        s.status().name(),
+                        s.reason().name(),
+                        s.linkedAt(),
+                        s.releasedAt(),
+                        s.releaseReason()))
+            .toList(),
+        detail.links().otherStoreCount());
+  }
 
   /** 退会の事実。操作者の表示名は行が消えていれば null。 */
   public record Withdrawal(

@@ -535,7 +535,8 @@ class MemberWithdrawalIntegrationTest {
     // 詳細: 退会情報は職員の表示名で、関連は閲覧者の店舗集合内だけ展開し集合外は件数のみ、明細は WITHDRAWAL_CLEAR を含む。
     var console = context.getBean(MemberConsoleService.class);
     MemberDetailResponse detail =
-        console.detail(member.memberId, new StoreScope(false, java.util.Set.of(store)));
+        MemberDetailResponse.of(
+            console.detail(member.memberId, new StoreScope(false, java.util.Set.of(store))));
     assertThat(detail.email()).isEqualTo(member.email);
     assertThat(detail.withdrawal().reason()).isEqualTo("本人からの電話依頼");
     assertThat(detail.withdrawal().bySelf()).isFalse();
@@ -556,10 +557,15 @@ class MemberWithdrawalIntegrationTest {
     assertThat(
             console
                 .detail(member.memberId, new StoreScope(false, java.util.Set.of(otherStore)))
-                .otherStoreLinkCount())
+                .links()
+                .otherStoreCount())
         .as("集合外は区間ではなく店舗を数える")
         .isEqualTo(1);
-    assertThat(console.detail(member.memberId, new StoreScope(true, java.util.Set.of())).links())
+    assertThat(
+            console
+                .detail(member.memberId, new StoreScope(true, java.util.Set.of()))
+                .links()
+                .segments())
         .hasSize(2);
     var entries =
         console.entries(
@@ -567,7 +573,7 @@ class MemberWithdrawalIntegrationTest {
             PageRequest.of(
                 0, 20, Sort.by(Sort.Direction.DESC, PointEntry::getCreatedAt, PointEntry::getId)));
     assertThat(entries.getContent())
-        .extracting(e -> e.entryType(), e -> e.amount(), e -> e.actorName())
+        .extracting(e -> e.entryType().name(), e -> e.amount(), e -> e.actorName())
         .containsExactly(
             tuple("WITHDRAWAL_CLEAR", -300, "検証職員"), tuple("MANUAL_ADJUST", 300, "検証職員"));
     assertThat(entries.getContent().getFirst().reason()).isEqualTo("会員退会");
