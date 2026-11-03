@@ -10,15 +10,9 @@ import org.springframework.security.web.util.matcher.RequestMatcher;
 import org.springframework.stereotype.Component;
 
 /**
- * resource-server の認証フィルタは decoder より前段で全リクエストの {@code Authorization} ヘッダを見るため、匿名で叩かれるべき
- * 端点でも壊れた（期限切れ・無効署名・ブラックリスト済み）Bearer が付いていると、{@code @PreAuthorize}/{@code @PermitAll} の区別が及ぶ前に 401
- * で弾かれてしまう。フロントエンドはタブのメモリにアクセストークンがあれば全リクエスト（ログイン・招待受諾・公開サイトを含む）に Bearer を付け、
- * そのトークンは期限切れ・ログアウト・資格情報の版の増分の後も、401 を受けてリフレッシュするまでメモリに残る。公開端点は 401 を返さないため、
- * 陳腐なアクセストークンを持つタブはこれらの端点そのものへ到達できなくなる。
+ * 公開端点（{@link #EXEMPTIONS}）では Bearer を解決せず匿名の要求として通し、それ以外は {@link DefaultBearerTokenResolver} に委ねる。
  *
- * <p>{@link #EXEMPTIONS} に列挙した「未認証で叩かれることが前提の公開端点」では Bearer を一切解決せず {@code null}
- * を返し、resource-server に匿名リクエストとして継続させる（decoder/validator に到達しないため壊れた token の内容は一切見ない）。それ以外は {@link
- * DefaultBearerTokenResolver} の既定動作に委譲し、保護端点では従来どおり 壊れた Bearer が 401 になる。
+ * <p>resource-server は認可の判定より前に Bearer を検証するため、タブのメモリに残った陳腐なトークンが公開端点まで 401 にしてしまう。
  */
 @Component
 public class ExemptingBearerTokenResolver implements BearerTokenResolver {

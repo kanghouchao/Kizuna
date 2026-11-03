@@ -13,9 +13,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * アプリが作る {@code OffsetDateTime} の「今」が {@code Timestamps.now()} か業務の時計 {@code now(clock)}
- * のどちらかを通ることを固定する。 それ以外の {@code OffsetDateTime.now(...)} は JVM の時計のナノ秒を持ち込み、保存時に pgjdbc
- * が四捨五入するため、書き込み直後の応答と読み直しで 値が食い違う。Mac の JDK はマイクロ秒単位の時計なので、この食い違いは Linux（コンテナ）でしか再現しない。
+ * アプリが作る {@code OffsetDateTime} の「今」は {@code Timestamps.now()} か業務の時計 {@code now(clock)} を通す。
+ *
+ * <p>それ以外の {@code OffsetDateTime.now(...)} はナノ秒を持ち込み、保存時の四捨五入で応答と読み直しが食い違う。Mac の JDK の時計はマイクロ秒なので
+ * Linux でしか再現しない。
  */
 class TimestampSourceTests {
 
