@@ -131,7 +131,10 @@ describe('useVersionedWrite', () => {
     expect(send).not.toHaveBeenCalled();
   });
 
-  it('重なった取り直しは、最後の一つが終わるまで競合を畳まない', async () => {
+  it.each([
+    ['先に始めた方が先に終わる', [0, 1]],
+    ['後に始めた方が先に終わる', [1, 0]],
+  ])('重なった取り直しは、最後に始めたものの完了で競合を畳む（%s）', async (_, order) => {
     const finishes: (() => void)[] = [];
     const reloadTarget = jest.fn(() => new Promise<void>(resolve => finishes.push(resolve)));
     const { result } = renderHook(() => useVersionedWrite(reloadTarget));
@@ -139,20 +142,18 @@ describe('useVersionedWrite', () => {
     await act(async () => {
       await result.current.write(rejectWith(409), messages);
     });
-    let first: Promise<void> = Promise.resolve();
-    let second: Promise<void> = Promise.resolve();
+    const reloads: Promise<void>[] = [];
     act(() => {
-      first = result.current.reload();
-      second = result.current.reload();
+      reloads.push(result.current.reload(), result.current.reload());
     });
     await act(async () => {
-      finishes[0]();
-      await first;
+      finishes[order[0]]();
+      await reloads[order[0]];
     });
-    expect(result.current.conflict).toBe(true);
+    expect(result.current.conflict).toBe(order[0] === 0);
     await act(async () => {
-      finishes[1]();
-      await second;
+      finishes[order[1]]();
+      await reloads[order[1]];
     });
     expect(result.current.conflict).toBe(false);
   });
