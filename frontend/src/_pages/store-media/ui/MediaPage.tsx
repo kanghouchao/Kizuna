@@ -207,8 +207,8 @@ function MediaList({ manage }: { manage: boolean }) {
         listFailed={renaming !== null && failure !== null}
         onRetryList={() => void reload()}
         busy={writer.busy}
-        // 版は一覧の行から引くので、行が取れるまで（取得中・失敗）は送らせない
-        versionPending={renaming !== null && !renamingNow}
+        // 版は一覧の行から引くので、行が取れるまで（取得中・失敗）と競合後の取り直しが終わるまでは送らせない
+        versionPending={writer.conflict || (renaming !== null && !renamingNow)}
         onClose={() => setModalOpen(false)}
         onSubmit={submitName}
       />

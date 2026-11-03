@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MediaPage } from '..';
 import { mediumApi, type MediumSummary } from '@/entities/medium';
 import { useMe } from '@/entities/user';
@@ -142,9 +142,15 @@ test('改名の 409 は入力を残したまま一覧を取り直し、取り直
   render(<MediaPage />);
   const dialog = await openRename();
   fireEvent.change(within(dialog).getByLabelText('媒体名'), { target: { value: '重複名' } });
-  api.list.mockResolvedValue([{ ...medium, version: 6 }]);
+  let finishList: (rows: MediumSummary[]) => void = () => {};
+  api.list.mockReturnValueOnce(new Promise(resolve => (finishList = resolve)));
   fireEvent.click(within(dialog).getByRole('button', { name: '保存する' }));
   await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2));
+  // 取り直しの応答待ちは古い行が残っているが、その版では送らせない
+  expect(
+    within(screen.getByRole('dialog')).getByRole('button', { name: '保存する' })
+  ).toBeDisabled();
+  await act(async () => finishList([{ ...medium, version: 6 }]));
   expect(notify.error).toHaveBeenCalledWith('同じ名前の媒体が既に登録されています');
   expect(screen.getByRole('dialog')).toBeVisible();
   expect(within(screen.getByRole('dialog')).getByLabelText('媒体名')).toHaveValue('重複名');
