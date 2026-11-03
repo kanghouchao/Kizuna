@@ -2,13 +2,12 @@ package com.kizuna.customer.infrastructure;
 
 import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerListRepository;
-import com.kizuna.shared.config.AppProperties;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.Expression;
 import jakarta.persistence.criteria.Order;
 import jakarta.persistence.criteria.Root;
+import java.time.Clock;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import lombok.RequiredArgsConstructor;
 import org.hibernate.Session;
@@ -48,7 +47,7 @@ public class JpaCustomerListRepository implements CustomerListRepository {
       """;
 
   private final EntityManager em;
-  private final AppProperties appProperties;
+  private final Clock clock;
 
   @Override
   public Page<Row> findAll(Long storeId, Specification<Customer> specification, Pageable pageable) {
@@ -81,7 +80,7 @@ public class JpaCustomerListRepository implements CustomerListRepository {
       orders.add(order.isAscending() ? cb.asc(value) : cb.desc(value));
     }
     query.orderBy(orders);
-    var today = LocalDate.now(ZoneId.of(appProperties.getTimezone()));
+    var today = LocalDate.now(clock);
     var rows =
         em
             .createQuery(query)

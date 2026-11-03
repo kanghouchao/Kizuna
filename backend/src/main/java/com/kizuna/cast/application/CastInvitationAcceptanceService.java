@@ -24,6 +24,7 @@ import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -60,6 +61,7 @@ public class CastInvitationAcceptanceService {
   private final StoreRepository storeRepository;
   private final PasswordEncoder passwordEncoder;
   private final BusinessAudit audit;
+  private final Clock clock;
 
   /** 招待を照会する。受諾可否のビュー状態と店舗名・档案名を返す。 */
   @Transactional(readOnly = true)
@@ -160,15 +162,14 @@ public class CastInvitationAcceptanceService {
    * よって永続化コンテキストのクリアは不要。
    */
   private void claim(CastInvitation invitation) {
-    OffsetDateTime now = Timestamps.now();
-    if (invitation.isExpired(now)) {
+    if (invitation.isExpired(OffsetDateTime.now(clock))) {
       throw new CastInvitationStateException("この招待は有効期限が切れています");
     }
     int claimed =
         castInvitationRepository.claimPending(
             invitation.getId(),
             invitation.getStoreId(),
-            now,
+            Timestamps.now(),
             CastInvitation.Status.PENDING,
             CastInvitation.Status.ACCEPTED);
     if (claimed != 1) {
@@ -260,7 +261,7 @@ public class CastInvitationAcceptanceService {
     if (!enrollment.isMembershipActive()) {
       return "UNAVAILABLE";
     }
-    return invitation.isExpired(Timestamps.now()) ? "EXPIRED" : "VALID";
+    return invitation.isExpired(OffsetDateTime.now(clock)) ? "EXPIRED" : "VALID";
   }
 
   private User saveUser(User user) {

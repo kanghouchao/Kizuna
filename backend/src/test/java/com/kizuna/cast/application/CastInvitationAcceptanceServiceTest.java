@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -30,7 +31,10 @@ import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.sql.SQLException;
+import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,9 +45,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -86,7 +90,32 @@ class CastInvitationAcceptanceServiceTest {
             });
   }
 
-  @InjectMocks private CastInvitationAcceptanceService service;
+  private CastInvitationAcceptanceService service;
+
+  @BeforeEach
+  void setUp() {
+    service = serviceAt(Clock.systemUTC());
+  }
+
+  private CastInvitationAcceptanceService serviceAt(Clock clock) {
+    return new CastInvitationAcceptanceService(
+        castInvitationRepository,
+        castRepository,
+        personRepository,
+        profileRepository,
+        userRepository,
+        storeRepository,
+        passwordEncoder,
+        audit,
+        clock);
+  }
+
+  private static final OffsetDateTime EXPIRES_AT = OffsetDateTime.parse("2025-01-01T15:00:00Z");
+
+  private static Clock clockAt(long microsAfterExpiry) {
+    return Clock.fixed(
+        EXPIRES_AT.plus(microsAfterExpiry, ChronoUnit.MICROS).toInstant(), ZoneOffset.UTC);
+  }
 
   private CastInvitation invitation(
       String castId, long storeId, CastInvitation.Status status, OffsetDateTime expiresAt) {
@@ -221,6 +250,17 @@ class CastInvitationAcceptanceServiceTest {
     assertThat(service.view("tok").status()).isEqualTo("EXPIRED");
   }
 
+  @ParameterizedTest
+  @CsvSource({"0, VALID", "1, EXPIRED"})
+  void view_judgesExpiryOnTheBusinessClock(long micros, String expected) {
+    when(castInvitationRepository.findByToken("tok"))
+        .thenReturn(Optional.of(invitation("c1", 1L, CastInvitation.Status.PENDING, EXPIRES_AT)));
+    when(castRepository.findByIdAndStoreId("c1", 1L)).thenReturn(Optional.of(cast("c1", "花子档案")));
+    stubStore(1L, "店舗A");
+
+    assertThat(serviceAt(clockAt(micros)).view("tok").status()).isEqualTo(expected);
+  }
+
   @Test
   void view_returnsUsedForAccepted() {
     when(castInvitationRepository.findByToken("tok"))
@@ -344,6 +384,25 @@ class CastInvitationAcceptanceServiceTest {
     assertThatThrownBy(() -> service.acceptAsNewUser("tok", acceptRequest("New@Example.com")))
         .isInstanceOf(CastInvitationStateException.class);
     verify(userRepository, never()).save(any());
+  }
+
+  @ParameterizedTest
+  @CsvSource({"0, true", "1, false"})
+  void acceptAsNewUser_judgesExpiryOnTheBusinessClock(long micros, boolean reachesClaim) {
+    when(castInvitationRepository.findByToken("tok"))
+        .thenReturn(Optional.of(invitation("c1", 1L, CastInvitation.Status.PENDING, EXPIRES_AT)));
+    when(castRepository.findByIdAndStoreIdForUpdate("c1", 1L))
+        .thenReturn(Optional.of(cast("c1", "花子档案")));
+    when(userRepository.findByEmail("new@example.com")).thenReturn(Optional.empty());
+
+    // 期限内なら条件付き UPDATE まで進む（モックは 0 行を返すので、そこで受諾済みとして撥ねられる）。
+    assertThatThrownBy(
+            () ->
+                serviceAt(clockAt(micros)).acceptAsNewUser("tok", acceptRequest("new@example.com")))
+        .isInstanceOf(CastInvitationStateException.class)
+        .hasMessageContaining(reachesClaim ? "既に受諾済み" : "有効期限");
+    verify(castInvitationRepository, reachesClaim ? times(1) : never())
+        .claimPending(any(), any(), any(), any(), any());
   }
 
   @Test

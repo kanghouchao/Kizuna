@@ -14,6 +14,7 @@ import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
 import java.security.SecureRandom;
+import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -38,6 +39,7 @@ public class CastInvitationService {
   private final CastInvitationRepository castInvitationRepository;
   private final StoreRepository storeRepository;
   private final BusinessAudit audit;
+  private final Clock clock;
 
   /**
    * 招待を発行する。紐づき済みの在籍は拒否し、既存の PENDING 招待を全て失効させてから最新 1 枚を新規発行する。 在籍は店舗条件付きで引くため他店舗の在籍は
@@ -118,7 +120,7 @@ public class CastInvitationService {
     if (casts.isEmpty()) {
       return Map.of();
     }
-    OffsetDateTime now = Timestamps.now();
+    OffsetDateTime now = OffsetDateTime.now(clock);
     List<String> castIds = casts.stream().map(CastEnrollment::getId).toList();
 
     Map<String, List<CastInvitation>> invitationsByCast = new HashMap<>();
