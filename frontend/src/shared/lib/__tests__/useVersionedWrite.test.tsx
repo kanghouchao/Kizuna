@@ -131,6 +131,32 @@ describe('useVersionedWrite', () => {
     expect(send).not.toHaveBeenCalled();
   });
 
+  it('重なった取り直しは、最後の一つが終わるまで競合を畳まない', async () => {
+    const finishes: (() => void)[] = [];
+    const reloadTarget = jest.fn(() => new Promise<void>(resolve => finishes.push(resolve)));
+    const { result } = renderHook(() => useVersionedWrite(reloadTarget));
+
+    await act(async () => {
+      await result.current.write(rejectWith(409), messages);
+    });
+    let first: Promise<void> = Promise.resolve();
+    let second: Promise<void> = Promise.resolve();
+    act(() => {
+      first = result.current.reload();
+      second = result.current.reload();
+    });
+    await act(async () => {
+      finishes[0]();
+      await first;
+    });
+    expect(result.current.conflict).toBe(true);
+    await act(async () => {
+      finishes[1]();
+      await second;
+    });
+    expect(result.current.conflict).toBe(false);
+  });
+
   it('送信中の二度目は同じ描画の中でも送らない', async () => {
     const { result } = setup();
     let finish: (value: null) => void = () => {};

@@ -25,6 +25,7 @@ export function useVersionedWrite(reloadTarget: () => void | Promise<void>) {
   // state だけでは同じ描画内の二度目の呼び出しを止められないため、送信中は ref でも持つ
   const inFlight = useRef(false);
   const conflictRef = useRef(false);
+  const pendingReloads = useRef(0);
   const [busy, setBusy] = useState(false);
   const [conflict, setConflict] = useState(false);
 
@@ -65,12 +66,17 @@ export function useVersionedWrite(reloadTarget: () => void | Promise<void>) {
     return 'success';
   };
 
-  /** 取り直してから競合を畳む。取り直しはすべてこれを通す。畳むのが先だと取得中に古い版で送れる。 */
+  /**
+   * 取り直してから競合を畳む。取り直しはすべてこれを通す。畳むのが先だと取得中に古い版で送れる。
+   * 重なった取り直しは先のものが早く戻る（後のものに無効化される）ので、最後の一つが終わってから畳む。
+   */
   const reload = async () => {
+    pendingReloads.current += 1;
     try {
       await reloadTarget();
     } finally {
-      markConflict(false);
+      pendingReloads.current -= 1;
+      if (pendingReloads.current === 0) markConflict(false);
     }
   };
 
