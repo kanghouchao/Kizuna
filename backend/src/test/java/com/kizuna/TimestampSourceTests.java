@@ -15,8 +15,8 @@ import org.junit.jupiter.api.Test;
 /**
  * アプリが作る {@code OffsetDateTime} の「今」は {@code Timestamps.now()} か業務の時計 {@code now(clock)} を通す。
  *
- * <p>それ以外の {@code OffsetDateTime.now(...)} はナノ秒を持ち込み、保存時の四捨五入で応答と読み直しが食い違う。Mac の JDK の時計はマイクロ秒なので
- * Linux でしか再現しない。
+ * <p>それ以外の {@code OffsetDateTime.now(...)} はシステム時計の精度のまま値を持ち込み、保存時の四捨五入で応答と読み直しが食い違う。時計の精度は OS と
+ * JDK で異なり、手元で再現しないことがある。
  */
 class TimestampSourceTests {
 
