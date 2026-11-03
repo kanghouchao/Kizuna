@@ -49,6 +49,7 @@ import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
 import liquibase.integration.spring.SpringLiquibase;
@@ -536,7 +537,7 @@ class MemberWithdrawalIntegrationTest {
     var console = context.getBean(MemberConsoleService.class);
     MemberDetailResponse detail =
         MemberDetailResponse.of(
-            console.detail(member.memberId, new StoreScope(false, java.util.Set.of(store))));
+            console.detail(member.memberId, new StoreScope(false, Set.of(store))));
     assertThat(detail.email()).isEqualTo(member.email);
     assertThat(detail.withdrawal().reason()).isEqualTo("本人からの電話依頼");
     assertThat(detail.withdrawal().bySelf()).isFalse();
@@ -556,16 +557,12 @@ class MemberWithdrawalIntegrationTest {
     assertThat(detail.otherStoreLinkCount()).isEqualTo(1);
     assertThat(
             console
-                .detail(member.memberId, new StoreScope(false, java.util.Set.of(otherStore)))
+                .detail(member.memberId, new StoreScope(false, Set.of(otherStore)))
                 .links()
                 .otherStoreCount())
         .as("集合外は区間ではなく店舗を数える")
         .isEqualTo(1);
-    assertThat(
-            console
-                .detail(member.memberId, new StoreScope(true, java.util.Set.of()))
-                .links()
-                .segments())
+    assertThat(console.detail(member.memberId, new StoreScope(true, Set.of())).links().segments())
         .hasSize(2);
     var entries =
         console.entries(
