@@ -51,6 +51,12 @@ public class StrictScalarJsonModule extends JacksonModule {
                     .setCoercion(CoercionInputShape.EmptyString, CoercionAction.Fail)
                     .setCoercion(CoercionInputShape.Boolean, CoercionAction.Fail))
         .withCoercionConfig(
+            LogicalType.Float,
+            c ->
+                c.setCoercion(CoercionInputShape.String, CoercionAction.Fail)
+                    .setCoercion(CoercionInputShape.EmptyString, CoercionAction.Fail)
+                    .setCoercion(CoercionInputShape.Boolean, CoercionAction.Fail))
+        .withCoercionConfig(
             LogicalType.Enum,
             c ->
                 c.setCoercion(CoercionInputShape.Integer, CoercionAction.Fail)
