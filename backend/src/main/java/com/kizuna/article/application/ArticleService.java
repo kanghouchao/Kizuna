@@ -6,6 +6,7 @@ import com.kizuna.article.domain.ArticlePublicView;
 import com.kizuna.article.domain.ArticleRepository;
 import com.kizuna.article.domain.ArticleSummaryView;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.persistence.Paging;
 import com.kizuna.shared.publication.Publication;
 import com.kizuna.user.application.BusinessAudit;
 import java.time.Clock;
@@ -15,8 +16,8 @@ import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,10 +41,10 @@ public class ArticleService {
   public Page<ArticlePublicSummaryView> listPublic(Long storeId, Pageable pageable) {
     // 並びは公開設定が決める。呼出側の sort は受け取らない
     var page =
-        PageRequest.of(
-            pageable.getPageNumber(),
-            pageable.getPageSize(),
-            Publication.order(Article::getPublication, Article::getId));
+        Paging.totalOrder(
+            pageable,
+            Publication.order(Article::getPublication, Article::getId),
+            Sort.Order.asc(Article::getId));
     return articles.findBy(
         ArticleRepository.displayed(storeId, OffsetDateTime.now(clock)),
         q -> q.as(ArticlePublicSummaryView.class).page(page));

@@ -27,6 +27,7 @@ import com.kizuna.review.domain.ReviewSummaryView;
 import com.kizuna.review.domain.ReviewValues.Operation;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.persistence.Paging;
 import com.kizuna.shared.publication.Publication;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PermissionCode;
@@ -36,8 +37,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -120,10 +121,10 @@ public class ReviewService {
   public Page<ReviewPublicResponse> listPublic(Long storeId, Pageable pageable) {
     // 並びは公開設定が決める。呼出側の sort は受け取らない
     var page =
-        PageRequest.of(
-            pageable.getPageNumber(),
-            pageable.getPageSize(),
-            Publication.order(ReviewRecord::getPublication, ReviewRecord::getId));
+        Paging.totalOrder(
+            pageable,
+            Publication.order(ReviewRecord::getPublication, ReviewRecord::getId),
+            Sort.Order.asc(ReviewRecord::getId));
     return reviews
         .findBy(
             ReviewSummaryView.displayed(storeId, OffsetDateTime.now(clock)),
