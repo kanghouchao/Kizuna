@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -15,6 +16,7 @@ import com.kizuna.article.domain.Article;
 import com.kizuna.article.domain.ArticleRepository;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.persistence.FluentPageCaptor;
 import com.kizuna.shared.publication.Publication;
 import com.kizuna.user.application.BusinessAudit;
 import java.time.Clock;
@@ -24,6 +26,9 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class ArticleServiceTest {
@@ -47,6 +52,23 @@ class ArticleServiceTest {
               if (saved.getVersion() == null) ReflectionTestUtils.setField(saved, "version", 0L);
               return saved;
             });
+  }
+
+  @Test
+  void publicListEndsInIdAfterPublicationOrder() {
+    var pages = new FluentPageCaptor();
+    doAnswer(pages.answer()).when(articles).findBy(any(Specification.class), any());
+
+    service.listPublic(1L, PageRequest.of(2, 10, Sort.by("ignored")));
+
+    var sort = pages.captured().getSort().toList();
+    assertThat(sort)
+        .first()
+        .extracting(Sort.Order::getProperty)
+        .isEqualTo("publication.displayOrder");
+    assertThat(sort).last().isEqualTo(Sort.Order.asc("id"));
+    assertThat(sort).extracting(Sort.Order::getProperty).doesNotContain("ignored");
+    assertThat(pages.captured().getPageNumber()).isEqualTo(2);
   }
 
   @Test

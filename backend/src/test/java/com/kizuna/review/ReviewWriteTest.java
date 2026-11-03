@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -33,6 +34,7 @@ import com.kizuna.review.domain.ReviewValues.Operation;
 import com.kizuna.review.domain.ReviewValues.ReceivedVia;
 import com.kizuna.review.domain.ReviewValues.Status;
 import com.kizuna.shared.exception.ConflictException;
+import com.kizuna.shared.persistence.FluentPageCaptor;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.PermissionCode;
 import java.time.Clock;
@@ -45,6 +47,9 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.projection.SpelAwareProxyProjectionFactory;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -107,6 +112,23 @@ class ReviewWriteTest {
 
   private static ReviewCommand.Decide approve(String key) {
     return new ReviewCommand.Decide("10", 0L, Operation.APPROVED, "確認", key);
+  }
+
+  @Test
+  void publicListEndsInIdAfterPublicationOrder() {
+    var pages = new FluentPageCaptor();
+    doAnswer(pages.answer()).when(reviews).findBy(any(Specification.class), any());
+
+    service.listPublic(1L, PageRequest.of(2, 10, Sort.by("ignored")));
+
+    var sort = pages.captured().getSort().toList();
+    assertThat(sort)
+        .first()
+        .extracting(Sort.Order::getProperty)
+        .isEqualTo("publication.displayOrder");
+    assertThat(sort).last().isEqualTo(Sort.Order.asc("id"));
+    assertThat(sort).extracting(Sort.Order::getProperty).doesNotContain("ignored");
+    assertThat(pages.captured().getPageNumber()).isEqualTo(2);
   }
 
   @Test
