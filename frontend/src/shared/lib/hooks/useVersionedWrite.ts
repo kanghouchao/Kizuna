@@ -50,7 +50,8 @@ export function useVersionedWrite(reloadTarget: () => void | Promise<void>) {
         return 'conflict';
       }
       if (isNotFound(error)) {
-        void reloadTarget();
+        // 取り直しが終わるまで送信中のまま。終わる前に次を受けると古い版で送る
+        await reloadTarget();
         return 'notFound';
       }
       return 'failed';
@@ -64,10 +65,13 @@ export function useVersionedWrite(reloadTarget: () => void | Promise<void>) {
     return 'success';
   };
 
-  /** 競合を畳んで取り直す。取り直しはすべてこれを通す。 */
+  /** 取り直してから競合を畳む。取り直しはすべてこれを通す。畳むのが先だと取得中に古い版で送れる。 */
   const reload = async () => {
-    markConflict(false);
-    await reloadTarget();
+    try {
+      await reloadTarget();
+    } finally {
+      markConflict(false);
+    }
   };
 
   return { busy, conflict, write, reload };

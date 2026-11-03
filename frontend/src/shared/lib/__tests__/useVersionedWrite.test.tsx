@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import { useVersionedWrite } from '@/shared/lib';
 
@@ -94,6 +94,41 @@ describe('useVersionedWrite', () => {
     expect(notify.error).toHaveBeenCalledWith('入力が不正です');
     expect(reloadTarget).not.toHaveBeenCalled();
     expect(result.current.conflict).toBe(false);
+  });
+
+  it('取り直しが終わるまでは、409 の後も 404 の後も次を送らない', async () => {
+    let finishReload: () => void = () => {};
+    const reloadTarget = jest.fn(() => new Promise<void>(resolve => (finishReload = resolve)));
+    const { result } = renderHook(() => useVersionedWrite(reloadTarget));
+    const send = jest.fn(async () => null);
+
+    await act(async () => {
+      await result.current.write(rejectWith(409), messages);
+    });
+    let reloading: Promise<void> = Promise.resolve();
+    act(() => {
+      reloading = result.current.reload();
+    });
+    expect(await act(() => result.current.write(send, messages))).toBe('refused');
+    await act(async () => {
+      finishReload();
+      await reloading;
+    });
+    expect(result.current.conflict).toBe(false);
+
+    let notFound: Promise<unknown> = Promise.resolve();
+    act(() => {
+      notFound = result.current.write(rejectWith(404), messages);
+    });
+    await waitFor(() => expect(reloadTarget).toHaveBeenCalledTimes(2));
+    expect(await act(() => result.current.write(send, messages))).toBe('refused');
+    expect(result.current.busy).toBe(true);
+    await act(async () => {
+      finishReload();
+      await notFound;
+    });
+    expect(result.current.busy).toBe(false);
+    expect(send).not.toHaveBeenCalled();
   });
 
   it('送信中の二度目は同じ描画の中でも送らない', async () => {
