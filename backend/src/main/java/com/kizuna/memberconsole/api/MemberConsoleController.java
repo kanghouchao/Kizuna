@@ -46,7 +46,8 @@ public class MemberConsoleController {
       @RequestParam(defaultValue = "ACTIVE") MemberStatusFilter status,
       @RequestParam(required = false) String search,
       Pageable pageable) {
-    return ResponseEntity.ok(memberConsoleService.list(status, search, pageable));
+    return ResponseEntity.ok(
+        memberConsoleService.list(status, search, pageable).map(MemberSummaryResponse::of));
   }
 
   /** 関連の展開範囲は閲覧者の店舗集合で決まるので、要求ごとに解決した集合を渡す（解決できなければ 403）。 */
@@ -55,7 +56,7 @@ public class MemberConsoleController {
   public ResponseEntity<MemberDetailResponse> get(@PathVariable Long id) {
     StoreScope scope = storeScopeHolder.current();
     if (scope == null) throw new AccessDeniedException("店舗集合スコープを解決できません");
-    return ResponseEntity.ok(memberConsoleService.detail(id, scope));
+    return ResponseEntity.ok(MemberDetailResponse.of(memberConsoleService.detail(id, scope)));
   }
 
   @GetMapping("/{id}/point-entries")
@@ -67,7 +68,8 @@ public class MemberConsoleController {
               sort = {"createdAt", "id"},
               direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return ResponseEntity.ok(memberConsoleService.entries(id, pageable));
+    return ResponseEntity.ok(
+        memberConsoleService.entries(id, pageable).map(MemberLedgerEntryResponse::of));
   }
 
   /** 代行退会。操作者は検証済みトークンの利用者 ID。二度目は 409、存在しない会員は 404。 */

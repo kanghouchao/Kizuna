@@ -15,11 +15,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kizuna.customer.application.CustomerMemberLinkDirectory.MemberLinks;
+import com.kizuna.member.application.MemberDirectoryService.MemberProfile;
+import com.kizuna.member.application.MemberDirectoryService.MemberSummary;
 import com.kizuna.member.application.MemberStatusFilter;
 import com.kizuna.member.domain.MemberAlreadyWithdrawnException;
-import com.kizuna.memberconsole.api.dto.MemberDetailResponse;
-import com.kizuna.memberconsole.api.dto.MemberSummaryResponse;
 import com.kizuna.memberconsole.application.MemberConsoleService;
+import com.kizuna.memberconsole.application.MemberDetail;
 import com.kizuna.point.domain.PointEntry;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.CommonExceptionHandler;
@@ -254,8 +256,8 @@ class MemberConsoleControllerTest {
     };
   }
 
-  private static MemberSummaryResponse summary(long id, OffsetDateTime withdrawnAt) {
-    return new MemberSummaryResponse(
+  private static MemberSummary summary(long id, OffsetDateTime withdrawnAt) {
+    return new MemberSummary(
         id,
         "123456789012",
         "会員 花子",
@@ -265,20 +267,25 @@ class MemberConsoleControllerTest {
         withdrawnAt);
   }
 
-  private static MemberDetailResponse detail() {
-    return new MemberDetailResponse(
-        7L,
-        "123456789012",
-        "会員 花子",
-        "hanako@example.com",
-        false,
-        "SILVER",
-        OffsetDateTime.now(),
-        null,
+  private static MemberDetail detail() {
+    return new MemberDetail(
+        new MemberProfile(
+            7L,
+            "123456789012",
+            10L,
+            "会員 花子",
+            "hanako@example.com",
+            false,
+            "SILVER",
+            OffsetDateTime.now(),
+            null,
+            null,
+            null,
+            false,
+            null,
+            List.of()),
         300L,
         List.of(),
-        List.of(),
-        List.of(),
-        2L);
+        new MemberLinks(List.of(), 2L));
   }
 }

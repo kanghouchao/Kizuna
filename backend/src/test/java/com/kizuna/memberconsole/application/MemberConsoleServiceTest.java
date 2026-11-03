@@ -73,7 +73,7 @@ class MemberConsoleServiceTest {
                         null)),
                 2));
 
-    MemberDetailResponse detail = service.detail(7L, SCOPE);
+    MemberDetailResponse detail = MemberDetailResponse.of(service.detail(7L, SCOPE));
 
     assertThat(detail.memberCode()).isEqualTo("123456789012");
     assertThat(detail.withdrawal()).isNull();
@@ -103,7 +103,7 @@ class MemberConsoleServiceTest {
     when(memberDirectoryService.findProfile(7L)).thenReturn(Optional.of(profile(AT)));
     when(linkDirectory.findByMember(7L, SCOPE)).thenReturn(new MemberLinks(List.of(), 0));
 
-    MemberDetailResponse detail = service.detail(7L, SCOPE);
+    MemberDetailResponse detail = MemberDetailResponse.of(service.detail(7L, SCOPE));
 
     assertThat(detail.withdrawal().withdrawnAt()).isEqualTo(AT);
     assertThat(detail.withdrawal().reason()).isEqualTo("電話依頼");
