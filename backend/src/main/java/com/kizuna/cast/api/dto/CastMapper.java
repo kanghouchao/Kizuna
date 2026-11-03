@@ -1,9 +1,10 @@
 package com.kizuna.cast.api.dto;
 
 import com.kizuna.cast.application.CastCreateCommand;
+import com.kizuna.cast.application.CastDetail;
+import com.kizuna.cast.application.CastUpdateCommand;
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastFieldDefinition;
-import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastProfilePatch;
 import java.util.Comparator;
@@ -19,39 +20,27 @@ public interface CastMapper {
   @Mapping(target = "id", source = "enrollment.id")
   @Mapping(target = "status", source = "enrollment.status")
   @Mapping(target = "startedOn", source = "enrollment.startedOn")
-  @Mapping(target = "deletable", source = "deletable")
-  @Mapping(target = "invitationStatus", source = "invitationStatus")
   @Mapping(target = "endedAt", source = "enrollment.endedAt")
   @Mapping(target = "createdAt", source = "enrollment.createdAt")
   @Mapping(target = "updatedAt", source = "enrollment.updatedAt")
-  @Mapping(target = "customFields", expression = "java(combine(enrollment, profile))")
-  CastResponse toResponse(
-      CastEnrollment enrollment,
-      CastProfile profile,
-      CastInvitationStatus invitationStatus,
-      boolean deletable);
+  @Mapping(
+      target = "customFields",
+      expression = "java(combine(detail.enrollment(), detail.profile()))")
+  CastResponse toResponse(CastDetail detail);
 
   @Mapping(target = ".", source = "profile")
   @Mapping(target = "id", source = "enrollment.id")
   @Mapping(target = "status", source = "enrollment.status")
   @Mapping(target = "startedOn", source = "enrollment.startedOn")
-  @Mapping(target = "deletable", source = "deletable")
-  @Mapping(target = "invitationStatus", source = "invitationStatus")
-  CastSummaryResponse toSummaryResponse(
-      CastEnrollment enrollment,
-      CastProfile profile,
-      CastInvitationStatus invitationStatus,
-      boolean deletable);
-
-  @Mapping(target = "enrollmentId", source = "enrollmentId")
-  @Mapping(target = "displayOrder", defaultValue = "0")
-  @Mapping(target = "publicationStatus", constant = "UNPUBLISHED")
-  @Mapping(target = "customFields", ignore = true)
-  CastProfile toProfile(CastCreateCommand command, String enrollmentId);
+  CastSummaryResponse toSummaryResponse(CastDetail detail);
 
   CastCreateCommand toCommand(CastCreateRequest request);
 
   CastProfilePatch toPatch(CastUpdateRequest request);
+
+  default CastUpdateCommand toCommand(CastUpdateRequest request) {
+    return new CastUpdateCommand(toPatch(request), request.getCustomFields());
+  }
 
   @Mapping(target = "id", source = "enrollmentId")
   @Mapping(target = "customFields", ignore = true)

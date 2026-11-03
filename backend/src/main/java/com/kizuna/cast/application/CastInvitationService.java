@@ -1,6 +1,5 @@
 package com.kizuna.cast.application;
 
-import com.kizuna.cast.api.dto.CastInvitationResponse;
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastInvitation;
@@ -56,7 +55,7 @@ public class CastInvitationService {
    * 再読込で再確認し、 並行受諾が在籍を紐づけていれば新規発行を中止する（連携済み在籍に有効トークンが残る矛盾を塞ぐ）。
    */
   @Transactional
-  public CastInvitationResponse issue(Long storeId, String castId, String actorEmail) {
+  public CastInvitation issue(Long storeId, String castId, String actorEmail) {
     // 招待行を書く前に店舗行・在籍行を押さえる（ADR 0016）。招待を先に押さえると、同じ在籍を
     // 「店舗 → 在籍 → 招待」の順で辿る受諾と逆順になって環になる。
     storeRepository.lockAgainstDeletion(storeId);
@@ -111,7 +110,7 @@ public class CastInvitationService {
             "status", saved.getStatus().name(),
             "expires_at", saved.getExpiresAt().toString(),
             "version", Objects.toString(saved.getVersion(), "")));
-    return new CastInvitationResponse(saved.getToken(), saved.getExpiresAt());
+    return saved;
   }
 
   /** ページ内の档案について招待状態を一括導出する。 */

@@ -32,7 +32,8 @@ public class CastInvitationController {
   @PermitAll
   public ResponseEntity<CastInvitationDetailResponse> view(
       @Valid @RequestBody CastInvitationTokenRequest request) {
-    return ResponseEntity.ok(acceptanceService.view(request.getToken()));
+    return ResponseEntity.ok(
+        CastInvitationDetailResponse.of(acceptanceService.view(request.getToken())));
   }
 
   @PostMapping("/acceptance")
@@ -40,7 +41,9 @@ public class CastInvitationController {
   public ResponseEntity<CastAcceptanceResponse> acceptAsNewUser(
       @Valid @RequestBody CastInvitationAcceptRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(acceptanceService.acceptAsNewUser(request.getToken(), request));
+        .body(
+            new CastAcceptanceResponse(
+                acceptanceService.acceptAsNewUser(request.getToken(), request.command())));
   }
 
   /**
@@ -56,7 +59,8 @@ public class CastInvitationController {
             UsernamePasswordAuthenticationToken.unauthenticated(
                 request.getEmail(), request.getPassword()));
     return ResponseEntity.ok(
-        acceptanceService.acceptAsExistingUser(
-            request.getToken(), authentication.getName(), request.getPassword()));
+        new CastAcceptanceResponse(
+            acceptanceService.acceptAsExistingUser(
+                request.getToken(), authentication.getName(), request.getPassword())));
   }
 }

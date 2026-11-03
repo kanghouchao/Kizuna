@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
-import com.kizuna.cast.api.dto.CastInvitationAcceptRequest;
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastInvitationStateException;
@@ -117,16 +116,11 @@ class CastInvitationAuditIntegrationTest {
   }
 
   private String issue(String enrollmentId) {
-    return issuing.issue(storeId, enrollmentId, STAFF).token();
+    return issuing.issue(storeId, enrollmentId, STAFF).getToken();
   }
 
-  private CastInvitationAcceptRequest request(String token, String email) {
-    var request = new CastInvitationAcceptRequest();
-    request.setToken(token);
-    request.setEmail(email);
-    request.setPassword("password-123");
-    request.setDisplayName("新規の本人");
-    return request;
+  private CastNewUserAcceptCommand request(String email) {
+    return new CastNewUserAcceptCommand(email, "password-123", "新規の本人");
   }
 
   private long audits(String action) {
@@ -159,7 +153,7 @@ class CastInvitationAuditIntegrationTest {
             enrollmentId);
     assertThat(issued.get("version")).isEqualTo(String.valueOf(issued.get("stored")));
 
-    accepting.acceptAsNewUser(token, request(token, "new-" + UUID.randomUUID() + "@example.test"));
+    accepting.acceptAsNewUser(token, request("new-" + UUID.randomUUID() + "@example.test"));
 
     var accepted =
         jdbc.queryForMap(
@@ -205,7 +199,7 @@ class CastInvitationAuditIntegrationTest {
       assertThatThrownBy(
               () ->
                   accepting.acceptAsNewUser(
-                      token, request(token, "x-" + UUID.randomUUID() + "@example.test")))
+                      token, request("x-" + UUID.randomUUID() + "@example.test")))
           .isInstanceOf(DataIntegrityViolationException.class);
     } finally {
       allowAudit();
@@ -226,7 +220,7 @@ class CastInvitationAuditIntegrationTest {
   void existingUserAcceptanceRollsBackOnAuditFailureThenAuditsRealVersion() {
     String email = "existing-" + UUID.randomUUID() + "@example.test";
     String home = issue(enrollment());
-    accepting.acceptAsNewUser(home, request(home, email));
+    accepting.acceptAsNewUser(home, request(email));
     Long otherStoreId =
         transactions.execute(
             status ->
@@ -246,7 +240,7 @@ class CastInvitationAuditIntegrationTest {
                   .saveAndFlush(enrollment)
                   .getId();
             });
-    String token = issuing.issue(otherStoreId, enrollmentId, STAFF).token();
+    String token = issuing.issue(otherStoreId, enrollmentId, STAFF).getToken();
     long acceptedAudits = audits("CAST_INVITATION_ACCEPTED");
 
     rejectAudit("CAST_INVITATION_ACCEPTED");
@@ -309,7 +303,7 @@ class CastInvitationAuditIntegrationTest {
     ready.countDown();
     if (!start.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("同時操作が開始されませんでした");
     try {
-      accepting.acceptAsNewUser(token, request(token, "r-" + UUID.randomUUID() + "@example.test"));
+      accepting.acceptAsNewUser(token, request("r-" + UUID.randomUUID() + "@example.test"));
       return true;
     } catch (CastInvitationStateException lost) {
       return false;

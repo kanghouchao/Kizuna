@@ -13,11 +13,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kizuna.cast.api.dto.CastInvitationResponse;
 import com.kizuna.cast.api.dto.CastMapperImpl;
-import com.kizuna.cast.api.dto.CastSummaryResponse;
 import com.kizuna.cast.application.CastCreateCommand;
-import com.kizuna.cast.application.CastCreation;
+import com.kizuna.cast.application.CastDetail;
 import com.kizuna.cast.application.CastEnrollmentService;
 import com.kizuna.cast.application.CastInvitationService;
 import com.kizuna.cast.application.CastService;
@@ -25,6 +23,8 @@ import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentSnapshot;
 import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.cast.domain.CastEnrollmentStatusHistory;
+import com.kizuna.cast.domain.CastInvitation;
+import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastPublicationStatus;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
@@ -33,6 +33,7 @@ import com.kizuna.user.application.StoreScopeResolver;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -81,7 +82,7 @@ class CastControllerTest {
   void listAppendsIdTiebreakerWhenCallerOverridesSort() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-    Page<CastSummaryResponse> empty = new PageImpl<>(List.of());
+    Page<CastDetail> empty = new PageImpl<>(List.of());
     when(castService.list(eq(1L), any(), pageableCaptor.capture())).thenReturn(empty);
 
     mockMvc.perform(get("/casts?sort=name").header("X-Store-ID", "1")).andExpect(status().isOk());
@@ -160,7 +161,7 @@ class CastControllerTest {
   void listPassesBlankSearchAsNull() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<String> searchCaptor = ArgumentCaptor.forClass(String.class);
-    Page<CastSummaryResponse> empty = new PageImpl<>(List.of());
+    Page<CastDetail> empty = new PageImpl<>(List.of());
     when(castService.list(eq(1L), searchCaptor.capture(), any())).thenReturn(empty);
 
     mockMvc
@@ -176,7 +177,8 @@ class CastControllerTest {
   void issueInvitationPassesTheOperatorAsAuditActor() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(castInvitationService.issue(1L, "cast-1", "operator@example.test"))
-        .thenReturn(new CastInvitationResponse("token", OffsetDateTime.now()));
+        .thenReturn(
+            CastInvitation.builder().token("token").expiresAt(OffsetDateTime.now()).build());
 
     mockMvc
         .perform(
@@ -202,6 +204,33 @@ class CastControllerTest {
         .andExpect(status().isNoContent());
 
     verify(castService).delete(1L, "cast-1", "operator@example.test");
+  }
+
+  @Test
+  @DisplayName("詳細は内部・公開のカスタムフィールド値を一つの custom_fields に合わせて返すこと")
+  @WithMockUser(authorities = "PERM_CAST_MANAGE")
+  void detailCombinesInternalAndPublicCustomFields() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    CastEnrollment enrollment =
+        CastEnrollment.builder()
+            .status(CastEnrollmentStatus.ENROLLED)
+            .customFields(Map.of("memo", "内部"))
+            .build();
+    enrollment.setId("e1");
+    CastProfile profile =
+        CastProfile.builder().name("花").customFields(Map.of("hobby", "読書")).build();
+    when(castService.get(1L, "e1"))
+        .thenReturn(new CastDetail(enrollment, profile, CastInvitationStatus.INVITED, false));
+
+    mockMvc
+        .perform(get("/casts/e1").header("X-Store-ID", "1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value("e1"))
+        .andExpect(jsonPath("$.name").value("花"))
+        .andExpect(jsonPath("$.custom_fields.memo").value("内部"))
+        .andExpect(jsonPath("$.custom_fields.hobby").value("読書"))
+        .andExpect(jsonPath("$.invitation_status").value("INVITED"))
+        .andExpect(jsonPath("$.deletable").value(false));
   }
 
   @Test
@@ -266,9 +295,10 @@ class CastControllerTest {
     ArgumentCaptor<CastCreateCommand> captor = ArgumentCaptor.forClass(CastCreateCommand.class);
     when(castService.create(eq(1L), captor.capture(), eq("operator@example.test")))
         .thenReturn(
-            new CastCreation(
+            new CastDetail(
                 CastEnrollment.builder().status(CastEnrollmentStatus.ENROLLED).build(),
                 new CastProfile(),
+                null,
                 true));
     mockMvc
         .perform(

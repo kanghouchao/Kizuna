@@ -9,9 +9,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.cast.api.dto.CastAcceptanceResponse;
-import com.kizuna.cast.api.dto.CastInvitationAcceptRequest;
-import com.kizuna.cast.api.dto.CastInvitationDetailResponse;
 import com.kizuna.cast.domain.Cast;
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
@@ -148,7 +145,8 @@ class CastInvitationAcceptanceServiceTest {
                     "c1", 1L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1))));
     when(castRepository.findByIdAndStoreIdForUpdate("c1", 1L)).thenReturn(Optional.of(enrollment));
 
-    assertThatThrownBy(() -> service.acceptAsNewUser("tok", new CastInvitationAcceptRequest()))
+    assertThatThrownBy(
+            () -> service.acceptAsNewUser("tok", new CastNewUserAcceptCommand(null, null, null)))
         .isInstanceOf(CastInvitationStateException.class);
     assertThatThrownBy(() -> service.acceptAsExistingUser("tok", "cast@example.com", "pw"))
         .isInstanceOf(CastInvitationStateException.class);
@@ -188,12 +186,8 @@ class CastInvitationAcceptanceServiceTest {
     return user;
   }
 
-  private CastInvitationAcceptRequest acceptRequest(String email) {
-    CastInvitationAcceptRequest request = new CastInvitationAcceptRequest();
-    request.setEmail(email);
-    request.setPassword("password1");
-    request.setDisplayName("花子");
-    return request;
+  private CastNewUserAcceptCommand acceptRequest(String email) {
+    return new CastNewUserAcceptCommand(email, "password1", "花子");
   }
 
   private void stubStore(long storeId, String name) {
@@ -211,7 +205,7 @@ class CastInvitationAcceptanceServiceTest {
     when(castRepository.findByIdAndStoreId("c1", 1L)).thenReturn(Optional.of(cast("c1", "花子档案")));
     stubStore(1L, "店舗A");
 
-    CastInvitationDetailResponse response = service.view("tok");
+    CastInvitationDetail response = service.view("tok");
 
     assertThat(response.status()).isEqualTo("VALID");
     assertThat(response.storeName()).isEqualTo("店舗A");
@@ -299,10 +293,9 @@ class CastInvitationAcceptanceServiceTest {
             });
     stubStore(1L, "店舗A");
 
-    CastAcceptanceResponse response =
-        service.acceptAsNewUser("tok", acceptRequest("New@Example.com"));
+    String storeName = service.acceptAsNewUser("tok", acceptRequest("New@Example.com"));
 
-    assertThat(response.storeName()).isEqualTo("店舗A");
+    assertThat(storeName).isEqualTo("店舗A");
     // 招待の状態遷移は条件付き UPDATE（claimPending）が担う。エンティティは受諾後に変更しない。
     verify(castInvitationRepository)
         .claimPending(
@@ -467,9 +460,9 @@ class CastInvitationAcceptanceServiceTest {
         .thenReturn(1);
     stubStore(2L, "店舗B");
 
-    CastAcceptanceResponse response = service.acceptAsExistingUser("tok", "cast@example.com", "pw");
+    String storeName = service.acceptAsExistingUser("tok", "cast@example.com", "pw");
 
-    assertThat(response.storeName()).isEqualTo("店舗B");
+    assertThat(storeName).isEqualTo("店舗B");
     assertThat(existing.getStoreIds()).containsExactlyInAnyOrder(1L, 2L);
     assertThat(existing.getUserType()).isEqualTo(UserType.CAST);
     assertThat(cast.getCastId()).isEqualTo(7L);
@@ -502,9 +495,9 @@ class CastInvitationAcceptanceServiceTest {
         .thenReturn(1);
     stubStore(2L, "店舗B");
 
-    CastAcceptanceResponse response = service.acceptAsExistingUser("tok", "cast@example.com", "pw");
+    String storeName = service.acceptAsExistingUser("tok", "cast@example.com", "pw");
 
-    assertThat(response.storeName()).isEqualTo("店舗B");
+    assertThat(storeName).isEqualTo("店舗B");
     // ALL_STORES 授権は招待受諾で SPECIFIC_STORES へ降格させない（全店アクセス権を1店舗に狭めない）。
     assertThat(existing.getStoreScopeType()).isEqualTo(StoreScopeType.ALL_STORES);
     assertThat(existing.getStoreIds()).isEmpty();

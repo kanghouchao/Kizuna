@@ -7,10 +7,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.cast.api.dto.CastFieldDefinitionCreateRequest;
-import com.kizuna.cast.api.dto.CastFieldDefinitionMapper;
-import com.kizuna.cast.api.dto.CastFieldDefinitionResponse;
-import com.kizuna.cast.api.dto.CastFieldDefinitionUpdateRequest;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastFieldDefinition;
 import com.kizuna.cast.domain.CastFieldDefinitionPatch;
@@ -36,7 +32,6 @@ class CastFieldDefinitionServiceTest {
 
   @Mock private CastFieldDefinitionRepository repository;
   @Mock private CastEnrollmentService enrollmentService;
-  @Mock private CastFieldDefinitionMapper mapper;
   @Mock private StoreRepository storeRepository;
   @Mock private CastEnrollmentRepository enrollmentRepository;
   @Mock private CastProfileRepository profileRepository;
@@ -44,11 +39,8 @@ class CastFieldDefinitionServiceTest {
 
   @InjectMocks private CastFieldDefinitionService service;
 
-  private CastFieldDefinitionCreateRequest createRequest(String key, String label) {
-    CastFieldDefinitionCreateRequest req = new CastFieldDefinitionCreateRequest();
-    req.setKey(key);
-    req.setLabel(label);
-    return req;
+  private CastFieldDefinitionCreateCommand createRequest(String key, String label) {
+    return new CastFieldDefinitionCreateCommand(key, label, null);
   }
 
   @Test
@@ -57,7 +49,6 @@ class CastFieldDefinitionServiceTest {
     when(repository.countByStoreId(STORE_ID)).thenReturn(0L);
     when(repository.findMaxDisplayOrder(STORE_ID)).thenReturn(null);
     when(repository.saveAndFlush(any())).thenAnswer(i -> i.getArgument(0));
-    when(mapper.toResponse(any())).thenReturn(new CastFieldDefinitionResponse());
 
     service.create(STORE_ID, createRequest("blood_type", "血液型"));
 
@@ -73,7 +64,6 @@ class CastFieldDefinitionServiceTest {
     when(repository.countByStoreId(STORE_ID)).thenReturn(3L);
     when(repository.findMaxDisplayOrder(STORE_ID)).thenReturn(5);
     when(repository.saveAndFlush(any())).thenAnswer(i -> i.getArgument(0));
-    when(mapper.toResponse(any())).thenReturn(new CastFieldDefinitionResponse());
 
     service.create(STORE_ID, createRequest("hobby", "趣味"));
 
@@ -88,7 +78,6 @@ class CastFieldDefinitionServiceTest {
     when(repository.countByStoreId(STORE_ID)).thenReturn(0L);
     when(repository.findMaxDisplayOrder(STORE_ID)).thenReturn(null);
     when(repository.saveAndFlush(any())).thenAnswer(i -> i.getArgument(0));
-    when(mapper.toResponse(any())).thenReturn(new CastFieldDefinitionResponse());
 
     service.create(STORE_ID, createRequest("hobby", "趣味"));
 
@@ -147,13 +136,8 @@ class CastFieldDefinitionServiceTest {
             .build();
     when(repository.findByIdAndStoreId("d1", STORE_ID)).thenReturn(Optional.of(existing));
     when(repository.save(any())).thenAnswer(i -> i.getArgument(0));
-    when(mapper.toResponse(any())).thenReturn(new CastFieldDefinitionResponse());
 
-    CastFieldDefinitionUpdateRequest req = new CastFieldDefinitionUpdateRequest();
-    req.setLabel("血液型（更新）");
-    when(mapper.toPatch(req)).thenReturn(new CastFieldDefinitionPatch("血液型（更新）", null, null));
-
-    service.update(STORE_ID, "d1", req);
+    service.update(STORE_ID, "d1", new CastFieldDefinitionPatch("血液型（更新）", null, null));
 
     assertThat(existing.getLabel()).isEqualTo("血液型（更新）");
     // null フィールドは変更なし
@@ -167,7 +151,8 @@ class CastFieldDefinitionServiceTest {
     when(repository.findByIdAndStoreId("missing", STORE_ID)).thenReturn(Optional.empty());
 
     assertThatThrownBy(
-            () -> service.update(STORE_ID, "missing", new CastFieldDefinitionUpdateRequest()))
+            () ->
+                service.update(STORE_ID, "missing", new CastFieldDefinitionPatch(null, null, null)))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("見つかりません");
   }

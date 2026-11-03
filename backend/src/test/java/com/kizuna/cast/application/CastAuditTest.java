@@ -12,8 +12,6 @@ import static org.mockito.Mockito.when;
 import com.kizuna.audit.domain.AuditEvent;
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
-import com.kizuna.cast.api.dto.CastMapper;
-import com.kizuna.cast.api.dto.CastUpdateRequest;
 import com.kizuna.cast.domain.CastCascadeCounts;
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
@@ -24,6 +22,7 @@ import com.kizuna.cast.domain.CastFieldDefinition;
 import com.kizuna.cast.domain.CastFieldDefinitionRepository;
 import com.kizuna.cast.domain.CastInvitationRepository;
 import com.kizuna.cast.domain.CastProfile;
+import com.kizuna.cast.domain.CastProfilePatch;
 import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.cast.domain.CastPublicationStatus;
 import com.kizuna.shared.exception.ConflictException;
@@ -47,7 +46,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mapstruct.factory.Mappers;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -86,7 +84,6 @@ class CastAuditTest {
         new CastService(
             enrollments,
             lifecycle,
-            Mappers.getMapper(CastMapper.class),
             profiles,
             stores,
             new CastInvitationService(
@@ -168,10 +165,11 @@ class CastAuditTest {
   @Test
   void privateOnlyEditIsAuditedButRepeatedAndEmptyInputsAreNot() {
     existing();
-    service.update(STORE_ID, "enrollment", new CastUpdateRequest(), "operator@example.test");
+    service.update(STORE_ID, "enrollment", customFields(null), "operator@example.test");
     assertThat(recorded).isEmpty();
-    var request = new CastUpdateRequest();
-    request.setName("変更後の非公開名");
+    var request =
+        new CastUpdateCommand(
+            new CastProfilePatch("変更後の非公開名", null, null, null, null, null, null, null, null), null);
     service.update(STORE_ID, "enrollment", request, "operator@example.test");
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
@@ -181,6 +179,11 @@ class CastAuditTest {
         .doesNotContain("非公開", "変更後");
     service.update(STORE_ID, "enrollment", request, "operator@example.test");
     assertThat(recorded).hasSize(1);
+  }
+
+  private static CastUpdateCommand customFields(Map<String, String> values) {
+    return new CastUpdateCommand(
+        new CastProfilePatch(null, null, null, null, null, null, null, null, null), values);
   }
 
   @AfterEach
@@ -253,8 +256,7 @@ class CastAuditTest {
             List.of(
                 CastFieldDefinition.builder().key("private-key").isPublic(false).build(),
                 CastFieldDefinition.builder().key("public-key").isPublic(true).build()));
-    var request = new CastUpdateRequest();
-    request.setCustomFields(Map.of("private-key", "秘密の内部値", "public-key", "秘密の公開値"));
+    var request = customFields(Map.of("private-key", "秘密の内部値", "public-key", "秘密の公開値"));
     service.update(STORE_ID, "enrollment", request, "operator@example.test");
     assertThat(recorded).hasSize(1);
     assertThat(recorded.getFirst().getAfterValues())
@@ -274,8 +276,7 @@ class CastAuditTest {
         .doesNotContain("private-key", "public-key", "秘密");
     service.update(STORE_ID, "enrollment", request, "operator@example.test");
     assertThat(recorded).hasSize(1);
-    request.setCustomFields(Map.of());
-    service.update(STORE_ID, "enrollment", request, "operator@example.test");
+    service.update(STORE_ID, "enrollment", customFields(Map.of()), "operator@example.test");
     assertThat(recorded).hasSize(2);
     assertThat(recorded.getLast().getAfterValues())
         .containsEntry("redacted_fields_changed", "internal_custom_fields,public_custom_fields");
@@ -309,8 +310,7 @@ class CastAuditTest {
     assertThat(recorded.getFirst().getOriginatingStoreId()).isEqualTo(1L);
     assertThatThrownBy(() -> lifecycle.suspend(STORE_ID, "enrollment", "operator@example.test"))
         .isInstanceOf(ServiceException.class);
-    var request = new CastUpdateRequest();
-    request.setCustomFields(Map.of("unknown-private-key", "秘密"));
+    var request = customFields(Map.of("unknown-private-key", "秘密"));
     assertThatThrownBy(
             () -> service.update(STORE_ID, "enrollment", request, "operator@example.test"))
         .isInstanceOf(ServiceException.class);

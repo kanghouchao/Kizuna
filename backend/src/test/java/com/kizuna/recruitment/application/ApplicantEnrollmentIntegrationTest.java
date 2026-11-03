@@ -12,7 +12,6 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
 
 import com.kizuna.audit.recording.AuditWriter;
-import com.kizuna.cast.api.dto.CastMapperImpl;
 import com.kizuna.cast.application.CastEnrollmentService;
 import com.kizuna.cast.application.CastInvitationService;
 import com.kizuna.cast.application.CastService;
@@ -243,7 +242,7 @@ class ApplicantEnrollmentIntegrationTest {
   void deletingAnEnrollmentHeldByAnApplicantIsRefusedWithConflict() {
     String applicant = hiredApplicant(storeId);
     String enrollment = applicants.enroll(storeId, applicant, request(0L), ACTOR).enrollmentId();
-    assertThat(context.getBean(CastService.class).get(storeId, enrollment).isDeletable()).isFalse();
+    assertThat(context.getBean(CastService.class).get(storeId, enrollment).deletable()).isFalse();
     assertThatThrownBy(() -> context.getBean(CastService.class).delete(storeId, enrollment, ACTOR))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("応募者から在籍登録された");
@@ -304,7 +303,6 @@ class ApplicantEnrollmentIntegrationTest {
     CastService.class,
     CastEnrollmentService.class,
     CastInvitationService.class,
-    CastMapperImpl.class,
     MediumLookup.class
   })
   static class Config {

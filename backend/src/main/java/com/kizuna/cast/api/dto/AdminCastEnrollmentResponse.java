@@ -2,6 +2,7 @@ package com.kizuna.cast.api.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.kizuna.cast.domain.CastEnrollmentStatus;
+import com.kizuna.cast.domain.CastPersonEnrollmentView;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 
@@ -13,4 +14,16 @@ public record AdminCastEnrollmentResponse(
     String name,
     CastEnrollmentStatus status,
     LocalDate startedOn,
-    OffsetDateTime endedAt) {}
+    OffsetDateTime endedAt) {
+
+  public static AdminCastEnrollmentResponse of(CastPersonEnrollmentView row) {
+    return new AdminCastEnrollmentResponse(
+        row.getId(),
+        row.getStoreId(),
+        row.getStoreName(),
+        row.getName(),
+        row.getStatus(),
+        row.getStartedOn(),
+        row.getEndedAt());
+  }
+}

@@ -7,8 +7,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.cast.api.dto.CastMapper;
-import com.kizuna.cast.api.dto.CastUpdateRequest;
 import com.kizuna.cast.domain.ApplicantReferenceCheck;
 import com.kizuna.cast.domain.AttendanceReferenceCheck;
 import com.kizuna.cast.domain.CastEnrollment;
@@ -21,6 +19,7 @@ import com.kizuna.cast.domain.CastFieldDefinition;
 import com.kizuna.cast.domain.CastFieldDefinitionRepository;
 import com.kizuna.cast.domain.CastManagementView;
 import com.kizuna.cast.domain.CastProfile;
+import com.kizuna.cast.domain.CastProfilePatch;
 import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.cast.domain.CastPublicationStatus;
 import com.kizuna.cast.domain.OrderReferenceCheck;
@@ -33,6 +32,7 @@ import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -41,7 +41,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -79,7 +78,6 @@ class CastServiceTest {
         new CastService(
             enrollments,
             new CastEnrollmentService(enrollments, histories, snapshots, users, stores, audit),
-            Mappers.getMapper(CastMapper.class),
             profiles,
             stores,
             invitations,
@@ -103,6 +101,17 @@ class CastServiceTest {
         .thenReturn(Optional.of(enrollment));
     when(profiles.findByEnrollmentIdAndStoreId("e1", STORE_ID))
         .thenReturn(Optional.of(CastProfile.builder().name("花").enrollmentId("e1").build()));
+  }
+
+  private static CastUpdateCommand customFields(Map<String, String> values) {
+    return new CastUpdateCommand(
+        new CastProfilePatch(null, null, null, null, null, null, null, null, null), values);
+  }
+
+  private static Map<String, String> combined(CastDetail detail) {
+    Map<String, String> values = new HashMap<>(detail.enrollment().getCustomFields());
+    values.putAll(detail.profile().getCustomFields());
+    return values;
   }
 
   private void actor() {
@@ -162,26 +171,23 @@ class CastServiceTest {
             List.of(
                 CastFieldDefinition.builder().key("memo").isPublic(false).build(),
                 CastFieldDefinition.builder().key("hobby").isPublic(true).build()));
-    CastUpdateRequest request = new CastUpdateRequest();
-    request.setCustomFields(Map.of("memo", "内部", "hobby", "読書"));
-    assertThat(service.update(STORE_ID, "e1", request, "actor").getCustomFields())
-        .containsExactlyInAnyOrderEntriesOf(request.getCustomFields());
+    var values = Map.of("memo", "内部", "hobby", "読書");
+    assertThat(combined(service.update(STORE_ID, "e1", customFields(values), "actor")))
+        .containsExactlyInAnyOrderEntriesOf(values);
     assertThat(
             enrollments.findByIdAndStoreIdForUpdate("e1", STORE_ID).orElseThrow().getCustomFields())
         .containsOnlyKeys("memo");
     assertThat(
             profiles.findByEnrollmentIdAndStoreId("e1", STORE_ID).orElseThrow().getCustomFields())
         .containsOnlyKeys("hobby");
-    request.setCustomFields(Map.of());
-    assertThat(service.update(STORE_ID, "e1", request, "actor").getCustomFields()).isEmpty();
+    assertThat(combined(service.update(STORE_ID, "e1", customFields(Map.of()), "actor"))).isEmpty();
   }
 
   @Test
   void unknownFieldIsRejected() {
     existing();
-    CastUpdateRequest request = new CastUpdateRequest();
-    request.setCustomFields(Map.of("unknown", "値"));
-    assertThatThrownBy(() -> service.update(STORE_ID, "e1", request, "actor"))
+    var command = customFields(Map.of("unknown", "値"));
+    assertThatThrownBy(() -> service.update(STORE_ID, "e1", command, "actor"))
         .isInstanceOf(ServiceException.class);
   }
 
@@ -190,9 +196,8 @@ class CastServiceTest {
     existing();
     when(definitions.findAllByStoreIdOrderByDisplayOrderAsc(STORE_ID))
         .thenReturn(List.of(CastFieldDefinition.builder().key("memo").isPublic(false).build()));
-    CastUpdateRequest request = new CastUpdateRequest();
-    request.setCustomFields(Map.of("memo", "x".repeat(501)));
-    assertThatThrownBy(() -> service.update(STORE_ID, "e1", request, "actor"))
+    var command = customFields(Map.of("memo", "x".repeat(501)));
+    assertThatThrownBy(() -> service.update(STORE_ID, "e1", command, "actor"))
         .isInstanceOf(ServiceException.class);
   }
 
@@ -202,10 +207,7 @@ class CastServiceTest {
     when(enrollments.findByIdAndStoreId("e1", STORE_ID)).thenReturn(Optional.of(enrollment));
     when(profiles.findByEnrollmentIdAndStoreId("e1", STORE_ID))
         .thenReturn(Optional.of(CastProfile.builder().name("花").enrollmentId("e1").build()));
-    assertThat(
-            service
-                .changePublication(STORE_ID, "e1", CastPublicationStatus.PUBLISHED)
-                .publicationStatus())
+    assertThat(service.changePublication(STORE_ID, "e1", CastPublicationStatus.PUBLISHED))
         .isEqualTo(CastPublicationStatus.PUBLISHED);
   }
 
@@ -250,7 +252,7 @@ class CastServiceTest {
     when(attendance.findReferencedCastIds(any())).thenReturn(Set.of("attendance"));
     var response = service.list(STORE_ID, null, PageRequest.of(0, 20));
     assertThat(response.getContent())
-        .extracting(r -> r.isDeletable())
+        .extracting(CastDetail::deletable)
         .containsExactly(true, false, false);
     verify(orders).findReferencedCastIds(Set.of("free", "order", "attendance"));
     verify(attendance).findReferencedCastIds(Set.of("free", "order", "attendance"));
@@ -260,8 +262,7 @@ class CastServiceTest {
   void updateReturnsReferenceAwareDeletability() {
     existing();
     when(orders.findReferencedCastIds(Set.of("e1"))).thenReturn(Set.of("e1"));
-    assertThat(service.update(STORE_ID, "e1", new CastUpdateRequest(), "actor").isDeletable())
-        .isFalse();
+    assertThat(service.update(STORE_ID, "e1", customFields(null), "actor").deletable()).isFalse();
   }
 
   @Test

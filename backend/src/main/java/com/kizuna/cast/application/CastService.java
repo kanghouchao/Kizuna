@@ -1,11 +1,5 @@
 package com.kizuna.cast.application;
 
-import com.kizuna.cast.api.dto.CastMapper;
-import com.kizuna.cast.api.dto.CastPublicResponse;
-import com.kizuna.cast.api.dto.CastPublicationResponse;
-import com.kizuna.cast.api.dto.CastResponse;
-import com.kizuna.cast.api.dto.CastSummaryResponse;
-import com.kizuna.cast.api.dto.CastUpdateRequest;
 import com.kizuna.cast.domain.ApplicantReferenceCheck;
 import com.kizuna.cast.domain.AttendanceReferenceCheck;
 import com.kizuna.cast.domain.CastEnrollment;
@@ -66,7 +60,6 @@ public class CastService {
 
   private final CastEnrollmentRepository castRepository;
   private final CastEnrollmentService enrollmentService;
-  private final CastMapper castMapper;
   private final CastProfileRepository profileRepository;
   private final StoreRepository storeRepository;
   private final CastInvitationService castInvitationService;
@@ -77,7 +70,7 @@ public class CastService {
   private final BusinessAudit audit;
 
   @Transactional(readOnly = true)
-  public Page<CastSummaryResponse> list(Long storeId, String search, Pageable pageable) {
+  public Page<CastDetail> list(Long storeId, String search, Pageable pageable) {
     // 並びは JPQL の別名（p. / e.）付きで渡す。別名は実体のプロパティではないので、型付きの参照にできず文字列で組む。
     Sort sort =
         Sort.by(
@@ -99,7 +92,7 @@ public class CastService {
         deletableIds(page.getContent().stream().map(CastManagementView::enrollment).toList());
     return page.map(
         view ->
-            castMapper.toSummaryResponse(
+            new CastDetail(
                 view.enrollment(),
                 view.profile(),
                 statuses.get(view.enrollment().getId()),
@@ -107,9 +100,9 @@ public class CastService {
   }
 
   @Transactional(readOnly = true)
-  public CastResponse get(Long storeId, String id) {
+  public CastDetail get(Long storeId, String id) {
     CastEnrollment enrollment = requireEnrollment(storeId, id);
-    return castMapper.toResponse(
+    return new CastDetail(
         enrollment,
         requireProfile(storeId, id),
         castInvitationService.deriveStatuses(storeId, List.of(enrollment)).get(id),
@@ -159,7 +152,7 @@ public class CastService {
   }
 
   @Transactional
-  public CastCreation create(Long storeId, CastCreateCommand command, String actorEmail) {
+  public CastDetail create(Long storeId, CastCreateCommand command, String actorEmail) {
     storeRepository.lockCastFields(storeId);
     CastEnrollment newEnrollment =
         CastEnrollment.builder()
@@ -169,7 +162,7 @@ public class CastService {
     newEnrollment.setStoreId(storeId);
     CastEnrollment enrollment = castRepository.save(newEnrollment);
     enrollmentService.recordCreation(enrollment, actorEmail);
-    CastProfile newProfile = castMapper.toProfile(command, enrollment.getId());
+    CastProfile newProfile = command.profile(enrollment.getId());
     newProfile.setStoreId(storeId);
     CastProfile profile = profileRepository.save(newProfile);
     profileRepository.flush();
@@ -183,8 +176,8 @@ public class CastService {
         null,
         Map.of(),
         snapshot(enrollment, profile));
-    return new CastCreation(
-        enrollment, profile, deletableIds(List.of(enrollment)).contains(enrollment.getId()));
+    return new CastDetail(
+        enrollment, profile, null, deletableIds(List.of(enrollment)).contains(enrollment.getId()));
   }
 
   private static Map<String, String> snapshot(CastEnrollment enrollment, CastProfile profile) {
@@ -200,8 +193,7 @@ public class CastService {
   }
 
   @Transactional
-  public CastResponse update(
-      Long storeId, String id, CastUpdateRequest request, String actorEmail) {
+  public CastDetail update(Long storeId, String id, CastUpdateCommand command, String actorEmail) {
     storeRepository.lockCastFields(storeId);
     CastEnrollment enrollment =
         castRepository
@@ -210,23 +202,24 @@ public class CastService {
     CastProfile profile = requireProfile(storeId, id);
     var before = snapshot(enrollment, profile);
     var privateBefore = privateValues(enrollment, profile);
-    if (request.getName() != null && request.getName().isBlank())
-      throw new ServiceException("源氏名は必須です");
-    if (request.getCustomFields() != null) {
-      validateCustomFields(storeId, request.getCustomFields());
+    String name = command.profile().name();
+    if (name != null && name.isBlank()) throw new ServiceException("源氏名は必須です");
+    Map<String, String> customFields = command.customFields();
+    if (customFields != null) {
+      validateCustomFields(storeId, customFields);
       Map<String, String> internal = new HashMap<>();
       Map<String, String> external = new HashMap<>();
       for (CastFieldDefinition definition :
           castFieldDefinitionRepository.findAllByStoreIdOrderByDisplayOrderAsc(storeId)) {
-        if (request.getCustomFields().containsKey(definition.getKey())) {
+        if (customFields.containsKey(definition.getKey())) {
           (Boolean.TRUE.equals(definition.getIsPublic()) ? external : internal)
-              .put(definition.getKey(), request.getCustomFields().get(definition.getKey()));
+              .put(definition.getKey(), customFields.get(definition.getKey()));
         }
       }
       enrollmentService.replaceInternalFields(enrollment, internal, actorEmail);
       profile.replaceCustomFields(external);
     }
-    profile.apply(castMapper.toPatch(request));
+    profile.apply(command.profile());
     var changedFields = new TreeSet<String>();
     var privateAfter = privateValues(enrollment, profile);
     privateAfter.forEach(
@@ -250,7 +243,7 @@ public class CastService {
           before,
           after);
     }
-    return castMapper.toResponse(
+    return new CastDetail(
         enrollment, profile, null, deletableIds(List.of(enrollment)).contains(enrollment.getId()));
   }
 
@@ -271,7 +264,7 @@ public class CastService {
   }
 
   @Transactional
-  public CastPublicationResponse changePublication(
+  public CastPublicationStatus changePublication(
       Long storeId, String id, CastPublicationStatus status) {
     requireEnrollment(storeId, id);
     CastProfile profile = requireProfile(storeId, id);
@@ -291,7 +284,7 @@ public class CastService {
           before,
           profileSnapshot(profile));
     }
-    return new CastPublicationResponse(profile.getPublicationStatus());
+    return profile.getPublicationStatus();
   }
 
   private static Map<String, String> profileSnapshot(CastProfile profile) {
@@ -384,11 +377,9 @@ public class CastService {
   }
 
   @Transactional(readOnly = true)
-  public List<CastPublicResponse> listPublished(Long storeId) {
-    List<CastFieldDefinition> publicDefinitions =
-        castFieldDefinitionRepository.findByStoreIdAndIsPublicTrueOrderByDisplayOrderAsc(storeId);
-    return profileRepository.findPublished(storeId).stream()
-        .map(cast -> castMapper.toPublicResponse(cast, publicDefinitions))
-        .toList();
+  public PublishedCasts listPublished(Long storeId) {
+    return new PublishedCasts(
+        profileRepository.findPublished(storeId),
+        castFieldDefinitionRepository.findByStoreIdAndIsPublicTrueOrderByDisplayOrderAsc(storeId));
   }
 }

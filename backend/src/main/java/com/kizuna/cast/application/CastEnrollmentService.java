@@ -1,8 +1,5 @@
 package com.kizuna.cast.application;
 
-import com.kizuna.cast.api.dto.CastEnrollmentSnapshotResponse;
-import com.kizuna.cast.api.dto.CastEnrollmentStatusHistoryResponse;
-import com.kizuna.cast.api.dto.CastEnrollmentStatusResponse;
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastEnrollmentSnapshot;
@@ -40,7 +37,7 @@ public class CastEnrollmentService {
   private final BusinessAudit audit;
 
   @Transactional
-  public CastEnrollmentStatusResponse suspend(Long storeId, String id, String actorEmail) {
+  public CastEnrollment suspend(Long storeId, String id, String actorEmail) {
     CastEnrollment enrollment = requireLocked(storeId, id);
     var before = snapshot(enrollment);
     CastEnrollmentStatus previous = enrollment.getStatus();
@@ -48,11 +45,11 @@ public class CastEnrollmentService {
     var history = record(enrollment, previous, actorEmail, Timestamps.now());
     enrollments.flush();
     recordAudit(enrollment, history, actorEmail, before);
-    return response(enrollment);
+    return enrollment;
   }
 
   @Transactional
-  public CastEnrollmentStatusResponse resume(Long storeId, String id, String actorEmail) {
+  public CastEnrollment resume(Long storeId, String id, String actorEmail) {
     CastEnrollment enrollment = requireLocked(storeId, id);
     var before = snapshot(enrollment);
     CastEnrollmentStatus previous = enrollment.getStatus();
@@ -60,11 +57,11 @@ public class CastEnrollmentService {
     var history = record(enrollment, previous, actorEmail, Timestamps.now());
     enrollments.flush();
     recordAudit(enrollment, history, actorEmail, before);
-    return response(enrollment);
+    return enrollment;
   }
 
   @Transactional
-  public CastEnrollmentStatusResponse withdraw(Long storeId, String id, String actorEmail) {
+  public CastEnrollment withdraw(Long storeId, String id, String actorEmail) {
     CastEnrollment enrollment = requireLocked(storeId, id);
     var before = snapshot(enrollment);
     CastEnrollmentStatus previous = enrollment.getStatus();
@@ -73,7 +70,7 @@ public class CastEnrollmentService {
     var history = record(enrollment, previous, actorEmail, at);
     enrollments.flush();
     recordAudit(enrollment, history, actorEmail, before);
-    return response(enrollment);
+    return enrollment;
   }
 
   @Transactional(propagation = Propagation.MANDATORY)
@@ -119,34 +116,15 @@ public class CastEnrollmentService {
   }
 
   @Transactional(readOnly = true)
-  public Page<CastEnrollmentStatusHistoryResponse> history(
-      Long storeId, String id, Pageable pageable) {
+  public Page<CastEnrollmentStatusHistory> history(Long storeId, String id, Pageable pageable) {
     require(storeId, id);
-    return histories
-        .findByStoreIdAndEnrollmentId(storeId, id, pageable)
-        .map(
-            row ->
-                new CastEnrollmentStatusHistoryResponse(
-                    row.getId(),
-                    row.getPreviousStatus(),
-                    row.getNewStatus(),
-                    row.getActorId(),
-                    row.getRecordedAt()));
+    return histories.findByStoreIdAndEnrollmentId(storeId, id, pageable);
   }
 
   @Transactional(readOnly = true)
-  public Page<CastEnrollmentSnapshotResponse> snapshots(
-      Long storeId, String id, Pageable pageable) {
+  public Page<CastEnrollmentSnapshot> snapshots(Long storeId, String id, Pageable pageable) {
     require(storeId, id);
-    return snapshots
-        .findByStoreIdAndEnrollmentId(storeId, id, pageable)
-        .map(
-            row ->
-                new CastEnrollmentSnapshotResponse(
-                    row.getId(),
-                    row.getActorId(),
-                    row.getRecordedAt(),
-                    new HashMap<>(row.getCustomFields())));
+    return snapshots.findByStoreIdAndEnrollmentId(storeId, id, pageable);
   }
 
   private CastEnrollment require(Long storeId, String id) {
@@ -216,10 +194,5 @@ public class CastEnrollmentService {
         "status", enrollment.getStatus().name(),
         "ended_at", Objects.toString(enrollment.getEndedAt(), ""),
         "version", Objects.toString(enrollment.getVersion(), ""));
-  }
-
-  private static CastEnrollmentStatusResponse response(CastEnrollment enrollment) {
-    return new CastEnrollmentStatusResponse(
-        enrollment.getId(), enrollment.getStatus(), enrollment.getEndedAt());
   }
 }

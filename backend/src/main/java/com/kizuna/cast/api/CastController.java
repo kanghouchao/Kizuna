@@ -55,13 +55,14 @@ public class CastController {
       @CurrentStore Long storeId,
       @RequestParam(required = false) String search,
       @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
-    return ResponseEntity.ok(castService.list(storeId, search, pageable));
+    return ResponseEntity.ok(
+        castService.list(storeId, search, pageable).map(castMapper::toSummaryResponse));
   }
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
   public ResponseEntity<CastResponse> get(@CurrentStore Long storeId, @PathVariable String id) {
-    return ResponseEntity.ok(castService.get(storeId, id));
+    return ResponseEntity.ok(castMapper.toResponse(castService.get(storeId, id)));
   }
 
   @PostMapping
@@ -71,10 +72,7 @@ public class CastController {
       @Valid @RequestBody CastCreateRequest request,
       Principal principal) {
     var created = castService.create(storeId, castMapper.toCommand(request), principal.getName());
-    return ResponseEntity.status(HttpStatus.CREATED)
-        .body(
-            castMapper.toResponse(
-                created.enrollment(), created.profile(), null, created.deletable()));
+    return ResponseEntity.status(HttpStatus.CREATED).body(castMapper.toResponse(created));
   }
 
   @PutMapping("/{id}")
@@ -84,7 +82,9 @@ public class CastController {
       @PathVariable String id,
       @Valid @RequestBody CastUpdateRequest request,
       Principal principal) {
-    return ResponseEntity.ok(castService.update(storeId, id, request, principal.getName()));
+    return ResponseEntity.ok(
+        castMapper.toResponse(
+            castService.update(storeId, id, castMapper.toCommand(request), principal.getName())));
   }
 
   @DeleteMapping("/{id}")
@@ -100,7 +100,9 @@ public class CastController {
   public ResponseEntity<CastInvitationResponse> issueInvitation(
       @CurrentStore Long storeId, @PathVariable String id, Principal principal) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(castInvitationService.issue(storeId, id, principal.getName()));
+        .body(
+            CastInvitationResponse.of(
+                castInvitationService.issue(storeId, id, principal.getName())));
   }
 
   @PatchMapping("/{id}/publication")
@@ -110,28 +112,32 @@ public class CastController {
       @PathVariable String id,
       @Valid @RequestBody CastPublicationRequest request) {
     return ResponseEntity.ok(
-        castService.changePublication(storeId, id, request.publicationStatus()));
+        new CastPublicationResponse(
+            castService.changePublication(storeId, id, request.publicationStatus())));
   }
 
   @PostMapping("/{id}/suspension")
   @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
   public CastEnrollmentStatusResponse suspend(
       @CurrentStore Long storeId, @PathVariable String id, Principal principal) {
-    return enrollmentService.suspend(storeId, id, principal.getName());
+    return CastEnrollmentStatusResponse.of(
+        enrollmentService.suspend(storeId, id, principal.getName()));
   }
 
   @PostMapping("/{id}/resumption")
   @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
   public CastEnrollmentStatusResponse resume(
       @CurrentStore Long storeId, @PathVariable String id, Principal principal) {
-    return enrollmentService.resume(storeId, id, principal.getName());
+    return CastEnrollmentStatusResponse.of(
+        enrollmentService.resume(storeId, id, principal.getName()));
   }
 
   @PostMapping("/{id}/withdrawal")
   @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
   public CastEnrollmentStatusResponse withdraw(
       @CurrentStore Long storeId, @PathVariable String id, Principal principal) {
-    return enrollmentService.withdraw(storeId, id, principal.getName());
+    return CastEnrollmentStatusResponse.of(
+        enrollmentService.withdraw(storeId, id, principal.getName()));
   }
 
   @GetMapping("/{id}/status-histories")
@@ -144,7 +150,9 @@ public class CastController {
               sort = {"recordedAt", "id"},
               direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return enrollmentService.history(storeId, id, pageable);
+    return enrollmentService
+        .history(storeId, id, pageable)
+        .map(CastEnrollmentStatusHistoryResponse::of);
   }
 
   @GetMapping("/{id}/snapshots")
@@ -157,12 +165,18 @@ public class CastController {
               sort = {"recordedAt", "id"},
               direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return enrollmentService.snapshots(storeId, id, pageable);
+    return enrollmentService
+        .snapshots(storeId, id, pageable)
+        .map(CastEnrollmentSnapshotResponse::of);
   }
 
   @GetMapping("/public")
   @PermitAll
   public ResponseEntity<List<CastPublicResponse>> listPublic(@CurrentStore Long storeId) {
-    return ResponseEntity.ok(castService.listPublished(storeId));
+    var published = castService.listPublished(storeId);
+    return ResponseEntity.ok(
+        published.profiles().stream()
+            .map(profile -> castMapper.toPublicResponse(profile, published.publicDefinitions()))
+            .toList());
   }
 }

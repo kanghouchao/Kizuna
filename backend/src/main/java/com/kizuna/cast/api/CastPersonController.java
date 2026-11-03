@@ -30,13 +30,13 @@ public class CastPersonController {
               size = 20,
               sort = {"id"})
           Pageable pageable) {
-    return service.list(search, pageable);
+    return service.list(search, pageable).map(AdminCastSummaryResponse::of);
   }
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_CAST_PERSON_VIEW')")
   public AdminCastResponse get(@PathVariable Long id) {
-    return service.get(id);
+    return AdminCastResponse.of(service.get(id));
   }
 
   @GetMapping("/{id}/enrollments")
@@ -48,6 +48,6 @@ public class CastPersonController {
               sort = {"createdAt", "id"},
               direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return service.enrollments(id, pageable);
+    return service.enrollments(id, pageable).map(AdminCastEnrollmentResponse::of);
   }
 }

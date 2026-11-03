@@ -9,7 +9,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.cast.api.dto.CastInvitationResponse;
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastInvitation;
@@ -86,11 +85,10 @@ class CastInvitationServiceTest {
     when(castInvitationRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
     OffsetDateTime before = OffsetDateTime.now();
-    CastInvitationResponse response =
-        castInvitationService.issue(STORE_ID, "c1", "op@example.test");
+    CastInvitation response = castInvitationService.issue(STORE_ID, "c1", "op@example.test");
 
-    assertThat(response.token()).isNotBlank();
-    assertThat(response.expiresAt())
+    assertThat(response.getToken()).isNotBlank();
+    assertThat(response.getExpiresAt())
         .isBetween(
             before.plus(Duration.ofHours(72)).minusMinutes(1),
             OffsetDateTime.now().plus(Duration.ofHours(72)).plusMinutes(1));

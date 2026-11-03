@@ -5,13 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
-import com.kizuna.cast.api.dto.CastMapper;
-import com.kizuna.cast.api.dto.CastUpdateRequest;
 import com.kizuna.cast.domain.ApplicantReferenceCheck;
 import com.kizuna.cast.domain.AttendanceReferenceCheck;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastFieldDefinition;
 import com.kizuna.cast.domain.CastFieldDefinitionRepository;
+import com.kizuna.cast.domain.CastProfilePatch;
 import com.kizuna.cast.domain.CastPublicationStatus;
 import com.kizuna.cast.domain.OrderReferenceCheck;
 import com.kizuna.shared.exception.ServiceException;
@@ -45,7 +44,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mapstruct.factory.Mappers;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -184,17 +182,18 @@ class CastAuditIntegrationTest {
     String id = create();
     String profile = profileId(id);
     assertVersions(id, 0, 0);
-    var request = new CastUpdateRequest();
-    request.setCustomFields(Map.of("private-key", "秘密の内部値"));
+    var request = command(null, Map.of("private-key", "秘密の内部値"));
     casts.update(storeId, id, request, ORDINARY);
     assertVersions(id, 1, 0);
     casts.update(storeId, id, request, ORDINARY);
-    casts.update(storeId, id, new CastUpdateRequest(), ORDINARY);
+    casts.update(storeId, id, command(null, null), ORDINARY);
     assertVersions(id, 1, 0);
     assertThat(auditCount(id, profile)).isEqualTo(2);
-    request.setName("秘密の変更名");
-    request.setCustomFields(Map.of("private-key", "秘密の内部値", "public-key", "秘密の公開値"));
-    casts.update(storeId, id, request, ORDINARY);
+    casts.update(
+        storeId,
+        id,
+        command("秘密の変更名", Map.of("private-key", "秘密の内部値", "public-key", "秘密の公開値")),
+        ORDINARY);
     assertVersions(id, 1, 1);
     casts.changePublication(storeId, id, CastPublicationStatus.PUBLISHED);
     casts.changePublication(storeId, id, CastPublicationStatus.PUBLISHED);
@@ -232,6 +231,11 @@ class CastAuditIntegrationTest {
                     profile)
                 .toString())
         .doesNotContain("秘密", "private-key", "public-key", ORDINARY);
+  }
+
+  private static CastUpdateCommand command(String name, Map<String, String> customFields) {
+    return new CastUpdateCommand(
+        new CastProfilePatch(name, null, null, null, null, null, null, null, null), customFields);
   }
 
   private String create() {
@@ -272,9 +276,7 @@ class CastAuditIntegrationTest {
     String id = create();
     var before = storedState(id);
     var counts = tableCounts();
-    var request = new CastUpdateRequest();
-    request.setName("秘密の更新名");
-    request.setCustomFields(Map.of("private-key", "内部更新値", "public-key", "公開更新値"));
+    var request = command("秘密の更新名", Map.of("private-key", "内部更新値", "public-key", "公開更新値"));
     rejectAudit("CAST_ENROLLMENT_UPDATED");
     try {
       assertThatThrownBy(() -> casts.update(storeId, id, request, ORDINARY))
@@ -329,9 +331,8 @@ class CastAuditIntegrationTest {
     var counts = tableCounts();
     transactions.executeWithoutResult(
         status -> {
-          var request = new CastUpdateRequest();
-          request.setName("外側rollbackの秘密");
-          request.setCustomFields(Map.of("private-key", "戻す内部値", "public-key", "戻す公開値"));
+          var request =
+              command("外側rollbackの秘密", Map.of("private-key", "戻す内部値", "public-key", "戻す公開値"));
           casts.update(storeId, id, request, ORDINARY);
           casts.changePublication(storeId, id, CastPublicationStatus.PUBLISHED);
           lifecycle.suspend(storeId, id, ORDINARY);
@@ -361,8 +362,7 @@ class CastAuditIntegrationTest {
             .build();
     SecurityContextHolder.getContext()
         .setAuthentication(new JwtAuthenticationToken(jwt, List.of()));
-    var request = new CastUpdateRequest();
-    request.setName("別担当で変更する秘密名");
+    var request = command("別担当で変更する秘密名", null);
     casts.update(storeId, id, request, SECOND);
     casts.changePublication(storeId, id, CastPublicationStatus.PUBLISHED);
     lifecycle.suspend(storeId, id, SECOND);
@@ -556,11 +556,6 @@ class CastAuditIntegrationTest {
     @Bean
     Clock clock() {
       return Clock.systemUTC();
-    }
-
-    @Bean
-    CastMapper mapper() {
-      return Mappers.getMapper(CastMapper.class);
     }
 
     @Bean
