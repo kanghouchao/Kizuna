@@ -1,5 +1,6 @@
 package com.kizuna.auth.api.dto;
 
+import com.kizuna.auth.application.LineRegistrationCommand;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -27,4 +28,8 @@ public class LineRegistrationRequest {
   // 永続化前の小文字化で最大2倍に伸長する文字(U+0130 等)があっても t_users.email VARCHAR(255) に収まる上限。
   @Size(max = 127)
   private String email;
+
+  public LineRegistrationCommand command() {
+    return new LineRegistrationCommand(registrationTicket, displayName, email);
+  }
 }

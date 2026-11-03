@@ -1,8 +1,5 @@
 package com.kizuna.auth.application;
 
-import com.kizuna.auth.api.dto.LineAuthorizationRequest;
-import com.kizuna.auth.api.dto.LineConfigResponse;
-import com.kizuna.auth.api.dto.LineRegistrationRequest;
 import com.kizuna.auth.infrastructure.LineApiClient;
 import com.kizuna.auth.infrastructure.LineChannel;
 import com.kizuna.auth.infrastructure.LineChannelResolver;
@@ -49,19 +46,19 @@ public class LineAuthService {
 
   /** 前端が認可要求を組み立てるための公開設定。無効なら channelId は返さない。 */
   @Transactional(readOnly = true)
-  public LineConfigResponse config() {
+  public LineConfig config() {
     return channelResolver
         .resolve()
-        .map(channel -> new LineConfigResponse(true, channel.channelId()))
-        .orElseGet(() -> new LineConfigResponse(false, null));
+        .map(channel -> new LineConfig(true, channel.channelId()))
+        .orElseGet(() -> new LineConfig(false, null));
   }
 
   /**
    * LINE ログイン。連携済みならトークンを、未登録なら 1 度きりの登録チケットを返す。取引を張らないのはパスワードログインと同じ理由 （特典の評価は認証の接続を返却してから。LINE
    * との往復中に接続を握らない利点もある）。
    */
-  public LineLogin login(LineAuthorizationRequest request) {
-    LineIdentity identity = verify(request);
+  public LineLogin login(LineAuthorizationCommand command) {
+    LineIdentity identity = verify(command);
     return userRepository
         .findByLineUserId(identity.lineUserId())
         .map(this::issueSessionForLinkedUser)
@@ -73,23 +70,23 @@ public class LineAuthService {
 
   /** 登録チケットで会員身分を作成し、そのままログイン状態にする（自動ログイン）。 */
   @Transactional
-  public IssuedSession register(LineRegistrationRequest request) {
+  public IssuedSession register(LineRegistrationCommand command) {
     String lineUserId =
         ticketStore
-            .peek(request.getRegistrationTicket())
+            .peek(command.registrationTicket())
             .orElseThrow(() -> new ServiceException(INVALID_TICKET_MESSAGE));
     User user =
         memberRegistrationService.registerWithLine(
-            request.getEmail(), request.getDisplayName(), lineUserId);
+            command.email(), command.displayName(), lineUserId);
     // 消費は登録成功後 — 重複メールなどの失敗でチケットを失うと、入力を直すだけのやり直しに OAuth の再実行を強いるため。
-    ticketStore.consume(request.getRegistrationTicket());
+    ticketStore.consume(command.registrationTicket());
     return authService.issueSessionFor(user);
   }
 
   /** 認証済みの本人に LINE アカウントを連携する。連携の解除・付け替えは提供しない。 */
   @Transactional
-  public void link(String email, LineAuthorizationRequest request) {
-    LineIdentity identity = verify(request);
+  public void link(String email, LineAuthorizationCommand command) {
+    LineIdentity identity = verify(command);
     User user =
         userRepository
             .findByEmail(email)
@@ -109,13 +106,13 @@ public class LineAuthService {
   }
 
   /** 認可コードを LINE と交換し、id_token を LINE に検証させて本人同一性を得る。 */
-  private LineIdentity verify(LineAuthorizationRequest request) {
+  private LineIdentity verify(LineAuthorizationCommand command) {
     LineChannel channel =
         channelResolver
             .resolve()
             .orElseThrow(() -> new ServiceUnavailableException(LINE_DISABLED_MESSAGE));
     return lineApiClient.exchangeAndVerify(
-        channel, request.getCode(), request.getRedirectUri(), request.getCodeVerifier());
+        channel, command.code(), command.redirectUri(), command.codeVerifier());
   }
 
   /** 連携済み身分へのトークン発行。停止済みアカウントはパスワードログインと同じく 401 で拒否する。 認証成功はパスワードログインと同一の発火事象なので、同じ引き金を発行の後に引く。 */

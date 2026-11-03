@@ -1,5 +1,6 @@
 package com.kizuna.auth.api.dto;
 
+import com.kizuna.auth.application.LineAuthorizationCommand;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
@@ -23,4 +24,8 @@ public class LineAuthorizationRequest {
   @NotBlank(message = "code_verifier is required")
   @Size(max = 128)
   private String codeVerifier;
+
+  public LineAuthorizationCommand command() {
+    return new LineAuthorizationCommand(code, redirectUri, codeVerifier);
+  }
 }

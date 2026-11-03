@@ -1,5 +1,6 @@
 package com.kizuna.auth.api.dto;
 
+import com.kizuna.auth.application.MeView;
 import java.util.List;
 
 /**
@@ -14,4 +15,10 @@ public record MeResponse(
     String displayName,
     String userType,
     List<String> permissions,
-    boolean lineLinked) {}
+    boolean lineLinked) {
+
+  public static MeResponse of(MeView me) {
+    return new MeResponse(
+        me.email(), me.displayName(), me.userType(), me.permissions(), me.lineLinked());
+  }
+}

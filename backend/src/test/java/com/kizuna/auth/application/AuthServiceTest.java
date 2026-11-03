@@ -12,7 +12,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.auth.api.dto.MeResponse;
 import com.kizuna.auth.infrastructure.IssuedJwt;
 import com.kizuna.auth.infrastructure.JwtIssuer;
 import com.kizuna.auth.infrastructure.RefreshTokenRejectedException;
@@ -305,7 +304,7 @@ class AuthServiceTest {
     when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(hqAdmin()));
     stubHqRole();
 
-    Optional<MeResponse> res = authService.me("admin@kizuna.test");
+    Optional<MeView> res = authService.me("admin@kizuna.test");
 
     assertThat(res).isPresent();
     assertThat(res.get().userType()).isEqualTo("STAFF");
@@ -327,7 +326,7 @@ class AuthServiceTest {
             .build();
     when(userRepository.findByEmail("cast@kizuna.test")).thenReturn(Optional.of(cast));
 
-    Optional<MeResponse> res = authService.me("cast@kizuna.test");
+    Optional<MeView> res = authService.me("cast@kizuna.test");
 
     assertThat(res).isPresent();
     assertThat(res.get().userType()).isEqualTo("CAST");
@@ -348,7 +347,7 @@ class AuthServiceTest {
     when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(user));
     stubHqRole();
 
-    MeResponse res = authService.updateMe("admin@kizuna.test", "新しい表示名");
+    MeView res = authService.updateMe("admin@kizuna.test", "新しい表示名");
 
     assertThat(user.getDisplayName()).isEqualTo("新しい表示名");
     assertThat(res.displayName()).isEqualTo("新しい表示名");
@@ -453,7 +452,7 @@ class AuthServiceTest {
         .containsEntry(JwtClaims.USER_ID, 1L);
     assertThat(session.userId()).isEqualTo(1L);
     assertThat(session.refresh().value()).isEqualTo("refresh-token");
-    assertThat(session.toToken().refreshExpiresAt()).isEqualTo(EXPIRES_AT);
+    assertThat(session.refresh().expiresAt().toEpochMilli()).isEqualTo(EXPIRES_AT);
   }
 
   private static Jwt refreshJwt(long userId, long version) {

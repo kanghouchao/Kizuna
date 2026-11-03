@@ -91,7 +91,7 @@ public class AuthController {
     // 前端の全域 401 経路（再ログインへの差し戻し）に乗らないため、updateMe と同じ例外へ揃える。
     return authService
         .me(principal.getName())
-        .map(ResponseEntity::ok)
+        .map(me -> ResponseEntity.ok(MeResponse.of(me)))
         .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
   }
 
@@ -99,7 +99,8 @@ public class AuthController {
   @PreAuthorize("isAuthenticated()")
   public ResponseEntity<MeResponse> updateMe(
       Principal principal, @Valid @RequestBody MeUpdateRequest req) {
-    return ResponseEntity.ok(authService.updateMe(principal.getName(), req.getDisplayName()));
+    return ResponseEntity.ok(
+        MeResponse.of(authService.updateMe(principal.getName(), req.getDisplayName())));
   }
 
   /** パスワード変更。版の増分により全端末のセッションが失効するため、クライアントは再ログインが必要。 */
@@ -116,7 +117,7 @@ public class AuthController {
       ResponseEntity.BodyBuilder response, IssuedSession session, RefreshTokenCookies cookies) {
     return response
         .header(HttpHeaders.SET_COOKIE, cookies.issue(session.refresh()).toString())
-        .body(session.toToken());
+        .body(Token.of(session));
   }
 
   /**
