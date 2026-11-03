@@ -8,6 +8,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import lombok.Builder;
@@ -53,6 +54,11 @@ public class Role extends BaseEntity {
     this.name = name;
     this.systemRole = systemRole != null && systemRole;
     this.permissionIds = new HashSet<>(permissionIds);
+  }
+
+  /** 変更できない view を返す。権限集合の変更は保持者の版を進める {@link #replacePermissions} だけに限る。 */
+  public Set<Long> getPermissionIds() {
+    return Collections.unmodifiableSet(permissionIds);
   }
 
   /** 名称を変更する。既定ロールは名称が播種の自然キーなので改名を拒否する（同じ名称の指定は変更ではない）。 */
