@@ -33,8 +33,10 @@ import com.kizuna.user.domain.UserRepository;
 import com.zaxxer.hikari.HikariDataSource;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -81,6 +83,8 @@ class PointExpiryIntegrationTest {
       new BCryptPasswordEncoder(4).encode(UUID.randomUUID().toString());
   private AnnotationConfigApplicationContext first;
   private AnnotationConfigApplicationContext second;
+  // 日付が変わる直前に始まった利用の要求を受けた別の実例。失効処理（AS_OF の時計）と同じ行を取り合う。
+  private AnnotationConfigApplicationContext beforeMidnight;
   private JdbcTemplate jdbc;
   private long serviceId;
   private long executeRole;
@@ -90,8 +94,10 @@ class PointExpiryIntegrationTest {
 
   @BeforeAll
   void connect() {
-    first = new AnnotationConfigApplicationContext(Config.class);
-    second = new AnnotationConfigApplicationContext(Config.class);
+    Instant midnight = AS_OF.atStartOfDay(ZONE).toInstant();
+    first = context(midnight);
+    second = context(midnight);
+    beforeMidnight = context(midnight.minus(1, ChronoUnit.MICROS));
     jdbc = first.getBean(JdbcTemplate.class);
     executeRole = role("TASK_EXECUTE");
     expiryRole = role("POINT_EXPIRE");
@@ -126,6 +132,7 @@ class PointExpiryIntegrationTest {
 
   @AfterAll
   void close() {
+    if (beforeMidnight != null) beforeMidnight.close();
     if (second != null) second.close();
     if (first != null) first.close();
   }
@@ -234,18 +241,18 @@ class PointExpiryIntegrationTest {
       var use =
           pool.submit(
               () ->
-                  tx(first)
+                  tx(beforeMidnight)
                       .execute(
                           status -> {
-                            first
+                            beforeMidnight
                                 .getBean(MemberLookupService.class)
                                 .lockForBalanceConfirmation(memberId);
-                            first
+                            beforeMidnight
                                 .getBean(PointEntryRepository.class)
                                 .findCreditsForUpdate(memberId);
                             locked.countDown();
                             await(release);
-                            first
+                            beforeMidnight
                                 .getBean(PointLedgerService.class)
                                 .useForOrder(memberId, order.id(), order.storeId(), 30, serviceId);
                             return null;
@@ -488,10 +495,10 @@ class PointExpiryIntegrationTest {
       throws Exception {
     credit(memberId, 100, TODAY);
     var order = order();
-    tx(first)
+    tx(beforeMidnight)
         .executeWithoutResult(
             status ->
-                first
+                beforeMidnight
                     .getBean(PointLedgerService.class)
                     .useForOrder(memberId, order.id(), order.storeId(), 30, serviceId));
     jdbc.execute(
@@ -705,6 +712,14 @@ class PointExpiryIntegrationTest {
     return id;
   }
 
+  private static AnnotationConfigApplicationContext context(Instant now) {
+    var context = new AnnotationConfigApplicationContext();
+    context.register(Config.class);
+    context.registerBean(Clock.class, () -> Clock.fixed(now, ZONE));
+    context.refresh();
+    return context;
+  }
+
   private TransactionTemplate tx(AnnotationConfigApplicationContext context) {
     return new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
   }
@@ -796,11 +811,6 @@ class PointExpiryIntegrationTest {
     @Bean
     PlatformTransactionManager transactionManager(EntityManagerFactory factory) {
       return new JpaTransactionManager(factory);
-    }
-
-    @Bean
-    Clock clock() {
-      return Clock.fixed(AS_OF.atStartOfDay(ZONE).toInstant(), ZONE);
     }
 
     @Bean
