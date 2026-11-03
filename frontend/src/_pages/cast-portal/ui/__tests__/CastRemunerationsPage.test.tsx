@@ -16,7 +16,7 @@ const enrollment = {
   store_id: 1,
   store_name: '退店店舗',
   status: 'WITHDRAWN' as const,
-  ended_at: '2026-09-16T10:00:00Z',
+  ended_at: '2026-09-30T20:00:00Z',
 };
 const summary = {
   order_id: 'order',
@@ -73,9 +73,9 @@ it('refuses to display stale private data when details are forbidden', async () 
   expect(screen.queryByText('基本コース')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '変更履歴を確認' })).not.toBeInTheDocument();
 });
-it('filters by the withdrawn enrollment and keeps its history accessible', async () => {
+it('filters by the withdrawn enrollment, labelled with its end date in Japan time', async () => {
   render(<CastRemunerationsPage />);
-  fireEvent.click(await screen.findByRole('button', { name: '退店店舗・退店（2026-09-16）' }));
+  fireEvent.click(await screen.findByRole('button', { name: '退店店舗・退店（2026/10/1）' }));
   await screen.findByRole('button', { name: '詳細を確認' });
   expect(selfRemunerationApi.list).toHaveBeenLastCalledWith(0, 'old');
 });
