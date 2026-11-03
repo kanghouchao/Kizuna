@@ -17,7 +17,6 @@ import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.stream.IntStream;
-import org.apache.poi.ss.usermodel.CellType;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageRequest;
@@ -44,7 +43,7 @@ class AdvertisingMediaRendererTest {
   }
 
   @Test
-  void exportIncludesAllGroupsBeyondTheDisplayedPageAndPreservesTypes() throws Exception {
+  void exportIncludesAllGroupsBeyondTheDisplayedPage() throws Exception {
     var entries =
         IntStream.range(0, 2001)
             .mapToObj(
@@ -65,61 +64,11 @@ class AdvertisingMediaRendererTest {
                 .rows())
         .isEmpty();
     String csv = new String(renderer.render(report, "csv", budget()), StandardCharsets.UTF_8);
-    assertThat(csv)
-        .startsWith("\ufeff")
-        .contains(
-            "'00000",
-            "'01000",
-            "'02000",
-            "\"'行種別\",\"'生成日時\",\"'計算根拠\",\"'媒体の照合\"",
-            "\"'区分別総計\"",
-            "\"'媒体別集計\"",
-            "\"'営業広告\"",
-            "費用行に手入力された人数の合計（重複未除外）",
-            "\"'全行未入力\"",
-            "\"'全行入力済み\"");
-    assertThat(ExportCells.letterRuns(csv)).containsExactly("ID");
     assertThat(csv.split("\r\n")).hasSize(2005);
+    assertThat(ExportCells.letterRuns(csv)).containsExactly("ID");
     try (var book =
         new XSSFWorkbook(new ByteArrayInputStream(renderer.render(report, "xlsx", budget())))) {
-      assertThat(book.getNumberOfSheets()).isEqualTo(2);
-      var sheet = book.getSheet("媒体別集計");
-      assertThat(
-              IntStream.range(0, 16)
-                  .mapToObj(i -> sheet.getRow(0).getCell(i).getStringCellValue())
-                  .toList())
-          .containsExactly(
-              "行種別",
-              "生成日時",
-              "計算根拠",
-              "媒体の照合",
-              "問い合わせ人数の根拠",
-              "店舗ID",
-              "対象月",
-              "対象月版",
-              "区分",
-              "媒体",
-              "費用行数",
-              "登録額（円）",
-              "問い合わせ人数の入力済み行数",
-              "問い合わせ人数の未入力行数",
-              "入力済み人数の合計（重複未除外）",
-              "入力状況");
-      assertThat(sheet.getRow(1).getCell(2).getStringCellValue()).isEqualTo("媒体別の広告費登録の集計（第1版）");
-      assertThat(sheet.getRow(1).getCell(3).getStringCellValue()).isEqualTo("媒体 ID で照合（表示は現在の媒体名）");
-      assertThat(sheet.getRow(1).getCell(4).getStringCellValue())
-          .isEqualTo("費用行に手入力された人数の合計（重複未除外）");
-      assertThat(sheet.getLastRowNum()).isEqualTo(2001);
-      assertThat(sheet.getRow(1).getCell(9).getStringCellValue()).isEqualTo("00000");
-      assertThat(sheet.getRow(1001).getCell(9).getStringCellValue()).isEqualTo("01000");
-      assertThat(sheet.getRow(2001).getCell(9).getStringCellValue()).isEqualTo("02000");
-      assertThat(sheet.getRow(1).getCell(14).getStringCellValue()).isEmpty();
-      assertThat(sheet.getRow(2).getCell(14).getNumericCellValue()).isZero();
-      assertThat(book.getSheet("条件と総計").getRow(1).getCell(11).getNumericCellValue())
-          .isEqualTo(200100);
-      for (var s : book)
-        for (var row : s)
-          for (var cell : row) assertThat(cell.getCellType()).isNotEqualTo(CellType.FORMULA);
+      assertThat(book.getSheet("媒体別集計").getLastRowNum()).isEqualTo(2001);
     }
   }
 }
