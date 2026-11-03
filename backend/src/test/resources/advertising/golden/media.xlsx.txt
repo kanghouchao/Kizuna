@@ -1,0 +1,146 @@
+sheet	条件と総計	frozen-rows=1
+0,0	STRING	行種別
+0,1	STRING	生成日時
+0,2	STRING	計算根拠
+0,3	STRING	媒体の照合
+0,4	STRING	問い合わせ人数の根拠
+0,5	STRING	店舗ID
+0,6	STRING	対象月
+0,7	STRING	対象月版
+0,8	STRING	区分
+0,9	STRING	媒体
+0,10	STRING	費用行数
+0,11	STRING	登録額（円）
+0,12	STRING	問い合わせ人数の入力済み行数
+0,13	STRING	問い合わせ人数の未入力行数
+0,14	STRING	入力済み人数の合計（重複未除外）
+0,15	STRING	入力状況
+1,0	STRING	条件と総計
+1,1	STRING	2026-10-09T12:00Z
+1,2	STRING	媒体別の広告費登録の集計（第1版）
+1,3	STRING	媒体 ID で照合（表示は現在の媒体名）
+1,4	STRING	費用行に手入力された人数の合計（重複未除外）
+1,5	NUMERIC	7.0
+1,6	STRING	2026-09
+1,7	NUMERIC	4.0
+1,8	STRING	
+1,9	STRING	
+1,10	NUMERIC	5.0
+1,11	NUMERIC	3800.0
+1,12	STRING	
+1,13	STRING	
+1,14	STRING	
+1,15	STRING	
+2,0	STRING	区分別総計
+2,1	STRING	2026-10-09T12:00Z
+2,2	STRING	媒体別の広告費登録の集計（第1版）
+2,3	STRING	媒体 ID で照合（表示は現在の媒体名）
+2,4	STRING	費用行に手入力された人数の合計（重複未除外）
+2,5	NUMERIC	7.0
+2,6	STRING	2026-09
+2,7	NUMERIC	4.0
+2,8	STRING	営業広告
+2,9	STRING	
+2,10	NUMERIC	4.0
+2,11	NUMERIC	2800.0
+2,12	STRING	
+2,13	STRING	
+2,14	STRING	
+2,15	STRING	
+3,0	STRING	区分別総計
+3,1	STRING	2026-10-09T12:00Z
+3,2	STRING	媒体別の広告費登録の集計（第1版）
+3,3	STRING	媒体 ID で照合（表示は現在の媒体名）
+3,4	STRING	費用行に手入力された人数の合計（重複未除外）
+3,5	NUMERIC	7.0
+3,6	STRING	2026-09
+3,7	NUMERIC	4.0
+3,8	STRING	採用広告
+3,9	STRING	
+3,10	NUMERIC	1.0
+3,11	NUMERIC	1000.0
+3,12	STRING	
+3,13	STRING	
+3,14	STRING	
+3,15	STRING	
+sheet	媒体別集計	frozen-rows=1
+0,0	STRING	行種別
+0,1	STRING	生成日時
+0,2	STRING	計算根拠
+0,3	STRING	媒体の照合
+0,4	STRING	問い合わせ人数の根拠
+0,5	STRING	店舗ID
+0,6	STRING	対象月
+0,7	STRING	対象月版
+0,8	STRING	区分
+0,9	STRING	媒体
+0,10	STRING	費用行数
+0,11	STRING	登録額（円）
+0,12	STRING	問い合わせ人数の入力済み行数
+0,13	STRING	問い合わせ人数の未入力行数
+0,14	STRING	入力済み人数の合計（重複未除外）
+0,15	STRING	入力状況
+1,0	STRING	媒体別集計
+1,1	STRING	2026-10-09T12:00Z
+1,2	STRING	媒体別の広告費登録の集計（第1版）
+1,3	STRING	媒体 ID で照合（表示は現在の媒体名）
+1,4	STRING	費用行に手入力された人数の合計（重複未除外）
+1,5	NUMERIC	7.0
+1,6	STRING	2026-09
+1,7	NUMERIC	4.0
+1,8	STRING	営業広告
+1,9	STRING	+81-3
+1,10	NUMERIC	1.0
+1,11	NUMERIC	2500.0
+1,12	NUMERIC	1.0
+1,13	NUMERIC	0.0
+1,14	NUMERIC	12.0
+1,15	STRING	全行入力済み
+2,0	STRING	媒体別集計
+2,1	STRING	2026-10-09T12:00Z
+2,2	STRING	媒体別の広告費登録の集計（第1版）
+2,3	STRING	媒体 ID で照合（表示は現在の媒体名）
+2,4	STRING	費用行に手入力された人数の合計（重複未除外）
+2,5	NUMERIC	7.0
+2,6	STRING	2026-09
+2,7	NUMERIC	4.0
+2,8	STRING	営業広告
+2,9	STRING	00123
+2,10	NUMERIC	1.0
+2,11	NUMERIC	0.0
+2,12	NUMERIC	1.0
+2,13	NUMERIC	0.0
+2,14	NUMERIC	0.0
+2,15	STRING	全行入力済み
+3,0	STRING	媒体別集計
+3,1	STRING	2026-10-09T12:00Z
+3,2	STRING	媒体別の広告費登録の集計（第1版）
+3,3	STRING	媒体 ID で照合（表示は現在の媒体名）
+3,4	STRING	費用行に手入力された人数の合計（重複未除外）
+3,5	NUMERIC	7.0
+3,6	STRING	2026-09
+3,7	NUMERIC	4.0
+3,8	STRING	営業広告
+3,9	STRING	=媒体,"試験"
+3,10	NUMERIC	2.0
+3,11	NUMERIC	300.0
+3,12	NUMERIC	1.0
+3,13	NUMERIC	1.0
+3,14	NUMERIC	0.0
+3,15	STRING	一部未入力
+4,0	STRING	媒体別集計
+4,1	STRING	2026-10-09T12:00Z
+4,2	STRING	媒体別の広告費登録の集計（第1版）
+4,3	STRING	媒体 ID で照合（表示は現在の媒体名）
+4,4	STRING	費用行に手入力された人数の合計（重複未除外）
+4,5	NUMERIC	7.0
+4,6	STRING	2026-09
+4,7	NUMERIC	4.0
+4,8	STRING	採用広告
+4,9	STRING	求人誌
+4,10	NUMERIC	1.0
+4,11	NUMERIC	1000.0
+4,12	NUMERIC	0.0
+4,13	NUMERIC	1.0
+4,14	STRING	
+4,15	STRING	全行未入力

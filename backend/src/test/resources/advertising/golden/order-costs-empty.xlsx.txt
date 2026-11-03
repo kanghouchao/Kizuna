@@ -1,0 +1,74 @@
+sheet	条件と総計	frozen-rows=1
+0,0	STRING	行種別
+0,1	STRING	生成日時
+0,2	STRING	計算根拠
+0,3	STRING	媒体の照合
+0,4	STRING	受注の根拠
+0,5	STRING	端数処理
+0,6	STRING	店舗ID
+0,7	STRING	対象月
+0,8	STRING	対象月版
+0,9	STRING	媒体
+0,10	STRING	費用行数
+0,11	STRING	登録営業広告費（円）
+0,12	STRING	有効完了受注件数
+0,13	STRING	うち0円の受注件数
+0,14	STRING	媒体未入力の有効完了受注件数
+0,15	STRING	一件あたり記録費用（円）
+0,16	STRING	算出状況
+0,17	STRING	解釈
+1,0	STRING	条件と総計
+1,1	STRING	2026-10-09T12:00Z
+1,2	STRING	登録営業広告費 ÷ 有効完了受注件数（第1版）
+1,3	STRING	媒体 ID で照合（表示は現在の媒体名）
+1,4	STRING	原営業日が対象月の有効完了受注（0円を含む）
+1,5	STRING	小数第3位を四捨五入（円）
+1,6	NUMERIC	7.0
+1,7	STRING	2026-10
+1,8	NUMERIC	0.0
+1,9	STRING	
+1,10	NUMERIC	0.0
+1,11	STRING	
+1,12	NUMERIC	0.0
+1,13	NUMERIC	0.0
+1,14	NUMERIC	0.0
+1,15	STRING	
+1,16	STRING	
+1,17	STRING	同月同媒体の記録比較であり、実際の獲得費用・広告による因果・利益・ROIを示しません。0円の有効完了受注を含み、小数第3位を四捨五入しています。
+2,0	STRING	媒体以外の経路
+2,1	STRING	2026-10-09T12:00Z
+2,2	STRING	登録営業広告費 ÷ 有効完了受注件数（第1版）
+2,3	STRING	媒体 ID で照合（表示は現在の媒体名）
+2,4	STRING	原営業日が対象月の有効完了受注（0円を含む）
+2,5	STRING	小数第3位を四捨五入（円）
+2,6	NUMERIC	7.0
+2,7	STRING	2026-10
+2,8	NUMERIC	0.0
+2,9	STRING	
+2,10	STRING	
+2,11	STRING	
+2,12	NUMERIC	0.0
+2,13	STRING	
+2,14	STRING	
+2,15	STRING	
+2,16	STRING	
+2,17	STRING	リピート・紹介・その他の経路で知った有効完了受注の件数で、有効完了受注件数の内数です。媒体への割当てと単価算出から除外しています。
+sheet	受注あたり記録広告費	frozen-rows=1
+0,0	STRING	行種別
+0,1	STRING	生成日時
+0,2	STRING	計算根拠
+0,3	STRING	媒体の照合
+0,4	STRING	受注の根拠
+0,5	STRING	端数処理
+0,6	STRING	店舗ID
+0,7	STRING	対象月
+0,8	STRING	対象月版
+0,9	STRING	媒体
+0,10	STRING	費用行数
+0,11	STRING	登録営業広告費（円）
+0,12	STRING	有効完了受注件数
+0,13	STRING	うち0円の受注件数
+0,14	STRING	媒体未入力の有効完了受注件数
+0,15	STRING	一件あたり記録費用（円）
+0,16	STRING	算出状況
+0,17	STRING	解釈

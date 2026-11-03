@@ -18,3 +18,5 @@
 *.project text eol=lf
 *.settings text eol=lf
 *.java text working-tree-encoding=UTF-8
+# 帳票の golden は BOM と CRLF を含めて字節で比べるので、改行を変換させない。
+backend/src/test/resources/advertising/golden/*.csv -text
