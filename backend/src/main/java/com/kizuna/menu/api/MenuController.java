@@ -20,6 +20,6 @@ public class MenuController {
   @GetMapping("/me")
   @PreAuthorize("isAuthenticated()")
   public ResponseEntity<List<MenuVO>> getMyMenus() {
-    return ResponseEntity.ok(menuService.getMyMenus());
+    return ResponseEntity.ok(menuService.getMyMenus().stream().map(MenuVO::of).toList());
   }
 }
