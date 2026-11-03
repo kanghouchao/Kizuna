@@ -41,8 +41,10 @@ public class OperationalReportController {
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
         .body(
-            service.viewStore(
-                storeId, from, to, groupBy, pageable, includeRemuneration, includeAdvertising));
+            OperationalReportResponse.from(
+                service.viewStore(
+                    storeId, from, to, groupBy, includeRemuneration, includeAdvertising),
+                pageable));
   }
 
   @GetMapping("/exports")

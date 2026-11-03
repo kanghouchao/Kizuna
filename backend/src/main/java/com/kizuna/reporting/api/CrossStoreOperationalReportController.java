@@ -44,8 +44,10 @@ public class CrossStoreOperationalReportController {
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
         .body(
-            service.viewGroupWide(
-                scope, from, to, groupBy, pageable, includeRemuneration, includeAdvertising));
+            OperationalReportResponse.from(
+                service.viewGroupWide(
+                    scope, from, to, groupBy, includeRemuneration, includeAdvertising),
+                pageable));
   }
 
   @GetMapping("/exports")

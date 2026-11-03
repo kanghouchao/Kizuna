@@ -42,7 +42,6 @@ import org.apache.poi.util.TempFileCreationStrategy;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.data.domain.PageRequest;
 
 class OperationalReportTest {
   final OperationalReportReader reader = mock(OperationalReportReader.class);
@@ -88,12 +87,10 @@ class OperationalReportTest {
   @Test
   void fullExportContainsFirstMiddleLastAndSafeTypedCells() throws Exception {
     rows(2001);
-    var response =
-        service.viewStore(
-            1L, "2026-09-01", "2026-10-31", "day", PageRequest.of(0, 1), false, false);
+    var response = service.viewStore(1L, "2026-09-01", "2026-10-31", "day", false, false);
     assertThat(response.totalOrderCount()).isEqualTo(2001);
     assertThat(response.totalFee()).isEqualTo(2001L * Integer.MAX_VALUE);
-    assertThat(response.stores()).hasSize(2);
+    assertThat(response.facts().stores()).hasSize(2);
     var csv = service.exportStore(1L, "2026-09-01", "2026-10-31", "day", "csv", false, false);
     assertThat(new String(csv, StandardCharsets.UTF_8))
         .startsWith("\ufeff")
@@ -123,34 +120,24 @@ class OperationalReportTest {
         List.of(
             new OperationalFacts.Order("a", 1L, LocalDate.of(2026, 9, 30), 8, false, 12000, 5000),
             new OperationalFacts.Order("b", 1L, LocalDate.of(2026, 10, 1), 6, true, 10000, 4000)));
-    var result =
-        service.viewStore(
-            1L, "2026-09-01", "2026-10-31", "month", PageRequest.of(0, 20), false, false);
+    var result = service.viewStore(1L, "2026-09-01", "2026-10-31", "month", false, false);
     assertThat(result.totalOrderCount()).isEqualTo(1);
     assertThat(result.invalidatedOrderCount()).isEqualTo(1);
     assertThat(result.totalFee()).isEqualTo(12000);
     assertThat(result.totalRemuneration()).isEqualTo(5000);
-    assertThat(result.rows().getContent())
-        .extracting(row -> row.period())
-        .containsExactly("2026-09", "2026-10");
+    assertThat(result.rows()).extracting(row -> row.period()).containsExactly("2026-09", "2026-10");
     assertThat(
-            service
-                .viewStore(
-                    1L, "2026-09-01", "2026-10-31", "store", PageRequest.of(0, 20), false, false)
-                .rows()
-                .getTotalElements())
+            service.viewStore(1L, "2026-09-01", "2026-10-31", "store", false, false).rows().size())
         .isEqualTo(1);
   }
 
   @Test
   void emptyIncludesStoresAndZeroTotals() {
     rows(0);
-    var result =
-        service.viewStore(
-            1L, "2026-09-01", "2026-09-30", "day", PageRequest.of(0, 20), false, false);
+    var result = service.viewStore(1L, "2026-09-01", "2026-09-30", "day", false, false);
     assertThat(result.rows()).isEmpty();
     assertThat(result.totalFee()).isZero();
-    assertThat(result.stores()).hasSize(2);
+    assertThat(result.facts().stores()).hasSize(2);
   }
 
   @Test
@@ -173,10 +160,7 @@ class OperationalReportTest {
   void resourceFailuresReleaseSlotAndNeverReturnPartialOutput() throws Exception {
     rows(2);
     properties.getOperationalReport().setMaxOrders(1);
-    assertThatThrownBy(
-            () ->
-                service.viewStore(
-                    1L, "2026-09-01", "2026-09-30", "day", PageRequest.of(0, 20), false, false))
+    assertThatThrownBy(() -> service.viewStore(1L, "2026-09-01", "2026-09-30", "day", false, false))
         .isInstanceOf(ServiceUnavailableException.class);
     properties.getOperationalReport().setMaxOrders(20_000);
     properties.getOperationalReport().setMaxBytes(8);
@@ -198,19 +182,13 @@ class OperationalReportTest {
   void hardLimitAndNumericBoundaryApplyToViewAndExport() {
     properties.getOperationalReport().setMaxOrders(100_001);
     rows(100_001);
-    assertThatThrownBy(
-            () ->
-                service.viewStore(
-                    1L, "2026-09-01", "2026-09-30", "day", PageRequest.of(0, 20), false, false))
+    assertThatThrownBy(() -> service.viewStore(1L, "2026-09-01", "2026-09-30", "day", false, false))
         .isInstanceOf(ServiceUnavailableException.class);
     assertThatThrownBy(
             () -> service.exportStore(1L, "2026-09-01", "2026-09-30", "day", "csv", false, false))
         .isInstanceOf(ServiceUnavailableException.class);
     facts(List.of(new OperationalFacts.Order("a", 1L, LocalDate.of(2026, 9, 30), 1, false, -1, 0)));
-    assertThatThrownBy(
-            () ->
-                service.viewStore(
-                    1L, "2026-09-01", "2026-09-30", "day", PageRequest.of(0, 20), false, false))
+    assertThatThrownBy(() -> service.viewStore(1L, "2026-09-01", "2026-09-30", "day", false, false))
         .isInstanceOf(ServiceUnavailableException.class);
   }
 
