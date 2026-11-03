@@ -1,6 +1,5 @@
 package com.kizuna.member.application;
 
-import com.kizuna.member.api.dto.MemberHomeResponse;
 import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.domain.User;
@@ -18,14 +17,14 @@ public class MemberSelfService {
   private final MemberRepository memberRepository;
 
   @Transactional(readOnly = true)
-  public MemberHomeResponse home(String email) {
+  public MemberHome home(String email) {
     User user =
         userRepository
             .findByEmail(email)
             .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
     return memberRepository
         .findByUserId(user.getId())
-        .map(member -> new MemberHomeResponse(member.getMemberCode(), user.getDisplayName()))
+        .map(member -> new MemberHome(member.getMemberCode(), user.getDisplayName()))
         .orElseThrow(() -> new StaleSessionException("会員情報が存在しません"));
   }
 }

@@ -13,9 +13,9 @@ import com.kizuna.customer.application.CustomerMemberLinkDirectory;
 import com.kizuna.customer.application.CustomerMemberLinkService;
 import com.kizuna.customer.application.CustomerMemberLinkWithdrawal;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
-import com.kizuna.member.api.dto.MemberRegistrationRequest;
 import com.kizuna.member.application.MemberDirectoryService;
 import com.kizuna.member.application.MemberLookupService;
+import com.kizuna.member.application.MemberRegistrationCommand;
 import com.kizuna.member.application.MemberRegistrationService;
 import com.kizuna.member.application.MemberStatusFilter;
 import com.kizuna.member.application.MemberWithdrawal;
@@ -327,14 +327,9 @@ class MemberWithdrawalIntegrationTest {
     credit(member.memberId, 100, null);
     service.withdrawSelf(member.userId, "やめる");
 
-    var request = new MemberRegistrationRequest();
-    request.setEmail(member.email);
-    request.setPassword("pass12345");
-    request.setDisplayName("再登録");
+    var command = new MemberRegistrationCommand(member.email, "pass12345", "再登録");
     String newCode =
-        tx.execute(
-            status ->
-                context.getBean(MemberRegistrationService.class).register(request).memberCode());
+        tx.execute(status -> context.getBean(MemberRegistrationService.class).register(command));
     assertThat(newCode).isNotEqualTo(member.memberCode);
     long newUser = users.findByEmail(member.email).orElseThrow().getId();
     assertThat(newUser).isNotEqualTo(member.userId);

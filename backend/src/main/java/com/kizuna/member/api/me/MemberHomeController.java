@@ -21,6 +21,6 @@ public class MemberHomeController {
   @GetMapping
   @PreAuthorize("hasRole('MEMBER')")
   public ResponseEntity<MemberHomeResponse> home(Principal principal) {
-    return ResponseEntity.ok(memberSelfService.home(principal.getName()));
+    return ResponseEntity.ok(MemberHomeResponse.of(memberSelfService.home(principal.getName())));
   }
 }
