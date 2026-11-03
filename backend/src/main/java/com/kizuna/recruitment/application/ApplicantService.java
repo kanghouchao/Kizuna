@@ -2,24 +2,14 @@ package com.kizuna.recruitment.application;
 
 import com.kizuna.cast.application.CastService;
 import com.kizuna.medium.lookup.MediumLookup;
-import com.kizuna.medium.lookup.MediumReference;
-import com.kizuna.recruitment.api.dto.ApplicantEnrollmentRequest;
-import com.kizuna.recruitment.api.dto.ApplicantHistoryResponse;
-import com.kizuna.recruitment.api.dto.ApplicantIntakeRequest;
-import com.kizuna.recruitment.api.dto.ApplicantInterviewRequest;
-import com.kizuna.recruitment.api.dto.ApplicantMapper;
-import com.kizuna.recruitment.api.dto.ApplicantMediumResponse;
-import com.kizuna.recruitment.api.dto.ApplicantResponse;
-import com.kizuna.recruitment.api.dto.ApplicantSummaryResponse;
-import com.kizuna.recruitment.api.dto.ApplicantTransitionRequest;
-import com.kizuna.recruitment.api.dto.ApplicantUpdateRequest;
-import com.kizuna.recruitment.api.dto.RecruitmentPolicyResponse;
 import com.kizuna.recruitment.domain.Applicant;
+import com.kizuna.recruitment.domain.ApplicantIntake;
 import com.kizuna.recruitment.domain.ApplicantRepository;
 import com.kizuna.recruitment.domain.ApplicantStatus;
 import com.kizuna.recruitment.domain.ApplicantStatusHistory;
 import com.kizuna.recruitment.domain.ApplicantStatusHistoryRepository;
 import com.kizuna.recruitment.domain.ApplicantSummaryView;
+import com.kizuna.settings.application.ApplicantRetentionSettings;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.NotFoundException;
@@ -48,18 +38,17 @@ public class ApplicantService {
   private final ApplicantRepository applicants;
   private final ApplicantStatusHistoryRepository histories;
   private final UserRepository users;
-  private final ApplicantMapper mapper;
   private final BusinessAudit audit;
   private final SystemConfigService systemConfigs;
   private final CastService casts;
   private final MediumLookup mediumLookup;
 
-  public RecruitmentPolicyResponse policy() {
-    return RecruitmentPolicyResponse.from(systemConfigs.applicantRetentionSettings());
+  public ApplicantRetentionSettings policy() {
+    return systemConfigs.applicantRetentionSettings();
   }
 
   @Transactional(readOnly = true)
-  public Page<ApplicantSummaryResponse> list(
+  public Page<ApplicantViews.Summary> list(
       Long storeId, String search, ApplicantStatus status, Pageable pageable) {
     Specification<Applicant> spec =
         (root, query, cb) -> {
@@ -94,18 +83,17 @@ public class ApplicantService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet()));
     return page.map(
-        a -> mapper.toSummary(a, medium(MediumLookup.referenced(media, a.getMediumId()))));
+        a -> ApplicantViews.Summary.of(a, MediumLookup.referenced(media, a.getMediumId())));
   }
 
   @Transactional(readOnly = true)
-  public ApplicantResponse get(Long storeId, String id) {
+  public ApplicantViews.Detail get(Long storeId, String id) {
     return response(require(storeId, id));
   }
 
   @Transactional
-  public ApplicantResponse create(Long storeId, ApplicantIntakeRequest request, String actorEmail) {
+  public ApplicantViews.Detail create(Long storeId, ApplicantIntake intake, String actorEmail) {
     Long actorId = actorId(actorEmail);
-    var intake = request.toIntake();
     requireSelectable(storeId, intake.mediumId(), null);
     Applicant applicant = Applicant.receive(storeId, intake);
     applicant.recordEditor(actorId);
@@ -117,11 +105,11 @@ public class ApplicantService {
   }
 
   @Transactional
-  public ApplicantResponse update(
-      Long storeId, String id, ApplicantUpdateRequest request, String actorEmail) {
-    Applicant applicant = locked(storeId, id, request.version());
+  public ApplicantViews.Detail update(
+      Long storeId, String id, ApplicantCommands.IntakeUpdate command, String actorEmail) {
+    Applicant applicant = locked(storeId, id, command.version());
     var before = auditValues(applicant);
-    var intake = request.intake().toIntake();
+    var intake = command.intake();
     requireSelectable(storeId, intake.mediumId(), applicant.getMediumId());
     applicant.replaceIntake(intake);
     applicant.recordEditor(actorId(actorEmail));
@@ -131,11 +119,11 @@ public class ApplicantService {
   }
 
   @Transactional
-  public ApplicantResponse interview(
-      Long storeId, String id, ApplicantInterviewRequest request, String actorEmail) {
-    Applicant applicant = locked(storeId, id, request.version());
+  public ApplicantViews.Detail interview(
+      Long storeId, String id, ApplicantCommands.InterviewRecord command, String actorEmail) {
+    Applicant applicant = locked(storeId, id, command.version());
     var before = auditValues(applicant);
-    applicant.recordInterview(request.toInterview());
+    applicant.recordInterview(command.interview());
     applicant.recordEditor(actorId(actorEmail));
     applicants.flush();
     recordAudit(applicant, "APPLICANT_INTERVIEW_UPDATED", before);
@@ -143,30 +131,30 @@ public class ApplicantService {
   }
 
   @Transactional
-  public ApplicantResponse transition(
-      Long storeId, String id, ApplicantTransitionRequest request, String actorEmail) {
-    Applicant applicant = locked(storeId, id, request.version());
+  public ApplicantViews.Detail transition(
+      Long storeId, String id, ApplicantCommands.StatusChange command, String actorEmail) {
+    Applicant applicant = locked(storeId, id, command.version());
     var before = auditValues(applicant);
     ApplicantStatus previous = applicant.getStatus();
-    applicant.transition(request.status(), request.reason());
+    applicant.transition(command.status(), command.reason());
     Long actorId = actorId(actorEmail);
     applicant.recordEditor(actorId);
-    record(applicant, previous, actorId, request.reason().strip());
+    record(applicant, previous, actorId, command.reason().strip());
     applicants.flush();
     recordAudit(applicant, "APPLICANT_STATUS_CHANGED", before);
     return response(applicant);
   }
 
   @Transactional
-  public ApplicantResponse decide(
-      Long storeId, String id, ApplicantTransitionRequest request, String actorEmail) {
-    Applicant applicant = locked(storeId, id, request.version());
+  public ApplicantViews.Detail decide(
+      Long storeId, String id, ApplicantCommands.StatusChange command, String actorEmail) {
+    Applicant applicant = locked(storeId, id, command.version());
     var before = auditValues(applicant);
     ApplicantStatus previous = applicant.getStatus();
-    applicant.decide(request.status(), request.reason());
+    applicant.decide(command.status(), command.reason());
     Long actorId = actorId(actorEmail);
     applicant.recordEditor(actorId);
-    record(applicant, previous, actorId, request.reason().strip());
+    record(applicant, previous, actorId, command.reason().strip());
     applicants.flush();
     recordAudit(applicant, "APPLICANT_DECIDED", before);
     return response(applicant);
@@ -174,14 +162,14 @@ public class ApplicantService {
 
   /** 在籍の作成・応募者の更新・双方の監査を一つのトランザクションで確定する。招待は発行しない（在籍側で手動発行する）。 */
   @Transactional
-  public ApplicantResponse enroll(
-      Long storeId, String id, ApplicantEnrollmentRequest request, String actorEmail) {
-    Applicant applicant = locked(storeId, id, request.version());
+  public ApplicantViews.Detail enroll(
+      Long storeId, String id, ApplicantCommands.Enrollment command, String actorEmail) {
+    Applicant applicant = locked(storeId, id, command.version());
     applicant.requireEnrollable();
     Long actorId = actorId(actorEmail);
     var before = enrollmentAuditValues(applicant);
     applicant.recordEnrollment(
-        casts.create(storeId, request.toCommand(), actorEmail).enrollment().getId());
+        casts.create(storeId, command.cast(), actorEmail).enrollment().getId());
     applicant.recordEditor(actorId);
     applicants.flush();
     audit.recordCurrent(
@@ -195,9 +183,9 @@ public class ApplicantService {
   }
 
   @Transactional(readOnly = true)
-  public Page<ApplicantHistoryResponse> history(Long storeId, String id, Pageable pageable) {
+  public Page<ApplicantStatusHistory> history(Long storeId, String id, Pageable pageable) {
     require(storeId, id);
-    return histories.findByStoreIdAndApplicantId(storeId, id, pageable).map(mapper::toHistory);
+    return histories.findByStoreIdAndApplicantId(storeId, id, pageable);
   }
 
   private void recordAudit(Applicant applicant, String action, Map<String, String> before) {
@@ -214,17 +202,13 @@ public class ApplicantService {
     if (mediumId != null) mediumLookup.requireSelectable(storeId, mediumId, current);
   }
 
-  private ApplicantResponse response(Applicant applicant) {
+  private ApplicantViews.Detail response(Applicant applicant) {
     var mediumId = applicant.getMediumId();
-    return mapper.toResponse(
+    return ApplicantViews.Detail.of(
         applicant,
         mediumId == null
             ? null
-            : medium(MediumLookup.referenced(mediumLookup.find(applicant.getStoreId(), mediumId))));
-  }
-
-  private static ApplicantMediumResponse medium(MediumReference medium) {
-    return medium == null ? null : new ApplicantMediumResponse(medium.id(), medium.name());
+            : MediumLookup.referenced(mediumLookup.find(applicant.getStoreId(), mediumId)));
   }
 
   // 非公開の連絡先・面接内容・理由を、別の閲覧権限を持つ汎用監査へ複製しない。

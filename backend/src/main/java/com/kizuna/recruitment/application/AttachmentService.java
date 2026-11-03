@@ -1,8 +1,5 @@
 package com.kizuna.recruitment.application;
 
-import com.kizuna.recruitment.api.dto.AttachmentPolicyResponse;
-import com.kizuna.recruitment.api.dto.AttachmentSummaryResponse;
-import com.kizuna.recruitment.api.dto.AttachmentUploadResponse;
 import com.kizuna.recruitment.domain.ApplicantRepository;
 import com.kizuna.recruitment.domain.AttachmentObject;
 import com.kizuna.recruitment.domain.AttachmentUpload;
@@ -39,9 +36,9 @@ public class AttachmentService {
   private final AppProperties properties;
 
   @PreAuthorize(READ)
-  public AttachmentPolicyResponse policy() {
+  public AttachmentViews.Policy policy() {
     var limits = properties.getPrivateAttachments();
-    return new AttachmentPolicyResponse(
+    return new AttachmentViews.Policy(
         storage.isConfigured(),
         List.of("image/jpeg", "image/png"),
         limits.getMaxFileBytes(),
@@ -74,13 +71,13 @@ public class AttachmentService {
 
   @PreAuthorize(WRITE)
   @Transactional(readOnly = true)
-  public AttachmentUploadResponse operation(Long storeId, String applicantId, String rawKey) {
+  public AttachmentViews.Upload operation(Long storeId, String applicantId, String rawKey) {
     storage.requireConfigured();
     UUID key = operationKey(rawKey);
     requireApplicant(storeId, applicantId);
     return uploads
         .findByStoreIdAndApplicantIdAndIdempotencyKey(storeId, applicantId, key)
-        .map(AttachmentUploadResponse::from)
+        .map(AttachmentViews.Upload::of)
         .orElseThrow(AttachmentService::missing);
   }
 
@@ -97,16 +94,16 @@ public class AttachmentService {
 
   @PreAuthorize(READ)
   @Transactional(readOnly = true)
-  public Page<AttachmentSummaryResponse> list(Long storeId, String id, Pageable pageable) {
+  public Page<AttachmentViews.Summary> list(Long storeId, String id, Pageable pageable) {
     storage.requireConfigured();
-    return page(storeId, id, true, pageable).map(AttachmentSummaryResponse::from);
+    return page(storeId, id, true, pageable).map(AttachmentViews.Summary::of);
   }
 
   @PreAuthorize(WRITE)
   @Transactional(readOnly = true)
-  public Page<AttachmentUploadResponse> uploads(Long storeId, String id, Pageable pageable) {
+  public Page<AttachmentViews.Upload> uploads(Long storeId, String id, Pageable pageable) {
     storage.requireConfigured();
-    return page(storeId, id, false, pageable).map(AttachmentUploadResponse::from);
+    return page(storeId, id, false, pageable).map(AttachmentViews.Upload::of);
   }
 
   private Page<AttachmentUpload> page(

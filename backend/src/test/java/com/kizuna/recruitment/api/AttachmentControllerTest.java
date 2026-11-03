@@ -19,11 +19,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kizuna.recruitment.api.dto.AttachmentPolicyResponse;
-import com.kizuna.recruitment.api.dto.AttachmentSummaryResponse;
-import com.kizuna.recruitment.api.dto.AttachmentUploadResponse;
 import com.kizuna.recruitment.application.ApplicantAttachmentStore;
 import com.kizuna.recruitment.application.AttachmentService;
+import com.kizuna.recruitment.application.AttachmentViews;
 import com.kizuna.recruitment.domain.AttachmentUpload;
 import com.kizuna.recruitment.infrastructure.AttachmentBodyReceiver;
 import com.kizuna.settings.application.SystemConfigService;
@@ -96,7 +94,7 @@ class AttachmentControllerTest {
     for (var state : AttachmentUpload.Status.values()) {
       when(service.operation(1L, "a", key.toString()))
           .thenReturn(
-              new AttachmentUploadResponse(
+              new AttachmentViews.Upload(
                   "u", key, state, "image/png", 3, OffsetDateTime.now(), null));
       mvc.perform(
               get("/applicants/a/attachment-operations/" + key)
@@ -151,8 +149,7 @@ class AttachmentControllerTest {
     when(service.receive(7L, "a", null, key, image, "actor"))
         .thenReturn(
             new ApplicantAttachmentStore.Receipt(
-                true,
-                new AttachmentSummaryResponse("image", "image/png", 3, OffsetDateTime.now())));
+                true, new AttachmentViews.Summary("image", "image/png", 3, OffsetDateTime.now())));
     var started =
         mvc.perform(
                 post("/applicants/a/attachments")
@@ -276,7 +273,7 @@ class AttachmentControllerTest {
   void disabledPolicyContainsNoStorageConfigurationAndHeadHasSafeDisposition() throws Exception {
     when(service.policy())
         .thenReturn(
-            new AttachmentPolicyResponse(
+            new AttachmentViews.Policy(
                 false, List.of("image/jpeg", "image/png"), 10, 20, 30, 40, 20, 50));
     var read =
         actor(

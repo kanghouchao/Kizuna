@@ -2,6 +2,7 @@ package com.kizuna.recruitment.api.dto;
 
 import com.kizuna.cast.application.CastCreateCommand;
 import com.kizuna.cast.domain.CastEnrollmentStatus;
+import com.kizuna.recruitment.application.ApplicantCommands;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -24,18 +25,20 @@ public record ApplicantEnrollmentRequest(
     Integer hip,
     Integer displayOrder) {
 
-  public CastCreateCommand toCommand() {
-    return new CastCreateCommand(
-        name,
-        status == null ? null : CastEnrollmentStatus.valueOf(status),
-        startedOn,
-        photoUrl,
-        introduction,
-        age,
-        height,
-        bust,
-        waist,
-        hip,
-        displayOrder);
+  public ApplicantCommands.Enrollment command() {
+    return new ApplicantCommands.Enrollment(
+        version,
+        new CastCreateCommand(
+            name,
+            status == null ? null : CastEnrollmentStatus.valueOf(status),
+            startedOn,
+            photoUrl,
+            introduction,
+            age,
+            height,
+            bust,
+            waist,
+            hip,
+            displayOrder));
   }
 }

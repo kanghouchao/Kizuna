@@ -1,6 +1,5 @@
 package com.kizuna.recruitment.application;
 
-import com.kizuna.recruitment.api.dto.AttachmentSummaryResponse;
 import com.kizuna.recruitment.domain.Applicant;
 import com.kizuna.recruitment.domain.ApplicantRepository;
 import com.kizuna.recruitment.domain.ApplicantStatus;
@@ -115,7 +114,7 @@ public class ApplicantAttachmentStore {
               return existing.orElse(null);
             });
     if (reserved != null && reserved.getStatus() == AttachmentUpload.Status.READY)
-      return new Receipt(false, AttachmentSummaryResponse.from(reserved));
+      return new Receipt(false, AttachmentViews.Summary.of(reserved));
     try {
       if (reserved != null) {
         Optional<Receipt> recovered = recover(storeId, applicantId, reserved, actorEmail);
@@ -171,7 +170,7 @@ public class ApplicantAttachmentStore {
         status -> {
           AttachmentUpload upload = lockUpload(storeId, applicantId, reserved.getId());
           if (upload.getStatus() == AttachmentUpload.Status.READY)
-            return Optional.of(new Receipt(false, AttachmentSummaryResponse.from(upload)));
+            return Optional.of(new Receipt(false, AttachmentViews.Summary.of(upload)));
           requireEditable(storeId, applicantId);
           try (PrivateAttachmentFile _ = storage.readVerified(upload.object())) {
             // 読めて照合も通ったので、その実体で完了する。
@@ -243,7 +242,7 @@ public class ApplicantAttachmentStore {
         status -> {
           AttachmentUpload upload = lockUpload(storeId, applicantId, reserved.getId());
           if (upload.getStatus() == AttachmentUpload.Status.READY)
-            return new Receipt(false, AttachmentSummaryResponse.from(upload));
+            return new Receipt(false, AttachmentViews.Summary.of(upload));
           // 実体を書く前に終端を読み、拒まれる完了のために書かない。確定は応募者のロック後に改めて判じる。
           requireEditable(storeId, applicantId);
           if (!upload.getNormalizerVersion().equals(content.normalizerVersion())
@@ -276,7 +275,7 @@ public class ApplicantAttachmentStore {
         upload.getId(),
         Map.of(),
         Map.of("applicant_id", applicantId, "attachment_id", upload.getId()));
-    return new Receipt(true, AttachmentSummaryResponse.from(upload));
+    return new Receipt(true, AttachmentViews.Summary.of(upload));
   }
 
   void recordFailure(
@@ -363,7 +362,7 @@ public class ApplicantAttachmentStore {
     return new ServiceUnavailableException("添付の保存または取得を完了できません。再試行してください");
   }
 
-  public record Receipt(boolean created, AttachmentSummaryResponse attachment) {}
+  public record Receipt(boolean created, AttachmentViews.Summary attachment) {}
 
   /** 回復待ちにする失敗（正規化器・非公開ストレージ・DB）。予約があればコードを記録してから response を返す。 */
   private static final class Failed extends RuntimeException {

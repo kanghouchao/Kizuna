@@ -20,15 +20,9 @@ import com.kizuna.cast.domain.CastEnrollmentStatus;
 import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.medium.lookup.MediumLookup;
 import com.kizuna.medium.lookup.MediumReference;
-import com.kizuna.recruitment.api.dto.ApplicantEnrollmentRequest;
-import com.kizuna.recruitment.api.dto.ApplicantIntakeRequest;
-import com.kizuna.recruitment.api.dto.ApplicantInterviewRequest;
-import com.kizuna.recruitment.api.dto.ApplicantMapper;
-import com.kizuna.recruitment.api.dto.ApplicantMediumResponse;
-import com.kizuna.recruitment.api.dto.ApplicantTransitionRequest;
-import com.kizuna.recruitment.api.dto.ApplicantUpdateRequest;
-import com.kizuna.recruitment.api.dto.RecruitmentPolicyResponse;
 import com.kizuna.recruitment.domain.Applicant;
+import com.kizuna.recruitment.domain.ApplicantIntake;
+import com.kizuna.recruitment.domain.ApplicantInterview;
 import com.kizuna.recruitment.domain.ApplicantRepository;
 import com.kizuna.recruitment.domain.ApplicantSourceType;
 import com.kizuna.recruitment.domain.ApplicantStatus;
@@ -53,7 +47,6 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
@@ -76,8 +69,8 @@ class ApplicantServiceTest {
   @Mock MediumLookup mediumLookup;
   ApplicantService service;
   Applicant applicant;
-  ApplicantIntakeRequest intake =
-      new ApplicantIntakeRequest(
+  ApplicantIntake intake =
+      new ApplicantIntake(
           "応募者",
           ReceptionChannel.PHONE,
           ApplicantSourceType.MEDIA,
@@ -94,18 +87,11 @@ class ApplicantServiceTest {
   void setup() {
     service =
         new ApplicantService(
-            applicants,
-            histories,
-            users,
-            Mappers.getMapper(ApplicantMapper.class),
-            audit,
-            systemConfigs,
-            casts,
-            mediumLookup);
+            applicants, histories, users, audit, systemConfigs, casts, mediumLookup);
     lenient()
         .when(mediumLookup.find(STORE_ID, "媒体"))
         .thenReturn(Optional.of(new MediumReference("媒体", "求人誌", true)));
-    applicant = Applicant.receive(STORE_ID, intake.toIntake());
+    applicant = Applicant.receive(STORE_ID, intake);
     applicant.setId("a");
     ReflectionTestUtils.setField(applicant, "version", 0L);
   }
@@ -151,7 +137,7 @@ class ApplicantServiceTest {
   void updateKeepsTheMediumTheApplicantAlreadyHasSelectable() {
     actor();
     lock();
-    service.update(STORE_ID, "a", new ApplicantUpdateRequest(0L, intake), "actor");
+    service.update(STORE_ID, "a", new ApplicantCommands.IntakeUpdate(0L, intake), "actor");
     verify(mediumLookup).requireSelectable(STORE_ID, "媒体", "媒体");
   }
 
@@ -160,8 +146,7 @@ class ApplicantServiceTest {
     when(systemConfigs.applicantRetentionSettings())
         .thenReturn(new ApplicantRetentionSettings(6, 12, 36));
 
-    assertThat(service.policy().retentionPeriods())
-        .isEqualTo(new RecruitmentPolicyResponse.RetentionPeriods(6, 12, 36));
+    assertThat(service.policy()).isEqualTo(new ApplicantRetentionSettings(6, 12, 36));
   }
 
   @Test
@@ -177,7 +162,7 @@ class ApplicantServiceTest {
             });
     var response = service.create(STORE_ID, intake, "actor");
     verify(mediumLookup).requireSelectable(STORE_ID, "媒体", null);
-    assertThat(response.medium()).isEqualTo(new ApplicantMediumResponse("媒体", "求人誌"));
+    assertThat(response.medium()).isEqualTo(new MediumReference("媒体", "求人誌", true));
     assertThat(response.status()).isEqualTo(ApplicantStatus.RECEIVED);
     assertThat(response.address()).isEqualTo("住所");
     assertThat(response.modifiedBy()).isEqualTo(9L);
@@ -200,11 +185,12 @@ class ApplicantServiceTest {
   void editsEvenIdenticalIntakeAndInterviewUnderVersionCheck() {
     actor();
     lock();
-    service.update(STORE_ID, "a", new ApplicantUpdateRequest(0L, intake), "actor");
+    service.update(STORE_ID, "a", new ApplicantCommands.IntakeUpdate(0L, intake), "actor");
     service.interview(
         STORE_ID,
         "a",
-        new ApplicantInterviewRequest(0L, OffsetDateTime.now(), "担当", "私用メモ", Map.of("確認", true)),
+        new ApplicantCommands.InterviewRecord(
+            0L, new ApplicantInterview(OffsetDateTime.now(), "担当", "私用メモ", Map.of("確認", true))),
         "actor");
     assertThat(applicant.getEditSequence()).isEqualTo(2);
     assertThat(applicant.getInterview().notes()).isEqualTo("私用メモ");
@@ -221,7 +207,7 @@ class ApplicantServiceTest {
     service.transition(
         STORE_ID,
         "a",
-        new ApplicantTransitionRequest(0L, ApplicantStatus.SCREENING, "  選考開始  "),
+        new ApplicantCommands.StatusChange(0L, ApplicantStatus.SCREENING, "  選考開始  "),
         "actor");
     var captor = ArgumentCaptor.forClass(ApplicantStatusHistory.class);
     verify(histories).save(captor.capture());
@@ -245,7 +231,9 @@ class ApplicantServiceTest {
   void rejectsStaleBeforeAnyMutation() {
     lock();
     assertThatThrownBy(
-            () -> service.update(STORE_ID, "a", new ApplicantUpdateRequest(3L, intake), "actor"))
+            () ->
+                service.update(
+                    STORE_ID, "a", new ApplicantCommands.IntakeUpdate(3L, intake), "actor"))
         .isInstanceOf(ConflictException.class);
     assertThat(applicant.getEditSequence()).isZero();
     verifyNoInteractions(audit);
@@ -262,7 +250,7 @@ class ApplicantServiceTest {
         service.decide(
             STORE_ID,
             "a",
-            new ApplicantTransitionRequest(0L, ApplicantStatus.HIRED, "  面接で合意  "),
+            new ApplicantCommands.StatusChange(0L, ApplicantStatus.HIRED, "  面接で合意  "),
             "actor");
     assertThat(response.status()).isEqualTo(ApplicantStatus.HIRED);
     assertThat(applicant.getModifiedBy()).isEqualTo(9L);
@@ -292,7 +280,7 @@ class ApplicantServiceTest {
                 service.decide(
                     STORE_ID,
                     "a",
-                    new ApplicantTransitionRequest(0L, ApplicantStatus.HIRED, "面接なし"),
+                    new ApplicantCommands.StatusChange(0L, ApplicantStatus.HIRED, "面接なし"),
                     "actor"))
         .isInstanceOf(ServiceException.class);
     assertThatThrownBy(
@@ -300,14 +288,17 @@ class ApplicantServiceTest {
                 service.decide(
                     STORE_ID,
                     "a",
-                    new ApplicantTransitionRequest(3L, ApplicantStatus.REJECTED, "旧版"),
+                    new ApplicantCommands.StatusChange(3L, ApplicantStatus.REJECTED, "旧版"),
                     "actor"))
         .isInstanceOf(ConflictException.class);
     for (var status : List.of(ApplicantStatus.HIRED, ApplicantStatus.REJECTED))
       assertThatThrownBy(
               () ->
                   service.transition(
-                      STORE_ID, "a", new ApplicantTransitionRequest(0L, status, "通常遷移"), "actor"))
+                      STORE_ID,
+                      "a",
+                      new ApplicantCommands.StatusChange(0L, status, "通常遷移"),
+                      "actor"))
           .isInstanceOf(ServiceException.class);
     assertThat(applicant.getStatus()).isEqualTo(ApplicantStatus.RECEIVED);
     assertThat(applicant.getEditSequence()).isZero();
@@ -316,20 +307,22 @@ class ApplicantServiceTest {
     verifyNoInteractions(audit);
   }
 
-  private static ApplicantEnrollmentRequest enrollment(Long version) {
-    return new ApplicantEnrollmentRequest(
-        version,
-        "源氏名",
-        "SUSPENDED",
-        LocalDate.of(2026, 11, 1),
-        null,
-        "紹介",
-        20,
-        null,
-        null,
-        null,
-        null,
-        3);
+  private static final CastCreateCommand CAST =
+      new CastCreateCommand(
+          "源氏名",
+          CastEnrollmentStatus.SUSPENDED,
+          LocalDate.of(2026, 11, 1),
+          null,
+          "紹介",
+          20,
+          null,
+          null,
+          null,
+          null,
+          3);
+
+  private static ApplicantCommands.Enrollment enrollment(Long version) {
+    return new ApplicantCommands.Enrollment(version, CAST);
   }
 
   @Test
@@ -346,20 +339,7 @@ class ApplicantServiceTest {
     assertThat(response.enrollmentId()).isEqualTo("e1");
     assertThat(response.status()).isEqualTo(ApplicantStatus.HIRED);
     assertThat(applicant.getModifiedBy()).isEqualTo(9L);
-    assertThat(command.getValue())
-        .isEqualTo(
-            new CastCreateCommand(
-                "源氏名",
-                CastEnrollmentStatus.SUSPENDED,
-                LocalDate.of(2026, 11, 1),
-                null,
-                "紹介",
-                20,
-                null,
-                null,
-                null,
-                null,
-                3));
+    assertThat(command.getValue()).isEqualTo(CAST);
     verify(histories, never()).save(any());
     verify(audit)
         .recordCurrent(
@@ -395,7 +375,7 @@ class ApplicantServiceTest {
     assertThatThrownBy(
             () ->
                 service.update(
-                    STORE_ID, "outside", new ApplicantUpdateRequest(0L, intake), "actor"))
+                    STORE_ID, "outside", new ApplicantCommands.IntakeUpdate(0L, intake), "actor"))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(() -> service.enroll(STORE_ID, "outside", enrollment(0L), "actor"))
         .isInstanceOf(NotFoundException.class);
@@ -426,7 +406,9 @@ class ApplicantServiceTest {
         .when(audit)
         .recordCurrent(eq(STORE_ID), any(), any(), any(), any(), any());
     assertThatThrownBy(
-            () -> service.update(STORE_ID, "a", new ApplicantUpdateRequest(0L, intake), "actor"))
+            () ->
+                service.update(
+                    STORE_ID, "a", new ApplicantCommands.IntakeUpdate(0L, intake), "actor"))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("監査を保存できません");
   }

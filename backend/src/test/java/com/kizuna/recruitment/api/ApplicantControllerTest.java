@@ -15,12 +15,11 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kizuna.recruitment.api.dto.ApplicantEnrollmentRequest;
-import com.kizuna.recruitment.api.dto.ApplicantIntakeRequest;
 import com.kizuna.recruitment.api.dto.ApplicantSummaryResponse;
-import com.kizuna.recruitment.api.dto.ApplicantTransitionRequest;
-import com.kizuna.recruitment.api.dto.RecruitmentPolicyResponse;
+import com.kizuna.recruitment.application.ApplicantCommands;
 import com.kizuna.recruitment.application.ApplicantService;
+import com.kizuna.recruitment.application.ApplicantViews;
+import com.kizuna.recruitment.domain.ApplicantIntake;
 import com.kizuna.recruitment.domain.ApplicantSourceType;
 import com.kizuna.recruitment.domain.ApplicantStatus;
 import com.kizuna.recruitment.domain.ApplicantStatusHistory;
@@ -88,9 +87,37 @@ class ApplicantControllerTest {
     }
   }
 
+  // 応答への変換は controller が行うので、書き込みと詳細の呼出には service の結果が要る。
+  static final ApplicantViews.Detail DETAIL =
+      new ApplicantViews.Detail(
+          "a",
+          "応募者",
+          ApplicantStatus.RECEIVED,
+          ReceptionChannel.WEB,
+          ApplicantSourceType.DIRECT,
+          null,
+          null,
+          OffsetDateTime.parse("2026-11-01T00:00:00+09:00"),
+          0L,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          9L,
+          OffsetDateTime.parse("2026-11-01T00:00:00+09:00"),
+          null,
+          null);
+
   @BeforeEach
   void setup() {
     when(stores.exists(anyLong())).thenReturn(true);
+    when(service.get(anyLong(), any())).thenReturn(DETAIL);
+    when(service.create(anyLong(), any(), any())).thenReturn(DETAIL);
+    when(service.decide(anyLong(), any(), any(), any())).thenReturn(DETAIL);
+    when(service.enroll(anyLong(), any(), any(), any())).thenReturn(DETAIL);
   }
 
   @Test
@@ -115,7 +142,7 @@ class ApplicantControllerTest {
   @Test
   void listUsesSummaryTypeWithoutSensitiveFields() throws Exception {
     var summary =
-        new ApplicantSummaryResponse(
+        new ApplicantViews.Summary(
             "a",
             "応募者",
             ApplicantStatus.RECEIVED,
@@ -179,7 +206,7 @@ class ApplicantControllerTest {
                             new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
                             new SimpleGrantedAuthority("PERM_RECRUITMENT_MANAGE"))))
         .andExpect(status().isCreated());
-    verify(service).create(eq(7L), any(ApplicantIntakeRequest.class), eq("actor"));
+    verify(service).create(eq(7L), any(ApplicantIntake.class), eq("actor"));
   }
 
   @Test
@@ -249,7 +276,7 @@ class ApplicantControllerTest {
                             new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
                             new SimpleGrantedAuthority("PERM_RECRUITMENT_DECIDE"))))
         .andExpect(status().isOk());
-    verify(service).decide(eq(7L), eq("a"), any(ApplicantTransitionRequest.class), eq("actor"));
+    verify(service).decide(eq(7L), eq("a"), any(ApplicantCommands.StatusChange.class), eq("actor"));
   }
 
   @Test
@@ -282,9 +309,9 @@ class ApplicantControllerTest {
                             new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
                             new SimpleGrantedAuthority("PERM_CAST_MANAGE"))))
         .andExpect(status().isCreated());
-    var request = ArgumentCaptor.forClass(ApplicantEnrollmentRequest.class);
+    var request = ArgumentCaptor.forClass(ApplicantCommands.Enrollment.class);
     verify(service).enroll(eq(7L), eq("a"), request.capture(), eq("actor"));
-    assertThat(request.getValue().startedOn()).isEqualTo(LocalDate.of(2026, 11, 1));
+    assertThat(request.getValue().cast().startedOn()).isEqualTo(LocalDate.of(2026, 11, 1));
   }
 
   @Test
@@ -327,8 +354,7 @@ class ApplicantControllerTest {
 
   @Test
   void policyReturnsThreeRetentionPeriodsWithUnsetAsNull() throws Exception {
-    when(service.policy())
-        .thenReturn(RecruitmentPolicyResponse.from(new ApplicantRetentionSettings(6, null, 0)));
+    when(service.policy()).thenReturn(new ApplicantRetentionSettings(6, null, 0));
     mvc.perform(
             get("/applicants/policy")
                 .header("X-Store-ID", "1")

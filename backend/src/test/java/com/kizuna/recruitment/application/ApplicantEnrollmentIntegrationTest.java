@@ -12,6 +12,7 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
 
 import com.kizuna.audit.recording.AuditWriter;
+import com.kizuna.cast.application.CastCreateCommand;
 import com.kizuna.cast.application.CastEnrollmentService;
 import com.kizuna.cast.application.CastInvitationService;
 import com.kizuna.cast.application.CastService;
@@ -19,10 +20,7 @@ import com.kizuna.cast.domain.ApplicantReferenceCheck;
 import com.kizuna.cast.domain.AttendanceReferenceCheck;
 import com.kizuna.cast.domain.OrderReferenceCheck;
 import com.kizuna.medium.lookup.MediumLookup;
-import com.kizuna.recruitment.api.dto.ApplicantEnrollmentRequest;
-import com.kizuna.recruitment.api.dto.ApplicantMapperImpl;
-import com.kizuna.recruitment.api.dto.ApplicantMediumResponse;
-import com.kizuna.recruitment.api.dto.ApplicantSummaryResponse;
+import com.kizuna.medium.lookup.MediumReference;
 import com.kizuna.recruitment.domain.ApplicantRepository;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
@@ -202,7 +200,7 @@ class ApplicantEnrollmentIntegrationTest {
     String enrollment =
         context
             .getBean(CastService.class)
-            .create(otherStoreId, request(0L).toCommand(), ACTOR)
+            .create(otherStoreId, request(0L).cast(), ACTOR)
             .enrollment()
             .getId();
     String local = hiredApplicant(storeId);
@@ -234,8 +232,8 @@ class ApplicantEnrollmentIntegrationTest {
     hiredApplicant(store);
 
     assertThat(applicants.list(store, null, null, PageRequest.of(0, 20)).getContent())
-        .extracting(ApplicantSummaryResponse::medium)
-        .containsExactlyInAnyOrder(new ApplicantMediumResponse(medium, "求人誌"), null);
+        .extracting(ApplicantViews.Summary::medium)
+        .containsExactlyInAnyOrder(new MediumReference(medium, "求人誌", true), null);
   }
 
   @Test
@@ -249,20 +247,21 @@ class ApplicantEnrollmentIntegrationTest {
     assertThat(count("t_cast_enrollments where id=?", enrollment)).isEqualTo(1);
   }
 
-  private static ApplicantEnrollmentRequest request(long version) {
-    return new ApplicantEnrollmentRequest(
+  private static ApplicantCommands.Enrollment request(long version) {
+    return new ApplicantCommands.Enrollment(
         version,
-        "源氏名",
-        null,
-        LocalDate.of(2026, 11, 1),
-        null,
-        "操作者の紹介文",
-        null,
-        null,
-        null,
-        null,
-        null,
-        null);
+        new CastCreateCommand(
+            "源氏名",
+            null,
+            LocalDate.of(2026, 11, 1),
+            null,
+            "操作者の紹介文",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null));
   }
 
   private long store() {
@@ -299,7 +298,6 @@ class ApplicantEnrollmentIntegrationTest {
   @Import({
     AuditWriter.class,
     ApplicantService.class,
-    ApplicantMapperImpl.class,
     CastService.class,
     CastEnrollmentService.class,
     CastInvitationService.class,
