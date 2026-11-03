@@ -16,6 +16,7 @@ import com.kizuna.advertising.api.dto.AdvertisingRequests.CopyRequest;
 import com.kizuna.advertising.api.dto.AdvertisingRequests.CreateRequest;
 import com.kizuna.advertising.api.dto.AdvertisingRequests.DeleteRequest;
 import com.kizuna.advertising.api.dto.AdvertisingRequests.ReplaceRequest;
+import com.kizuna.advertising.application.AdvertisingMediaComparison;
 import com.kizuna.advertising.application.AdvertisingMediaService;
 import com.kizuna.advertising.application.AdvertisingOrderCostService;
 import com.kizuna.advertising.application.AdvertisingService;
@@ -401,7 +402,10 @@ class AdvertisingIntegrationTest {
   @Test
   void mediaSummaryKeepsInquiryAmountAndRevisionTogetherAndRecalculatesAfterDeletion() {
     var first = service.create(1L, create("2026-09", 5, 100, UUID.randomUUID()), "actor");
-    var media = new AdvertisingMediaService(service, context.getBean(AppProperties.class));
+    var media =
+        new AdvertisingMediaService(
+            context.getBean(AdvertisingMediaComparison.class),
+            context.getBean(AppProperties.class));
     service.create(
         2L,
         new CreateRequest(
@@ -646,6 +650,7 @@ class AdvertisingIntegrationTest {
   @EnableMethodSecurity
   @Import({
     AdvertisingService.class,
+    AdvertisingMediaComparison.class,
     AdvertisingOrderCostService.class,
     AdvertisingOrderReader.class,
     MediumLookup.class,

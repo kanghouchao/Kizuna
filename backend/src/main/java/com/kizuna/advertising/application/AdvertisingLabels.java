@@ -1,4 +1,4 @@
-package com.kizuna.advertising.infrastructure;
+package com.kizuna.advertising.application;
 
 import com.kizuna.advertising.domain.AdvertisingCategory;
 

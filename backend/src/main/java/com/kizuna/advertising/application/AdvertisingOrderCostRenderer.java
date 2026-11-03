@@ -1,15 +1,14 @@
-package com.kizuna.advertising.infrastructure;
-
-import static com.kizuna.shared.export.TabularCells.writeCsv;
-import static com.kizuna.shared.export.TabularCells.writeXlsx;
+package com.kizuna.advertising.application;
 
 import com.kizuna.advertising.application.AdvertisingOrderCostService.Snapshot;
 import com.kizuna.advertising.domain.AdvertisingOrderCostReport;
 import com.kizuna.shared.export.DocumentBudget;
+import com.kizuna.shared.export.TabularDocument;
+import com.kizuna.shared.export.TabularDocument.Sheet;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import org.apache.poi.xssf.streaming.SXSSFWorkbook;
+import java.util.stream.Stream;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -39,7 +38,6 @@ public class AdvertisingOrderCostRenderer {
   private static final String OTHER_ROUTES = "媒体以外の経路";
 
   public byte[] render(Snapshot source, String format, DocumentBudget budget) throws IOException {
-    var output = budget.output();
     var criteria = common(source, AdvertisingLabels.CRITERIA);
     var report = source.report();
     criteria.addAll(
@@ -65,30 +63,13 @@ public class AdvertisingOrderCostRenderer {
             "",
             "",
             "リピート・紹介・その他の経路で知った有効完了受注の件数で、有効完了受注件数の内数です。媒体への割当てと単価算出から除外しています。"));
-    if (format.equals("csv")) {
-      output.write(new byte[] {(byte) 0xef, (byte) 0xbb, (byte) 0xbf});
-      writeCsv(output, HEADER, budget);
-      writeCsv(output, criteria, budget);
-      writeCsv(output, otherRoutes, budget);
-      for (var row : report.rows()) writeCsv(output, media(source, row), budget);
-    } else {
-      try (var book = new SXSSFWorkbook(100)) {
-        book.setCompressTempFiles(true);
-        var totals = book.createSheet(AdvertisingLabels.CRITERIA);
-        var media = book.createSheet(MEDIA);
-        writeXlsx(totals, HEADER, budget);
-        writeXlsx(media, HEADER, budget);
-        totals.createFreezePane(0, 1);
-        media.createFreezePane(0, 1);
-        writeXlsx(totals, criteria, budget);
-        writeXlsx(totals, otherRoutes, budget);
-        for (var row : report.rows()) writeXlsx(media, media(source, row), budget);
-        budget.check();
-        book.write(output);
-      }
-    }
-    budget.check();
-    return output.toByteArray();
+    return TabularDocument.write(
+        format,
+        HEADER,
+        List.of(
+            new Sheet(AdvertisingLabels.CRITERIA, Stream.<List<Object>>of(criteria, otherRoutes)),
+            new Sheet(MEDIA, report.rows().stream().map(row -> media(source, row)))),
+        budget);
   }
 
   private ArrayList<Object> common(Snapshot source, String type) {
