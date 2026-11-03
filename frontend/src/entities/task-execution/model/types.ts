@@ -31,7 +31,7 @@ export interface ExecutionRequest {
   task_name: string;
   logical_key: string;
   service_user_id: number;
-  store_id: number | string | null;
+  store_id: string | null;
   period_start: string;
   period_end: string;
 }
