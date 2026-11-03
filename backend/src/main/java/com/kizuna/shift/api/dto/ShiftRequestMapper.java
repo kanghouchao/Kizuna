@@ -19,7 +19,7 @@ public interface ShiftRequestMapper {
   @Mapping(target = "approvable", ignore = true)
   StoreShiftRequestResponse toStoreResponse(ShiftRequest request);
 
-  /** inbox の 1 件。変更申請だけが対象シフトの現行日時（current_*）を内联する。 */
+  /** inbox の 1 件。変更申請だけが対象シフトの現行日時（current_*）をインラインで載せる。 */
   default StoreShiftRequestResponse toStoreResponse(InboxRequest item) {
     StoreShiftRequestResponse response = toStoreResponse(item.request());
     if (item.target() != null) {

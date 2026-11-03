@@ -31,7 +31,7 @@ class ShiftRequestMapperTest {
   }
 
   @Test
-  @DisplayName("inbox の変更申請は対象シフトの現行日時と承認可否を内联すること")
+  @DisplayName("inbox の変更申請は対象シフトの現行日時と承認可否をインラインで載せること")
   void inboxInlinesTheTargetSlot() {
     Shift target =
         Shift.builder()

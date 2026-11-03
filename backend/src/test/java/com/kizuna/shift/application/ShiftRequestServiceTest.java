@@ -509,7 +509,7 @@ class ShiftRequestServiceTest {
 
     assertThat(result).hasSize(2);
     InboxRequest newRow = result.get(0);
-    assertThat(newRow.target()).as("承認済み NEW の関連シフトは現行日時の内联先にしない").isNull();
+    assertThat(newRow.target()).as("承認済み NEW の関連シフトは現行日時のインライン先にしない").isNull();
     assertThat(newRow.approvable()).as("処理済みは承認できない — 押せば必ず失敗する行に可能と書かない").isFalse();
     InboxRequest changeRow = result.get(1);
     assertThat(changeRow.target()).isSameAs(target);
