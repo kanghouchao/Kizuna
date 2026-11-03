@@ -6,7 +6,6 @@ import static org.assertj.core.api.Assertions.tuple;
 
 import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberLookupService.MemberLookup;
-import com.kizuna.point.api.dto.MemberPointEntryResponse;
 import com.kizuna.point.domain.MemberPointEntryView;
 import com.kizuna.point.domain.PointEntryRepository;
 import com.kizuna.point.domain.PointEntryType;
@@ -121,7 +120,7 @@ class MemberPointServiceTest {
   void balanceReturnsOwnLedgerTotal() {
     Mockito.when(pointLedgerService.balance(MEMBER_ID)).thenReturn(1200L);
 
-    assertThat(service.balance(EMAIL).balance()).isEqualTo(1200L);
+    assertThat(service.balance(EMAIL)).isEqualTo(1200L);
   }
 
   @Test
@@ -147,21 +146,21 @@ class MemberPointServiceTest {
                         LocalDate.parse("2027-08-10"),
                         "店舗A"))));
 
-    Page<MemberPointEntryResponse> page = service.entries(EMAIL, FIRST);
+    Page<MemberPointEntry> page = service.entries(EMAIL, FIRST);
 
     assertThat(page.getContent())
         .extracting(
-            MemberPointEntryResponse::occurredOn,
-            MemberPointEntryResponse::storeName,
-            MemberPointEntryResponse::entryType,
-            MemberPointEntryResponse::amount,
-            MemberPointEntryResponse::expiresOn)
+            MemberPointEntry::occurredOn,
+            MemberPointEntry::storeName,
+            MemberPointEntry::entryType,
+            MemberPointEntry::amount,
+            MemberPointEntry::expiresOn)
         .containsExactly(
-            tuple(LocalDate.parse("2026-08-11"), "店舗B", "USE", -300, null),
+            tuple(LocalDate.parse("2026-08-11"), "店舗B", PointEntryType.USE, -300, null),
             tuple(
                 LocalDate.parse("2026-08-10"),
                 "店舗A",
-                "MANUAL_ADJUST",
+                PointEntryType.MANUAL_ADJUST,
                 500,
                 LocalDate.parse("2027-08-10")));
   }
@@ -175,7 +174,7 @@ class MemberPointServiceTest {
         .thenReturn(new PageImpl<>(List.of(grant(1L, "2026-08-11T00:30:00+09:00"))));
 
     assertThat(service.entries(EMAIL, FIRST).getContent())
-        .extracting(MemberPointEntryResponse::occurredOn)
+        .extracting(MemberPointEntry::occurredOn)
         .containsExactly(LocalDate.parse("2026-08-11"));
   }
 
@@ -196,8 +195,8 @@ class MemberPointServiceTest {
                         null))));
 
     assertThat(service.entries(EMAIL, FIRST).getContent())
-        .extracting(MemberPointEntryResponse::entryType, MemberPointEntryResponse::storeName)
-        .containsExactly(tuple("EXPIRE", null));
+        .extracting(MemberPointEntry::entryType, MemberPointEntry::storeName)
+        .containsExactly(tuple(PointEntryType.EXPIRE, null));
   }
 
   @Test
@@ -208,7 +207,7 @@ class MemberPointServiceTest {
     Mockito.when(pointEntryRepository.findMemberEntryViews(MEMBER_ID, second))
         .thenReturn(new PageImpl<>(List.of(grant(1L, "2026-08-10T20:00:00+09:00")), second, 3));
 
-    Page<MemberPointEntryResponse> page = service.entries(EMAIL, second);
+    Page<MemberPointEntry> page = service.entries(EMAIL, second);
 
     assertThat(page.getContent()).hasSize(1);
     assertThat(page.getTotalElements()).isEqualTo(3);

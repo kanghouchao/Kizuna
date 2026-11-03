@@ -26,7 +26,8 @@ public class MemberPointController {
   @GetMapping("/balance")
   @PreAuthorize("hasRole('MEMBER')")
   public ResponseEntity<MemberPointBalanceResponse> balance(Principal principal) {
-    return ResponseEntity.ok(memberPointService.balance(principal.getName()));
+    return ResponseEntity.ok(
+        new MemberPointBalanceResponse(memberPointService.balance(principal.getName())));
   }
 
   @GetMapping("/entries")
@@ -38,6 +39,9 @@ public class MemberPointController {
               sort = {"createdAt", "id"},
               direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return ResponseEntity.ok(memberPointService.entries(principal.getName(), pageable));
+    return ResponseEntity.ok(
+        memberPointService
+            .entries(principal.getName(), pageable)
+            .map(MemberPointEntryResponse::of));
   }
 }

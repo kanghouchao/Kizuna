@@ -5,10 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
-import com.kizuna.point.api.dto.BenefitRuleCreateRequest;
-import com.kizuna.point.api.dto.BenefitRuleDeactivationRequest;
-import com.kizuna.point.api.dto.BenefitRuleMapperImpl;
-import com.kizuna.point.api.dto.BenefitRuleUpdateRequest;
+import com.kizuna.point.domain.BenefitRuleDefinition;
 import com.kizuna.point.domain.BenefitRuleRepeatPolicy;
 import com.kizuna.point.domain.BenefitRuleRepository;
 import com.kizuna.point.domain.BenefitRuleType;
@@ -120,9 +117,9 @@ class BenefitConfigAuditIntegrationTest {
 
   @Test
   void ruleLifecycleCommitsGroupWideAuditWithRealVersions() {
-    Long id = rules.create(create()).id();
-    rules.update(id, update(0L, 800));
-    rules.deactivate(id, deactivation(1L));
+    Long id = rules.create(BenefitRuleType.VISIT, definition(500)).getId();
+    rules.update(id, 0L, definition(800));
+    rules.deactivate(id, 1L);
 
     var rows =
         jdbc.queryForList(
@@ -153,13 +150,13 @@ class BenefitConfigAuditIntegrationTest {
 
   @Test
   void auditFailureRollsBackRuleUpdateAndDeactivation() {
-    Long id = rules.create(create()).id();
+    Long id = rules.create(BenefitRuleType.VISIT, definition(500)).getId();
     long audits = audits("BENEFIT_RULE");
     failAuditFor("BENEFIT_RULE_UPDATED", "BENEFIT_RULE_DEACTIVATED");
     try {
-      assertThatThrownBy(() -> rules.update(id, update(0L, 900)))
+      assertThatThrownBy(() -> rules.update(id, 0L, definition(900)))
           .isInstanceOf(DataIntegrityViolationException.class);
-      assertThatThrownBy(() -> rules.deactivate(id, deactivation(0L)))
+      assertThatThrownBy(() -> rules.deactivate(id, 0L))
           .isInstanceOf(DataIntegrityViolationException.class);
     } finally {
       jdbc.execute("alter table t_audit_events drop constraint ck_benefit_config_audit_test");
@@ -248,30 +245,13 @@ class BenefitConfigAuditIntegrationTest {
         "select count(*) from t_audit_events where target_type=?", Long.class, targetType);
   }
 
-  private static BenefitRuleCreateRequest create() {
-    var request = new BenefitRuleCreateRequest();
-    request.setType(BenefitRuleType.VISIT);
-    request.setName("秘密の規則名");
-    request.setStoreScopeType(StoreScopeType.ALL_STORES);
-    request.setRepeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME);
-    request.setPoints(500);
-    return request;
-  }
-
-  private static BenefitRuleUpdateRequest update(Long version, int points) {
-    var request = new BenefitRuleUpdateRequest();
-    request.setVersion(version);
-    request.setName("秘密の規則名");
-    request.setStoreScopeType(StoreScopeType.ALL_STORES);
-    request.setRepeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME);
-    request.setPoints(points);
-    return request;
-  }
-
-  private static BenefitRuleDeactivationRequest deactivation(Long version) {
-    var request = new BenefitRuleDeactivationRequest();
-    request.setVersion(version);
-    return request;
+  private static BenefitRuleDefinition definition(int points) {
+    return BenefitRuleDefinition.builder()
+        .name("秘密の規則名")
+        .storeScopeType(StoreScopeType.ALL_STORES)
+        .repeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME)
+        .points(points)
+        .build();
   }
 
   @Configuration
@@ -294,7 +274,6 @@ class BenefitConfigAuditIntegrationTest {
     AuditWriter.class,
     BusinessAudit.class,
     BenefitRuleService.class,
-    BenefitRuleMapperImpl.class,
     SystemConfigServiceImpl.class
   })
   static class Config {

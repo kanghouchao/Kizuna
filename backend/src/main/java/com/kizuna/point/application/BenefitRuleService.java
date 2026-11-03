@@ -1,13 +1,9 @@
 package com.kizuna.point.application;
 
-import com.kizuna.point.api.dto.BenefitRuleCreateRequest;
-import com.kizuna.point.api.dto.BenefitRuleDeactivationRequest;
-import com.kizuna.point.api.dto.BenefitRuleMapper;
-import com.kizuna.point.api.dto.BenefitRuleResponse;
-import com.kizuna.point.api.dto.BenefitRuleSummaryResponse;
-import com.kizuna.point.api.dto.BenefitRuleUpdateRequest;
 import com.kizuna.point.domain.BenefitRule;
+import com.kizuna.point.domain.BenefitRuleDefinition;
 import com.kizuna.point.domain.BenefitRuleRepository;
+import com.kizuna.point.domain.BenefitRuleType;
 import com.kizuna.point.domain.InvalidBenefitRuleException;
 import com.kizuna.point.domain.StaleBenefitRuleUpdateException;
 import com.kizuna.shared.exception.DbConstraint;
@@ -36,7 +32,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class BenefitRuleService {
 
   private final BenefitRuleRepository benefitRuleRepository;
-  private final BenefitRuleMapper benefitRuleMapper;
   private final BusinessAudit businessAudit;
 
   /**
@@ -50,34 +45,31 @@ public class BenefitRuleService {
               () -> new InvalidBenefitRuleException("指定された店舗が見つかりません。選択し直してください"));
 
   /** 停用済みも含めた全規則を新しい順に返す。停用が退場を表すので、一覧から消えるものは無い。 */
-  public Page<BenefitRuleSummaryResponse> list(Pageable pageable) {
-    return benefitRuleRepository
-        .findAllByOrderByCreatedAtDescIdDesc(pageable)
-        .map(benefitRuleMapper::toSummary);
+  public Page<BenefitRule> list(Pageable pageable) {
+    return benefitRuleRepository.findAllByOrderByCreatedAtDescIdDesc(pageable);
   }
 
-  public BenefitRuleResponse get(Long id) {
-    return benefitRuleMapper.toResponse(find(id));
+  public BenefitRule get(Long id) {
+    return find(id);
   }
 
   @Transactional
-  public BenefitRuleResponse create(BenefitRuleCreateRequest request) {
-    BenefitRule rule =
-        persist(BenefitRule.define(request.getType(), benefitRuleMapper.toDefinition(request)));
+  public BenefitRule create(BenefitRuleType type, BenefitRuleDefinition definition) {
+    BenefitRule rule = persist(BenefitRule.define(type, definition));
     audit("BENEFIT_RULE_CREATED", rule.getId(), Map.of("exists", "false"), snapshot(rule));
-    return benefitRuleMapper.toResponse(rule);
+    return rule;
   }
 
   @Transactional
-  public BenefitRuleResponse update(Long id, BenefitRuleUpdateRequest request) {
+  public BenefitRule update(Long id, Long expectedVersion, BenefitRuleDefinition definition) {
     BenefitRule rule = find(id);
     // 全量置換なので、開いたまま別の管理者が編集を済ませていると送らなかった項目まで開いた時点の値で
     // 押し戻す。陳腐化した編集フォームの提出は JPA の @Version では捕まらない（再読込後の正当な更新に
     // 見える）ため、応答で往復させた version を明示比対して 409 で拒否する。
-    requireExpectedVersion(rule, request.getVersion());
+    requireExpectedVersion(rule, expectedVersion);
     var before = snapshot(rule);
     String oldName = rule.getName();
-    rule.redefine(benefitRuleMapper.toDefinition(request));
+    rule.redefine(definition);
     persist(rule);
     var after = snapshot(rule);
     var changed = changedFields(before, after);
@@ -88,16 +80,16 @@ public class BenefitRuleService {
       after.put("changed_fields", String.join(",", changed));
       audit("BENEFIT_RULE_UPDATED", id, before, after);
     }
-    return benefitRuleMapper.toResponse(rule);
+    return rule;
   }
 
   /**
    * 停用（退場）。再開の口が無い一方通行なので、更新と同じく確認した版を照合する — 承認の画面を開いている間に別の管理者が 内容を書き換えていれば、操作者が見ていない規則を消すことになる。
    */
   @Transactional
-  public void deactivate(Long id, BenefitRuleDeactivationRequest request) {
+  public void deactivate(Long id, Long expectedVersion) {
     BenefitRule rule = find(id);
-    requireExpectedVersion(rule, request.getVersion());
+    requireExpectedVersion(rule, expectedVersion);
     var before = snapshot(rule);
     rule.deactivate();
     persist(rule);
