@@ -310,22 +310,22 @@ public class CustomerService {
   }
 
   @Transactional
-  public CustomerDetail create(Long storeId, NewCustomer request) {
+  public CustomerDetail create(Long storeId, NewCustomer command) {
     Customer customer =
         Customer.builder()
-            .name(request.name())
-            .address(request.address())
-            .buildingName(request.buildingName())
-            .landmark(request.landmark())
-            .classification(request.classification())
-            .hasPet(request.hasPet())
-            .usageAreas(request.usageAreas())
-            .ngType(request.ngType())
-            .ngContent(request.ngContent())
+            .name(command.name())
+            .address(command.address())
+            .buildingName(command.buildingName())
+            .landmark(command.landmark())
+            .classification(command.classification())
+            .hasPet(command.hasPet())
+            .usageAreas(command.usageAreas())
+            .ngType(command.ngType())
+            .ngContent(command.ngContent())
             .build();
     customer.setStoreId(storeId);
     customerRepository.saveAndFlush(customer);
-    for (var contact : request.contacts())
+    for (var contact : command.contacts())
       customerContactService.create(storeId, customer.getId(), contact);
     audit.recordCurrent(
         customer.getStoreId(),

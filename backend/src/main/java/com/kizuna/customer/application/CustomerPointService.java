@@ -52,7 +52,7 @@ public class CustomerPointService {
    */
   @Transactional
   public PointBalance adjust(
-      Long storeId, String customerId, PointAdjustment request, String actorEmail) {
+      Long storeId, String customerId, PointAdjustment command, String actorEmail) {
     // 積み先を決める前に顧客行を押さえる。契約は CustomerRepository#findByIdAndStoreIdForUpdate に記す。
     customerRepository
         .findByIdAndStoreIdForUpdate(customerId, storeId)
@@ -71,11 +71,11 @@ public class CustomerPointService {
     pointLedgerService.adjust(
         memberId,
         storeId,
-        request.delta(),
-        request.reason(),
-        request.expiresOn(),
+        command.delta(),
+        command.reason(),
+        command.expiresOn(),
         actorId,
-        request.idempotencyKey());
+        command.idempotencyKey());
     return linkedBalance(memberId);
   }
 
@@ -88,7 +88,7 @@ public class CustomerPointService {
    */
   @Transactional(readOnly = true)
   public PointBalance replayAdjust(
-      Long storeId, String customerId, PointAdjustment request, String actorEmail) {
+      Long storeId, String customerId, PointAdjustment command, String actorEmail) {
     requireCustomer(storeId, customerId);
     Long memberId = activeMemberId(storeId, customerId);
     if (memberId == null) {
@@ -98,11 +98,11 @@ public class CustomerPointService {
     pointLedgerService.adjust(
         memberId,
         storeId,
-        request.delta(),
-        request.reason(),
-        request.expiresOn(),
+        command.delta(),
+        command.reason(),
+        command.expiresOn(),
         actorId,
-        request.idempotencyKey());
+        command.idempotencyKey());
     return linkedBalance(memberId);
   }
 

@@ -55,8 +55,8 @@ public class CustomerMergeService {
   /** 墓標は別の顧客へ読み替えず拒否する。確認した二行と原資料の一致が不可逆な統合の前提になる。 */
   @Transactional
   public CustomerMerge merge(
-      Long storeId, String survivingCustomerId, MergeExecution request, String actorEmail) {
-    String mergedCustomerId = request.selection().mergedCustomerId();
+      Long storeId, String survivingCustomerId, MergeExecution command, String actorEmail) {
+    String mergedCustomerId = command.selection().mergedCustomerId();
     if (survivingCustomerId.equals(mergedCustomerId)) {
       throw new ServiceException("同じ顧客を統合することはできません");
     }
@@ -71,8 +71,8 @@ public class CustomerMergeService {
       throw new ConflictException(RELEASE_THE_LINK_FIRST);
     }
 
-    var prepared = preparation.prepare(storeId, survivingCustomerId, request.selection());
-    confirmation.verify(request.previewToken(), prepared.preview().previewToken());
+    var prepared = preparation.prepare(storeId, survivingCustomerId, command.selection());
+    confirmation.verify(command.previewToken(), prepared.preview().previewToken());
 
     var preview = prepared.preview();
     customerRepository
@@ -112,7 +112,7 @@ public class CustomerMergeService {
                 movedOrderCount,
                 movedLinkCount,
                 preview.movedContactCount(),
-                request.operationReason().strip(),
+                command.operationReason().strip(),
                 evidence));
     businessAudit.recordById(
         actorId,
@@ -131,7 +131,7 @@ public class CustomerMergeService {
             "moved_contacts",
             Integer.toString(preview.movedContactCount()),
             "reason",
-            request.operationReason().strip()));
+            command.operationReason().strip()));
     return recorded;
   }
 
