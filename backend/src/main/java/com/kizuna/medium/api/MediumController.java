@@ -39,7 +39,9 @@ public class MediumController {
       @CurrentStore Long storeId, @RequestParam(required = false) MediumStatus status) {
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
-        .body(new MediumItemsResponse<>(service.list(storeId, status)));
+        .body(
+            new MediumItemsResponse<>(
+                service.list(storeId, status).stream().map(MediumSummary::of).toList()));
   }
 
   // 受付・採用担当が広告費を見る権限なしに媒体を選べるよう、選ぶ側の権限のどれか一つで許す。
@@ -50,7 +52,9 @@ public class MediumController {
       @CurrentStore Long storeId) {
     return ResponseEntity.ok()
         .cacheControl(CacheControl.noStore())
-        .body(new MediumItemsResponse<>(service.options(storeId)));
+        .body(
+            new MediumItemsResponse<>(
+                service.options(storeId).stream().map(MediumOptionResponse::of).toList()));
   }
 
   @PostMapping
@@ -67,7 +71,7 @@ public class MediumController {
       @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody RenameRequest request) {
-    return service.rename(storeId, id, request.name(), request.version());
+    return MediumSummary.of(service.rename(storeId, id, request.name(), request.version()));
   }
 
   @PostMapping("/{id}/stop")
@@ -76,7 +80,7 @@ public class MediumController {
       @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody VersionRequest request) {
-    return service.stop(storeId, id, request.version());
+    return MediumSummary.of(service.stop(storeId, id, request.version()));
   }
 
   @PostMapping("/{id}/resume")
@@ -85,7 +89,7 @@ public class MediumController {
       @CurrentStore Long storeId,
       @PathVariable String id,
       @Valid @RequestBody VersionRequest request) {
-    return service.resume(storeId, id, request.version());
+    return MediumSummary.of(service.resume(storeId, id, request.version()));
   }
 
   @DeleteMapping("/{id}")

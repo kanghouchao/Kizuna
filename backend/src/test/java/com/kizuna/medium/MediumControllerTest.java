@@ -12,9 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.medium.api.MediumController;
-import com.kizuna.medium.api.dto.MediumResponses.MediumOptionResponse;
-import com.kizuna.medium.api.dto.MediumResponses.MediumSummary;
 import com.kizuna.medium.application.MediumService;
+import com.kizuna.medium.domain.Medium;
 import com.kizuna.medium.domain.MediumStatus;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
@@ -34,6 +33,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.test.context.TestSecurityContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
@@ -76,8 +76,7 @@ class MediumControllerTest {
 
   @Test
   void listShowsEveryStatusToViewersAndFiltersByStatus() throws Exception {
-    when(service.list(1L, null))
-        .thenReturn(List.of(new MediumSummary("m1", "停止中", MediumStatus.STOPPED, 3L)));
+    when(service.list(1L, null)).thenReturn(List.of(medium("m1", "停止中", MediumStatus.STOPPED, 3L)));
 
     mvc.perform(get("/media").header("X-Store-ID", "1").with(permissions("ADVERTISING_COST_VIEW")))
         .andExpect(status().isOk())
@@ -98,7 +97,7 @@ class MediumControllerTest {
 
   @Test
   void optionsAreOpenToAnyOfTheThreeChoosersOnly() throws Exception {
-    when(service.options(1L)).thenReturn(List.of(new MediumOptionResponse("m1", "ヘブン")));
+    when(service.options(1L)).thenReturn(List.of(medium("m1", "ヘブン", MediumStatus.ACTIVE, 0L)));
     for (var permission : List.of("ADVERTISING_COST_VIEW", "ORDER_MANAGE", "RECRUITMENT_MANAGE")) {
       mvc.perform(get("/media/options").header("X-Store-ID", "1").with(permissions(permission)))
           .andExpect(status().isOk())
@@ -112,7 +111,7 @@ class MediumControllerTest {
 
   @Test
   void managersCreateRenameStopResumeAndDelete() throws Exception {
-    var summary = new MediumSummary("m1", "新名", MediumStatus.ACTIVE, 1L);
+    var summary = medium("m1", "新名", MediumStatus.ACTIVE, 1L);
     when(service.create(1L, "ヘブン")).thenReturn("m1");
     when(service.rename(1L, "m1", "新名", 0L)).thenReturn(summary);
     when(service.stop(1L, "m1", 1L)).thenReturn(summary);
@@ -166,5 +165,13 @@ class MediumControllerTest {
     mvc.perform(json(post("/media/m1/stop"), "{}").with(manage)).andExpect(status().isBadRequest());
     mvc.perform(delete("/media/m1").header("X-Store-ID", "1").with(manage))
         .andExpect(status().isBadRequest());
+  }
+
+  private static Medium medium(String id, String name, MediumStatus status, long version) {
+    var medium = Medium.builder().name(name).build();
+    ReflectionTestUtils.setField(medium, "id", id);
+    ReflectionTestUtils.setField(medium, "status", status);
+    ReflectionTestUtils.setField(medium, "version", version);
+    return medium;
   }
 }
