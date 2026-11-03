@@ -8,12 +8,14 @@ import com.kizuna.receipt.once.OperationReceipts;
 import com.kizuna.receipt.once.Receipt;
 import com.kizuna.receipt.once.ReceiptKey;
 import com.kizuna.shared.exception.ConflictException;
+import com.kizuna.shared.exception.ResourceBusyException;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.store.StoreShortNames;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterAll;
@@ -61,6 +63,7 @@ class OperationReceiptsIntegrationTest {
                         "classpath:db/changelog/db.changelog-master.yaml",
                     "spring.jpa.hibernate.ddl-auto", "validate",
                     "spring.jpa.open-in-view", "false",
+                    "app.receipt.lock-timeout-seconds", "1",
                     "logging.level.root", "WARN"))
             .run();
     jdbc = context.getBean(JdbcTemplate.class);
@@ -219,6 +222,49 @@ class OperationReceiptsIntegrationTest {
                 Integer.class,
                 storeId))
         .isEqualTo(1);
+  }
+
+  @Test
+  void sameKeyGivesUpAfterTheLockTimeoutWithoutCommittingAndLeavesRowLocksUnlimited()
+      throws Exception {
+    String id = probe();
+    var holderHasTheKey = new CountDownLatch(1);
+    var release = new CountDownLatch(1);
+    var rowLockTimeout = new String[1];
+    try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+      var holder =
+          executor.submit(
+              () ->
+                  increment(
+                      "timeout",
+                      "fingerprint",
+                      id,
+                      () -> {
+                        rowLockTimeout[0] =
+                            jdbc.queryForObject(
+                                "select current_setting('lock_timeout')", String.class);
+                        holderHasTheKey.countDown();
+                        try {
+                          release.await(10, TimeUnit.SECONDS);
+                        } catch (InterruptedException interrupted) {
+                          Thread.currentThread().interrupt();
+                        }
+                      }));
+      assertThat(holderHasTheKey.await(10, TimeUnit.SECONDS)).isTrue();
+      try {
+        var waiter = executor.submit(() -> increment("timeout", "fingerprint", id));
+        assertThatThrownBy(() -> waiter.get(5, TimeUnit.SECONDS))
+            .isInstanceOf(ExecutionException.class)
+            .cause()
+            .isInstanceOf(ResourceBusyException.class);
+      } finally {
+        release.countDown();
+      }
+      assertThat(holder.get(10, TimeUnit.SECONDS).receipt().replayed()).isFalse();
+    }
+    assertThat(rowLockTimeout[0]).isEqualTo("0");
+    assertThat(counter(id)).isEqualTo(1);
+    assertThat(increment("timeout", "fingerprint", id).receipt().replayed()).isTrue();
   }
 
   /** 後続の要求が業務行ではなく受領キーの助言ロックで待っていること。 */
