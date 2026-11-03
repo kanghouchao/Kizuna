@@ -1,5 +1,6 @@
 package com.kizuna.shift.api.dto;
 
+import com.kizuna.shift.application.ShiftCommand.SubmitChangeRequest;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -17,4 +18,8 @@ public class ShiftChangeRequestCreateRequest {
 
   @Size(max = 500, message = "備考は500文字以内で入力してください")
   private String note;
+
+  public SubmitChangeRequest command() {
+    return new SubmitChangeRequest(shiftId, workDate, startTime, endTime, note);
+  }
 }

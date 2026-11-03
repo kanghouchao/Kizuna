@@ -1,5 +1,6 @@
 package com.kizuna.shift.api.dto;
 
+import com.kizuna.shift.application.ShiftViews.AttendanceLineage;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -28,4 +29,22 @@ public class AttendanceLineageResponse {
   private ActorResponse updatedBy;
   private OffsetDateTime createdAt;
   private OffsetDateTime updatedAt;
+
+  public static AttendanceLineageResponse of(AttendanceLineage a) {
+    if (a == null) {
+      return null;
+    }
+    return AttendanceLineageResponse.builder()
+        .id(a.id())
+        .castId(a.castId())
+        .businessDate(a.businessDate())
+        .actualStartAt(a.actualStartAt())
+        .actualEndAt(a.actualEndAt())
+        .waitingPlace(a.waitingPlace())
+        .createdBy(ActorResponse.of(a.createdBy()))
+        .updatedBy(ActorResponse.of(a.updatedBy()))
+        .createdAt(a.createdAt())
+        .updatedAt(a.updatedAt())
+        .build();
+  }
 }

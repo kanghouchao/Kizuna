@@ -30,6 +30,9 @@ public class MemberShiftController {
   public ResponseEntity<List<PublicShiftResponse>> confirmedCasts(
       @RequestParam(name = "store_id") Long storeId,
       @RequestParam(name = "date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-    return ResponseEntity.ok(confirmedShiftLookupService.listConfirmedCasts(storeId, date));
+    return ResponseEntity.ok(
+        confirmedShiftLookupService.listConfirmedCasts(storeId, date).stream()
+            .map(PublicShiftResponse::of)
+            .toList());
   }
 }

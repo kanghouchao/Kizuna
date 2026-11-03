@@ -13,11 +13,8 @@ import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shift.api.dto.AttendanceCancellationRequest;
-import com.kizuna.shift.api.dto.AttendanceCorrectionRequest;
-import com.kizuna.shift.api.dto.AttendanceCreateRequest;
-import com.kizuna.shift.api.dto.AttendanceMapper;
-import com.kizuna.shift.api.dto.AttendanceResponse;
+import com.kizuna.shift.application.ShiftCommand.CorrectAttendance;
+import com.kizuna.shift.application.ShiftCommand.RecordAttendance;
 import com.kizuna.shift.domain.Attendance;
 import com.kizuna.shift.domain.AttendanceCorrection;
 import com.kizuna.shift.domain.AttendanceCorrectionRepository;
@@ -64,7 +61,6 @@ class AttendanceServiceTest {
 
   @Mock private AttendanceRepository attendanceRepository;
   @Mock private AttendanceCorrectionRepository correctionRepository;
-  @Mock private AttendanceMapper attendanceMapper;
   @Mock private ShiftRepository shiftRepository;
   @Mock private CastService castService;
   @Mock private UserRepository userRepository;
@@ -112,27 +108,12 @@ class AttendanceServiceTest {
         .build();
   }
 
-  private AttendanceCreateRequest createRequest(String shiftId) {
-    AttendanceCreateRequest request = new AttendanceCreateRequest();
-    request.setCastId(CAST_ID);
-    request.setShiftId(shiftId);
-    request.setActualStartAt(START);
-    return request;
+  private RecordAttendance createRequest(String shiftId) {
+    return new RecordAttendance(CAST_ID, shiftId, START, null, null);
   }
 
-  private AttendanceCorrectionRequest correctionRequest(LocalDate businessDate) {
-    AttendanceCorrectionRequest request = new AttendanceCorrectionRequest();
-    request.setBusinessDate(businessDate);
-    request.setActualStartAt(START);
-    request.setActualEndAt(START.plusHours(4));
-    request.setWaitingPlace("2番待機室");
-    return request;
-  }
-
-  private AttendanceCancellationRequest cancellationRequest(String reason) {
-    AttendanceCancellationRequest request = new AttendanceCancellationRequest();
-    request.setReason(reason);
-    return request;
+  private CorrectAttendance correctionRequest(LocalDate businessDate) {
+    return new CorrectAttendance(businessDate, START, START.plusHours(4), "2番待機室");
   }
 
   private Attendance saved() {
@@ -293,7 +274,7 @@ class AttendanceServiceTest {
     when(attendanceRepository.findByIdAndStoreId("att-1", STORE_ID))
         .thenReturn(Optional.of(attendance));
 
-    attendanceService.cancel(STORE_ID, "att-1", cancellationRequest("誤って記録したため"), ACTOR_EMAIL);
+    attendanceService.cancel(STORE_ID, "att-1", "誤って記録したため", ACTOR_EMAIL);
 
     assertThat(attendance.isCancelled()).isTrue();
     assertThat(attendance.getCancelledBy()).isEqualTo(ACTOR_ID);
@@ -315,7 +296,6 @@ class AttendanceServiceTest {
             .findByStoreIdAndBusinessDateAndCastIdAndCancelledAtIsNullOrderByActualStartAtAscIdAsc(
                 STORE_ID, DERIVED_BUSINESS_DATE, CAST_ID))
         .thenReturn(List.of());
-    when(attendanceMapper.toResponse(attendance)).thenReturn(new AttendanceResponse());
 
     assertThat(attendanceService.list(STORE_ID, DERIVED_BUSINESS_DATE, null)).hasSize(1);
     assertThat(attendanceService.list(STORE_ID, DERIVED_BUSINESS_DATE, CAST_ID)).isEmpty();

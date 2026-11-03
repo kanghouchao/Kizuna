@@ -3,7 +3,7 @@ package com.kizuna.shift.application;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
-import com.kizuna.shift.api.dto.PublicShiftResponse;
+import com.kizuna.shift.application.ShiftViews.PublicShift;
 import com.kizuna.shift.domain.ConfirmedShiftCastView;
 import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.shift.domain.ShiftStatus;
@@ -36,25 +36,24 @@ public class ConfirmedShiftLookupService {
 
   /** 指定店舗・指定日に公開可能なプロフィールと確定シフトを持つ在籍中のキャストを返す。 */
   @Transactional(readOnly = true)
-  public List<PublicShiftResponse> listConfirmedCasts(Long storeId, LocalDate workDate) {
+  public List<PublicShift> listConfirmedCasts(Long storeId, LocalDate workDate) {
     if (!storeExistenceCheck.exists(storeId)) {
       throw new ServiceException("店舗が見つかりません");
     }
     validateWorkDate(workDate);
     // 同じ日に複数の確定シフトを持つキャストは 1 件に畳む。指名はキャスト単位で、どのシフトかは選べないため、
     // 重複させると同じ値の選択肢が並ぶだけになる。問い合わせは開始時刻の昇順なので、残るのは最も早い出勤。
-    Map<String, PublicShiftResponse> byCast = new LinkedHashMap<>();
+    Map<String, PublicShift> byCast = new LinkedHashMap<>();
     for (ConfirmedShiftCastView view : shiftRepository.findConfirmedCasts(storeId, workDate)) {
       byCast.computeIfAbsent(
           view.getCastId(),
           castId ->
-              PublicShiftResponse.builder()
-                  .castId(castId)
-                  .castName(view.getCastName())
-                  .castPhotoUrl(view.getCastPhotoUrl())
-                  .startTime(view.getStartTime())
-                  .endTime(view.getEndTime())
-                  .build());
+              new PublicShift(
+                  castId,
+                  view.getCastName(),
+                  view.getCastPhotoUrl(),
+                  view.getStartTime(),
+                  view.getEndTime()));
     }
     return List.copyOf(byCast.values());
   }

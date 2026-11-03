@@ -1,5 +1,6 @@
 package com.kizuna.shift.api.dto;
 
+import com.kizuna.shift.application.ShiftViews.Actor;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -18,4 +19,11 @@ import lombok.NoArgsConstructor;
 public class ActorResponse {
   private Long id;
   private String name;
+
+  public static ActorResponse of(Actor actor) {
+    if (actor == null) {
+      return null;
+    }
+    return ActorResponse.builder().id(actor.id()).name(actor.name()).build();
+  }
 }

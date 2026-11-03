@@ -7,8 +7,7 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.persistence.Timestamps;
-import com.kizuna.shift.api.dto.ShiftRequestMapper;
-import com.kizuna.shift.api.dto.StoreShiftRequestResponse;
+import com.kizuna.shift.application.ShiftViews.InboxRequest;
 import com.kizuna.shift.domain.AttendanceRepository;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftPatch;
@@ -41,14 +40,13 @@ public class ShiftRequestService {
   private final CastEnrollmentRepository enrollments;
   private final ShiftRepository shiftRepository;
   private final AttendanceRepository attendanceRepository;
-  private final ShiftRequestMapper shiftRequestMapper;
   private final UserRepository userRepository;
   private final BusinessDateService businessDateService;
   private final StoreRepository storeRepository;
   private final BusinessAudit audit;
 
   @Transactional(readOnly = true)
-  public List<StoreShiftRequestResponse> list(Long storeId, String status) {
+  public List<InboxRequest> list(Long storeId, String status) {
     List<ShiftRequest> requests =
         status == null
             ? shiftRequestRepository.findByStoreIdOrderByCreatedAtAsc(storeId)
@@ -90,18 +88,13 @@ public class ShiftRequestService {
     return requests.stream()
         .map(
             request -> {
-              StoreShiftRequestResponse response = shiftRequestMapper.toStoreResponse(request);
               Shift target = targetShifts.get(request.getShiftId());
-              if (target != null) {
-                response.setCurrentWorkDate(target.getWorkDate());
-                response.setCurrentStartTime(target.getStartTime());
-                response.setCurrentEndTime(target.getEndTime());
-              }
-              response.setApprovable(
+              return new InboxRequest(
+                  request,
+                  target,
                   activeEnrollments.contains(request.getCastId())
                       && approvable(
                           request, target, currentBusinessDate, shiftsWithActiveAttendance));
-              return response;
             })
         .toList();
   }
@@ -160,8 +153,7 @@ public class ShiftRequestService {
    *     公開状態で生まれてから隠すまでの露出窓を作らない（ADR 0015）
    */
   @Transactional
-  public StoreShiftRequestResponse approve(
-      Long storeId, String id, Boolean published, String actorEmail) {
+  public ShiftRequest approve(Long storeId, String id, Boolean published, String actorEmail) {
     ShiftRequest request = findOwnRequest(storeId, id);
     var before = ShiftAuditSnapshot.of(request);
     storeRepository.lockAgainstDeletion(storeId);
@@ -266,11 +258,11 @@ public class ShiftRequestService {
         null,
         before.values(),
         ShiftAuditSnapshot.of(request).after(before));
-    return shiftRequestMapper.toStoreResponse(request);
+    return request;
   }
 
   @Transactional
-  public StoreShiftRequestResponse decline(Long storeId, String id, String actorEmail) {
+  public ShiftRequest decline(Long storeId, String id, String actorEmail) {
     ShiftRequest request = findOwnRequest(storeId, id);
     var before = ShiftAuditSnapshot.of(request);
     request.decline(resolveActorId(actorEmail), Timestamps.now());
@@ -286,7 +278,7 @@ public class ShiftRequestService {
         null,
         before.values(),
         ShiftAuditSnapshot.of(request).after(before));
-    return shiftRequestMapper.toStoreResponse(request);
+    return request;
   }
 
   private ShiftRequest findOwnRequest(Long storeId, String id) {

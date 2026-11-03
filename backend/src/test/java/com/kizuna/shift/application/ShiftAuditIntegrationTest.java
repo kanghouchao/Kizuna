@@ -21,12 +21,9 @@ import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.shift.api.dto.AttendanceCancellationRequest;
 import com.kizuna.shift.api.dto.AttendanceCorrectionRequest;
 import com.kizuna.shift.api.dto.AttendanceCreateRequest;
-import com.kizuna.shift.api.dto.AttendanceMapperImpl;
 import com.kizuna.shift.api.dto.ShiftChangeRequestCreateRequest;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
-import com.kizuna.shift.api.dto.ShiftMapperImpl;
 import com.kizuna.shift.api.dto.ShiftRequestCreateRequest;
-import com.kizuna.shift.api.dto.ShiftRequestMapperImpl;
 import com.kizuna.shift.api.dto.ShiftUpdateRequest;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
@@ -142,7 +139,7 @@ class ShiftAuditIntegrationTest {
     r.setStartTime(LocalTime.of(10, 0));
     r.setEndTime(LocalTime.of(18, 0));
     r.setNote("秘密希望");
-    return own.submit("cast@example.test", r).getId();
+    return own.submit("cast@example.test", r.command()).getId();
   }
 
   private AttendanceCreateRequest attendance(String shiftId) {
@@ -171,11 +168,11 @@ class ShiftAuditIntegrationTest {
 
   @Test
   void realVersionsAndNoOpsSurvivePhysicalDeletion() {
-    var id = shifts.create(1L, shiftRequest(), "operator@example.test").getId();
+    var id = shifts.create(1L, shiftRequest().command(), "operator@example.test").shift().getId();
     var patch = new ShiftUpdateRequest();
     patch.setStartTime(LocalTime.of(11, 0));
-    shifts.update(1L, id, patch, "operator@example.test");
-    shifts.update(1L, id, patch, "operator@example.test");
+    shifts.update(1L, id, patch.command(), "operator@example.test");
+    shifts.update(1L, id, patch.command(), "operator@example.test");
     shifts.changePublication(1L, id, false, "operator@example.test");
     shifts.changePublication(1L, id, false, "operator@example.test");
     shifts.delete(1L, id);
@@ -263,22 +260,22 @@ class ShiftAuditIntegrationTest {
 
   @Test
   void auditFailureRollsBackEachAttendanceWriteAndItsCorrectionHistory() {
-    var id = shifts.create(1L, shiftRequest(), "operator@example.test").getId();
+    var id = shifts.create(1L, shiftRequest().command(), "operator@example.test").shift().getId();
     var patch = new ShiftUpdateRequest();
     patch.setStatus(ShiftStatus.CONFIRMED);
-    shifts.update(1L, id, patch, "operator@example.test");
+    shifts.update(1L, id, patch.command(), "operator@example.test");
     var r = attendance(id);
     long audits = count("t_audit_events"), records = count("t_attendances");
     reject("ATTENDANCE_RECORDED");
     try {
-      assertThatThrownBy(() -> actuals.record(1L, r, "operator@example.test"))
+      assertThatThrownBy(() -> actuals.record(1L, r.command(), "operator@example.test"))
           .isInstanceOf(RuntimeException.class);
       assertThat(count("t_attendances")).isEqualTo(records);
       assertThat(count("t_audit_events")).isEqualTo(audits);
     } finally {
       allow();
     }
-    var attendanceId = actuals.record(1L, r, "operator@example.test").getId();
+    var attendanceId = actuals.record(1L, r.command(), "operator@example.test").getId();
     var correction = new AttendanceCorrectionRequest();
     correction.setBusinessDate(date);
     correction.setActualStartAt(date.atTime(11, 0));
@@ -288,7 +285,8 @@ class ShiftAuditIntegrationTest {
     reject("ATTENDANCE_CORRECTED");
     try {
       assertThatThrownBy(
-              () -> actuals.correct(1L, attendanceId, correction, "operator@example.test"))
+              () ->
+                  actuals.correct(1L, attendanceId, correction.command(), "operator@example.test"))
           .isInstanceOf(RuntimeException.class);
       assertThat(count("t_attendance_corrections")).isEqualTo(histories);
       assertThat(count("t_audit_events")).isEqualTo(audits);
@@ -299,7 +297,7 @@ class ShiftAuditIntegrationTest {
     } finally {
       allow();
     }
-    actuals.correct(1L, attendanceId, correction, "operator@example.test");
+    actuals.correct(1L, attendanceId, correction.command(), "operator@example.test");
     var source =
         jdbc.queryForObject(
             "select source_id from t_audit_events where action='ATTENDANCE_CORRECTED' and target_id=?",
@@ -316,7 +314,8 @@ class ShiftAuditIntegrationTest {
     audits = count("t_audit_events");
     reject("ATTENDANCE_CANCELLED");
     try {
-      assertThatThrownBy(() -> actuals.cancel(1L, attendanceId, cancel, "operator@example.test"))
+      assertThatThrownBy(
+              () -> actuals.cancel(1L, attendanceId, cancel.getReason(), "operator@example.test"))
           .isInstanceOf(RuntimeException.class);
       assertThat(
               jdbc.queryForObject(
@@ -328,7 +327,7 @@ class ShiftAuditIntegrationTest {
     } finally {
       allow();
     }
-    actuals.cancel(1L, attendanceId, cancel, "operator@example.test");
+    actuals.cancel(1L, attendanceId, cancel.getReason(), "operator@example.test");
     audits = count("t_audit_events");
     assertThatThrownBy(() -> shifts.delete(1L, id)).isInstanceOf(RuntimeException.class);
     assertThat(count("t_audit_events")).isEqualTo(audits);
@@ -347,13 +346,13 @@ class ShiftAuditIntegrationTest {
             () ->
                 transactions.executeWithoutResult(
                     status -> {
-                      shifts.create(1L, shiftRequest(), "operator@example.test");
+                      shifts.create(1L, shiftRequest().command(), "operator@example.test");
                       throw new IllegalStateException("後続失敗");
                     }))
         .isInstanceOf(IllegalStateException.class);
     assertThat(count("t_shifts")).isEqualTo(rows);
     assertThat(count("t_audit_events")).isEqualTo(audits);
-    var id = shifts.create(1L, shiftRequest(), "operator@example.test").getId();
+    var id = shifts.create(1L, shiftRequest().command(), "operator@example.test").shift().getId();
     audits = count("t_audit_events");
     assertThatThrownBy(
             () ->
@@ -428,7 +427,7 @@ class ShiftAuditIntegrationTest {
     change.setWorkDate(date);
     change.setStartTime(LocalTime.of(11, 0));
     change.setEndTime(LocalTime.of(18, 0));
-    var changeId = own.submitChange("cast@example.test", change).getId();
+    var changeId = own.submitChange("cast@example.test", change.command()).getId();
     long audits = count("t_audit_events");
     var locked = new CountDownLatch(1);
     var read = new CountDownLatch(1);
@@ -517,9 +516,6 @@ class ShiftAuditIntegrationTest {
     ShiftRequestService.class,
     CastShiftRequestService.class,
     AttendanceService.class,
-    ShiftMapperImpl.class,
-    ShiftRequestMapperImpl.class,
-    AttendanceMapperImpl.class,
     BusinessDateService.class
   })
   static class Config {

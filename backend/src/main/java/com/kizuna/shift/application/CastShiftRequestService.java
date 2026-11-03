@@ -6,12 +6,10 @@ import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.shift.api.dto.CastShiftRequestResponse;
-import com.kizuna.shift.api.dto.ShiftChangeRequestCreateRequest;
-import com.kizuna.shift.api.dto.ShiftRequestCreateRequest;
-import com.kizuna.shift.api.dto.ShiftRequestMapper;
-import com.kizuna.shift.api.dto.ShiftRequestResponse;
+import com.kizuna.shift.application.ShiftCommand.SubmitChangeRequest;
+import com.kizuna.shift.application.ShiftCommand.SubmitRequest;
 import com.kizuna.shift.domain.AttendanceRepository;
+import com.kizuna.shift.domain.CastShiftRequestView;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.shift.domain.ShiftRequest;
@@ -46,32 +44,31 @@ public class CastShiftRequestService {
   private final ShiftRequestRepository shiftRequestRepository;
   private final ShiftRepository shiftRepository;
   private final AttendanceRepository attendanceRepository;
-  private final ShiftRequestMapper shiftRequestMapper;
   private final BusinessDateService businessDateService;
   private final StoreRepository storeRepository;
   private final BusinessAudit audit;
 
   @Transactional
-  public ShiftRequestResponse submit(String email, ShiftRequestCreateRequest request) {
-    validateRequestedSlot(request.getWorkDate(), request.getStartTime(), request.getEndTime());
+  public ShiftRequest submit(String email, SubmitRequest command) {
+    validateRequestedSlot(command.workDate(), command.startTime(), command.endTime());
 
     Long userId = resolveUserId(email);
     String castId =
-        castRepository.findIdsByUserIdAndStoreId(userId, request.getStoreId()).stream()
+        castRepository.findIdsByUserIdAndStoreId(userId, command.storeId()).stream()
             .findFirst()
             .orElseThrow(() -> new ServiceException("指定店舗に所属していません"));
 
-    requireActiveMembership(castId, request.getStoreId());
+    requireActiveMembership(castId, command.storeId());
 
     ShiftRequest entity =
         ShiftRequest.builder()
             .castId(castId)
-            .workDate(request.getWorkDate())
-            .startTime(request.getStartTime())
-            .endTime(request.getEndTime())
-            .note(request.getNote())
+            .workDate(command.workDate())
+            .startTime(command.startTime())
+            .endTime(command.endTime())
+            .note(command.note())
             .build();
-    entity.setStoreId(request.getStoreId());
+    entity.setStoreId(command.storeId());
     shiftRequestRepository.save(entity);
     shiftRequestRepository.flush();
     audit.recordById(
@@ -84,7 +81,7 @@ public class CastShiftRequestService {
         null,
         Map.of(),
         ShiftAuditSnapshot.of(entity).after(null));
-    return shiftRequestMapper.toResponse(entity);
+    return entity;
   }
 
   /**
@@ -92,15 +89,15 @@ public class CastShiftRequestService {
    * であることを要求する。店舗はシフトから導出し、シフト自体はこの時点では変更しない（店舗の承認で更新される）。
    */
   @Transactional
-  public ShiftRequestResponse submitChange(String email, ShiftChangeRequestCreateRequest request) {
-    validateRequestedSlot(request.getWorkDate(), request.getStartTime(), request.getEndTime());
+  public ShiftRequest submitChange(String email, SubmitChangeRequest command) {
+    validateRequestedSlot(command.workDate(), command.startTime(), command.endTime());
 
     Long userId = resolveUserId(email);
     List<String> castIds = castRepository.findIdsByUserId(userId);
     Shift shift =
         shiftRepository
-            .findByIdAndCastIdIn(request.getShiftId(), castIds)
-            .orElseThrow(() -> new NotFoundException("対象のシフトが見つかりません: " + request.getShiftId()));
+            .findByIdAndCastIdIn(command.shiftId(), castIds)
+            .orElseThrow(() -> new NotFoundException("対象のシフトが見つかりません: " + command.shiftId()));
     requireActiveMembership(shift.getCastId(), shift.getStoreId());
     if (shift.getStatus() != ShiftStatus.CONFIRMED) {
       throw new ServiceException("確定済みのシフトのみ変更申請できます");
@@ -120,10 +117,10 @@ public class CastShiftRequestService {
             .originalWorkDate(shift.getWorkDate())
             .originalStartTime(shift.getStartTime())
             .originalEndTime(shift.getEndTime())
-            .workDate(request.getWorkDate())
-            .startTime(request.getStartTime())
-            .endTime(request.getEndTime())
-            .note(request.getNote())
+            .workDate(command.workDate())
+            .startTime(command.startTime())
+            .endTime(command.endTime())
+            .note(command.note())
             .build();
     entity.setStoreId(shift.getStoreId());
     shiftRequestRepository.save(entity);
@@ -138,20 +135,18 @@ public class CastShiftRequestService {
         null,
         Map.of(),
         ShiftAuditSnapshot.of(entity).after(null));
-    return shiftRequestMapper.toResponse(entity);
+    return entity;
   }
 
   /** 本人の出勤希望履歴。提出のたびに増え続けるので、上限の無い一覧では返さない。 */
   @Transactional(readOnly = true)
-  public Page<CastShiftRequestResponse> history(String email, Pageable pageable) {
+  public Page<CastShiftRequestView> history(String email, Pageable pageable) {
     Long userId = resolveUserId(email);
     List<String> castIds = castRepository.findIdsByUserId(userId);
     if (castIds.isEmpty()) {
       return Page.empty(pageable);
     }
-    return shiftRequestRepository
-        .findHistoryByCastIds(castIds, pageable)
-        .map(shiftRequestMapper::toHistoryResponse);
+    return shiftRequestRepository.findHistoryByCastIds(castIds, pageable);
   }
 
   /** 希望する勤務枠の共通検証（新規希望・変更申請共通）: 開始≠終了、勤務日は現在の営業日以降。 */

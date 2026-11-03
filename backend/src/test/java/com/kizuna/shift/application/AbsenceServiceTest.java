@@ -7,7 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.settings.application.SystemConfigService;
-import com.kizuna.shift.api.dto.AbsenceResponse;
+import com.kizuna.shift.application.ShiftViews.Absence;
 import com.kizuna.shift.domain.AttendanceRepository;
 import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
@@ -78,8 +78,8 @@ class AbsenceServiceTest {
         .build();
   }
 
-  private static List<String> castIdsOf(List<AbsenceResponse> rows) {
-    return rows.stream().map(AbsenceResponse::getCastId).toList();
+  private static List<String> castIdsOf(List<Absence> rows) {
+    return rows.stream().map(Absence::castId).toList();
   }
 
   @Test
@@ -161,11 +161,11 @@ class AbsenceServiceTest {
         shiftOf("cast-2", LocalTime.of(18, 0), LocalTime.of(21, 0)));
     givenActiveAttendanceCastIds("cast-2");
 
-    List<AbsenceResponse> absences =
+    List<Absence> absences =
         serviceAt(LocalDateTime.of(2026, 8, 19, 8, 0)).list(STORE_ID, BUSINESS_DATE);
 
     assertThat(castIdsOf(absences)).containsExactly(CAST_ID, "cast-3");
-    assertThat(absences.getFirst().getBusinessDate()).isEqualTo(BUSINESS_DATE);
+    assertThat(absences.getFirst().businessDate()).isEqualTo(BUSINESS_DATE);
   }
 
   @Test

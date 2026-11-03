@@ -1,5 +1,6 @@
 package com.kizuna.shift.api.dto;
 
+import com.kizuna.shift.application.ShiftCommand.CreateShift;
 import com.kizuna.shift.domain.ShiftStatus;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -17,4 +18,8 @@ public class ShiftCreateRequest {
 
   /** 店外への露出可否。省略時は公開可で出生する。非公開で生まれる必要がある行だけが false を送る。 */
   private Boolean published;
+
+  public CreateShift command() {
+    return new CreateShift(castId, workDate, startTime, endTime, status, published);
+  }
 }

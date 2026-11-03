@@ -4,6 +4,7 @@ import com.kizuna.shared.storescope.CurrentStore;
 import com.kizuna.shift.api.dto.AttendanceCancellationRequest;
 import com.kizuna.shift.api.dto.AttendanceCorrectionRequest;
 import com.kizuna.shift.api.dto.AttendanceCreateRequest;
+import com.kizuna.shift.api.dto.AttendanceMapper;
 import com.kizuna.shift.api.dto.AttendanceResponse;
 import com.kizuna.shift.application.AttendanceService;
 import jakarta.validation.Valid;
@@ -34,6 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AttendanceController {
 
   private final AttendanceService attendanceService;
+  private final AttendanceMapper attendanceMapper;
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
@@ -42,7 +44,10 @@ public class AttendanceController {
       @RequestParam(name = "business_date") @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
           LocalDate businessDate,
       @RequestParam(name = "cast_id", required = false) String castId) {
-    return ResponseEntity.ok(attendanceService.list(storeId, businessDate, castId));
+    return ResponseEntity.ok(
+        attendanceService.list(storeId, businessDate, castId).stream()
+            .map(attendanceMapper::toResponse)
+            .toList());
   }
 
   @PostMapping
@@ -52,7 +57,9 @@ public class AttendanceController {
       @Valid @RequestBody AttendanceCreateRequest request,
       Principal principal) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(attendanceService.record(storeId, request, principal.getName()));
+        .body(
+            attendanceMapper.toResponse(
+                attendanceService.record(storeId, request.command(), principal.getName())));
   }
 
   @PutMapping("/{id}")
@@ -62,7 +69,9 @@ public class AttendanceController {
       @PathVariable String id,
       @Valid @RequestBody AttendanceCorrectionRequest request,
       Principal principal) {
-    return ResponseEntity.ok(attendanceService.correct(storeId, id, request, principal.getName()));
+    return ResponseEntity.ok(
+        attendanceMapper.toResponse(
+            attendanceService.correct(storeId, id, request.command(), principal.getName())));
   }
 
   @PostMapping("/{id}/cancellation")
@@ -72,7 +81,7 @@ public class AttendanceController {
       @PathVariable String id,
       @Valid @RequestBody AttendanceCancellationRequest request,
       Principal principal) {
-    attendanceService.cancel(storeId, id, request, principal.getName());
+    attendanceService.cancel(storeId, id, request.getReason(), principal.getName());
     return ResponseEntity.noContent().build();
   }
 }

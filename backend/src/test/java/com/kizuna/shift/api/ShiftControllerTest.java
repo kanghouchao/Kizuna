@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.shift.api.dto.ShiftMapperImpl;
 import com.kizuna.shift.application.ShiftLineageService;
 import com.kizuna.shift.application.ShiftService;
 import com.kizuna.shift.domain.ShiftRequest;
@@ -36,7 +37,11 @@ import org.springframework.test.web.servlet.MockMvc;
 
 /** handler が X-Store-ID で名乗られた店舗をそのまま service へ渡すことの単体テスト。 */
 @WebMvcTest(ShiftController.class)
-@Import({ShiftControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
+@Import({
+  ShiftControllerTest.MethodSecurityConfig.class,
+  StoreScopeHolder.class,
+  ShiftMapperImpl.class
+})
 class ShiftControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
