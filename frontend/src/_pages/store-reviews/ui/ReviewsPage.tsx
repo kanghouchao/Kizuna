@@ -168,6 +168,9 @@ function Reviews({
   };
   const submit = (command: ReviewCommand) => run(command, () => operation.start(command));
   const replay = () => pending && run(pending.payload, operation.replay);
+  const editorKey = editor
+    ? `${editor.action}-${editor.row?.id ?? 'new'}-${editor.row?.version ?? 0}`
+    : 'none';
   const feedback = (
     <>
       {uncertain && (
@@ -308,7 +311,9 @@ function Reviews({
           )}
         </DialogContent>
       </Dialog>
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+      {/* 操作ごとにダイアログを作り直す。閉じるアニメーションの途中で開き直すと元のポータル位置に留まり、
+          その間に開いた詳細の下に隠れて支援技術からも外れるため、新しい操作は詳細より後ろに置く。 */}
+      <Dialog key={editorKey} open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editor ? editorTitle(editor) : '口コミの操作'}</DialogTitle>
@@ -321,7 +326,6 @@ function Reviews({
           ) : (
             editor && (
               <ReviewEditor
-                key={`${editor.action}-${editor.row?.id ?? 'new'}-${editor.row?.version ?? 0}`}
                 editor={editor}
                 canOrder={canOrder}
                 busy={busy || pending !== null}
