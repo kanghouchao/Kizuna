@@ -26,6 +26,19 @@ class UserTest {
   }
 
   @Test
+  @DisplayName("返した授権の集合は変更できず、変更は reassignGrants / reassignStores を通るしかない")
+  void grantSetsCannotBeModifiedThroughTheGetters() {
+    User user = staffBuilder().build();
+
+    assertThatThrownBy(() -> user.getRoleIds().add(99L))
+        .isInstanceOf(UnsupportedOperationException.class);
+    assertThatThrownBy(() -> user.getStoreIds().add(99L))
+        .isInstanceOf(UnsupportedOperationException.class);
+    assertThat(user.getRoleIds()).containsExactly(1L);
+    assertThat(user.getStoreIds()).isEmpty();
+  }
+
+  @Test
   @DisplayName("SPECIFIC_STORES で店舗集合が空だと不変条件違反で例外")
   void specificStoresWithEmptyStoreIdsThrows() {
     assertThatThrownBy(

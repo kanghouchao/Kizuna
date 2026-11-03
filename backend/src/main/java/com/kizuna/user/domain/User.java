@@ -13,6 +13,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import java.time.OffsetDateTime;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
@@ -127,6 +128,16 @@ public class User extends BaseEntity {
     this.roleIds = new HashSet<>(roles);
     this.storeScopeType = storeScopeType;
     this.storeIds = new HashSet<>(stores);
+  }
+
+  /** 変更できない view を返す。ロール集合の変更は版を進める {@link #reassignGrants} だけに限る。 */
+  public Set<Long> getRoleIds() {
+    return Collections.unmodifiableSet(roleIds);
+  }
+
+  /** 変更できない view を返す。担当店舗集合の変更は {@link #reassignGrants} と {@link #reassignStores} だけに限る。 */
+  public Set<Long> getStoreIds() {
+    return Collections.unmodifiableSet(storeIds);
   }
 
   /**
