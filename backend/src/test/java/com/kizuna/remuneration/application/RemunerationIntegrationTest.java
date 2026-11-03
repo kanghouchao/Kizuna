@@ -199,12 +199,13 @@ class RemunerationIntegrationTest {
     SecurityContextHolder.getContext()
         .setAuthentication(UsernamePasswordAuthenticationToken.authenticated(email, "", List.of()));
     var request = guarantee(10000, 0, UUID.randomUUID());
-    var original = management.createGuarantee(storeId, request, email);
+    var original = management.createGuarantee(storeId, request.command(), email);
     when(clock.instant()).thenReturn(Instant.parse("2026-10-01T12:00:00Z"));
-    assertThat(management.createGuarantee(storeId, request, email)).isEqualTo(original);
+    assertThat(management.createGuarantee(storeId, request.command(), email)).isEqualTo(original);
     assertThatThrownBy(
             () ->
-                management.createGuarantee(storeId, guarantee(10000, 1, UUID.randomUUID()), email))
+                management.createGuarantee(
+                    storeId, guarantee(10000, 1, UUID.randomUUID()).command(), email))
         .isInstanceOf(AccessDeniedException.class);
     assertThat(
             management
@@ -221,9 +222,11 @@ class RemunerationIntegrationTest {
 
   @Test
   void dailyUnionAndBonusAreVisibleAcrossHistoricalEnrollments() {
-    management.createGuarantee(storeId, guarantee(10000, 0, UUID.randomUUID()), email);
+    management.createGuarantee(storeId, guarantee(10000, 0, UUID.randomUUID()).command(), email);
     management.createBonus(
-        storeId, new BonusCreateRequest(personId, DAY, 1500, "付与", UUID.randomUUID()), email);
+        storeId,
+        new BonusCreateRequest(personId, DAY, 1500, "付与", UUID.randomUUID()).command(),
+        email);
     var store =
         statements.store(
             storeId, personId, "2026-09", PageRequest.of(0, 20), PageRequest.of(0, 20));
@@ -243,7 +246,7 @@ class RemunerationIntegrationTest {
 
   @Test
   void cancelledAttendanceAndStoppedTermRecalculateWithoutBlockingTheMonth() {
-    management.createGuarantee(storeId, guarantee(10000, 0, UUID.randomUUID()), email);
+    management.createGuarantee(storeId, guarantee(10000, 0, UUID.randomUUID()).command(), email);
     jdbc.update("update t_attendances set actual_end_at=null where id=?", attendanceId);
     assertThat(
             statements
@@ -258,9 +261,9 @@ class RemunerationIntegrationTest {
             .getFirst();
     management.correctGuarantee(
         storeId,
-        term.id(),
         new GuaranteeCorrectionRequest(
-            DAY, GuaranteeState.STOPPED, null, "停止", "停止日訂正", 1L, UUID.randomUUID()),
+                DAY, GuaranteeState.STOPPED, null, "停止", "停止日訂正", 1L, UUID.randomUUID())
+            .command(term.id()),
         email);
     var stopped =
         statements.store(
@@ -273,27 +276,29 @@ class RemunerationIntegrationTest {
   @Test
   void guaranteeTimelineAndBonusCorrectionsRetainHistoryAndRejectStaleVersions() {
     var created =
-        management.createGuarantee(storeId, guarantee(10000, 0, UUID.randomUUID()), email);
+        management.createGuarantee(
+            storeId, guarantee(10000, 0, UUID.randomUUID()).command(), email);
     assertThatThrownBy(
             () ->
                 management.createGuarantee(
                     storeId,
                     new GuaranteeCreateRequest(
-                        personId,
-                        DAY.plusDays(1),
-                        GuaranteeState.STOPPED,
-                        null,
-                        "停止",
-                        0L,
-                        UUID.randomUUID()),
+                            personId,
+                            DAY.plusDays(1),
+                            GuaranteeState.STOPPED,
+                            null,
+                            "停止",
+                            0L,
+                            UUID.randomUUID())
+                        .command(),
                     email))
         .isInstanceOf(ConflictException.class);
     var corrected =
         management.correctGuarantee(
             storeId,
-            created.guarantee().id(),
             new GuaranteeCorrectionRequest(
-                DAY, GuaranteeState.ACTIVE, 12000L, "日額", "転記訂正", 1L, UUID.randomUUID()),
+                    DAY, GuaranteeState.ACTIVE, 12000L, "日額", "転記訂正", 1L, UUID.randomUUID())
+                .command(created.guarantee().id()),
             email);
     assertThat(corrected.version()).isEqualTo(2);
     assertThat(
@@ -305,22 +310,22 @@ class RemunerationIntegrationTest {
         management
             .createBonus(
                 storeId,
-                new BonusCreateRequest(personId, DAY, 1000, "付与", UUID.randomUUID()),
+                new BonusCreateRequest(personId, DAY, 1000, "付与", UUID.randomUUID()).command(),
                 email)
             .bonus();
     var changed =
         management
             .correctBonus(
                 storeId,
-                bonus.id(),
                 new BonusCorrectionRequest(
-                    DAY, 2000, "付与", "金額訂正", bonus.version(), UUID.randomUUID()),
+                        DAY, 2000, "付与", "金額訂正", bonus.version(), UUID.randomUUID())
+                    .command(bonus.id()),
                 email)
             .bonus();
     management.cancelBonus(
         storeId,
-        changed.id(),
-        new CancellationRequest("誤記取消", changed.version(), UUID.randomUUID()),
+        new CancellationRequest("誤記取消", changed.version(), UUID.randomUUID())
+            .bonusCommand(changed.id()),
         email);
     assertThat(management.bonusChanges(storeId, bonus.id(), NEWEST_FIRST).getContent()).hasSize(3);
     assertThat(
@@ -330,8 +335,8 @@ class RemunerationIntegrationTest {
         .isZero();
     management.cancelGuarantee(
         storeId,
-        created.guarantee().id(),
-        new CancellationRequest("誤記取消", 2L, UUID.randomUUID()),
+        new CancellationRequest("誤記取消", 2L, UUID.randomUUID())
+            .guaranteeCommand(created.guarantee().id()),
         email);
     assertThat(
             statements
@@ -343,13 +348,14 @@ class RemunerationIntegrationTest {
   @Test
   void cancellationResponsesCarryTheTimesThatAReadReturns() {
     var guarantee =
-        management.createGuarantee(storeId, guarantee(10000, 0, UUID.randomUUID()), email);
+        management.createGuarantee(
+            storeId, guarantee(10000, 0, UUID.randomUUID()).command(), email);
     var cancelledGuarantee =
         management
             .cancelGuarantee(
                 storeId,
-                guarantee.guarantee().id(),
-                new CancellationRequest("誤記取消", 1L, UUID.randomUUID()),
+                new CancellationRequest("誤記取消", 1L, UUID.randomUUID())
+                    .guaranteeCommand(guarantee.guarantee().id()),
                 email)
             .guarantee();
     assertThat(cancelledGuarantee.cancelledAt()).isNotNull();
@@ -361,15 +367,15 @@ class RemunerationIntegrationTest {
         management
             .createBonus(
                 storeId,
-                new BonusCreateRequest(personId, DAY, 1000, "付与", UUID.randomUUID()),
+                new BonusCreateRequest(personId, DAY, 1000, "付与", UUID.randomUUID()).command(),
                 email)
             .bonus();
     var cancelledBonus =
         management
             .cancelBonus(
                 storeId,
-                bonus.id(),
-                new CancellationRequest("誤記取消", bonus.version(), UUID.randomUUID()),
+                new CancellationRequest("誤記取消", bonus.version(), UUID.randomUUID())
+                    .bonusCommand(bonus.id()),
                 email)
             .bonus();
     assertThat(cancelledBonus.cancelledAt()).isNotNull();
@@ -380,16 +386,16 @@ class RemunerationIntegrationTest {
   @Test
   void replayAfterACorrectionReturnsTheCurrentBonusAndTheCreationsOwnChangeId() {
     var request = new BonusCreateRequest(personId, DAY, 1000, "付与", UUID.randomUUID());
-    var created = management.createBonus(storeId, request, email);
+    var created = management.createBonus(storeId, request.command(), email);
     var corrected =
         management.correctBonus(
             storeId,
-            created.bonus().id(),
             new BonusCorrectionRequest(
-                DAY, 2000, "付与", "金額訂正", created.bonus().version(), UUID.randomUUID()),
+                    DAY, 2000, "付与", "金額訂正", created.bonus().version(), UUID.randomUUID())
+                .command(created.bonus().id()),
             email);
 
-    var replay = management.createBonus(storeId, request, email);
+    var replay = management.createBonus(storeId, request.command(), email);
 
     assertThat(replay.bonus()).isEqualTo(corrected.bonus());
     assertThat(replay.changeId()).isEqualTo(created.changeId());
@@ -401,18 +407,18 @@ class RemunerationIntegrationTest {
         management
             .createBonus(
                 storeId,
-                new BonusCreateRequest(personId, DAY, 1000, "付与", UUID.randomUUID()),
+                new BonusCreateRequest(personId, DAY, 1000, "付与", UUID.randomUUID()).command(),
                 email)
             .bonus();
     var term =
         management
-            .createGuarantee(storeId, guarantee(10000, 0, UUID.randomUUID()), email)
+            .createGuarantee(storeId, guarantee(10000, 0, UUID.randomUUID()).command(), email)
             .guarantee();
     assertThatThrownBy(
             () ->
                 management.createBonus(
                     storeId + 100000,
-                    new BonusCreateRequest(personId, DAY, 1000, "付与", UUID.randomUUID()),
+                    new BonusCreateRequest(personId, DAY, 1000, "付与", UUID.randomUUID()).command(),
                     email))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
@@ -426,8 +432,8 @@ class RemunerationIntegrationTest {
             () ->
                 management.cancelBonus(
                     storeId + 100000,
-                    bonus.id(),
-                    new CancellationRequest("取消", bonus.version(), UUID.randomUUID()),
+                    new CancellationRequest("取消", bonus.version(), UUID.randomUUID())
+                        .bonusCommand(bonus.id()),
                     email))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
@@ -449,13 +455,13 @@ class RemunerationIntegrationTest {
           pool.submit(
               () -> {
                 authorize();
-                return management.createBonus(storeId, request, email);
+                return management.createBonus(storeId, request.command(), email);
               });
       var second =
           pool.submit(
               () -> {
                 authorize();
-                return management.createBonus(storeId, request, email);
+                return management.createBonus(storeId, request.command(), email);
               });
       assertThat(first.get(10, TimeUnit.SECONDS)).isEqualTo(second.get(10, TimeUnit.SECONDS));
     }
@@ -474,7 +480,8 @@ class RemunerationIntegrationTest {
             () ->
                 management.createBonus(
                     storeId,
-                    new BonusCreateRequest(personId, DAY, 2000, "付与", request.requestId()),
+                    new BonusCreateRequest(personId, DAY, 2000, "付与", request.requestId())
+                        .command(),
                     email))
         .isInstanceOf(ConflictException.class);
   }
@@ -498,7 +505,7 @@ class RemunerationIntegrationTest {
     start.await();
     authorize();
     try {
-      management.createGuarantee(storeId, guarantee(10000, 0, UUID.randomUUID()), email);
+      management.createGuarantee(storeId, guarantee(10000, 0, UUID.randomUUID()).command(), email);
       return true;
     } catch (ConflictException e) {
       return false;
@@ -511,7 +518,7 @@ class RemunerationIntegrationTest {
       throws Exception {
     var term =
         management
-            .createGuarantee(storeId, guarantee(10000, 0, UUID.randomUUID()), email)
+            .createGuarantee(storeId, guarantee(10000, 0, UUID.randomUUID()).command(), email)
             .guarantee();
     var facts = context.getBean(SnapshotFacts.class);
     facts.reached = new CountDownLatch(1);

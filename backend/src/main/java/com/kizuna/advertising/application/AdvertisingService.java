@@ -1,9 +1,5 @@
 package com.kizuna.advertising.application;
 
-import com.kizuna.advertising.api.dto.AdvertisingRequests.CopyRequest;
-import com.kizuna.advertising.api.dto.AdvertisingRequests.CreateRequest;
-import com.kizuna.advertising.api.dto.AdvertisingRequests.DeleteRequest;
-import com.kizuna.advertising.api.dto.AdvertisingRequests.ReplaceRequest;
 import com.kizuna.advertising.api.dto.AdvertisingResponses.ChangeResponse;
 import com.kizuna.advertising.api.dto.AdvertisingResponses.ChangeSummary;
 import com.kizuna.advertising.api.dto.AdvertisingResponses.CopyResponse;
@@ -12,6 +8,7 @@ import com.kizuna.advertising.api.dto.AdvertisingResponses.CostSummary;
 import com.kizuna.advertising.domain.AdvertisingCategory;
 import com.kizuna.advertising.domain.AdvertisingChange;
 import com.kizuna.advertising.domain.AdvertisingChangeRepository;
+import com.kizuna.advertising.domain.AdvertisingCommand;
 import com.kizuna.advertising.domain.AdvertisingCost;
 import com.kizuna.advertising.domain.AdvertisingMedium;
 import com.kizuna.advertising.infrastructure.AdvertisingRecords;
@@ -108,12 +105,12 @@ public class AdvertisingService {
   }
 
   @Transactional(timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
-  public CostResponse create(Long storeId, CreateRequest request, String actor) {
-    var month = AdvertisingInput.month(request.month());
-    var values = request.values();
+  public CostResponse create(Long storeId, AdvertisingCommand.Create command, String actor) {
+    var month = AdvertisingInput.month(command.month());
+    var values = command.values();
     return receipts.once(
-        key(storeId, actor, request.requestId()),
-        request.fingerprint(),
+        key(storeId, actor, command.requestId()),
+        command.fingerprint(),
         () -> {
           var selected = mediumLookup.findAll(storeId, Set.of(values.mediumId()));
           MediumLookup.selectable(selected.get(values.mediumId()), null);
@@ -132,14 +129,14 @@ public class AdvertisingService {
   }
 
   @Transactional(timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
-  public CostResponse replace(Long storeId, String id, ReplaceRequest request, String actor) {
-    var values = request.values();
+  public CostResponse replace(Long storeId, AdvertisingCommand.Replace command, String actor) {
+    var values = command.values();
     return receipts.once(
-        key(storeId, actor, request.requestId()),
-        request.fingerprint(id),
+        key(storeId, actor, command.requestId()),
+        command.fingerprint(),
         () -> {
-          var cost = locked(storeId, id);
-          cost.requireVersion(request.version());
+          var cost = locked(storeId, command.id());
+          cost.requireVersion(command.version());
           var current = cost.getMediumId();
           var selected =
               mediumLookup.findAll(
@@ -151,7 +148,7 @@ public class AdvertisingService {
           MediumLookup.flush(records::flush, DbConstraint.FK_T_ADVERTISING_COSTS_MEDIUM);
           var after =
               CostResponse.of(cost, MediumLookup.referenced(selected, cost.getMediumId()).name());
-          change(storeId, actor, cost.getMonth(), "UPDATED", before, after, request.reason(), null);
+          change(storeId, actor, cost.getMonth(), "UPDATED", before, after, command.reason(), null);
           return committed("UPDATED", cost);
         },
         receipt -> recorded(storeId, receipt));
@@ -159,33 +156,35 @@ public class AdvertisingService {
 
   /** 作成と置換の要求キーの一意制約に敗れた要求を、成立済みの受領から解決する。 */
   @Transactional(readOnly = true)
-  public CostResponse replayCost(Long storeId, UUID requestId, String fingerprint, String actor) {
+  public CostResponse replayCost(Long storeId, AdvertisingCommand command, String actor) {
     return receipts.replayOnly(
-        key(storeId, actor, requestId), fingerprint, receipt -> recorded(storeId, receipt));
+        key(storeId, actor, command.requestId()),
+        command.fingerprint(),
+        receipt -> recorded(storeId, receipt));
   }
 
   @Transactional(timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
-  public void delete(Long storeId, String id, DeleteRequest request, String actor) {
+  public void delete(Long storeId, AdvertisingCommand.Delete command, String actor) {
     receipts.once(
-        key(storeId, actor, request.requestId()),
-        request.fingerprint(id),
+        key(storeId, actor, command.requestId()),
+        command.fingerprint(),
         () -> {
-          var cost = locked(storeId, id);
-          cost.requireVersion(request.version());
+          var cost = locked(storeId, command.id());
+          cost.requireVersion(command.version());
           var before = response(storeId, cost);
           cost.delete();
           records.advance(storeId, cost.getMonth());
           records.flush();
-          change(storeId, actor, cost.getMonth(), "DELETED", before, null, request.reason(), null);
+          change(storeId, actor, cost.getMonth(), "DELETED", before, null, command.reason(), null);
           return committed("DELETED", cost);
         },
         receipt -> null);
   }
 
   @Transactional(readOnly = true)
-  public void replayDelete(Long storeId, String id, DeleteRequest request, String actor) {
+  public void replayDelete(Long storeId, AdvertisingCommand.Delete command, String actor) {
     receipts.replayOnly(
-        key(storeId, actor, request.requestId()), request.fingerprint(id), receipt -> null);
+        key(storeId, actor, command.requestId()), command.fingerprint(), receipt -> null);
   }
 
   private AdvertisingCost locked(Long storeId, String id) {
@@ -195,16 +194,17 @@ public class AdvertisingService {
   }
 
   @Transactional(timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
-  public CopyResponse copy(Long storeId, String target, CopyRequest request, String actor) {
+  public CopyResponse copy(Long storeId, AdvertisingCommand.Copy command, String actor) {
+    String target = command.targetMonth();
     String source = source(target);
     return receipts.once(
-        key(storeId, actor, request.requestId()),
-        request.fingerprint(target),
+        key(storeId, actor, command.requestId()),
+        command.fingerprint(),
         () -> {
           records.lockMonth(storeId, source);
           records.lockMonth(storeId, target);
-          if (revision(storeId, source) != request.sourceVersion()
-              || revision(storeId, target) != request.targetVersion())
+          if (revision(storeId, source) != command.sourceVersion()
+              || revision(storeId, target) != command.targetVersion())
             throw new ConflictException("コピー元または対象月が更新されています。再確認してください");
           if (records.count(storeId, target) > 0)
             throw new ConflictException("対象月に広告費があります。空の月にだけコピーできます");
@@ -225,7 +225,7 @@ public class AdvertisingService {
                 "COPIED",
                 null,
                 CostResponse.of(cost, MediumLookup.referenced(names, cost.getMediumId()).name()),
-                request.reason(),
+                command.reason(),
                 original.getId());
           }
           return new Committed(
@@ -237,7 +237,7 @@ public class AdvertisingService {
                   "copied_count",
                   originals.size(),
                   "source_version",
-                  request.sourceVersion(),
+                  command.sourceVersion(),
                   "target_version",
                   targetMonth.getRevision(),
                   "created_at",
@@ -247,11 +247,11 @@ public class AdvertisingService {
   }
 
   @Transactional(readOnly = true)
-  public CopyResponse replayCopy(Long storeId, String target, CopyRequest request, String actor) {
-    source(target);
+  public CopyResponse replayCopy(Long storeId, AdvertisingCommand.Copy command, String actor) {
+    source(command.targetMonth());
     return receipts.replayOnly(
-        key(storeId, actor, request.requestId()),
-        request.fingerprint(target),
+        key(storeId, actor, command.requestId()),
+        command.fingerprint(),
         receipt -> copied(storeId, receipt));
   }
 

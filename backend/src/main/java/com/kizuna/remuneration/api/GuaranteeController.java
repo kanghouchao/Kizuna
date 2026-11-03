@@ -54,12 +54,11 @@ public class GuaranteeController {
       @CurrentStore Long storeId,
       @Valid @RequestBody GuaranteeCreateRequest request,
       Principal principal) {
+    var command = request.command();
     return Replays.write(
         DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-        () -> service.createGuarantee(storeId, request, principal.getName()),
-        () ->
-            service.replayGuarantee(
-                storeId, request.requestId(), request.fingerprint(), principal.getName()));
+        () -> service.createGuarantee(storeId, command, principal.getName()),
+        () -> service.replayGuarantee(storeId, command, principal.getName()));
   }
 
   @PostMapping("/{id}/corrections")
@@ -71,12 +70,11 @@ public class GuaranteeController {
       @PathVariable String id,
       @Valid @RequestBody GuaranteeCorrectionRequest request,
       Principal principal) {
+    var command = request.command(id);
     return Replays.write(
         DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-        () -> service.correctGuarantee(storeId, id, request, principal.getName()),
-        () ->
-            service.replayGuarantee(
-                storeId, request.requestId(), request.fingerprint(id), principal.getName()));
+        () -> service.correctGuarantee(storeId, command, principal.getName()),
+        () -> service.replayGuarantee(storeId, command, principal.getName()));
   }
 
   @PostMapping("/{id}/cancellation")
@@ -87,15 +85,11 @@ public class GuaranteeController {
       @PathVariable String id,
       @Valid @RequestBody CancellationRequest request,
       Principal principal) {
+    var command = request.guaranteeCommand(id);
     return Replays.write(
         DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-        () -> service.cancelGuarantee(storeId, id, request, principal.getName()),
-        () ->
-            service.replayGuarantee(
-                storeId,
-                request.requestId(),
-                request.guaranteeFingerprint(id),
-                principal.getName()));
+        () -> service.cancelGuarantee(storeId, command, principal.getName()),
+        () -> service.replayGuarantee(storeId, command, principal.getName()));
   }
 
   @GetMapping("/{id}/changes")

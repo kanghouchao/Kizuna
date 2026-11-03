@@ -1,7 +1,7 @@
 package com.kizuna.remuneration.api.dto;
 
-import com.kizuna.receipt.once.Fingerprint;
 import com.kizuna.remuneration.domain.GuaranteeState;
+import com.kizuna.remuneration.domain.RemunerationCommand;
 import com.kizuna.shared.exception.ServiceException;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -28,9 +28,9 @@ public final class RemunerationRequests {
         throw new ServiceException("日付は西暦1年から9999年の範囲で指定してください");
     }
 
-    public String fingerprint() {
-      return Fingerprint.of(
-          "GUARANTEE_CREATE", personId, effectiveFrom, state, dailyAmount, reason, expectedVersion);
+    public RemunerationCommand.CreateGuarantee command() {
+      return new RemunerationCommand.CreateGuarantee(
+          personId, effectiveFrom, state, dailyAmount, reason, expectedVersion, requestId);
     }
   }
 
@@ -49,16 +49,16 @@ public final class RemunerationRequests {
         throw new ServiceException("日付は西暦1年から9999年の範囲で指定してください");
     }
 
-    public String fingerprint(String id) {
-      return Fingerprint.of(
-          "GUARANTEE_CORRECT",
+    public RemunerationCommand.CorrectGuarantee command(String id) {
+      return new RemunerationCommand.CorrectGuarantee(
           id,
           effectiveFrom,
           state,
           dailyAmount,
           reason,
           correctionReason,
-          expectedVersion);
+          expectedVersion,
+          requestId);
     }
   }
 
@@ -74,8 +74,8 @@ public final class RemunerationRequests {
         throw new ServiceException("日付は西暦1年から9999年の範囲で指定してください");
     }
 
-    public String fingerprint() {
-      return Fingerprint.of("BONUS_CREATE", personId, awardDate, amount, reason);
+    public RemunerationCommand.CreateBonus command() {
+      return new RemunerationCommand.CreateBonus(personId, awardDate, amount, reason, requestId);
     }
   }
 
@@ -93,9 +93,9 @@ public final class RemunerationRequests {
         throw new ServiceException("日付は西暦1年から9999年の範囲で指定してください");
     }
 
-    public String fingerprint(String id) {
-      return Fingerprint.of(
-          "BONUS_CORRECT", id, awardDate, amount, reason, correctionReason, expectedVersion);
+    public RemunerationCommand.CorrectBonus command(String id) {
+      return new RemunerationCommand.CorrectBonus(
+          id, awardDate, amount, reason, correctionReason, expectedVersion, requestId);
     }
   }
 
@@ -107,13 +107,12 @@ public final class RemunerationRequests {
       reason = reason == null ? null : reason.strip();
     }
 
-    // 保証条件とボーナスの取消は同じ形の要求なので、取り消す対象の種類を指紋に含める。
-    public String guaranteeFingerprint(String id) {
-      return Fingerprint.of("GUARANTEE_CANCEL", id, reason, expectedVersion);
+    public RemunerationCommand.CancelGuarantee guaranteeCommand(String id) {
+      return new RemunerationCommand.CancelGuarantee(id, reason, expectedVersion, requestId);
     }
 
-    public String bonusFingerprint(String id) {
-      return Fingerprint.of("BONUS_CANCEL", id, reason, expectedVersion);
+    public RemunerationCommand.CancelBonus bonusCommand(String id) {
+      return new RemunerationCommand.CancelBonus(id, reason, expectedVersion, requestId);
     }
   }
 }
