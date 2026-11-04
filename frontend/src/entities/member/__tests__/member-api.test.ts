@@ -5,6 +5,7 @@ jest.mock('@/shared/api/client', () => ({
   default: {
     get: jest.fn(async (url: string) => ({ data: { ok: true, url } })),
     post: jest.fn(async (url: string) => ({ data: { ok: true, url } })),
+    put: jest.fn(async (url: string) => ({ data: { ok: true, url } })),
   },
 }));
 
@@ -27,6 +28,20 @@ describe('member api', () => {
     const client = jest.requireMock('@/shared/api/client').default;
     await expect(memberApi.withdraw({ reason: '引っ越し' })).resolves.toBeUndefined();
     expect(client.post).toHaveBeenCalledWith('/me/member/withdrawal', { reason: '引っ越し' });
+  });
+
+  it('notificationSettings GETs /me/member/notification-settings', async () => {
+    const res = await memberApi.notificationSettings();
+    expect(res).toEqual({ ok: true, url: '/me/member/notification-settings' });
+  });
+
+  it('chooseNotification PUTs the status to the purpose sub-resource', async () => {
+    const client = jest.requireMock('@/shared/api/client').default;
+    const res = await memberApi.chooseNotification('BUSINESS', 'ALLOWED');
+    expect(client.put).toHaveBeenCalledWith('/me/member/notification-settings/BUSINESS', {
+      status: 'ALLOWED',
+    });
+    expect(res).toEqual({ ok: true, url: '/me/member/notification-settings/BUSINESS' });
   });
 });
 

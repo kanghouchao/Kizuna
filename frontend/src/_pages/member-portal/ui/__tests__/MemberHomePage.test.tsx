@@ -51,7 +51,7 @@ describe('MemberHomePage', () => {
     expect(await screen.findByText('1234 5678 9012')).toBeInTheDocument();
   });
 
-  it('予約・ポイント・来店履歴への導線を張る', async () => {
+  it('予約・ポイント・来店履歴・通知の設定への導線を張る', async () => {
     mockedHome.mockResolvedValue({ member_code: '123456789012', display_name: '会員花子' });
 
     render(<MemberHomePage />);
@@ -68,6 +68,10 @@ describe('MemberHomePage', () => {
     expect(screen.getByRole('link', { name: '来店履歴を見る' })).toHaveAttribute(
       'href',
       '/member/visits'
+    );
+    expect(screen.getByRole('link', { name: '通知の設定' })).toHaveAttribute(
+      'href',
+      '/member/notification-settings'
     );
     expect(screen.getByRole('link', { name: '退会する' })).toHaveAttribute(
       'href',

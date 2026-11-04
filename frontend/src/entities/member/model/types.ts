@@ -21,6 +21,18 @@ export interface MemberWithdrawalRequest {
   reason: string;
 }
 
+/** 会員の通知設定の用途（PUT /me/member/notification-settings/{purpose}）。 */
+export type MemberNotificationPurpose = 'BUSINESS' | 'MARKETING';
+
+/** 会員の通知設定の実効値。UNKNOWN は本人がまだ選んでおらず、能動的に連絡しない。 */
+export type MemberNotificationStatus = 'UNKNOWN' | 'ALLOWED' | 'DENIED';
+
+/** 会員の通知設定。membernotification/api/dto/MemberNotificationSettingsResponse.java に対応。 */
+export interface MemberNotificationSettings {
+  business_status: MemberNotificationStatus;
+  marketing_status: MemberNotificationStatus;
+}
+
 /** 会員検索の状態条件（GET /members の status）。既定は有効。 */
 export type MemberStatusFilter = 'ACTIVE' | 'WITHDRAWN' | 'ALL';
 
