@@ -7,6 +7,7 @@ import com.kizuna.notificationdelivery.domain.DeliveryResolution;
 import com.kizuna.notificationdelivery.domain.NotificationDelivery;
 import com.kizuna.notificationdelivery.domain.NotificationDeliveryRepository;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.user.domain.PermissionCode;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -98,7 +99,7 @@ public class NotificationService {
     row.resolve(version, outcome, reason);
     deliveries.flush();
     attempts.saveAndFlush(
-        DeliveryAttempt.resolution(row, actor.id(), actor.name(), OffsetDateTime.now(clock)));
+        DeliveryAttempt.resolution(row, actor.id(), actor.name(), Timestamps.now()));
     audit.append(row, actor, "NOTIFICATION_RESOLVED");
     return response(storeId, row);
   }
