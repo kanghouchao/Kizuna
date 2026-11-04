@@ -32,7 +32,6 @@ import com.kizuna.notificationdelivery.domain.DeliveryStatus;
 import com.kizuna.notificationdelivery.domain.NotificationDelivery;
 import com.kizuna.notificationdelivery.domain.NotificationDeliveryRepository;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.task.execution.TaskContext;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
 import com.kizuna.user.domain.PermissionCode;
@@ -142,9 +141,7 @@ class NotificationApplicationTest {
     var identities = mock(ServiceExecutionIdentityService.class);
     var events = mock(ApplicationEventPublisher.class);
     var task = new NotificationDeliveryTask(deliveries, attempts, identities, audit, events, clock);
-    assertThat(task.groupWide()).isTrue();
-    when(identities.requireService(5L, PermissionCode.NOTIFICATION_DELIVER, null))
-        .thenReturn(SERVICE);
+    when(identities.requireService(5L, PermissionCode.NOTIFICATION_DELIVER)).thenReturn(SERVICE);
     var row = row();
     row.queue(null, "確認済み", false);
     when(deliveries.findByStatusAndScheduledAtLessThanEqualOrderByScheduledAtAscIdAsc(
@@ -157,25 +154,11 @@ class NotificationApplicationTest {
               ReflectionTestUtils.setField(attempt, "id", "201");
               return attempt;
             });
-    assertThat(task.execute(new TaskContext(3L, 5L, null, null, null))).isEqualTo(1);
-    verify(identities).requireService(5L, PermissionCode.TASK_EXECUTE, null);
+    assertThat(task.execute(new TaskContext(3L, 5L, null, null))).isEqualTo(1);
+    verify(identities).requireService(5L, PermissionCode.TASK_EXECUTE);
     var event = ArgumentCaptor.forClass(DeliveryDispatch.class);
     verify(events).publishEvent(event.capture());
     assertThat(event.getValue()).isEqualTo(new DeliveryDispatch("101", "201", 5L, 3L));
-  }
-
-  @Test
-  void sweepRejectsAStoreTarget() {
-    var task =
-        new NotificationDeliveryTask(
-            deliveries,
-            attempts,
-            mock(ServiceExecutionIdentityService.class),
-            audit,
-            mock(ApplicationEventPublisher.class),
-            clock);
-    assertThatThrownBy(() -> task.execute(new TaskContext(3L, 5L, STORE_ID, null, null)))
-        .isInstanceOf(ServiceException.class);
   }
 
   @Test

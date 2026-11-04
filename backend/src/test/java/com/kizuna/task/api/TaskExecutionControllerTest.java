@@ -13,7 +13,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
-import com.kizuna.store.domain.Store;
 import com.kizuna.task.application.TaskLifecycle;
 import com.kizuna.task.application.TaskOptions;
 import com.kizuna.task.application.TaskQuery;
@@ -88,14 +87,12 @@ class TaskExecutionControllerTest {
   }
 
   @Test
-  @DisplayName("実行主体の候補と店舗の選択肢は名前順の Page で返し、範囲外のページを 400 にすること")
+  @DisplayName("実行主体の候補は名前順の Page で返し、範囲外のページを 400 にすること")
   @WithMockUser(authorities = "PERM_TASK_MANAGE")
-  void optionListsArePagesInNameOrder() throws Exception {
+  void candidatesArePagesInNameOrder() throws Exception {
     var candidates = ArgumentCaptor.forClass(Pageable.class);
-    var stores = ArgumentCaptor.forClass(Pageable.class);
-    when(options.candidates(eq("SERVICE_IDENTITY_CHECK"), eq(null), candidates.capture()))
+    when(options.candidates(eq("SERVICE_IDENTITY_CHECK"), candidates.capture()))
         .thenReturn(new PageImpl<>(List.of()));
-    when(options.stores(stores.capture())).thenReturn(new PageImpl<>(List.of()));
     var auth = SecurityContextHolder.getContext().getAuthentication();
 
     mockMvc
@@ -103,12 +100,8 @@ class TaskExecutionControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
     mockMvc
-        .perform(get("/task-executions/stores").principal(auth))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.total_elements").value(0));
-    mockMvc
         .perform(
-            get("/task-executions/stores")
+            get("/task-executions/service-identities")
                 .param("page", "99999999")
                 .param("size", "100")
                 .principal(auth))
@@ -116,19 +109,17 @@ class TaskExecutionControllerTest {
 
     assertThat(candidates.getValue())
         .isEqualTo(PageRequest.of(0, 20, Sort.by(User::getDisplayName, User::getId)));
-    assertThat(stores.getValue())
-        .isEqualTo(PageRequest.of(0, 20, Sort.by(Store::getName, Store::getId)));
   }
 
   @Test
-  @DisplayName("店舗は選択肢と同じ文字列の id で受け、安全な整数を超える値も桁を落とさず実行に渡すこと")
+  @DisplayName("実行要求を処理条件のとおりに渡し、店舗の指定を受け付けないこと")
   @WithMockUser(authorities = "PERM_TASK_MANAGE")
-  void storeIdTravelsAsStringWithoutLosingDigits() throws Exception {
+  void executeBindsTheCommandAndRejectsAStore() throws Exception {
     var command = ArgumentCaptor.forClass(TaskCommand.class);
     var auth = SecurityContextHolder.getContext().getAuthentication();
     String body =
         "{\"task_name\":\"NOTIFICATION_DELIVER\",\"logical_key\":\"k\",\"service_user_id\":10,"
-            + "\"store_id\":%s,\"period_start\":\"2026-10-07\",\"period_end\":\"2026-10-07\"}";
+            + "\"period_start\":\"2026-10-07\",\"period_end\":\"2026-10-07\"%s}";
 
     var day = LocalDate.of(2026, 10, 7);
     var execution =
@@ -141,8 +132,6 @@ class TaskExecutionControllerTest {
             "k",
             10L,
             "通知主体",
-            9007199254740993L,
-            "通知店舗",
             day,
             day,
             "MANUAL",
@@ -160,20 +149,21 @@ class TaskExecutionControllerTest {
             post("/task-executions")
                 .principal(auth)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(body.formatted("\"9007199254740993\"")))
+                .content(body.formatted("")))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.execution.id").value(1))
-        .andExpect(jsonPath("$.execution.task_name").value("NOTIFICATION_DELIVER"));
+        .andExpect(jsonPath("$.execution.task_name").value("NOTIFICATION_DELIVER"))
+        .andExpect(jsonPath("$.execution.store_id").doesNotExist());
     verify(executor).execute(command.capture(), any());
-    assertThat(command.getValue().storeId()).isEqualTo(9007199254740993L);
+    assertThat(command.getValue())
+        .isEqualTo(new TaskCommand("NOTIFICATION_DELIVER", "k", 10L, day, day));
 
-    for (String invalid : List.of("9007199254740993", "\"0\"", "\"abc\""))
-      mockMvc
-          .perform(
-              post("/task-executions")
-                  .principal(auth)
-                  .contentType(MediaType.APPLICATION_JSON)
-                  .content(body.formatted(invalid)))
-          .andExpect(status().isBadRequest());
+    mockMvc
+        .perform(
+            post("/task-executions")
+                .principal(auth)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body.formatted(",\"store_id\":\"1\"")))
+        .andExpect(status().isBadRequest());
   }
 }

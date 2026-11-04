@@ -37,7 +37,6 @@ class ApplicantAnonymizationScheduleTest {
     new ApplicantAnonymizationSchedule(executor, clock, properties).anonymizeDaily();
     var day = LocalDate.of(2026, 10, 30);
     verify(executor)
-        .executeScheduled(
-            new TaskCommand("APPLICANT_ANONYMIZATION", "2026-10-30", 8L, null, day, day));
+        .executeScheduled(new TaskCommand("APPLICANT_ANONYMIZATION", "2026-10-30", 8L, day, day));
   }
 }

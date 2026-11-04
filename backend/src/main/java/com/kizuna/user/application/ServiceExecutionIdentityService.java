@@ -31,13 +31,11 @@ public class ServiceExecutionIdentityService {
       readOnly = true,
       propagation = Propagation.REQUIRES_NEW,
       isolation = Isolation.READ_COMMITTED)
-  public AuditActor requireService(Long id, PermissionCode permission, Long storeId) {
+  public AuditActor requireService(Long id, PermissionCode permission) {
     var user = users.findById(id).orElseThrow(ServiceExecutionIdentityService::denied);
     if (user.getUserType() != UserType.SERVICE
         || !Boolean.TRUE.equals(user.getEnabled())
-        || !(storeId == null
-            ? user.getStoreScopeType() == StoreScopeType.ALL_STORES
-            : user.authorizes(storeId))
+        || user.getStoreScopeType() != StoreScopeType.ALL_STORES
         || !hasPermission(user, permission)) {
       throw denied();
     }
@@ -66,7 +64,7 @@ public class ServiceExecutionIdentityService {
 
   public record Candidate(Long id, String displayName) {}
 
-  public Page<Candidate> candidates(Pageable pageable, PermissionCode permission, Long storeId) {
+  public Page<Candidate> candidates(Pageable pageable, PermissionCode permission) {
     var roleIds = roles.findIdsByPermissionCode(PermissionCode.TASK_EXECUTE.name());
     var taskRoleIds = roles.findIdsByPermissionCode(permission.name());
     if (roleIds.isEmpty() || taskRoleIds.isEmpty()) return Page.empty(pageable);
@@ -77,11 +75,7 @@ public class ServiceExecutionIdentityService {
               return cb.and(
                   cb.equal(root.get("userType"), UserType.SERVICE),
                   cb.isTrue(root.get("enabled")),
-                  storeId == null
-                      ? cb.equal(root.get("storeScopeType"), StoreScopeType.ALL_STORES)
-                      : cb.or(
-                          cb.equal(root.get("storeScopeType"), StoreScopeType.ALL_STORES),
-                          cb.isMember(storeId, root.get("storeIds"))),
+                  cb.equal(root.get("storeScopeType"), StoreScopeType.ALL_STORES),
                   root.join("roleIds").in(roleIds),
                   root.join("roleIds").in(taskRoleIds));
             },

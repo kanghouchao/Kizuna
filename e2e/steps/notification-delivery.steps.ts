@@ -87,7 +87,6 @@ async function executeNotifications(page: Page) {
   await page.goto(`${APP_URL}/admin/task-executions`);
   await page.getByRole('combobox', { name: '処理', exact: true }).click();
   await page.getByRole('option', { name: '業務通知の送信', exact: true }).click();
-  await expect(page.getByRole('combobox', { name: '対象店舗', exact: true })).toHaveCount(0);
   await page.getByRole('combobox', { name: '実行主体', exact: true }).click();
   await page.getByRole('option', { name: serviceName, exact: true }).click();
   await page.getByLabel('対象日', { exact: true }).fill(new Date().toISOString().slice(0, 10));

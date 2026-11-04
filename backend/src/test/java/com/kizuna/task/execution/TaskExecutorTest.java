@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -19,8 +18,6 @@ import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.store.domain.Store;
-import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.task.application.TaskLifecycle;
 import com.kizuna.task.application.TaskRegistry;
 import com.kizuna.task.domain.ExecutionAttempt;
@@ -54,7 +51,6 @@ class TaskExecutorTest {
   private final ServiceExecutionIdentityService identities =
       mock(ServiceExecutionIdentityService.class);
   private final TaskHandler handler = mock(TaskHandler.class);
-  private final StoreRepository stores = mock(StoreRepository.class);
   private final Clock clock = Clock.fixed(Instant.parse("2026-10-07T01:00:00Z"), ZoneOffset.UTC);
   private final AuditActor service = new AuditActor(10L, "SERVICE", "実行主体");
   private final AuditActor operator = new AuditActor(20L, "STAFF", "操作担当");
@@ -107,13 +103,12 @@ class TaskExecutorTest {
                 attempts.values().stream()
                     .filter(a -> a.getRequestId().equals(call.getArgument(0)))
                     .max(Comparator.comparingInt(ExecutionAttempt::getAttemptNumber)));
-    when(identities.requireService(anyLong(), any(), nullable(Long.class))).thenReturn(service);
+    when(identities.requireService(anyLong(), any())).thenReturn(service);
     when(handler.name()).thenReturn("CHECK");
-    when(handler.groupWide()).thenReturn(true);
     when(handler.permission()).thenReturn(PermissionCode.TASK_EXECUTE);
     var transactions = mock(PlatformTransactionManager.class);
     when(transactions.getTransaction(any())).thenAnswer(call -> new SimpleTransactionStatus());
-    lifecycle = new TaskLifecycle(requestRepo, attemptRepo, audit, clock, stores);
+    lifecycle = new TaskLifecycle(requestRepo, attemptRepo, audit, clock);
     executor =
         new TaskExecutor(
             new TaskRegistry(List.of(handler)),
@@ -125,8 +120,7 @@ class TaskExecutorTest {
   }
 
   private TaskCommand command(String key) {
-    return new TaskCommand(
-        "CHECK", key, 10L, null, LocalDate.of(2026, 10, 7), LocalDate.of(2026, 10, 7));
+    return new TaskCommand("CHECK", key, 10L, LocalDate.of(2026, 10, 7), LocalDate.of(2026, 10, 7));
   }
 
   @Test
@@ -149,7 +143,6 @@ class TaskExecutorTest {
                         "CHECK",
                         "daily",
                         11L,
-                        null,
                         LocalDate.of(2026, 10, 7),
                         LocalDate.of(2026, 10, 7)),
                     operator))
@@ -168,7 +161,7 @@ class TaskExecutorTest {
   void committedRequestReplaysAfterServiceAuthorizationIsRevoked() {
     when(handler.execute(any())).thenReturn(4L);
     var first = executor.execute(command("replay-after-revocation"), operator);
-    when(identities.requireService(anyLong(), any(), nullable(Long.class)))
+    when(identities.requireService(anyLong(), any()))
         .thenThrow(new AccessDeniedException("停止または権限取消"));
 
     var replay = executor.execute(command("replay-after-revocation"), operator);
@@ -186,7 +179,6 @@ class TaskExecutorTest {
                         "CHECK",
                         "replay-after-revocation",
                         11L,
-                        null,
                         LocalDate.of(2026, 10, 7),
                         LocalDate.of(2026, 10, 7)),
                     operator))
@@ -198,7 +190,7 @@ class TaskExecutorTest {
   void failedRequestReplaysAfterRevocationButCannotStartANewRetry() {
     when(handler.execute(any())).thenThrow(new IllegalStateException("処理失敗"));
     var failed = executor.executeScheduled(command("failed-replay")).execution();
-    when(identities.requireService(anyLong(), any(), nullable(Long.class)))
+    when(identities.requireService(anyLong(), any()))
         .thenThrow(new AccessDeniedException("停止または権限取消"));
 
     var replay = executor.executeScheduled(command("failed-replay"));
@@ -221,7 +213,7 @@ class TaskExecutorTest {
     assertThatThrownBy(() -> executor.retry(failed.id(), " ", operator))
         .isInstanceOf(ServiceException.class);
     doReturn(2L).when(handler).execute(any());
-    when(identities.requireService(anyLong(), any(), nullable(Long.class)))
+    when(identities.requireService(anyLong(), any()))
         .thenReturn(new AuditActor(10L, "SERVICE", "新しい実行主体名"));
     var retried = executor.retry(failed.id(), "復旧を確認", operator);
     assertThat(retried.status()).isEqualTo("SUCCEEDED");
@@ -236,15 +228,14 @@ class TaskExecutorTest {
 
   @Test
   void stoppedServiceIsRejectedBeforeCreationAndAgainBeforeWork() {
-    when(identities.requireService(anyLong(), any(), nullable(Long.class)))
-        .thenThrow(new AccessDeniedException("停止"));
+    when(identities.requireService(anyLong(), any())).thenThrow(new AccessDeniedException("停止"));
     assertThatThrownBy(() -> executor.executeScheduled(command("denied")))
         .isInstanceOf(AccessDeniedException.class);
     assertThat(attempts).isEmpty();
     doReturn(service)
         .doThrow(new AccessDeniedException("停止"))
         .when(identities)
-        .requireService(anyLong(), any(), nullable(Long.class));
+        .requireService(anyLong(), any());
     var denied = executor.executeScheduled(command("revoked")).execution();
     assertThat(denied.failureCode()).isEqualTo("AUTHORIZATION_DENIED");
     verify(handler, never()).execute(any());
@@ -266,34 +257,6 @@ class TaskExecutorTest {
   }
 
   @Test
-  void storeExecutionPassesTheStoreToTheHandlerAndSnapshotsName() {
-    when(handler.groupWide()).thenReturn(false);
-    var store = new Store();
-    store.setId(3L);
-    store.setName("対象店舗");
-    when(stores.findById(3L)).thenReturn(Optional.of(store));
-    when(handler.execute(any()))
-        .thenAnswer(
-            call -> {
-              assertThat(call.<TaskContext>getArgument(0).storeId()).isEqualTo(3L);
-              throw new IllegalStateException("failure");
-            });
-    var result =
-        executor
-            .executeScheduled(
-                new TaskCommand(
-                    "CHECK",
-                    "store",
-                    10L,
-                    3L,
-                    LocalDate.of(2026, 10, 7),
-                    LocalDate.of(2026, 10, 7)))
-            .execution();
-    assertThat(result.storeName()).isEqualTo("対象店舗");
-    assertThat(result.status()).isEqualTo("FAILED");
-  }
-
-  @Test
   void existingTransactionAndUnknownTaskAreRefused() {
     TransactionSynchronizationManager.setActualTransactionActive(true);
     try {
@@ -306,7 +269,7 @@ class TaskExecutorTest {
             () ->
                 executor.executeScheduled(
                     new TaskCommand(
-                        "UNKNOWN", "key", 10L, null, LocalDate.now(clock), LocalDate.now(clock))))
+                        "UNKNOWN", "key", 10L, LocalDate.now(clock), LocalDate.now(clock))))
         .isInstanceOf(ServiceException.class);
     verify(handler, never()).execute(any());
   }

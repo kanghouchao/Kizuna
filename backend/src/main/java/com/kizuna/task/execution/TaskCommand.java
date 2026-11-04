@@ -8,7 +8,6 @@ public record TaskCommand(
     String taskName,
     String logicalKey,
     Long serviceUserId,
-    Long storeId,
     LocalDate periodStart,
     LocalDate periodEnd) {
   public TaskCommand {
@@ -18,7 +17,6 @@ public record TaskCommand(
         || !logicalKey.matches("[a-zA-Z0-9.:_-]{1,120}")
         || serviceUserId == null
         || serviceUserId <= 0
-        || storeId != null && storeId <= 0
         || periodStart == null
         || periodEnd == null
         || periodEnd.isBefore(periodStart)

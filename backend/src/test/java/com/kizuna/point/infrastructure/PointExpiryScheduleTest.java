@@ -36,7 +36,6 @@ class PointExpiryScheduleTest {
     var clock = Clock.fixed(Instant.parse("2026-10-07T15:00:00Z"), ZoneId.of("Asia/Tokyo"));
     new PointExpirySchedule(executor, clock, properties).expireDaily();
     var day = LocalDate.of(2026, 10, 8);
-    verify(executor)
-        .executeScheduled(new TaskCommand("POINT_EXPIRY", "2026-10-08", 8L, null, day, day));
+    verify(executor).executeScheduled(new TaskCommand("POINT_EXPIRY", "2026-10-08", 8L, day, day));
   }
 }

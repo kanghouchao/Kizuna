@@ -6,7 +6,6 @@ import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.task.domain.ExecutionAttempt;
 import com.kizuna.task.domain.ExecutionAttemptRepository;
 import com.kizuna.task.domain.ExecutionRequest;
@@ -30,7 +29,6 @@ public class TaskLifecycle {
   private final ExecutionAttemptRepository attempts;
   private final AuditWriter audit;
   private final Clock clock;
-  private final StoreRepository stores;
 
   public record Started(Long id, boolean created) {}
 
@@ -55,8 +53,7 @@ public class TaskLifecycle {
                 operator == null ? null : operator.id(),
                 "初回実行",
                 OffsetDateTime.now(clock),
-                service.name(),
-                storeName(command.storeId())));
+                service.name()));
     auditState(request, attempt, operator == null ? service : operator, "TASK_STARTED", Map.of());
     return new Started(attempt.getId(), true);
   }
@@ -80,8 +77,7 @@ public class TaskLifecycle {
                 operator.id(),
                 reason,
                 OffsetDateTime.now(clock),
-                service.name(),
-                storeName(request.getTargetStoreId())));
+                service.name()));
     auditState(request, attempt, operator, "TASK_RETRIED", Map.of("retry_of", id.toString()));
     return new Started(attempt.getId(), true);
   }
@@ -117,7 +113,7 @@ public class TaskLifecycle {
     audit.append(
         new AuditChange(
             operator,
-            request.getTargetStoreId(),
+            null,
             "TASK_INTERRUPTED",
             "TASK_EXECUTION",
             attempt.getId().toString(),
@@ -188,7 +184,7 @@ public class TaskLifecycle {
     audit.append(
         new AuditChange(
             actor,
-            request.getTargetStoreId(),
+            null,
             action,
             "TASK_EXECUTION",
             attempt.getId().toString(),
@@ -219,8 +215,6 @@ public class TaskLifecycle {
         request.getLogicalKey(),
         request.getServiceUserId(),
         attempt.getServiceName(),
-        request.getTargetStoreId(),
-        attempt.getStoreName(),
         request.getPeriodStart(),
         request.getPeriodEnd(),
         attempt.getOrigin(),
@@ -231,15 +225,6 @@ public class TaskLifecycle {
         attempt.getFinishedAt(),
         attempt.getProcessedCount(),
         attempt.getFailureCode());
-  }
-
-  private String storeName(Long storeId) {
-    return storeId == null
-        ? null
-        : stores
-            .findById(storeId)
-            .orElseThrow(() -> new NotFoundException("対象店舗が見つかりません"))
-            .getName();
   }
 
   private static void requireReason(String reason) {

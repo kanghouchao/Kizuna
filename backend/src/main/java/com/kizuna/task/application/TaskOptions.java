@@ -1,8 +1,5 @@
 package com.kizuna.task.application;
 
-import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.task.execution.TaskHandler;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
 import java.util.List;
@@ -11,27 +8,18 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
 public class TaskOptions {
   private final TaskRegistry registry;
-  private final StoreRepository stores;
   private final ServiceExecutionIdentityService identities;
 
-  public record TaskType(String name, String scope, boolean manualAllowed) {}
-
-  public record StoreOption(String id, String name) {}
+  public record TaskType(String name, boolean manualAllowed) {}
 
   public List<TaskType> taskTypes(String email) {
     return registry.registered().stream()
-        .map(
-            handler ->
-                new TaskType(
-                    handler.name(),
-                    handler.groupWide() ? "PLATFORM" : "STORE",
-                    allowed(email, handler)))
+        .map(handler -> new TaskType(handler.name(), allowed(email, handler)))
         .toList();
   }
 
@@ -46,19 +34,8 @@ public class TaskOptions {
     }
   }
 
-  @Transactional(readOnly = true)
-  public Page<StoreOption> stores(Pageable pageable) {
-    return stores
-        .findAll(pageable)
-        .map(store -> new StoreOption(store.getId().toString(), store.getName()));
-  }
-
   public Page<ServiceExecutionIdentityService.Candidate> candidates(
-      String taskName, Long storeId, Pageable pageable) {
-    var handler = registry.requireName(taskName);
-    if (handler.groupWide() != (storeId == null) || storeId != null && storeId <= 0)
-      throw new ServiceException("処理の対象範囲と店舗を確認してください");
-    if (storeId != null && !stores.existsById(storeId)) throw new NotFoundException("対象店舗が見つかりません");
-    return identities.candidates(pageable, handler.permission(), storeId);
+      String taskName, Pageable pageable) {
+    return identities.candidates(pageable, registry.requireName(taskName).permission());
   }
 }

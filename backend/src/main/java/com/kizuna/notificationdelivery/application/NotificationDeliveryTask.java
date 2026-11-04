@@ -4,7 +4,6 @@ import com.kizuna.notificationdelivery.domain.DeliveryAttempt;
 import com.kizuna.notificationdelivery.domain.DeliveryAttemptRepository;
 import com.kizuna.notificationdelivery.domain.DeliveryStatus;
 import com.kizuna.notificationdelivery.domain.NotificationDeliveryRepository;
-import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.task.execution.TaskContext;
 import com.kizuna.task.execution.TaskHandler;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
@@ -45,16 +44,10 @@ public class NotificationDeliveryTask implements TaskHandler {
   }
 
   @Override
-  public boolean groupWide() {
-    return true;
-  }
-
-  @Override
   @Transactional(propagation = Propagation.MANDATORY)
   public long execute(TaskContext context) {
-    if (context.storeId() != null) throw new ServiceException("通知の送信は店舗を指定せずに実行してください");
-    identities.requireService(context.serviceUserId(), PermissionCode.TASK_EXECUTE, null);
-    var actor = identities.requireService(context.serviceUserId(), permission(), null);
+    identities.requireService(context.serviceUserId(), PermissionCode.TASK_EXECUTE);
+    var actor = identities.requireService(context.serviceUserId(), permission());
     var rows =
         deliveries.findByStatusAndScheduledAtLessThanEqualOrderByScheduledAtAscIdAsc(
             DeliveryStatus.QUEUED, OffsetDateTime.now(clock), Limit.of(100));

@@ -102,8 +102,6 @@ function ExecutionDetail({ id, onChanged }: { id: number; onChanged: (id: number
         <dd className="wrap-anywhere">{row.task_name}</dd>
         <dt>実行主体</dt>
         <dd>{row.service_name}</dd>
-        <dt>対象店舗</dt>
-        <dd>{row.store_name ?? '全体'}</dd>
         <dt>対象期間</dt>
         <dd>
           {row.period_start} ～ {row.period_end}
@@ -195,23 +193,10 @@ export default function TaskExecutionsPage() {
   const [taskName, setTaskName] = useState('SERVICE_IDENTITY_CHECK');
   const catalog = useResource(taskExecutionApi.taskTypes);
   const taskType = catalog.data?.find(task => task.name === taskName);
-  const [storeId, setStoreId] = useState('');
-  const [storePage, setStorePage] = useState(0);
-  const stores = useResource(
-    taskType?.scope === 'STORE' ? () => taskExecutionApi.stores(storePage) : null,
-    [taskType?.scope, storePage]
-  );
   const [candidatePage, setCandidatePage] = useState(0);
   const candidates = useResource(
-    taskType && (taskType.scope === 'PLATFORM' || storeId)
-      ? () =>
-          taskExecutionApi.candidates(
-            candidatePage,
-            taskName,
-            taskType.scope === 'STORE' ? storeId : undefined
-          )
-      : null,
-    [candidatePage, taskName, storeId, taskType?.scope]
+    taskType ? () => taskExecutionApi.candidates(candidatePage, taskName) : null,
+    [candidatePage, taskName, taskType === undefined]
   );
   const [selected, setSelected] = useState<number | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -227,9 +212,9 @@ export default function TaskExecutionsPage() {
     []
   );
   const submit = async (values: { service: string; date: string }) => {
-    if (!taskType?.manual_allowed || (taskType.scope === 'STORE' && !storeId)) return;
+    if (!taskType?.manual_allowed) return;
     const currentGeneration = generation.current;
-    const signature = JSON.stringify({ ...values, taskName, storeId });
+    const signature = JSON.stringify({ ...values, taskName });
     if (pending.current?.signature !== signature)
       pending.current = {
         signature,
@@ -240,7 +225,6 @@ export default function TaskExecutionsPage() {
         task_name: taskName,
         logical_key: pending.current.key,
         service_user_id: Number(values.service),
-        store_id: taskType.scope === 'STORE' ? storeId : null,
         period_start: values.date,
         period_end: values.date,
       });
@@ -278,9 +262,6 @@ export default function TaskExecutionsPage() {
               candidates.setData(null);
               pending.current = null;
               generation.current++;
-              setStoreId('');
-              setStorePage(0);
-              stores.setData(null);
               setTaskName(value);
             }}
           >
@@ -306,84 +287,6 @@ export default function TaskExecutionsPage() {
         {taskType && !taskType.manual_allowed && (
           <p role="status">この処理の手動実行権限がありません。</p>
         )}
-        {taskType?.scope === 'STORE' && (
-          <div className="max-w-lg space-y-3">
-            <Label htmlFor="task-store">対象店舗</Label>
-            {stores.failure ? (
-              <RegionError
-                message="店舗の候補を取得できませんでした"
-                onRetry={() => void stores.reload()}
-              />
-            ) : stores.isLoading ? (
-              <p>店舗を読み込み中...</p>
-            ) : (
-              <>
-                <Select
-                  value={storeId}
-                  disabled={form.formState.isSubmitting}
-                  items={(stores.data?.rows ?? []).map(store => ({
-                    value: store.id,
-                    label: store.name,
-                  }))}
-                  onValueChange={value => {
-                    generation.current++;
-                    setStoreId(value ?? '');
-                    form.setValue('service', '');
-                    setCandidatePage(0);
-                    candidates.setData(null);
-                    pending.current = null;
-                  }}
-                >
-                  <SelectTrigger id="task-store">
-                    <SelectValue placeholder="店舗を選択" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {stores.data?.rows.map(store => (
-                      <SelectItem key={store.id} value={store.id}>
-                        {store.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {(stores.data?.pageCount ?? 0) > 1 && (
-                  <div className="flex gap-3">
-                    <Button
-                      variant="outline"
-                      disabled={storePage === 0 || form.formState.isSubmitting}
-                      onClick={() => {
-                        generation.current++;
-                        setStorePage(p => p - 1);
-                        setStoreId('');
-                        form.setValue('service', '');
-                        candidates.setData(null);
-                        pending.current = null;
-                      }}
-                    >
-                      前の店舗
-                    </Button>
-                    <Button
-                      variant="outline"
-                      disabled={
-                        storePage + 1 >= (stores.data?.pageCount ?? 0) ||
-                        form.formState.isSubmitting
-                      }
-                      onClick={() => {
-                        generation.current++;
-                        setStorePage(p => p + 1);
-                        setStoreId('');
-                        form.setValue('service', '');
-                        candidates.setData(null);
-                        pending.current = null;
-                      }}
-                    >
-                      次の店舗
-                    </Button>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
         <p className="text-sm text-muted-foreground">
           {taskName === 'POINT_EXPIRY'
             ? '対象日より前に期限を過ぎた未消費ポイントを記帳します。利用可能な残高は変わりません。本日以前の日付を指定してください。'
@@ -393,9 +296,7 @@ export default function TaskExecutionsPage() {
                 ? '全店舗の送信予定を過ぎた通知を最大100件、送信器へ引き渡します。対象日は実行記録の日付です。送信結果は店舗の業務通知で確認してください。'
                 : '選択したサービスIDの現在の権限を確認し、実行履歴に記録します。対象日は確認記録の対象日です。'}
         </p>
-        {taskType?.scope === 'STORE' && !storeId ? (
-          <p>対象店舗を選択してください。</p>
-        ) : catalog.isLoading || candidates.isLoading ? (
+        {catalog.isLoading || candidates.isLoading ? (
           <p>読み込み中...</p>
         ) : candidates.failure ? (
           <RegionError

@@ -67,7 +67,7 @@ When('処理を再送し主体の権限と対象範囲を検証する', async ({
   } finally {
     await restrictedPage.close();
   }
-  const body = { task_name: 'SERVICE_IDENTITY_CHECK', logical_key: crypto.randomUUID(), service_user_id: serviceId, store_id: null, period_start: '2026-10-07', period_end: '2026-10-07' };
+  const body = { task_name: 'SERVICE_IDENTITY_CHECK', logical_key: crypto.randomUUID(), service_user_id: serviceId, period_start: '2026-10-07', period_end: '2026-10-07' };
   expect((await request.get('/api/task-executions', { headers: headers(restricted) })).status()).toBe(403);
   expect((await request.get('/api/audit-events', { headers: headers(restricted) })).status()).toBe(403);
   const initial = await request.post('/api/task-executions', { headers: headers(operator), data: body });

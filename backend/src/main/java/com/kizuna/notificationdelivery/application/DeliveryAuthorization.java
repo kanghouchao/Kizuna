@@ -13,7 +13,7 @@ public class DeliveryAuthorization {
 
   /** 送信はグループ全体の処理なので、サービス ID に全店舗の授権を求める。 */
   public AuditActor require(Long serviceId) {
-    identities.requireService(serviceId, PermissionCode.TASK_EXECUTE, null);
-    return identities.requireService(serviceId, PermissionCode.NOTIFICATION_DELIVER, null);
+    identities.requireService(serviceId, PermissionCode.TASK_EXECUTE);
+    return identities.requireService(serviceId, PermissionCode.NOTIFICATION_DELIVER);
   }
 }

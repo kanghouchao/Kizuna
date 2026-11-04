@@ -32,6 +32,6 @@ public class PointExpirySchedule {
   public void expireDaily() {
     LocalDate today = LocalDate.now(clock);
     executor.executeScheduled(
-        new TaskCommand(PointExpiryTask.NAME, today.toString(), serviceUserId, null, today, today));
+        new TaskCommand(PointExpiryTask.NAME, today.toString(), serviceUserId, today, today));
   }
 }

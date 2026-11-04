@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -41,7 +40,7 @@ class ApplicantAnonymizationTaskTest {
   private final AppProperties properties = new AppProperties();
   private final Clock clock = Clock.fixed(Instant.parse("2026-10-29T15:30:00Z"), TOKYO);
   private final LocalDate today = LocalDate.now(clock);
-  private final TaskContext context = new TaskContext(4L, 8L, null, today, today);
+  private final TaskContext context = new TaskContext(4L, 8L, today, today);
   private final ApplicantAnonymizationTask task =
       new ApplicantAnonymizationTask(
           applicants,
@@ -54,7 +53,7 @@ class ApplicantAnonymizationTaskTest {
 
   @BeforeEach
   void authorize() {
-    when(identities.requireService(eq(8L), any(), isNull()))
+    when(identities.requireService(eq(8L), any()))
         .thenReturn(new AuditActor(8L, "SERVICE", "匿名化処理"));
   }
 
@@ -63,7 +62,6 @@ class ApplicantAnonymizationTaskTest {
     assertThat(task.name()).isEqualTo("APPLICANT_ANONYMIZATION");
     assertThat(task.permission()).isEqualTo(PermissionCode.APPLICANT_ANONYMIZE);
     assertThat(task.manualPermission()).contains(PermissionCode.APPLICANT_ANONYMIZE);
-    assertThat(task.groupWide()).isTrue();
   }
 
   @Test
@@ -109,12 +107,11 @@ class ApplicantAnonymizationTaskTest {
   }
 
   @Test
-  void invalidRangeFutureOrStoreIsRejected() {
+  void invalidOrFutureRangeIsRejected() {
     for (var invalid :
         List.of(
-            new TaskContext(4L, 8L, null, today.plusDays(1), today.plusDays(1)),
-            new TaskContext(4L, 8L, null, today.minusDays(1), today),
-            new TaskContext(4L, 8L, 1L, today, today))) {
+            new TaskContext(4L, 8L, today.plusDays(1), today.plusDays(1)),
+            new TaskContext(4L, 8L, today.minusDays(1), today))) {
       assertThatThrownBy(() -> task.execute(invalid)).isInstanceOf(ServiceException.class);
     }
     verifyNoInteractions(applicants, systemConfigs);
@@ -122,7 +119,7 @@ class ApplicantAnonymizationTaskTest {
 
   @Test
   void serviceWithoutTheTaskPermissionTouchesNothing() {
-    when(identities.requireService(8L, PermissionCode.APPLICANT_ANONYMIZE, null))
+    when(identities.requireService(8L, PermissionCode.APPLICANT_ANONYMIZE))
         .thenThrow(new AccessDeniedException("denied"));
     assertThatThrownBy(() -> task.execute(context)).isInstanceOf(AccessDeniedException.class);
     verifyNoInteractions(applicants, systemConfigs);

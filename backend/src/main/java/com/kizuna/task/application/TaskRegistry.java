@@ -1,7 +1,6 @@
 package com.kizuna.task.application;
 
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.task.execution.TaskCommand;
 import com.kizuna.task.execution.TaskHandler;
 import java.util.Comparator;
 import java.util.List;
@@ -28,14 +27,6 @@ public class TaskRegistry {
   public TaskHandler requireName(String name) {
     var handler = handlers.get(name);
     if (handler == null) throw new ServiceException("登録済み処理を指定してください");
-    return handler;
-  }
-
-  public TaskHandler require(TaskCommand command) {
-    var handler = requireName(command.taskName());
-    if (handler.groupWide() != (command.storeId() == null)) {
-      throw new ServiceException("登録済み処理とその対象範囲を指定してください");
-    }
     return handler;
   }
 }

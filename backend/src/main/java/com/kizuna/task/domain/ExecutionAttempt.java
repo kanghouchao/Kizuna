@@ -24,9 +24,6 @@ public class ExecutionAttempt extends BaseEntity {
   @Column(nullable = false, updatable = false)
   private String serviceName;
 
-  @Column(updatable = false)
-  private String storeName;
-
   @Column(nullable = false, updatable = false)
   private int attemptNumber;
 
@@ -63,8 +60,7 @@ public class ExecutionAttempt extends BaseEntity {
       Long initiatedBy,
       String reason,
       OffsetDateTime now,
-      String serviceName,
-      String storeName) {
+      String serviceName) {
     if (requestId == null
         || requestId <= 0
         || attemptNumber < 1
@@ -78,7 +74,6 @@ public class ExecutionAttempt extends BaseEntity {
     var attempt = new ExecutionAttempt();
     attempt.requestId = requestId;
     attempt.serviceName = serviceName;
-    attempt.storeName = storeName;
     attempt.attemptNumber = attemptNumber;
     attempt.retryOf = retryOf;
     attempt.origin = origin;
