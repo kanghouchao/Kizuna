@@ -101,7 +101,7 @@ class MemberConsoleControllerTest {
   @DisplayName("一覧の状態の既定は有効（未退会）で、検索語は無しとして渡ること")
   void listDefaultsToActive() throws Exception {
     when(memberConsoleService.list(any(), any(), any()))
-        .thenReturn(new PageImpl<>(List.of(summary(1L, null))));
+        .thenReturn(new PageImpl<>(List.of(summary(1L, null, false))));
 
     mockMvc
         .perform(get("/members").with(staff("PERM_MEMBER_VIEW")))
@@ -109,6 +109,38 @@ class MemberConsoleControllerTest {
         .andExpect(jsonPath("$.content[0].member_code").value("123456789012"));
 
     verify(memberConsoleService).list(eq(MemberStatusFilter.ACTIVE), eq(null), any(Pageable.class));
+  }
+
+  @Test
+  @DisplayName("一覧の行は検証の有無だけを真偽値で持ち、検証日時は載らないこと")
+  void listCarriesEmailVerifiedAsBoolean() throws Exception {
+    when(memberConsoleService.list(any(), any(), any()))
+        .thenReturn(new PageImpl<>(List.of(summary(1L, null, false), summary(2L, null, true))));
+
+    mockMvc
+        .perform(get("/members").with(staff("PERM_MEMBER_VIEW")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content[0].email_verified").value(false))
+        .andExpect(jsonPath("$.content[1].email_verified").value(true))
+        .andExpect(jsonPath("$.content[1].email_verified_at").doesNotExist());
+  }
+
+  @Test
+  @DisplayName("詳細は検証日時を返し、未検証の会員では項目ごと消えること")
+  void detailCarriesEmailVerifiedAtOnlyWhenVerified() throws Exception {
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(true, Set.of()));
+    when(memberConsoleService.detail(eq(7L), any()))
+        .thenReturn(detail(OffsetDateTime.parse("2026-10-26T10:00:00+09:00")));
+    mockMvc
+        .perform(get("/members/7").with(staff("PERM_MEMBER_VIEW")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.email_verified_at").exists());
+
+    when(memberConsoleService.detail(eq(7L), any())).thenReturn(detail(null));
+    mockMvc
+        .perform(get("/members/7").with(staff("PERM_MEMBER_VIEW")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.email_verified_at").doesNotExist());
   }
 
   @Test
@@ -140,7 +172,7 @@ class MemberConsoleControllerTest {
   void detailPassesResolvedStoreScope() throws Exception {
     when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(false, Set.of(3L)));
     ArgumentCaptor<StoreScope> scope = ArgumentCaptor.forClass(StoreScope.class);
-    when(memberConsoleService.detail(eq(7L), scope.capture())).thenReturn(detail());
+    when(memberConsoleService.detail(eq(7L), scope.capture())).thenReturn(detail(null));
 
     mockMvc
         .perform(get("/members/7").with(staff("PERM_MEMBER_VIEW")))
@@ -256,7 +288,7 @@ class MemberConsoleControllerTest {
     };
   }
 
-  private static MemberSummary summary(long id, OffsetDateTime withdrawnAt) {
+  private static MemberSummary summary(long id, OffsetDateTime withdrawnAt, boolean emailVerified) {
     return new MemberSummary(
         id,
         "123456789012",
@@ -264,10 +296,11 @@ class MemberConsoleControllerTest {
         "hanako@example.com",
         "BRONZE",
         OffsetDateTime.now(),
-        withdrawnAt);
+        withdrawnAt,
+        emailVerified);
   }
 
-  private static MemberDetail detail() {
+  private static MemberDetail detail(OffsetDateTime emailVerifiedAt) {
     return new MemberDetail(
         new MemberProfile(
             7L,
@@ -275,6 +308,7 @@ class MemberConsoleControllerTest {
             10L,
             "会員 花子",
             "hanako@example.com",
+            emailVerifiedAt,
             false,
             "SILVER",
             OffsetDateTime.now(),

@@ -108,6 +108,21 @@ it('身分・期限別残高・ランク履歴・店舗集合内の関連と集�
   expect(screen.getByText('獲得')).toBeInTheDocument();
 });
 
+it('メールアドレスの検証は検証済みなら日時、未検証ならそう名乗る', async () => {
+  api.get.mockResolvedValue(detail({ email_verified_at: '2026-10-26T10:00:00+09:00' }));
+  const { unmount } = render(<AdminMemberDetailPage />);
+  await screen.findByText('会員 花子');
+  const verified = screen.getByText('メール検証').closest('div')!;
+  expect(verified).toHaveTextContent('2026/10/26 10:00:00');
+  expect(verified).not.toHaveTextContent('未検証');
+  unmount();
+
+  api.get.mockResolvedValue(detail({}));
+  render(<AdminMemberDetailPage />);
+  await screen.findByText('会員 花子');
+  expect(screen.getByText('メール検証').closest('div')).toHaveTextContent('未検証');
+});
+
 it('MEMBER_WITHDRAW が無ければ退会操作を出さない', async () => {
   render(<AdminMemberDetailPage />);
   await screen.findByText('会員 花子');

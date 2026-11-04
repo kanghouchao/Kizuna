@@ -16,6 +16,7 @@ const member = (override: Partial<AdminMemberSummary>): AdminMemberSummary => ({
   email: 'hanako@example.com',
   rank: 'SILVER',
   registered_at: '2026-10-01T10:00:00+09:00',
+  email_verified: false,
   ...override,
 });
 
@@ -40,6 +41,26 @@ it('既定は有効な会員だけを検索語なしで取得し、コードは�
   const table = within(screen.getByRole('table'));
   expect(table.getByText('シルバー')).toBeInTheDocument();
   expect(table.getByText('有効')).toBeInTheDocument();
+});
+
+it('メールアドレスの検証状態を行ごとに検証済み・未検証で出し分ける', async () => {
+  api.list.mockResolvedValue(
+    pageOf([
+      member({ id: 1, display_name: '未検証 花子' }),
+      member({ id: 2, display_name: '検証済 太郎', email_verified: true }),
+    ])
+  );
+  render(<AdminMembersPage />);
+  await screen.findByText('未検証 花子');
+
+  const table = within(screen.getByRole('table'));
+  expect(table.getByRole('columnheader', { name: 'メール検証' })).toBeInTheDocument();
+  const unverified = within(table.getByText('未検証 花子').closest('tr')!);
+  expect(unverified.getByText('未検証')).toBeInTheDocument();
+  expect(unverified.queryByText('検証済み')).not.toBeInTheDocument();
+  const verified = within(table.getByText('検証済 太郎').closest('tr')!);
+  expect(verified.getByText('検証済み')).toBeInTheDocument();
+  expect(verified.queryByText('未検証')).not.toBeInTheDocument();
 });
 
 it('状態を「退会済み」に切り替えると検索ボタンを待たずに取り直し、退会済みの行がそう名乗る', async () => {

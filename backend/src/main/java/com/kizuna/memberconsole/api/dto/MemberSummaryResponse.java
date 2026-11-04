@@ -11,7 +11,8 @@ public record MemberSummaryResponse(
     String email,
     String rank,
     OffsetDateTime registeredAt,
-    OffsetDateTime withdrawnAt) {
+    OffsetDateTime withdrawnAt,
+    boolean emailVerified) {
   public static MemberSummaryResponse of(MemberSummary row) {
     return new MemberSummaryResponse(
         row.id(),
@@ -20,6 +21,7 @@ public record MemberSummaryResponse(
         row.email(),
         row.rank(),
         row.registeredAt(),
-        row.withdrawnAt());
+        row.withdrawnAt(),
+        row.emailVerified());
   }
 }

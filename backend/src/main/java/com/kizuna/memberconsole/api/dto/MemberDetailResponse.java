@@ -8,6 +8,7 @@ import java.util.List;
 /**
  * 会員 1 人の照会結果。明細は件数が伸びるので別の端点（{@code /point-entries}）でページ付きに読む。
  *
+ * @param emailVerifiedAt メールアドレスの検証日時。未検証なら null で応答から消える
  * @param withdrawal 退会情報。未退会なら null で応答から消える
  * @param balances 期限別の利用可能残高（合計は {@code balance}）
  * @param rankHistory 昇格の履歴（古い順。3 段のランクなので高々 2 件）
@@ -19,6 +20,7 @@ public record MemberDetailResponse(
     String memberCode,
     String displayName,
     String email,
+    OffsetDateTime emailVerifiedAt,
     boolean lineLinked,
     String rank,
     OffsetDateTime registeredAt,
@@ -36,6 +38,7 @@ public record MemberDetailResponse(
         profile.memberCode(),
         profile.displayName(),
         profile.email(),
+        profile.emailVerifiedAt(),
         profile.lineLinked(),
         profile.rank(),
         profile.registeredAt(),

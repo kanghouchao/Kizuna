@@ -31,7 +31,7 @@ public class MemberDirectoryService {
   private final MemberRankHistoryRepository memberRankHistoryRepository;
   private final UserRepository userRepository;
 
-  /** 会員一覧 1 行。 */
+  /** 会員一覧 1 行。検証は有無だけを持ち、日時は詳細でだけ読む。 */
   public record MemberSummary(
       long id,
       String memberCode,
@@ -39,7 +39,8 @@ public class MemberDirectoryService {
       String email,
       String rank,
       OffsetDateTime registeredAt,
-      OffsetDateTime withdrawnAt) {}
+      OffsetDateTime withdrawnAt,
+      boolean emailVerified) {}
 
   /** 昇格の事実 1 件。契機の帰属記録・仕訳は職員の照会に要らないので持たない。 */
   /** ランクは enum 名の文字列で渡す — 会員の集約内部（domain）を他モジュールへ露出しないため。 */
@@ -48,6 +49,7 @@ public class MemberDirectoryService {
   /**
    * 会員 1 人の身分の照会結果。
    *
+   * @param emailVerifiedAt メールアドレスの検証日時。未検証なら null
    * @param withdrawnByName 退会の操作者の表示名。本人退会なら本人の表示名、操作者の行が消えていれば null
    */
   public record MemberProfile(
@@ -56,6 +58,7 @@ public class MemberDirectoryService {
       long userId,
       String displayName,
       String email,
+      OffsetDateTime emailVerifiedAt,
       boolean lineLinked,
       String rank,
       OffsetDateTime registeredAt,
@@ -89,7 +92,8 @@ public class MemberDirectoryService {
                 view.getEmail(),
                 view.getRank().name(),
                 view.getCreatedAt(),
-                view.getWithdrawnAt()));
+                view.getWithdrawnAt(),
+                view.getEmailVerifiedAt() != null));
   }
 
   /** 会員 1 人の身分。存在しなければ空。 */
@@ -124,6 +128,7 @@ public class MemberDirectoryService {
         user.getId(),
         user.getDisplayName(),
         user.getEmail(),
+        user.getEmailVerifiedAt(),
         user.getLineUserId() != null,
         member.getRank().name(),
         member.getCreatedAt(),

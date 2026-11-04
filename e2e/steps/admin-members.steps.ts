@@ -65,6 +65,13 @@ Then("会員一覧に該当する会員がいない", async ({ page }) => {
   await expect(page.getByRole("link", { name: memberCode, exact: true })).toHaveCount(0);
 });
 
+// 登録直後の会員は未検証。検証済みとの出し分けはフロントエンドの単体テストで固定する。
+Then("会員一覧のコンソール検証用の会員の行でメールアドレスが未検証と読める", async ({ page }) => {
+  const row = page.getByRole("row").filter({ hasText: memberCode });
+  await expect(row.getByText("未検証", { exact: true })).toBeVisible();
+  await expect(row.getByText("検証済み", { exact: true })).toHaveCount(0);
+});
+
 When("会員一覧からコンソール検証用の会員の詳細を開く", async ({ page }) => {
   await page.getByRole("link", { name: memberCode, exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/members\/\d+$/);
@@ -77,6 +84,11 @@ Then("会員詳細に残高 120 pt と店舗1の関連が表示される", async
   // 店舗1の関連（顧客名）。管理者は全店舗の作用域なので担当外の注記は出ない
   await expect(page.getByText(/E2Eコンソール顧客-/)).toBeVisible();
   await expect(page.getByText(/担当外の/)).toHaveCount(0);
+});
+
+Then("会員詳細でメールアドレスが未検証と読める", async ({ page }) => {
+  const field = page.locator("dl > div").filter({ has: page.getByText("メール検証", { exact: true }) });
+  await expect(field.getByText("未検証", { exact: true })).toBeVisible();
 });
 
 When(
