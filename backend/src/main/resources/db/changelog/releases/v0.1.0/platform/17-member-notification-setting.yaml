@@ -1,0 +1,79 @@
+databaseChangeLog:
+  - changeSet:
+      id: platform-v0100-017-member-notification-setting-schema
+      author: kanghouchao
+      # 会員の通知設定。会員本人の明示の選択だけを用途ごとに 1 行で持ち、行が無い用途は既定
+      # （業務はメールアドレスの検証状態から導き、販促は未確認）として解決する。既定を行に写すと
+      # 検証状態の変化が既定に届かなくなるので、未確認（UNKNOWN）は書かない。
+      # 店舗の顧客連絡先の連絡可否とは独立で、互いに推定も同期もしない（ADR 0039）。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createTable:
+            tableName: t_member_notification_settings
+            remarks: 会員の通知設定（会員本人の明示の選択。用途ごとに高々 1 行）
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_member_notification_settings
+              - column:
+                  name: member_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                  remarks: 設定の持ち主の会員
+              - column:
+                  name: purpose
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  remarks: 用途（BUSINESS/MARKETING）
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+                  remarks: 本人の選択（ALLOWED/DENIED）
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        - addUniqueConstraint:
+            tableName: t_member_notification_settings
+            columnNames: member_id, purpose
+            constraintName: uq_t_member_notification_settings_member_purpose
+        # 設定は会員の属性であって独立した資産ではなく、会員が消えた後の行は読めない。ランク履歴と同じ CASCADE。
+        - addForeignKeyConstraint:
+            constraintName: fk_t_member_notification_settings_member
+            baseTableName: t_member_notification_settings
+            baseColumnNames: member_id
+            referencedTableName: t_members
+            referencedColumnNames: id
+            onDelete: CASCADE
+        # 行は明示の選択だけを表す。未確認は行の不在で表すので、値として書かれれば既定の導出を塞ぐ。
+        - sql:
+            sql: >-
+              ALTER TABLE t_member_notification_settings
+              ADD CONSTRAINT ck_t_member_notification_settings_status CHECK (
+                status IN ('ALLOWED', 'DENIED'))

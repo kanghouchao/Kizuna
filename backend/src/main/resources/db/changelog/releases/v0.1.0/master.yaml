@@ -29,6 +29,9 @@ databaseChangeLog:
       file: platform/07-member.yaml
       relativeToChangelogFile: true
   - include:
+      file: platform/17-member-notification-setting.yaml
+      relativeToChangelogFile: true
+  - include:
       file: store/01-store-profile.yaml
       relativeToChangelogFile: true
   - include:

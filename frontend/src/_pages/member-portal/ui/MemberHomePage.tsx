@@ -66,6 +66,13 @@ export function MemberHomePage() {
       <Button render={<Link href="/member/visits/" />} variant="outline" className="mt-3 w-full">
         来店履歴を見る
       </Button>
+      <Button
+        render={<Link href="/member/notification-settings/" />}
+        variant="outline"
+        className="mt-3 w-full"
+      >
+        通知の設定
+      </Button>
       <Button type="button" variant="outline" onClick={() => logout()} className="mt-6 w-full">
         ログアウト
       </Button>

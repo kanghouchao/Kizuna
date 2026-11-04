@@ -54,6 +54,12 @@ public class MemberLookupService {
     lockMember(memberId);
   }
 
+  /** 同じ会員の通知設定の「行があるか読み、無ければ挿入」を直列化する。二つのタブの初回の選択が一意制約で衝突しないようにする。 */
+  @Transactional
+  public void lockForNotificationSettingWrite(long memberId) {
+    lockMember(memberId);
+  }
+
   private void lockMember(long memberId) {
     memberRepository
         .lockIdForBalanceConfirmation(memberId)
