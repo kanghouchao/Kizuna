@@ -54,7 +54,8 @@ Then("会員ポータルの全画面に未検証の案内が内容を隠さず�
 Then("登録したメールアドレスに確認画面のリンクつきの検証メールが届く", async ({ request }) => {
   const mail = await latestMailTo(request, memberEmail);
   expect(mail.subject).toBe("メールアドレスの確認のお願い");
-  expect(mail.firstLink).toMatch(
-    new RegExp(`^${APP_URL.replace(/[.]/g, "\\.")}/auth/verify-email#[A-Za-z0-9_-]{43}$`),
-  );
+  // 接頭辞は文字列のまま比べ、APP_URL を正規表現へ埋め込まない（メタ文字の逃がし漏れが起きない）。
+  const prefix = `${APP_URL}/auth/verify-email#`;
+  expect(mail.firstLink?.slice(0, prefix.length)).toBe(prefix);
+  expect(mail.firstLink?.slice(prefix.length)).toMatch(/^[A-Za-z0-9_-]{43}$/);
 });
