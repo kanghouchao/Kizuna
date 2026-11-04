@@ -15,6 +15,8 @@ import java.util.HexFormat;
 import java.util.List;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -51,6 +53,7 @@ public class EmailVerificationMail {
   }
 
   /** 利用者の現在の宛先へトークンを発行し、コミット後に検証メールを送る。取引の外では呼べない。 */
+  @Transactional(propagation = Propagation.MANDATORY)
   public void issue(User user) {
     String token = randomToken();
     tokenRepository.save(
@@ -58,7 +61,7 @@ public class EmailVerificationMail {
             user.getId(), digest(token), user.getEmail(), Timestamps.now()));
     Long userId = user.getId();
     String recipient = user.getEmail();
-    String body = body(user.getDisplayName(), token);
+    String body = body(token);
     TransactionSynchronizationManager.registerSynchronization(
         new TransactionSynchronization() {
           @Override
@@ -92,12 +95,11 @@ public class EmailVerificationMail {
     }
   }
 
-  private String body(String displayName, String token) {
+  // 表示名は載せない。登録は匿名で誰の宛先でも名乗れるので、入力した文言が他人宛ての本文に混ざる。
+  private String body(String token) {
     String link =
         appProperties.getScheme() + "://" + appProperties.getDomain() + CONFIRMATION_PATH + token;
-    return displayName
-        + " 様\n\n"
-        + "会員登録ありがとうございます。\n"
+    return "会員登録ありがとうございます。\n"
         + "次のリンクを開いて、メールアドレスの確認を完了してください。\n\n"
         + link
         + "\n\n"
