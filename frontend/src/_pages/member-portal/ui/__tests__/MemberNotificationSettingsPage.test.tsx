@@ -66,7 +66,7 @@ describe('MemberNotificationSettingsPage', () => {
     fireEvent.click(within(business).getByRole('radio', { name: '受け取る' }));
 
     await waitFor(() =>
-      expect(notify.error).toHaveBeenCalledWith('通知の設定を保存できませんでした')
+      expect(notify.warning).toHaveBeenCalledWith('通知の設定を保存できませんでした')
     );
     expect(within(business).getByRole('radio', { name: '受け取らない' })).toBeChecked();
     expect(within(business).getByRole('radio', { name: '受け取る' })).not.toBeChecked();

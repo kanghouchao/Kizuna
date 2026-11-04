@@ -45,7 +45,7 @@ const PURPOSES: {
 /**
  * 会員ポータルの通知設定。用途ごとに受け取る・受け取らないを選び、選んだ時点で保存する。
  * 未確認（まだ選んでいない）の用途にはどちらの選択も付けず、選ぶまで連絡しないことを本文で示す。
- * 保存の失敗では選択を応答の値のまま戻すので、画面は常に保存済みの状態を映す。
+ * 保存の失敗では選択が保存済みの値へ戻り、押した選択が画面から消えるので warning で失敗を伝える。
  */
 export function MemberNotificationSettingsPage() {
   const { data, setData, isLoading, failure, reload } = useResource(() =>
@@ -59,7 +59,7 @@ export function MemberNotificationSettingsPage() {
       setData(await memberApi.chooseNotification(purpose, status));
       notify.success('通知の設定を保存しました');
     } catch (error) {
-      notify.error(getApiErrorMessage(error, '通知の設定を保存できませんでした'));
+      notify.warning(getApiErrorMessage(error, '通知の設定を保存できませんでした'));
     } finally {
       setSaving(false);
     }
