@@ -16,6 +16,7 @@ import java.sql.PreparedStatement;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -45,6 +46,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.jpa.JpaTransactionManager;
@@ -57,7 +59,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** 実 PostgreSQL で、会員登録の両経路が利用者を未検証で生み、トークンをダイジェストで残し、検証メールをコミット後に送ることを確かめる。 */
+/** 実 PostgreSQL で、会員登録の両経路が利用者を未検証で生み、トークンをダイジェストで残し、検証メールをコミット後に送ることと、職員の照会が検証状態を読むことを確かめる。 */
 @EnabledIfIntegration
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class MemberEmailVerificationIntegrationTest {
@@ -121,6 +123,31 @@ class MemberEmailVerificationIntegrationTest {
 
     assertVerificationMailSentAfterCommit(email);
     assertThat(notificationDeliveries()).isEqualTo(deliveriesBefore);
+  }
+
+  @Test
+  void 職員の照会は一覧で検証の有無を_詳細で検証日時を返す() {
+    String email = email();
+    tx.executeWithoutResult(
+        status -> registration.register(new MemberRegistrationCommand(email, "pass12345", "検証会員")));
+    var directory = context.getBean(MemberDirectoryService.class);
+    var unverified =
+        assertThat(directory.search(MemberStatusFilter.ALL, email, PageRequest.of(0, 10)))
+            .singleElement()
+            .actual();
+    assertThat(unverified.emailVerified()).isFalse();
+    long memberId = unverified.id();
+    assertThat(directory.findProfile(memberId).orElseThrow().emailVerifiedAt()).isNull();
+
+    jdbc.update(
+        "update t_users set email_verified_at = timestamptz '2026-10-26 10:00:00+09' where email = ?",
+        email);
+
+    assertThat(directory.search(MemberStatusFilter.ALL, email, PageRequest.of(0, 10)))
+        .singleElement()
+        .satisfies(row -> assertThat(row.emailVerified()).isTrue());
+    assertThat(directory.findProfile(memberId).orElseThrow().emailVerifiedAt())
+        .isAtSameInstantAs(OffsetDateTime.parse("2026-10-26T10:00:00+09:00"));
   }
 
   @Test
@@ -405,7 +432,8 @@ class MemberEmailVerificationIntegrationTest {
   @Import({
     MemberRegistrationService.class,
     EmailVerificationMail.class,
-    EmailVerificationConfirmation.class
+    EmailVerificationConfirmation.class,
+    MemberDirectoryService.class
   })
   static class Config {
     @Bean

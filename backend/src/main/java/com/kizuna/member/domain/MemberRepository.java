@@ -80,7 +80,8 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
       """
       select m.id as id, m.memberCode as memberCode, m.rank as rank,
              m.withdrawnAt as withdrawnAt, m.createdAt as createdAt,
-             u.email as email, u.displayName as displayName
+             u.email as email, u.displayName as displayName,
+             u.emailVerifiedAt as emailVerifiedAt
       from com.kizuna.member.domain.Member m
         join com.kizuna.user.domain.User u on u.id = m.userId
       """;

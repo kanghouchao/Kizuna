@@ -54,6 +54,18 @@ function StatusBadge({ member }: { member: AdminMemberSummary }) {
   );
 }
 
+function EmailVerificationBadge({ member }: { member: AdminMemberSummary }) {
+  return member.email_verified ? (
+    <Badge variant="outline" className="border-transparent bg-success/10 text-success-strong">
+      検証済み
+    </Badge>
+  ) : (
+    <Badge variant="outline" className="border-transparent bg-warning/10 text-warning-strong">
+      未検証
+    </Badge>
+  );
+}
+
 /**
  * 会員の一覧（グループ級）。既定は有効な会員だけで、退会済みは状態を切り替えて見る。
  * 検索語は会員コード・電子メール・表示名のいずれにも当たる。
@@ -127,6 +139,7 @@ export function AdminMembersPage() {
             <TableHead>会員コード</TableHead>
             <TableHead>表示名</TableHead>
             <TableHead>メールアドレス</TableHead>
+            <TableHead>メール検証</TableHead>
             <TableHead>ランク</TableHead>
             <TableHead>状態</TableHead>
             <TableHead>登録日時</TableHead>
@@ -145,6 +158,9 @@ export function AdminMembersPage() {
               </TableCell>
               <TableCell className="font-medium text-foreground">{member.display_name}</TableCell>
               <TableCell className="text-muted-foreground">{member.email}</TableCell>
+              <TableCell>
+                <EmailVerificationBadge member={member} />
+              </TableCell>
               <TableCell className="text-muted-foreground">
                 {member.rank ? MEMBER_RANK_LABELS[member.rank] : '—'}
               </TableCell>

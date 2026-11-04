@@ -129,6 +129,12 @@ function Profile({ data }: { data: AdminMemberDetail }) {
             <dd className="text-foreground">{data.email}</dd>
           </div>
           <div>
+            <dt className="text-sm text-muted-foreground">メール検証</dt>
+            <dd className="text-foreground">
+              {data.email_verified_at ? formatDateTime(data.email_verified_at) : '未検証'}
+            </dd>
+          </div>
+          <div>
             <dt className="text-sm text-muted-foreground">状態</dt>
             <dd>
               {data.withdrawal ? (

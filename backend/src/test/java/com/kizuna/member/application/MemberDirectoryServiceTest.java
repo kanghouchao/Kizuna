@@ -34,6 +34,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class MemberDirectoryServiceTest {
@@ -53,7 +54,8 @@ class MemberDirectoryServiceTest {
       OffsetDateTime withdrawnAt,
       OffsetDateTime createdAt,
       String email,
-      String displayName)
+      String displayName,
+      OffsetDateTime emailVerifiedAt)
       implements MemberSearchView {
     @Override
     public Long getId() {
@@ -89,6 +91,11 @@ class MemberDirectoryServiceTest {
     public String getDisplayName() {
       return displayName;
     }
+
+    @Override
+    public OffsetDateTime getEmailVerifiedAt() {
+      return emailVerifiedAt;
+    }
   }
 
   @Test
@@ -96,19 +103,24 @@ class MemberDirectoryServiceTest {
   void activeSearchUsesActiveQueryWithMatchAllPattern() {
     Page<MemberSearchView> page =
         new PageImpl<>(
-            List.of(new View(1L, "123456789012", MemberRank.GOLD, null, AT, "a@x.jp", "花子")));
+            List.of(
+                new View(1L, "123456789012", MemberRank.GOLD, null, AT, "a@x.jp", "花子", null),
+                new View(2L, "123456789013", MemberRank.BRONZE, null, AT, "b@x.jp", "太郎", AT)));
     when(memberRepository.searchActive(eq("%"), any())).thenReturn(page);
 
     var result = service.search(MemberStatusFilter.ACTIVE, "  ", PageRequest.of(0, 20));
 
     assertThat(result.getContent())
-        .singleElement()
+        .first()
         .satisfies(
             row -> {
               assertThat(row.memberCode()).isEqualTo("123456789012");
               assertThat(row.rank()).isEqualTo("GOLD");
               assertThat(row.email()).isEqualTo("a@x.jp");
             });
+    assertThat(result.getContent())
+        .extracting(MemberDirectoryService.MemberSummary::emailVerified)
+        .containsExactly(false, true);
     verify(memberRepository, never()).searchWithdrawn(any(), any());
     verify(memberRepository, never()).searchAll(any(), any());
   }
@@ -183,6 +195,21 @@ class MemberDirectoryServiceTest {
 
     assertThat(profile.withdrawnBySelf()).isFalse();
     assertThat(profile.withdrawnByName()).isEqualTo("職員 太郎");
+  }
+
+  @Test
+  @DisplayName("照会は利用者行の検証日時を返し、未検証なら null")
+  void profileCarriesEmailVerifiedAt() {
+    when(memberRepository.findById(7L)).thenReturn(Optional.of(member()));
+    User verified = user(10L, "会員 花子");
+    ReflectionTestUtils.setField(verified, "emailVerifiedAt", AT);
+    when(userRepository.findById(10L)).thenReturn(Optional.of(verified));
+    when(memberRankHistoryRepository.findByMemberIdOrderByIdAsc(7L)).thenReturn(List.of());
+
+    assertThat(service.findProfile(7L).orElseThrow().emailVerifiedAt()).isEqualTo(AT);
+
+    when(userRepository.findById(10L)).thenReturn(Optional.of(user(10L, "会員 花子")));
+    assertThat(service.findProfile(7L).orElseThrow().emailVerifiedAt()).isNull();
   }
 
   @Test

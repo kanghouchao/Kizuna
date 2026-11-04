@@ -56,6 +56,8 @@ export interface AdminMemberSummary {
   registered_at?: string;
   /** 退会済みだけが持つ。 */
   withdrawn_at?: string;
+  /** Java 側が primitive の boolean のため、キーは必ず応答に含まれる。検証日時は詳細だけが持つ。 */
+  email_verified: boolean;
 }
 
 /** 退会の事実。memberconsole/api/dto/MemberDetailResponse.Withdrawal に対応。 */
@@ -100,6 +102,8 @@ export interface AdminMemberDetail {
   member_code?: string;
   display_name?: string;
   email?: string;
+  /** メールアドレスの検証日時。未検証なら応答から消える。 */
+  email_verified_at?: string;
   line_linked: boolean;
   rank?: MemberRank;
   registered_at?: string;

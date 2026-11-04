@@ -18,4 +18,6 @@ public interface MemberSearchView {
   String getEmail();
 
   String getDisplayName();
+
+  OffsetDateTime getEmailVerifiedAt();
 }

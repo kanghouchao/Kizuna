@@ -135,6 +135,7 @@ class MemberConsoleServiceTest {
         10L,
         "会員 花子",
         "hanako@example.com",
+        null,
         false,
         "SILVER",
         AT.minusDays(30),
