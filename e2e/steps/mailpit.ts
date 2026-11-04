@@ -7,6 +7,15 @@ export type ReceivedMail = { subject: string; text: string; firstLink: string | 
 
 type Summary = { ID: string; To: { Address: string }[] };
 
+// 宛先が完全一致するメールの通数。検索の to: は部分一致なので宛先で絞り直す。
+export async function mailCountTo(request: APIRequestContext, recipient: string): Promise<number> {
+  const address = recipient.toLowerCase();
+  const response = await request.get(`${MAILPIT_URL}/api/v1/search`, { params: { query: `to:"${recipient}"` } });
+  expect(response.status(), await response.text()).toBe(200);
+  const messages: Summary[] = (await response.json()).messages;
+  return messages.filter(message => message.To.some(to => to.Address.toLowerCase() === address)).length;
+}
+
 // 送信は定期処理の中で進み画面の応答より遅れるので、届くまで待ってから最新の 1 通を読む。
 export async function latestMailTo(request: APIRequestContext, recipient: string): Promise<ReceivedMail> {
   const address = recipient.toLowerCase();

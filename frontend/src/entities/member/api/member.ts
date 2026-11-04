@@ -23,6 +23,10 @@ export const memberApi = {
   withdraw: async (data: MemberWithdrawalRequest): Promise<void> => {
     await apiClient.post('/me/member/withdrawal', data);
   },
+  /** 本人の宛先へ検証メールを再送する（202）。間隔・回数の上限は 429、検証済みは 400。 */
+  resendEmailVerification: async (): Promise<void> => {
+    await apiClient.post('/me/email-verification');
+  },
   /** 本人の通知設定（用途ごとの実効値）を取得する。 */
   notificationSettings: async (): Promise<MemberNotificationSettings> => {
     const response = await apiClient.get('/me/member/notification-settings');

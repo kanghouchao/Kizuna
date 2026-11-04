@@ -91,7 +91,7 @@ databaseChangeLog:
             onDelete: CASCADE
         # 「利用者ごとに生きたトークンは高々 1 本」を DB 側の最終防波堤として固定する。期限は索引で
         # 表せないので期限切れの未消費行も対象になり、再発行は期限切れの行も失効させる。
-        # DbConstraint に載せない — 発火は発行側の欠陥であり、業務例外へ写像せず大きく失敗させる。
+        # 発火するのは並行した再送の敗者で、DbConstraint 経由で 429 に写す。
         - sql:
             sql: >-
               CREATE UNIQUE INDEX uq_t_email_verification_tokens_live_user

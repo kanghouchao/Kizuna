@@ -1,7 +1,7 @@
 import { expect } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
 import { APP_URL } from "../base-url";
-import { latestMailTo } from "./mailpit";
+import { latestMailTo, mailCountTo } from "./mailpit";
 
 const { Given, When, Then } = createBdd();
 
@@ -89,4 +89,32 @@ When("壊れたトークンの確認リンクを開く", async ({ page }) => {
 Then("メールアドレスを確認できなかったと表示される", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "メールアドレスを確認できませんでした" })).toBeVisible({ timeout: 15000 });
   await expect(page.getByText("確認リンクが無効か、有効期限が切れています。", { exact: false })).toBeVisible();
+});
+
+// 登録時の発行も再送の間隔に数える（バックエンドの間隔は 60 秒）。
+When("登録時の発行から再送の間隔が過ぎるまで待つ", async ({ page, $testInfo }) => {
+  $testInfo.setTimeout($testInfo.timeout + 90000);
+  await page.waitForTimeout(61000);
+});
+
+When("案内の再送ボタンを押す", async ({ page }) => {
+  await page.getByRole("button", { name: "確認メールを再送する", exact: true }).click();
+});
+
+Then("確認メールを送ったと伝えられる", async ({ page }) => {
+  const toast = page.locator("[data-slot=toast]").filter({ hasText: `${memberEmail}に確認メールを送りました` });
+  await expect(toast).toBeVisible();
+});
+
+Then("登録したメールアドレスに検証メールが 2 通届く", async ({ request }) => {
+  await expect
+    .poll(() => mailCountTo(request, memberEmail), { message: `${memberEmail} 宛の 2 通目が届かない`, timeout: 15000 })
+    .toBe(2);
+  const mail = await latestMailTo(request, memberEmail);
+  expect(mail.subject).toBe("メールアドレスの確認のお願い");
+});
+
+Then("時間をおいてから再送するよう伝えられる", async ({ page }) => {
+  const toast = page.locator("[data-slot=toast]").filter({ hasText: "しばらく時間をおいてからお試しください" });
+  await expect(toast).toBeVisible();
 });
