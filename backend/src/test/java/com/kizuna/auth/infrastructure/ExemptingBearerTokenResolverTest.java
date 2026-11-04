@@ -44,9 +44,10 @@ class ExemptingBearerTokenResolverTest {
         "/cast-invitations/view",
         "/cast-invitations/acceptance",
         "/cast-invitations/acceptance/existing",
-        "/members"
+        "/members",
+        "/auth/email-verification/confirmation"
       })
-  @DisplayName("招待の照会・受諾と会員の自助登録の POST は、壊れた Bearer があっても null を返すこと")
+  @DisplayName("招待の照会・受諾、会員の自助登録、メールアドレスの確認の POST は、壊れた Bearer があっても null を返すこと")
   void resolvesNullForAnonymousPosts(String uri) {
     MockHttpServletRequest request = requestWithBearer("POST", uri);
 
@@ -59,7 +60,8 @@ class ExemptingBearerTokenResolverTest {
         "/cast-invitations/view",
         "/cast-invitations/acceptance",
         "/cast-invitations/acceptance/existing",
-        "/members"
+        "/members",
+        "/auth/email-verification/confirmation"
       })
   @DisplayName("匿名 POST の免除は同一パスの他メソッドに及ばないこと")
   void doesNotExemptOtherMethodsOnAnonymousPostPaths(String uri) {
