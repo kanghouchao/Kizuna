@@ -35,7 +35,6 @@ describe('VerifyEmailPage', () => {
     window.location.hash = '#raw-verification-token';
     mockedConfirm.mockResolvedValue(undefined);
 
-    // 開発時の Strict Mode は入場の効果を二度走らせる。二度目の送信は消費済みで 400 になり、成功を上書きしてしまう。
     render(
       <StrictMode>
         <VerifyEmailPage />
