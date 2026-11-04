@@ -75,6 +75,13 @@ services:
       timeout: 5s
       retries: 10
 
+  # 送信したメールを受け取るだけのメールキャッチャー。step は API（http://mailpit:8025）で読む
+  mailpit:
+    image: axllent/mailpit:v1.32.0
+    # healthcheck はイメージ同梱の HEALTHCHECK（/mailpit readyz）に任せる。backend の service_healthy が頼る
+    networks:
+      - network
+
   backend:
     tmpfs:
       # backend は非 root（65532）で動くため、所有者を合わせないと mode=0700 で書けない
@@ -107,6 +114,9 @@ services:
       # gateway の network alias と一致させる。frontend/backend はこの値で アプリドメインと
       # 店舗ドメインを判別するため、alias とずれると店舗として解決されて全シナリオが崩れる。
       APP_DOMAIN: kizuna.test
+      # システム設定の SMTP が未設定のときの既定経路。送信正本の送信は mailpit に届く
+      SPRING_MAIL_HOST: mailpit
+      SPRING_MAIL_PORT: "1025"
     depends_on:
       database:
         condition: service_healthy
@@ -115,6 +125,8 @@ services:
       storage:
         condition: service_healthy
       private-storage:
+        condition: service_healthy
+      mailpit:
         condition: service_healthy
     healthcheck:
       # 実行イメージにシェルも curl も無いので、イメージ同梱の HealthCheck クラスで actuator を叩く
@@ -194,6 +206,7 @@ services:
       PGDATABASE: kizuna
       PGUSER: kizuna
       PGPASSWORD: ${POSTGRES_PASSWORD:-password}
+      MAILPIT_URL: http://mailpit:8025
       # 分割（例 1/4）と本体シナリオの絞り込み（正規表現）。root の `task e2e` が渡し、playwright.config.ts が読む。
       E2E_SHARD: ${E2E_SHARD:-}
       E2E_GREP: ${E2E_GREP:-}

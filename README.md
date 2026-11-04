@@ -26,6 +26,8 @@ cp infrastructure/.env.example infrastructure/development/.env
 
 開発環境の管理画面は [http://localhost:23646](http://localhost:23646) で開ける（ホストのループバックのみ公開）。リリース・E2E では管理画面を無効にする。既存データで管理画面が 404 になる場合は、`/data/mini.options` の `admin.ui` が `false` のまま保存されていないか確認し、バックアップ後に `true` へ変更して storage を再作成する。
 
+開発環境では backend が送るメールをすべてメールキャッチャー Mailpit が受け取り、外部へは送らない。届いたメールは [http://localhost:8025](http://localhost:8025) で読める（ホストのループバックのみ公開）。実在の SMTP で試すときは管理画面のシステム設定で SMTP を設定する（設定があればそちらが優先される）。`.env` の `SPRING_MAIL_*` はリリース環境だけが読む。
+
 永続データは専用の `seaweedfs-data` ボリュームに保存するため、切り替え後は空のストレージで起動する。旧ストレージのボリュームは自動削除・変換しない。
 
 `/etc/hosts` に次を追加する。

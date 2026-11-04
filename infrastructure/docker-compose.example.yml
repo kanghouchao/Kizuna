@@ -113,18 +113,18 @@ services:
       - SPRING_JPA_SHOW_SQL
       - SPRING_JPA_OPEN_IN_VIEW
       - SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL
-      - SPRING_MAIL_HOST
-      - SPRING_MAIL_PORT
-      - SPRING_MAIL_USERNAME
-      - SPRING_MAIL_PASSWORD
-      - SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH
-      - SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE
+      # 環境変数の送信経路は常に mailpit に向け、.env の値では変えない。実在の SMTP を試すときは
+      # システム設定の SMTP を設定する（そちらが優先される）
+      - SPRING_MAIL_HOST=mailpit
+      - SPRING_MAIL_PORT=1025
     depends_on:
       database:
         condition: service_healthy
       cache:
         condition: service_healthy
       storage:
+        condition: service_healthy
+      mailpit:
         condition: service_healthy
       # 添付機能を無効にしている間も private-storage の不調で backend を止めない。有効時は backend の起動時検査が落とす
       private-storage:
@@ -160,6 +160,17 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: on-failure:3
+
+  # 送信したメールを受け取って外へは出さないメールキャッチャー。Web UI はホストのループバックにだけ公開する
+  mailpit:
+    image: axllent/mailpit:v1.32.0
+    container_name: mailpit
+    # healthcheck はイメージ同梱の HEALTHCHECK（/mailpit readyz）に任せる。backend の service_healthy が頼る
+    ports:
+      - "127.0.0.1:8025:8025"
+    networks:
+      - network
     restart: on-failure:3
 
   # 応募者添付の非公開 S3。Traefik のルートもホストポートも持たず、backend とだけ共有する private-network に置く。
