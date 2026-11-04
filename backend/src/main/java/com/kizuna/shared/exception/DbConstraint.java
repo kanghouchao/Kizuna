@@ -32,7 +32,7 @@ public enum DbConstraint {
   /** t_users.email の一意制約。 */
   UQ_T_USERS_EMAIL("uq_t_users_email"),
 
-  /** 検証トークンの「利用者ごとに生きたトークンは高々 1 本」の部分一意索引。並行した再送の敗者を 429 で返す。 */
+  /** 検証トークンの「利用者ごとに生きたトークンは高々 1 本」の部分一意索引。 */
   UQ_T_EMAIL_VERIFICATION_TOKENS_LIVE_USER("uq_t_email_verification_tokens_live_user"),
 
   /** t_users.line_user_id の一意制約。 */
