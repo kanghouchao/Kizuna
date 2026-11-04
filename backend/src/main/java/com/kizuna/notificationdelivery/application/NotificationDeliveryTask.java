@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @RequiredArgsConstructor
 public class NotificationDeliveryTask implements TaskHandler {
+  public static final String NAME = "NOTIFICATION_DELIVER";
   private final NotificationDeliveryRepository deliveries;
   private final DeliveryAttemptRepository attempts;
   private final ServiceExecutionIdentityService identities;
@@ -30,7 +31,7 @@ public class NotificationDeliveryTask implements TaskHandler {
 
   @Override
   public String name() {
-    return "NOTIFICATION_DELIVER";
+    return NAME;
   }
 
   @Override

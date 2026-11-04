@@ -1,11 +1,10 @@
-package com.kizuna.point.infrastructure;
+package com.kizuna.pointsexpiry.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-import com.kizuna.pointsexpiry.infrastructure.PointExpirySchedule;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.task.execution.TaskCommand;
 import com.kizuna.task.execution.TaskExecutor;
