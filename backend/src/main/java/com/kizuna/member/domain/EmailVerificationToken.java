@@ -57,4 +57,17 @@ public class EmailVerificationToken extends BaseEntity {
       Long userId, String tokenDigest, String email, OffsetDateTime issuedAt) {
     return new EmailVerificationToken(userId, tokenDigest, email, issuedAt);
   }
+
+  /** 消費・失効の前で、期限内か。期限ちょうどは期限内として扱う。 */
+  public boolean isUsable(OffsetDateTime now) {
+    return consumedAt == null && revokedAt == null && !now.isAfter(expiresAt);
+  }
+
+  /** 消費する。消費・失効の済んだトークンは二度と使えない。 */
+  public void consume(OffsetDateTime at) {
+    if (consumedAt != null || revokedAt != null) {
+      throw new IllegalStateException("消費・失効の済んだ検証トークンは消費できません");
+    }
+    this.consumedAt = at;
+  }
 }

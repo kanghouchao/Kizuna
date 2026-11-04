@@ -201,6 +201,11 @@ public class User extends BaseEntity {
     return emailVerifiedAt != null;
   }
 
+  /** メールアドレスを検証済みにする。権限と本人種別は変わらないので、資格情報の版は進めない。 */
+  public void markEmailVerified(OffsetDateTime at) {
+    this.emailVerifiedAt = at;
+  }
+
   /** 発行済みセッションを失効させる（版を 1 つ進める）。本人属性も授権も変えない、失効そのものが目的の操作に使う。 */
   public void invalidateSessions() {
     this.credentialVersion++;

@@ -30,6 +30,8 @@ public class ExemptingBearerTokenResolver implements BearerTokenResolver {
           new Exemption(HttpMethod.POST, "/cast-invitations/acceptance/existing"),
           // 会員の自助登録（POST）。統一ログイン画面からの遷移で陳腐なアクセストークンが付きうる。
           new Exemption(HttpMethod.POST, "/members"),
+          // メールアドレスの確認（POST）。検証メールのリンクをログイン中のタブで開くと陳腐なアクセストークンが付きうる。
+          new Exemption(HttpMethod.POST, "/auth/email-verification/confirmation"),
           // LINE ログインの公開端点（設定照会・ログイン・登録確定）。統一ログイン画面からの遷移で陳腐なアクセストークンが付きうる。
           // 連携（/me/line）は認証必須のため対象外 — 免除すると Bearer が解決されず、常に匿名として 401 になる。
           new Exemption(null, "/auth/line/config"),
