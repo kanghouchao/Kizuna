@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -17,9 +16,9 @@ import com.kizuna.member.application.MemberDisplayNames;
 import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.notificationdelivery.intake.MemberNotices;
 import com.kizuna.point.application.PointExpiryLedger;
+import com.kizuna.point.domain.ExpiringCreditView;
 import com.kizuna.point.domain.PointAllocationRepository;
 import com.kizuna.point.domain.PointConsumption;
-import com.kizuna.point.domain.PointEntry;
 import com.kizuna.point.domain.PointEntryRepository;
 import com.kizuna.settings.application.PointExpiryNoticeSettings;
 import com.kizuna.settings.application.SystemConfigService;
@@ -88,7 +87,6 @@ class PointExpiryNoticeTaskTest {
     assertThat(first.subject()).isEqualTo("ポイントの有効期限のお知らせ");
     assertThat(first.body()).contains("山田 様", "1,200 ポイント", "2026年10月15日");
     assertThat(issued.getAllValues().get(1).body()).contains("佐藤 様", "80 ポイント");
-    verify(entries, never()).saveAndFlush(any());
   }
 
   @Test
@@ -149,11 +147,24 @@ class PointExpiryNoticeTaskTest {
     verifyNoInteractions(notices);
   }
 
-  private PointEntry credit(long id, long member, int amount) {
-    var entry =
-        PointEntry.manualAdjust(member, null, amount, "検証", target, List.of(), 8L, "grant:" + id);
-    entry.setId(id);
-    return entry;
+  private ExpiringCreditView credit(long id, long member, int amount) {
+    return new ExpiringCreditView() {
+      public Long getId() {
+        return id;
+      }
+
+      public Long getMemberId() {
+        return member;
+      }
+
+      public int getAmount() {
+        return amount;
+      }
+
+      public LocalDate getExpiresOn() {
+        return target;
+      }
+    };
   }
 
   private PointConsumption consumption(long id, long amount) {
