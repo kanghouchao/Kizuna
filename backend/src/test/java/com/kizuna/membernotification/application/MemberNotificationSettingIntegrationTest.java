@@ -16,13 +16,13 @@ import com.kizuna.store.StoreShortNames;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.UserRepository;
 import jakarta.persistence.EntityManagerFactory;
+import java.sql.Connection;
 import java.time.Clock;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import liquibase.integration.spring.SpringLiquibase;
@@ -146,17 +146,28 @@ class MemberNotificationSettingIntegrationTest {
         .isZero();
   }
 
+  // 二つの初回の選択を会員行の待ち行列に並ばせてから一斉に通す。どちらも行の不在を読んでから挿入する順序が
+  // 確実に重なるので、直列化が無ければ一意制約違反で片方が落ちる。
   @Test
   void concurrentFirstChoicesForTheSamePurposeBothLand() throws Exception {
     var member = member();
-    var start = new CountDownLatch(1);
-    var first =
-        CompletableFuture.supplyAsync(
-            () -> chooseAfter(start, member.userId(), ContactPermissionStatus.ALLOWED));
-    var second =
-        CompletableFuture.supplyAsync(
-            () -> chooseAfter(start, member.userId(), ContactPermissionStatus.DENIED));
-    start.countDown();
+    CompletableFuture<MemberNotificationSettings> first;
+    CompletableFuture<MemberNotificationSettings> second;
+    try (Connection holder = context.getBean(DataSource.class).getConnection()) {
+      holder.setAutoCommit(false);
+      try (var lock = holder.prepareStatement("select id from t_members where id = ? for update")) {
+        lock.setLong(1, member.memberId());
+        lock.executeQuery().close();
+      }
+      first =
+          CompletableFuture.supplyAsync(
+              () -> choose(member.userId(), ContactPermissionStatus.ALLOWED));
+      second =
+          CompletableFuture.supplyAsync(
+              () -> choose(member.userId(), ContactPermissionStatus.DENIED));
+      awaitLockWaiters(2);
+      holder.commit();
+    }
 
     first.get(30, TimeUnit.SECONDS);
     second.get(30, TimeUnit.SECONDS);
@@ -182,15 +193,21 @@ class MemberNotificationSettingIntegrationTest {
         .hasMessageContaining("ck_t_member_notification_settings_status");
   }
 
-  private MemberNotificationSettings chooseAfter(
-      CountDownLatch start, long userId, ContactPermissionStatus status) {
-    try {
-      start.await();
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new IllegalStateException(e);
-    }
+  private MemberNotificationSettings choose(long userId, ContactPermissionStatus status) {
     return service.choose(userId, ContactPurpose.BUSINESS, status);
+  }
+
+  private void awaitLockWaiters(int expected) throws InterruptedException {
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+    while (System.nanoTime() < deadline) {
+      Long waiting =
+          jdbc.queryForObject(
+              "select count(*) from pg_stat_activity where datname=current_database() and wait_event_type='Lock'",
+              Long.class);
+      if (waiting != null && waiting >= expected) return;
+      Thread.sleep(20);
+    }
+    throw new AssertionError("初回の選択が会員行のロックを待っていません");
   }
 
   private static Map<String, Object> audit(String before, String after, long actor) {
