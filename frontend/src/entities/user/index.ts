@@ -2,6 +2,7 @@ export * from './model/types';
 export { authApi } from './api/auth';
 export { lineApi } from './api/line';
 export { initialSetupApi } from './api/initial-setup';
+export { emailVerificationApi } from './api/email-verification';
 export { staffApi, roleApi } from './api/staff';
 export { serviceIdentityApi } from './api/service-identity';
 export { StoreContextProvider, useStoreContext } from './model/StoreContext';
