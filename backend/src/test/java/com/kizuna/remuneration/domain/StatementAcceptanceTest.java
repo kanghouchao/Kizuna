@@ -129,6 +129,35 @@ class StatementAcceptanceTest {
   }
 
   @Test
+  void aShortDayIsAcceptableEvenWithoutAnyGuaranteeCondition() {
+    var shortDay =
+        AttendanceDuration.of(
+            List.of(
+                new AttendanceDuration.Interval(
+                    DAY.atTime(20, 0), DAY.atTime(20, 0).plusMinutes(239))));
+    var guarantee = DailyGuarantee.calculate(null, null, shortDay, 7000);
+    var content =
+        new StatementContent(
+            7000,
+            guarantee.amount(),
+            0,
+            List.of(new OrderBasis("o1", 7000, false)),
+            shortDay.closedDuration().toString(),
+            guarantee.status(),
+            null,
+            null,
+            List.of());
+    assertThat(content.notAcceptableReason(true)).isNull();
+    var fourHours =
+        AttendanceDuration.of(
+            List.of(
+                new AttendanceDuration.Interval(
+                    DAY.atTime(20, 0), DAY.atTime(20, 0).plusHours(4))));
+    assertThat(DailyGuarantee.calculate(null, null, fourHours, 7000).status())
+        .isEqualTo(Status.NOT_CONFIGURED);
+  }
+
+  @Test
   void acceptingAnUndeterminedContentIsRefused() {
     var pending =
         content(List.of(), Status.PENDING_ATTENDANCE, null, List.of(new BonusBasis("b", 1)));
