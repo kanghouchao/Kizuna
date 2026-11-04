@@ -29,7 +29,13 @@ const medium: MediumSummary = { id: 'm1', name: '求人誌', status: 'ACTIVE', v
 const conflict = (error: string) => ({ response: { status: 409, data: { error } } });
 const permission = (...permissions: PermissionCode[]) =>
   jest.mocked(useMe).mockReturnValue({
-    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    me: {
+      email: 'staff@example.com',
+      user_type: 'STAFF',
+      permissions,
+      line_linked: false,
+      email_verified: false,
+    },
     isLoading: false,
     failure: null,
     reload: jest.fn(),

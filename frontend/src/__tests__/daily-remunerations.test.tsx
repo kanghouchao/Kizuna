@@ -34,6 +34,7 @@ const grantMe = () =>
       user_type: 'STAFF',
       permissions: [...granted],
       line_linked: false,
+      email_verified: false,
     },
     isLoading: false,
     failure: null,

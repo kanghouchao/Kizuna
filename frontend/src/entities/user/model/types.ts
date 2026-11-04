@@ -90,6 +90,8 @@ export interface MeResponse {
   permissions?: PermissionCode[];
   // LINE アカウントと連携済みか。Java 側が primitive の boolean のため、キーは必ず応答に含まれる。
   line_linked: boolean;
+  // ログイン用メールアドレスの検証が済んでいるか（ADR 0040）。line_linked と同じくキーは必ず含まれる。
+  email_verified: boolean;
 }
 
 // 自己プロフィール更新リクエスト

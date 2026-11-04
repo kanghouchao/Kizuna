@@ -29,7 +29,13 @@ const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
 const meAs = (userId: number, permissions: PermissionCode[]) => {
   storeSessionToken({ token: 't', expires_at: 1, user_id: userId, refresh_expires_at: 2 });
   mockedUseMe.mockReturnValue({
-    me: { email: `user${userId}@kizuna.test`, user_type: 'STAFF', permissions, line_linked: false },
+    me: {
+      email: `user${userId}@kizuna.test`,
+      user_type: 'STAFF',
+      permissions,
+      line_linked: false,
+      email_verified: false,
+    },
     isLoading: false,
     failure: null,
     reload: jest.fn(),

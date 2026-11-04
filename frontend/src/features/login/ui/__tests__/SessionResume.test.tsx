@@ -36,6 +36,7 @@ const me = (user_type: MeResponse['user_type']): MeResponse => ({
   user_type,
   permissions: [],
   line_linked: false,
+  email_verified: false,
 });
 
 describe('SessionResume（ログイン画面を開いたときの継続ログイン）', () => {

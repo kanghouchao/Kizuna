@@ -6,6 +6,7 @@ const me = (permissions?: MeResponse['permissions']): MeResponse => ({
   user_type: 'STAFF',
   permissions,
   line_linked: false,
+  email_verified: false,
 });
 
 describe('hasPermission', () => {

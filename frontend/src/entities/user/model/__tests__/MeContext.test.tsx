@@ -13,6 +13,7 @@ const meFixture: MeResponse = {
   email: 'tanaka.hanako@example.com',
   display_name: '田中花子',
   line_linked: false,
+  email_verified: false,
 };
 
 // 消費者は2役に分ける。表示係（Header 相当）と更新係（アカウント設定ページ相当）で、

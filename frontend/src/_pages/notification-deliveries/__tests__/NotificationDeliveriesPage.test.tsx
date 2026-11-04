@@ -60,7 +60,13 @@ const row: Delivery = {
 const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
 const permission = (...permissions: PermissionCode[]) =>
   mockedUseMe.mockReturnValue({
-    me: { email: 'staff@example.com', user_type: 'STAFF', permissions, line_linked: false },
+    me: {
+      email: 'staff@example.com',
+      user_type: 'STAFF',
+      permissions,
+      line_linked: false,
+      email_verified: false,
+    },
     isLoading: false,
     failure: null,
     reload: jest.fn(),
