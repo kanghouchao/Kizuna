@@ -2,6 +2,7 @@ package com.kizuna.notificationdelivery;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.kizuna.audit.recording.AuditActor;
 import com.kizuna.audit.recording.AuditWriter;
@@ -341,11 +342,11 @@ class NotificationIntegrationTest {
   }
 
   @Test
-  void unavailableAndUnknownAreNotSentAndUnknownCannotRetry() throws Exception {
+  void unavailableIsRetriedExplicitlyAndUnknownCannotRetry() throws Exception {
     transport.outcome = ContactTransport.Result.UNAVAILABLE;
     var row = queue(draft());
     runTask();
-    await(row.id(), "FAILED");
+    var failed = await(row.id(), "FAILED");
     assertThat(
             notifications
                 .history(storeId, email, row.id(), PageRequest.of(0, 10))
@@ -353,6 +354,18 @@ class NotificationIntegrationTest {
                 .getFirst()
                 .getFailureCode())
         .isEqualTo("UNAVAILABLE");
+    transport.outcome = ContactTransport.Result.SENT;
+    notifications.queue(storeId, email, row.id(), failed.version(), "未送信の結果を確認して再試行", true);
+    runTask();
+    await(row.id(), "SENT");
+    assertThat(notifications.history(storeId, email, row.id(), PageRequest.of(0, 10)).getContent())
+        .extracting(
+            a -> a.getAttemptNumber(),
+            a -> a.getStatus().name(),
+            a -> a.getFailureCode(),
+            a -> a.getReason())
+        .containsExactly(
+            tuple(2, "SENT", null, "未送信の結果を確認して再試行"), tuple(1, "FAILED", "UNAVAILABLE", "内容確認済み"));
     transport.outcome = ContactTransport.Result.UNKNOWN;
     var next = queue(draft());
     runTask();
