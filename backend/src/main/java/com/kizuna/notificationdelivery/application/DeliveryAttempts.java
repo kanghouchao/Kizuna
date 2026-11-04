@@ -11,6 +11,7 @@ import com.kizuna.notificationdelivery.domain.NotificationDeliveryRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -104,7 +105,7 @@ public class DeliveryAttempts {
             .orElseThrow(() -> new NotFoundException("送信試行が見つかりません"));
     if (!attempt.getDeliveryId().equals(row.getId())
         || !attempt.getActorUserId().equals(event.serviceUserId())
-        || !attempt.getTaskExecutionId().equals(event.executionId()))
+        || !Objects.equals(attempt.getTaskExecutionId(), event.executionId()))
       throw new AccessDeniedException("送信試行の指定が不正です");
     return new Locked(row, attempt);
   }
