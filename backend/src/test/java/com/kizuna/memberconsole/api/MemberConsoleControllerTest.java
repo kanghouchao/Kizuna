@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.jayway.jsonpath.JsonPath;
 import com.kizuna.customer.application.CustomerMemberLinkDirectory.MemberLinks;
 import com.kizuna.member.application.MemberDirectoryService.MemberProfile;
 import com.kizuna.member.application.MemberDirectoryService.MemberSummary;
@@ -129,12 +130,17 @@ class MemberConsoleControllerTest {
   @DisplayName("詳細は検証日時を返し、未検証の会員では項目ごと消えること")
   void detailCarriesEmailVerifiedAtOnlyWhenVerified() throws Exception {
     when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(true, Set.of()));
-    when(memberConsoleService.detail(eq(7L), any()))
-        .thenReturn(detail(OffsetDateTime.parse("2026-10-26T10:00:00+09:00")));
-    mockMvc
-        .perform(get("/members/7").with(staff("PERM_MEMBER_VIEW")))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.email_verified_at").exists());
+    OffsetDateTime verifiedAt = OffsetDateTime.parse("2026-10-26T10:00:00+09:00");
+    when(memberConsoleService.detail(eq(7L), any())).thenReturn(detail(verifiedAt));
+    String body =
+        mockMvc
+            .perform(get("/members/7").with(staff("PERM_MEMBER_VIEW")))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    assertThat(OffsetDateTime.parse(JsonPath.<String>read(body, "$.email_verified_at")))
+        .isAtSameInstantAs(verifiedAt);
 
     when(memberConsoleService.detail(eq(7L), any())).thenReturn(detail(null));
     mockMvc
