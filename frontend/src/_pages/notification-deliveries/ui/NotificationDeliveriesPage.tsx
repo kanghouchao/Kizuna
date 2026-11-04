@@ -84,6 +84,11 @@ const resolutionLabels: Partial<Record<DeliveryStatus, string>> = {
   SENT: '送達済みと判定',
   FAILED: '未送達と判定',
 };
+const sourceLabels: Record<Delivery['source_type'], string> = {
+  ORDER: '受注',
+  APPLICATION: 'ゲスト申請',
+  MEMBER: '会員',
+};
 function Status({ status, label }: { status: DeliveryStatus; label?: string }) {
   return (
     <Badge
@@ -328,7 +333,7 @@ function Detail({
         </dd>
         <dt>起点</dt>
         <dd className="wrap-anywhere">
-          {row.source_type === 'ORDER' ? '受注' : 'ゲスト申請'} #{row.source_id}
+          {sourceLabels[row.source_type]} #{row.source_id}
         </dd>
         <dt>送信予定</dt>
         <dd>{time(row.scheduled_at)}</dd>
@@ -587,7 +592,16 @@ function Create({ onCreated }: { onCreated: (row: Delivery) => void }) {
     </Form>
   );
 }
-function Workspace({ canManage, canSend }: { canManage: boolean; canSend: boolean }) {
+// グループの画面は X-Store-ID を付けない要求でグループ級（会員宛）の行を扱う。会員宛の起票は業務の処理が担うので作成口を出さない。
+function Workspace({
+  group,
+  canManage,
+  canSend,
+}: {
+  group: boolean;
+  canManage: boolean;
+  canSend: boolean;
+}) {
   const list = useListPage(page => notificationApi.list(page));
   const [selected, setSelected] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -596,7 +610,9 @@ function Workspace({ canManage, canSend }: { canManage: boolean; canSend: boolea
     <>
       <ListPage
         title="業務通知"
-        description="受注・ゲスト申請の業務メールと送信履歴"
+        description={
+          group ? '会員宛の業務メールと送信履歴' : '受注・ゲスト申請の業務メールと送信履歴'
+        }
         state={list}
         emptyMessage="業務通知はありません"
         errorMessage="通知一覧を取得できませんでした"
@@ -606,7 +622,7 @@ function Workspace({ canManage, canSend }: { canManage: boolean; canSend: boolea
             <Button variant="outline" onClick={() => void list.reload()}>
               再読み込み
             </Button>
-            {canManage && <Button onClick={() => setCreating(true)}>通知を作成</Button>}
+            {canManage && !group && <Button onClick={() => setCreating(true)}>通知を作成</Button>}
           </>
         }
       >
@@ -624,7 +640,7 @@ function Workspace({ canManage, canSend }: { canManage: boolean; canSend: boolea
             {list.rows.map(row => (
               <TableRow key={row.id}>
                 <TableCell>
-                  {row.source_type === 'ORDER' ? '受注' : 'ゲスト申請'}
+                  {sourceLabels[row.source_type]}
                   <br />
                   {row.source_id}
                 </TableCell>
@@ -691,7 +707,7 @@ function Workspace({ canManage, canSend }: { canManage: boolean; canSend: boolea
     </>
   );
 }
-export function NotificationDeliveriesPage() {
+function NotificationDeliveriesPage({ group }: { group: boolean }) {
   const storeId = useStoreContext().currentStoreId;
   const { me } = useMe();
   if (me === null) return <MePending />;
@@ -699,5 +715,18 @@ export function NotificationDeliveriesPage() {
     return <p role="alert">業務通知の閲覧権限がありません</p>;
   const manage = hasPermission(me, 'NOTIFICATION_MANAGE'),
     send = hasPermission(me, 'NOTIFICATION_SEND');
-  return <Workspace key={`${storeId}:${manage}:${send}`} canManage={manage} canSend={send} />;
+  return (
+    <Workspace
+      key={`${group ? 'group' : storeId}:${manage}:${send}`}
+      group={group}
+      canManage={manage}
+      canSend={send}
+    />
+  );
+}
+export function StoreNotificationDeliveriesPage() {
+  return <NotificationDeliveriesPage group={false} />;
+}
+export function GroupNotificationDeliveriesPage() {
+  return <NotificationDeliveriesPage group />;
 }

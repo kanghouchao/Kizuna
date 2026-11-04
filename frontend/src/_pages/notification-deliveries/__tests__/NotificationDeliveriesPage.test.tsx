@@ -1,6 +1,9 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { renderToString } from 'react-dom/server';
-import { NotificationDeliveriesPage } from '../ui/NotificationDeliveriesPage';
+import {
+  GroupNotificationDeliveriesPage,
+  StoreNotificationDeliveriesPage,
+} from '../ui/NotificationDeliveriesPage';
 import { Delivery, notificationApi } from '@/entities/notification-delivery';
 import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
@@ -80,13 +83,13 @@ async function detail() {
 }
 test('閲覧権限がなければ通知を取得しない', () => {
   permission('NOTIFICATION_SEND');
-  render(<NotificationDeliveriesPage />);
+  render(<StoreNotificationDeliveriesPage />);
   expect(screen.getByRole('alert')).toHaveTextContent('閲覧権限がありません');
   expect(api.list).not.toHaveBeenCalled();
 });
 test('閲覧のみの担当者は本文を確認できるが作成や送信はできない', async () => {
   permission('NOTIFICATION_VIEW');
-  render(<NotificationDeliveriesPage />);
+  render(<StoreNotificationDeliveriesPage />);
   const dialog = await detail();
   expect(await within(dialog).findByText('非公開の本文')).toBeVisible();
   expect(screen.queryByRole('button', { name: '通知を作成' })).not.toBeInTheDocument();
@@ -96,7 +99,7 @@ test('閲覧のみの担当者は本文を確認できるが作成や送信は�
 });
 test('結果不明では再試行を出さず未設定を成功として表示しない', async () => {
   api.get.mockResolvedValue({ ...row, status: 'UNKNOWN', transport_availability: 'UNAVAILABLE' });
-  render(<NotificationDeliveriesPage />);
+  render(<StoreNotificationDeliveriesPage />);
   const dialog = await detail();
   expect(await within(dialog).findByText(/送信結果が不明です/)).toBeVisible();
   expect(within(dialog).getByText(/メールの送信設定が利用できません/)).toBeVisible();
@@ -108,7 +111,7 @@ test('結果不明では再試行を出さず未設定を成功として表示�
 test('送信権限が無ければ結果不明の判定を出さない', async () => {
   permission('NOTIFICATION_VIEW', 'NOTIFICATION_MANAGE');
   api.get.mockResolvedValue({ ...row, status: 'UNKNOWN' });
-  render(<NotificationDeliveriesPage />);
+  render(<StoreNotificationDeliveriesPage />);
   const dialog = await detail();
   expect(await within(dialog).findByText(/送信結果が不明です/)).toBeVisible();
   expect(within(dialog).queryByRole('button', { name: '判定を記録する' })).not.toBeInTheDocument();
@@ -116,7 +119,7 @@ test('送信権限が無ければ結果不明の判定を出さない', async ()
 test('判定と理由が無ければ送らず、未送達と判定すると再試行の入力に切り替わる', async () => {
   api.get.mockResolvedValue({ ...row, status: 'UNKNOWN', attempt_count: 1, version: 4 });
   api.resolve.mockResolvedValue({ ...row, status: 'FAILED', attempt_count: 2, version: 5 });
-  render(<NotificationDeliveriesPage />);
+  render(<StoreNotificationDeliveriesPage />);
   const dialog = await detail();
   fireEvent.click(await within(dialog).findByRole('button', { name: '判定を記録する' }));
   expect(await within(dialog).findByText('判定を選択してください')).toBeVisible();
@@ -142,7 +145,7 @@ test('判定が競合したら最新の状態を取るまで送らない', async
   api.resolve.mockRejectedValue({
     response: { status: 409, data: { error: '状態が変わりました' } },
   });
-  render(<NotificationDeliveriesPage />);
+  render(<StoreNotificationDeliveriesPage />);
   const dialog = await detail();
   fireEvent.click(await within(dialog).findByRole('radio', { name: /送達済み/ }));
   fireEvent.change(within(dialog).getByLabelText('確認した内容・判定の理由'), {
@@ -188,7 +191,7 @@ test('試行履歴は職員の判定を提供元の結果と区別して示す',
     pageCount: 1,
     total: 2,
   });
-  render(<NotificationDeliveriesPage />);
+  render(<StoreNotificationDeliveriesPage />);
   const dialog = await detail();
   const judged = (await within(dialog).findByText('提供元で未配信を確認')).closest('li')!;
   expect(within(judged).getByText('未送達と判定')).toBeVisible();
@@ -205,7 +208,7 @@ test('操作失敗後に理由を保持し連打で二重登録しない', async
       reject = r;
     })
   );
-  render(<NotificationDeliveriesPage />);
+  render(<StoreNotificationDeliveriesPage />);
   const dialog = await detail();
   const input = await within(dialog).findByLabelText('内容を確認した理由・再試行の理由');
   fireEvent.change(input, { target: { value: '内容確認済み' } });
@@ -235,9 +238,9 @@ test('店舗変更後に旧店舗の遅い応答を表示しない', async () =>
       })
     )
     .mockResolvedValueOnce({ rows: [], page: 0, pageCount: 0, total: 0 });
-  const view = render(<NotificationDeliveriesPage />);
+  const view = render(<StoreNotificationDeliveriesPage />);
   mockStoreId = '2';
-  view.rerender(<NotificationDeliveriesPage />);
+  view.rerender(<StoreNotificationDeliveriesPage />);
   expect(await screen.findByText('業務通知はありません')).toBeVisible();
   await act(async () => resolve({ rows: [row], page: 0, pageCount: 1, total: 1 }));
   expect(screen.queryByRole('button', { name: '内容・履歴' })).not.toBeInTheDocument();
@@ -246,7 +249,7 @@ test('詳細取得の失敗からその場で回復し404は一覧へ戻れる',
   api.get
     .mockRejectedValueOnce(new Error('network'))
     .mockRejectedValueOnce({ response: { status: 404 } });
-  render(<NotificationDeliveriesPage />);
+  render(<StoreNotificationDeliveriesPage />);
   const dialog = await detail();
   const failure = await within(dialog).findByRole('alert');
   fireEvent.click(within(failure).getByRole('button'));
@@ -269,7 +272,7 @@ test('確定した入力エラーは内容を修正して再提出できる', as
   api.create.mockRejectedValueOnce({
     response: { status: 400, data: { error: '起点を確認してください' } },
   });
-  render(<NotificationDeliveriesPage />);
+  render(<StoreNotificationDeliveriesPage />);
   const dialog = await fillDraft();
   fireEvent.click(within(dialog).getByRole('button', { name: '下書きを作成' }));
   await waitFor(() => expect(notify.error).toHaveBeenCalled());
@@ -278,7 +281,7 @@ test('確定した入力エラーは内容を修正して再提出できる', as
 
 test('作成結果が不明なダイアログを閉じても同じ要求を再確認できる', async () => {
   api.create.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(row);
-  render(<NotificationDeliveriesPage />);
+  render(<StoreNotificationDeliveriesPage />);
   const dialog = await fillDraft();
   fireEvent.click(within(dialog).getByRole('button', { name: '下書きを作成' }));
   await within(dialog).findByRole('button', { name: '同じ要求で結果を確認' });
@@ -301,7 +304,7 @@ test.each([400, 404, 409])(
     api.create
       .mockRejectedValueOnce(new Error('network'))
       .mockRejectedValueOnce({ response: { status } });
-    render(<NotificationDeliveriesPage />);
+    render(<StoreNotificationDeliveriesPage />);
     const dialog = await fillDraft();
     fireEvent.click(within(dialog).getByRole('button', { name: '下書きを作成' }));
     fireEvent.click(await within(dialog).findByRole('button', { name: '同じ要求で結果を確認' }));
@@ -319,7 +322,7 @@ test('本人情報が未取得のサーバー描画では権限に依存した�
     reload: jest.fn(),
     setMe: jest.fn(),
   });
-  const html = renderToString(<NotificationDeliveriesPage />);
+  const html = renderToString(<StoreNotificationDeliveriesPage />);
   expect(html).toContain('読み込み中');
   expect(html).not.toContain('業務通知はありません');
   expect(api.list).not.toHaveBeenCalled();
@@ -327,7 +330,7 @@ test('本人情報が未取得のサーバー描画では権限に依存した�
 
 test('確認操作の404では保存を外して一覧へ戻れる', async () => {
   api.queue.mockRejectedValue({ response: { status: 404 } });
-  render(<NotificationDeliveriesPage />);
+  render(<StoreNotificationDeliveriesPage />);
   const dialog = await detail();
   fireEvent.change(await within(dialog).findByLabelText('内容を確認した理由・再試行の理由'), {
     target: { value: '内容確認' },
@@ -348,7 +351,7 @@ test('通知一覧はページ番号で送り、次のページを取り直す',
       pageCount: 2,
       total: 51,
     });
-  render(<NotificationDeliveriesPage />);
+  render(<StoreNotificationDeliveriesPage />);
   expect(await screen.findByText(/123/)).toBeInTheDocument();
   fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
   expect(await screen.findByText(/456/)).toBeInTheDocument();
@@ -377,10 +380,40 @@ test('送信試行はページ番号で送り、次のページを取り直す',
       pageCount: 2,
       total: 51,
     });
-  render(<NotificationDeliveriesPage />);
+  render(<StoreNotificationDeliveriesPage />);
   const modal = await detail();
   expect(await within(modal).findByText('一頁目の試行')).toBeInTheDocument();
   fireEvent.click(within(modal).getAllByRole('button', { name: '次へ' })[0]);
   expect(await within(modal).findByText('二頁目の試行')).toBeInTheDocument();
   expect(api.history).toHaveBeenLastCalledWith('10', 1);
+});
+describe('グループのコンテキスト', () => {
+  const member: Delivery = { ...row, id: '20', source_type: 'MEMBER', source_id: '55' };
+  beforeEach(() => {
+    api.list.mockResolvedValue({ rows: [member], page: 0, pageCount: 1, total: 1 });
+  });
+  test('会員宛の通知を一覧し、管理権限があっても作成口は出さない', async () => {
+    render(<GroupNotificationDeliveriesPage />);
+    expect(await screen.findByRole('row', { name: /会員\s*55/ })).toBeVisible();
+    expect(screen.getByText('会員宛の業務メールと送信履歴')).toBeVisible();
+    expect(screen.queryByRole('button', { name: '通知を作成' })).not.toBeInTheDocument();
+  });
+  test('送信不可の通知は理由を添えて再試行できる', async () => {
+    api.get.mockResolvedValue({ ...member, status: 'BLOCKED', contact_decision: 'NOT_ALLOWED' });
+    api.retry.mockResolvedValue({ ...member, status: 'QUEUED', version: 2 });
+    render(<GroupNotificationDeliveriesPage />);
+    const dialog = await detail();
+    expect(await within(dialog).findByText('会員 #55')).toBeVisible();
+    fireEvent.change(within(dialog).getByLabelText('内容を確認した理由・再試行の理由'), {
+      target: { value: '本人が許可した' },
+    });
+    fireEvent.click(within(dialog).getByRole('button', { name: '明示的に再試行する' }));
+    await waitFor(() => expect(api.retry).toHaveBeenCalledWith('20', 1, '本人が許可した'));
+  });
+  test('結果不明の通知は送信権限があれば判定できる', async () => {
+    api.get.mockResolvedValue({ ...member, status: 'UNKNOWN' });
+    render(<GroupNotificationDeliveriesPage />);
+    const dialog = await detail();
+    expect(await within(dialog).findByRole('button', { name: '判定を記録する' })).toBeVisible();
+  });
 });

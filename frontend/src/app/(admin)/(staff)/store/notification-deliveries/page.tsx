@@ -1,1 +1,1 @@
-export { NotificationDeliveriesPage as default } from '@/_pages/store-notification-deliveries';
+export { StoreNotificationDeliveriesPage as default } from '@/_pages/notification-deliveries';
