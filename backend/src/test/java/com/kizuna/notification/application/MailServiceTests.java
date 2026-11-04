@@ -7,7 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.kizuna.notification.transport.EmailTransport;
+import com.kizuna.notification.transport.ContactTransport;
 import com.kizuna.settings.application.SmtpSettings;
 import com.kizuna.settings.application.SystemConfigService;
 import org.junit.jupiter.api.BeforeEach;
@@ -45,7 +45,7 @@ class MailServiceTests {
     when(systemConfigService.smtpSettings()).thenReturn(NOT_CONFIGURED);
 
     assertThat(service.deliver("recipient@example.invalid", "件名", "本文"))
-        .isEqualTo(EmailTransport.Result.UNAVAILABLE);
+        .isEqualTo(ContactTransport.Result.UNAVAILABLE);
     verifyNoInteractions(mailSender);
   }
 
@@ -55,15 +55,15 @@ class MailServiceTests {
     when(mailSenderProvider.getIfAvailable()).thenReturn(mailSender);
     assertThat(service.available()).isTrue();
     assertThat(service.deliver("recipient@example.invalid", "件名", "本文"))
-        .isEqualTo(EmailTransport.Result.SENT);
+        .isEqualTo(ContactTransport.Result.SENT);
     doThrow(new MailSendException("機密な提供方応答")).when(mailSender).send(any(SimpleMailMessage.class));
     assertThat(service.deliver("recipient@example.invalid", "件名", "本文"))
-        .isEqualTo(EmailTransport.Result.UNKNOWN);
+        .isEqualTo(ContactTransport.Result.UNKNOWN);
     doThrow(new MailAuthenticationException("認証拒否"))
         .when(mailSender)
         .send(any(SimpleMailMessage.class));
     assertThat(service.deliver("recipient@example.invalid", "件名", "本文"))
-        .isEqualTo(EmailTransport.Result.FAILED);
+        .isEqualTo(ContactTransport.Result.FAILED);
   }
 
   @Test
@@ -71,7 +71,7 @@ class MailServiceTests {
     when(systemConfigService.smtpSettings()).thenThrow(new IllegalStateException("機密情報"));
     assertThat(service.available()).isFalse();
     assertThat(service.deliver("recipient@example.invalid", "件名", "本文"))
-        .isEqualTo(EmailTransport.Result.UNAVAILABLE);
+        .isEqualTo(ContactTransport.Result.UNAVAILABLE);
     verifyNoInteractions(mailSender);
   }
 

@@ -1,6 +1,7 @@
 package com.kizuna.notification.application;
 
-import com.kizuna.notification.transport.EmailTransport;
+import com.kizuna.customer.domain.ContactType;
+import com.kizuna.notification.transport.ContactTransport;
 import com.kizuna.settings.application.SmtpSettings;
 import com.kizuna.settings.application.SystemConfigService;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +18,7 @@ import org.springframework.stereotype.Service;
 @Log4j2
 @Service
 @RequiredArgsConstructor
-public class MailService implements EmailTransport {
+public class MailService implements ContactTransport {
 
   private final SystemConfigService systemConfigService;
   // required=false 相当: JavaMailSender Bean（spring.mail.host 未設定時は不在）が無くても起動できるようにする
@@ -26,6 +27,11 @@ public class MailService implements EmailTransport {
   public void send(String to, String subject, String body) {
     var result = deliver(to, subject, body);
     if (result != Result.SENT) log.warn("メール送信が完了しませんでした result={}", result);
+  }
+
+  @Override
+  public ContactType type() {
+    return ContactType.EMAIL;
   }
 
   @Override

@@ -83,7 +83,7 @@ databaseChangeLog:
       file: store/15-recruitment.yaml
       relativeToChangelogFile: true
   - include:
-      file: store/10-notification-delivery.yaml
+      file: platform/16-notification-delivery.yaml
       relativeToChangelogFile: true
   - include:
       file: store/16-review-intake.yaml

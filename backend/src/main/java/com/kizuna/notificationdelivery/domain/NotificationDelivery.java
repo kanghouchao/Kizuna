@@ -1,7 +1,6 @@
 package com.kizuna.notificationdelivery.domain;
 
 import com.kizuna.shared.exception.ConflictException;
-import com.kizuna.shared.persistence.StoreScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -17,22 +16,24 @@ import lombok.NoArgsConstructor;
 @Table(name = "t_notification_deliveries")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class NotificationDelivery extends StoreScopedEntity {
+public class NotificationDelivery extends DeliveryRecord {
+  @Column(updatable = false)
+  private Long attributedStoreId;
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, updatable = false, length = 20)
-  private DeliveryContent.SourceType sourceType;
+  private DeliverySourceType sourceType;
 
-  @Column(updatable = false, length = 32)
-  private String orderId;
+  @Column(nullable = false, updatable = false, length = 32)
+  private String sourceId;
 
-  @Column(updatable = false, length = 32)
-  private String applicationId;
-
+  @Enumerated(EnumType.STRING)
   @Column(nullable = false, updatable = false, length = 20)
-  private String channel;
+  private DeliveryChannel channel;
 
+  @Enumerated(EnumType.STRING)
   @Column(nullable = false, updatable = false, length = 20)
-  private String purpose;
+  private DeliveryPurpose purpose;
 
   @Column(nullable = false, updatable = false, length = 200)
   private String subject;
@@ -56,12 +57,11 @@ public class NotificationDelivery extends StoreScopedEntity {
   @Column(length = 500)
   private String reason;
 
-  public static NotificationDelivery draft(Long storeId, DeliveryContent input) {
+  public static NotificationDelivery draft(Long attributedStoreId, DeliveryContent input) {
     var row = new NotificationDelivery();
-    row.setStoreId(storeId);
+    row.attributedStoreId = attributedStoreId;
     row.sourceType = input.sourceType();
-    if (input.sourceType() == DeliveryContent.SourceType.ORDER) row.orderId = input.sourceId();
-    else row.applicationId = input.sourceId();
+    row.sourceId = input.sourceId();
     row.channel = input.channel();
     row.purpose = input.purpose();
     row.subject = input.subject();
@@ -72,13 +72,9 @@ public class NotificationDelivery extends StoreScopedEntity {
     return row;
   }
 
-  public String sourceId() {
-    return sourceType == DeliveryContent.SourceType.ORDER ? orderId : applicationId;
-  }
-
   public DeliveryContent content() {
     return new DeliveryContent(
-        sourceType, sourceId(), channel, purpose, subject, body, scheduledAt, dedupeKey);
+        sourceType, sourceId, channel, purpose, subject, body, scheduledAt, dedupeKey);
   }
 
   public void requireSame(DeliveryContent input) {

@@ -11,8 +11,9 @@ import org.springframework.stereotype.Service;
 public class DeliveryAuthorization {
   private final ServiceExecutionIdentityService identities;
 
-  public AuditActor require(Long serviceId, Long storeId) {
-    identities.requireService(serviceId, PermissionCode.TASK_EXECUTE, storeId);
-    return identities.requireService(serviceId, PermissionCode.NOTIFICATION_DELIVER, storeId);
+  /** 送信はグループ全体の処理なので、サービス ID に全店舗の授権を求める。 */
+  public AuditActor require(Long serviceId) {
+    identities.requireService(serviceId, PermissionCode.TASK_EXECUTE, null);
+    return identities.requireService(serviceId, PermissionCode.NOTIFICATION_DELIVER, null);
   }
 }

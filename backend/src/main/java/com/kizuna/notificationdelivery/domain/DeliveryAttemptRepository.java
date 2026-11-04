@@ -1,10 +1,15 @@
 package com.kizuna.notificationdelivery.domain;
 
-import com.kizuna.shared.persistence.StoreScopedRepository;
+import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.repository.Repository;
 
-public interface DeliveryAttemptRepository extends StoreScopedRepository<DeliveryAttempt> {
-  Page<DeliveryAttempt> findByStoreIdAndDeliveryId(
-      Long storeId, String deliveryId, Pageable pageable);
+/** 試行は通知の子で店舗を持たない。境界は通知の ID で、呼び出し側が通知の帰属を先に確かめる。 */
+public interface DeliveryAttemptRepository extends Repository<DeliveryAttempt, String> {
+  DeliveryAttempt saveAndFlush(DeliveryAttempt attempt);
+
+  Optional<DeliveryAttempt> findById(String id);
+
+  Page<DeliveryAttempt> findByDeliveryId(String deliveryId, Pageable pageable);
 }

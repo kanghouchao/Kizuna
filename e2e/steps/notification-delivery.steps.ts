@@ -9,12 +9,10 @@ let operator = '';
 let applicationId = '';
 let deliveryId = '';
 let serviceName = '';
-let storeId = '';
-let storeName = '';
 const headers = () => ({ ...STORE_HEADERS, Authorization: `Bearer ${operator}` });
 
 Given('業務通知の担当者とサービス主体と同意済みゲスト申請がある', async ({ request, page }) => {
-  storeId = await loginViaUiAndEnterStore(page);
+  await loginViaUiAndEnterStore(page);
   const admin = await loginUser(request, 'admin@kizuna.test', 'pass1234');
   expect((await request.get('/api/notification-deliveries', { headers: { ...STORE_HEADERS, Authorization: `Bearer ${admin}` } })).status()).toBe(403);
   const suffix = Date.now().toString();
@@ -30,9 +28,6 @@ Given('業務通知の担当者とサービス主体と同意済みゲスト申�
     data: { display_name: serviceName, role_ids: [executionRole], store_scope_type: 'ALL_STORES', store_ids: [] },
   });
   expect(service.status(), await service.text()).toBe(201);
-  const stores = await request.get('/api/task-executions/stores', { headers: { Authorization: `Bearer ${operator}` }, params: { size: 100 } });
-  expect(stores.status()).toBe(200);
-  storeName = (await stores.json()).content.find((row: { id: string }) => row.id === storeId).name;
   applicationId = await createConsentingGuestApplication(request, 'notification-' + suffix + '@example.invalid');
 });
 
@@ -92,8 +87,7 @@ async function executeNotifications(page: Page) {
   await page.goto(`${APP_URL}/admin/task-executions`);
   await page.getByRole('combobox', { name: '処理', exact: true }).click();
   await page.getByRole('option', { name: '業務通知の送信', exact: true }).click();
-  await page.getByRole('combobox', { name: '対象店舗', exact: true }).click();
-  await page.getByRole('option', { name: storeName, exact: true }).click();
+  await expect(page.getByRole('combobox', { name: '対象店舗', exact: true })).toHaveCount(0);
   await page.getByRole('combobox', { name: '実行主体', exact: true }).click();
   await page.getByRole('option', { name: serviceName, exact: true }).click();
   await page.getByLabel('対象日', { exact: true }).fill(new Date().toISOString().slice(0, 10));

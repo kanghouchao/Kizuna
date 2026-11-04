@@ -4,6 +4,7 @@ import com.kizuna.notificationdelivery.domain.DeliveryAttempt;
 import com.kizuna.notificationdelivery.domain.DeliveryAttemptRepository;
 import com.kizuna.notificationdelivery.domain.DeliveryStatus;
 import com.kizuna.notificationdelivery.domain.NotificationDeliveryRepository;
+import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.task.execution.TaskContext;
 import com.kizuna.task.execution.TaskHandler;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
@@ -45,18 +46,18 @@ public class NotificationDeliveryTask implements TaskHandler {
 
   @Override
   public boolean groupWide() {
-    return false;
+    return true;
   }
 
   @Override
   @Transactional(propagation = Propagation.MANDATORY)
   public long execute(TaskContext context) {
-    identities.requireService(
-        context.serviceUserId(), PermissionCode.TASK_EXECUTE, context.storeId());
-    var actor = identities.requireService(context.serviceUserId(), permission(), context.storeId());
+    if (context.storeId() != null) throw new ServiceException("通知の送信は店舗を指定せずに実行してください");
+    identities.requireService(context.serviceUserId(), PermissionCode.TASK_EXECUTE, null);
+    var actor = identities.requireService(context.serviceUserId(), permission(), null);
     var rows =
-        deliveries.findByStoreIdAndStatusAndScheduledAtLessThanEqualOrderByScheduledAtAscIdAsc(
-            context.storeId(), DeliveryStatus.QUEUED, OffsetDateTime.now(clock), Limit.of(100));
+        deliveries.findByStatusAndScheduledAtLessThanEqualOrderByScheduledAtAscIdAsc(
+            DeliveryStatus.QUEUED, OffsetDateTime.now(clock), Limit.of(100));
     for (var row : rows) {
       row.dispatch();
       var attempt =
@@ -70,11 +71,7 @@ public class NotificationDeliveryTask implements TaskHandler {
       audit.append(row, actor, "NOTIFICATION_DISPATCHED");
       events.publishEvent(
           new DeliveryDispatch(
-              row.getId(),
-              attempt.getId(),
-              context.serviceUserId(),
-              context.storeId(),
-              context.executionId()));
+              row.getId(), attempt.getId(), context.serviceUserId(), context.executionId()));
     }
     return rows.size();
   }

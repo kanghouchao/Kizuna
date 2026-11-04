@@ -1,8 +1,14 @@
 package com.kizuna;
 
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.implement;
+import static com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAnyPackage;
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.kizuna.notification.transport.ContactTransport;
 import com.kizuna.user.application.CredentialOperations;
+import com.tngtech.archunit.core.importer.ClassFileImporter;
+import com.tngtech.archunit.core.importer.ImportOption;
 import org.junit.jupiter.api.Test;
 import org.springframework.modulith.core.ApplicationModules;
 import org.springframework.modulith.docs.Documenter;
@@ -53,6 +59,23 @@ class ModularityTests {
         .extracting(type -> type.getSimpleName())
         .containsExactlyInAnyOrder(
             "OperationReceipts", "Fingerprint", "ReceiptKey", "Committed", "Receipt");
+  }
+
+  // チャネルの追加が送信正本を変えないよう、送信正本は送信手段の抽象だけを知り、その実装やメール基盤を参照しない。
+  @Test
+  void notificationDeliveryDependsOnNoConcreteChannel() {
+    var classes =
+        new ClassFileImporter()
+            .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)
+            .importPackages("com.kizuna");
+    noClasses()
+        .that()
+        .resideInAPackage("com.kizuna.notificationdelivery..")
+        .should()
+        .dependOnClassesThat(
+            implement(ContactTransport.class)
+                .or(resideInAnyPackage("org.springframework.mail..", "jakarta.mail..")))
+        .check(classes);
   }
 
   @Test

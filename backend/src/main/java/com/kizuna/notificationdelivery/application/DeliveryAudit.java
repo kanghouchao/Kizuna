@@ -17,12 +17,12 @@ public class DeliveryAudit {
     writer.append(
         new AuditChange(
             actor,
-            d.getStoreId(),
+            d.getAttributedStoreId(),
             action,
             "NOTIFICATION_DELIVERY",
             d.getId(),
             d.getSourceType().name(),
-            d.sourceId(),
+            d.getSourceId(),
             Map.of(),
             Map.of(
                 "status",

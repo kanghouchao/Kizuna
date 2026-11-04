@@ -18,9 +18,9 @@ public record DeliverySummary(
     return new DeliverySummary(
         d.getId(),
         d.getSourceType().name(),
-        d.sourceId(),
-        d.getChannel(),
-        d.getPurpose(),
+        d.getSourceId(),
+        d.getChannel().name(),
+        d.getPurpose().name(),
         d.getScheduledAt(),
         d.getStatus().name(),
         d.getAttemptCount(),

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -11,12 +12,15 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kizuna.notificationdelivery.application.ContactDecision;
 import com.kizuna.notificationdelivery.application.DeliveryView;
 import com.kizuna.notificationdelivery.application.NotificationService;
 import com.kizuna.notificationdelivery.domain.DeliveryAttempt;
+import com.kizuna.notificationdelivery.domain.DeliveryChannel;
 import com.kizuna.notificationdelivery.domain.DeliveryContent;
+import com.kizuna.notificationdelivery.domain.DeliveryPurpose;
+import com.kizuna.notificationdelivery.domain.DeliverySourceType;
 import com.kizuna.notificationdelivery.domain.NotificationDelivery;
-import com.kizuna.order.contact.BusinessContactDecision;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
@@ -41,6 +45,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
 /** handler が X-Store-ID で名乗られた店舗をそのまま service へ渡すことの単体テスト。 */
@@ -148,6 +153,53 @@ class NotificationDeliveryControllerTest {
   }
 
   @Test
+  @DisplayName("作成口は販促の通知を 400 で拒み、service を呼ばないこと")
+  @WithMockUser(authorities = {"PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_MANAGE"})
+  void creationRejectsMarketing() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    mockMvc
+        .perform(
+            post("/notification-deliveries")
+                .header("X-Store-ID", STORE_ID.toString())
+                .principal(currentUser())
+                .contentType("application/json")
+                .content(
+                    """
+                    {"source_type":"ORDER","source_id":"1","channel":"EMAIL","purpose":"MARKETING",
+                     "subject":"件名","body":"本文","scheduled_at":"2026-10-07T00:00:00Z",
+                     "dedupe_key":"promo"}
+                    """))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error").value("作成できる通知は業務連絡だけです"));
+
+    verify(notifications, never()).create(any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("作成口は未定義のチャネルを 400 で拒むこと")
+  @WithMockUser(authorities = {"PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_MANAGE"})
+  void creationRejectsUnknownChannel() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    mockMvc
+        .perform(
+            post("/notification-deliveries")
+                .header("X-Store-ID", STORE_ID.toString())
+                .principal(currentUser())
+                .contentType("application/json")
+                .content(
+                    """
+                    {"source_type":"ORDER","source_id":"1","channel":"SMS","purpose":"BUSINESS",
+                     "subject":"件名","body":"本文","scheduled_at":"2026-10-07T00:00:00Z",
+                     "dedupe_key":"sms"}
+                    """))
+        .andExpect(status().isBadRequest());
+
+    verify(notifications, never()).create(any(), any(), any());
+  }
+
+  @Test
   @DisplayName("通知一覧は新しい順を既定の並びとして名乗られた店舗で service を呼び、Page で返すこと")
   @WithMockUser(authorities = "PERM_NOTIFICATION_VIEW")
   void listIsAPageNewestFirst() throws Exception {
@@ -195,15 +247,15 @@ class NotificationDeliveryControllerTest {
         NotificationDelivery.draft(
             STORE_ID,
             new DeliveryContent(
-                DeliveryContent.SourceType.ORDER,
+                DeliverySourceType.ORDER,
                 "1",
-                "EMAIL",
-                "BUSINESS",
+                DeliveryChannel.EMAIL,
+                DeliveryPurpose.BUSINESS,
                 "件名",
                 "本文",
                 OffsetDateTime.parse("2026-10-07T09:00:00+09:00"),
                 "race"));
-    row.setId("101");
-    return new DeliveryView(row, BusinessContactDecision.ALLOWED, true);
+    ReflectionTestUtils.setField(row, "id", "101");
+    return new DeliveryView(row, ContactDecision.ALLOWED, true);
   }
 }

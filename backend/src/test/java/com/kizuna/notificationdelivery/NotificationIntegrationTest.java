@@ -7,6 +7,7 @@ import com.kizuna.audit.recording.AuditActor;
 import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.customer.contact.BusinessContactRestrictions;
 import com.kizuna.customer.contact.GuestContactImports;
+import com.kizuna.customer.contact.MarketingContacts;
 import com.kizuna.customer.domain.ContactPermissionStatus;
 import com.kizuna.customer.domain.ContactPurpose;
 import com.kizuna.customer.domain.ContactType;
@@ -14,17 +15,23 @@ import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerContact;
 import com.kizuna.customer.domain.CustomerContactRepository;
 import com.kizuna.customer.domain.CustomerRepository;
-import com.kizuna.notification.transport.EmailTransport;
+import com.kizuna.notification.transport.ContactTransport;
 import com.kizuna.notificationdelivery.api.dto.DeliveryResponse;
+import com.kizuna.notificationdelivery.application.ContactDecision;
 import com.kizuna.notificationdelivery.application.DeliveryAttempts;
+import com.kizuna.notificationdelivery.application.DeliveryContact;
 import com.kizuna.notificationdelivery.application.DeliveryDispatch;
 import com.kizuna.notificationdelivery.application.NotificationService;
+import com.kizuna.notificationdelivery.domain.DeliveryChannel;
 import com.kizuna.notificationdelivery.domain.DeliveryContent;
+import com.kizuna.notificationdelivery.domain.DeliveryPurpose;
+import com.kizuna.notificationdelivery.domain.DeliverySourceType;
 import com.kizuna.order.application.BusinessContactPermissions;
 import com.kizuna.order.application.GuestApplicationConsent;
 import com.kizuna.order.contact.BusinessContactPolicy;
 import com.kizuna.order.contact.OrderApplicationBusinessContact;
 import com.kizuna.order.contact.OrderBusinessContact;
+import com.kizuna.order.contact.SourceCustomers;
 import com.kizuna.order.domain.BusinessContactHistory;
 import com.kizuna.order.domain.BusinessContactHistoryRepository;
 import com.kizuna.order.domain.BusinessContactState;
@@ -138,8 +145,10 @@ class NotificationIntegrationTest {
 
   @BeforeEach
   void fixtures() {
+    // 送信の定期処理はグループ全体を掃くので、前の試験が残した送信待ちを次の試験に持ち越さない。
+    jdbc.update("delete from t_notification_deliveries");
     transport.results.clear();
-    transport.outcome = EmailTransport.Result.SENT;
+    transport.outcome = ContactTransport.Result.SENT;
     transport.crash = false;
     transport.afterSend = () -> {};
     String suffix = UUID.randomUUID().toString();
@@ -212,10 +221,10 @@ class NotificationIntegrationTest {
 
   private DeliveryContent content(String source) {
     return new DeliveryContent(
-        DeliveryContent.SourceType.APPLICATION,
+        DeliverySourceType.APPLICATION,
         source,
-        "EMAIL",
-        "BUSINESS",
+        DeliveryChannel.EMAIL,
+        DeliveryPurpose.BUSINESS,
         "受付確認",
         "機密な本文",
         OffsetDateTime.now().minusMinutes(1),
@@ -238,7 +247,7 @@ class NotificationIntegrationTest {
             "NOTIFICATION_DELIVER",
             UUID.randomUUID().toString(),
             serviceId,
-            storeId,
+            null,
             LocalDate.now(),
             LocalDate.now());
     assertThat(context.getBean(TaskExecutor.class).executeScheduled(command).execution().status())
@@ -328,7 +337,7 @@ class NotificationIntegrationTest {
 
   @Test
   void unavailableAndUnknownAreNotSentAndUnknownCannotRetry() throws Exception {
-    transport.outcome = EmailTransport.Result.UNAVAILABLE;
+    transport.outcome = ContactTransport.Result.UNAVAILABLE;
     var row = queue(draft());
     runTask();
     await(row.id(), "FAILED");
@@ -339,7 +348,7 @@ class NotificationIntegrationTest {
                 .getFirst()
                 .getFailureCode())
         .isEqualTo("UNAVAILABLE");
-    transport.outcome = EmailTransport.Result.UNKNOWN;
+    transport.outcome = ContactTransport.Result.UNKNOWN;
     var next = queue(draft());
     runTask();
     var unknown = await(next.id(), "UNKNOWN");
@@ -435,7 +444,7 @@ class NotificationIntegrationTest {
     long before = jdbc.queryForObject("select count(*) from event_publication", Long.class);
     tx.execute(
         status -> {
-          context.publishEvent(new DeliveryDispatch(row.id(), "123", serviceId, storeId, 1L));
+          context.publishEvent(new DeliveryDispatch(row.id(), "123", serviceId, 1L));
           status.setRollbackOnly();
           return null;
         });
@@ -471,8 +480,7 @@ class NotificationIntegrationTest {
     var event =
         jdbc.queryForObject(
             "select id,task_execution_id from t_notification_attempts where delivery_id=?",
-            (rs, n) ->
-                new DeliveryDispatch(row.id(), rs.getString(1), serviceId, storeId, rs.getLong(2)),
+            (rs, n) -> new DeliveryDispatch(row.id(), rs.getString(1), serviceId, rs.getLong(2)),
             row.id());
     var attempts = context.getBean(DeliveryAttempts.class);
     assertThat(attempts.claim(event)).isTrue();
@@ -490,7 +498,7 @@ class NotificationIntegrationTest {
             "NOTIFICATION_DELIVER",
             UUID.randomUUID().toString(),
             serviceId,
-            storeId,
+            null,
             LocalDate.now(),
             LocalDate.now());
     var actor = new AuditActor(operatorId, "STAFF", "通知担当");
@@ -576,10 +584,10 @@ class NotificationIntegrationTest {
     var source = order();
     var input =
         new DeliveryContent(
-            DeliveryContent.SourceType.ORDER,
+            DeliverySourceType.ORDER,
             source,
-            "EMAIL",
-            "BUSINESS",
+            DeliveryChannel.EMAIL,
+            DeliveryPurpose.BUSINESS,
             "受付確認",
             "本文",
             OffsetDateTime.now().minusMinutes(1),
@@ -608,8 +616,8 @@ class NotificationIntegrationTest {
         new DeliveryContent(
             input.sourceType(),
             source,
-            "EMAIL",
-            "BUSINESS",
+            DeliveryChannel.EMAIL,
+            DeliveryPurpose.BUSINESS,
             "確認",
             "本文",
             OffsetDateTime.now().minusMinutes(1),
@@ -622,48 +630,156 @@ class NotificationIntegrationTest {
   }
 
   @Test
-  void serviceCandidatesRespectTaskPermissionsAndTargetStoreWithoutGrantingExecution() {
+  void serviceCandidatesForGroupWideDeliveryRequireAllStoresWithoutGrantingExecution() {
     var options = context.getBean(TaskOptions.class);
-    jdbc.update("update t_users set store_scope_type='SPECIFIC_STORES' where id=?", serviceId);
-    jdbc.update("insert into t_user_stores(user_id,store_id) values (?,?)", serviceId, storeId);
     assertThat(
-            options
-                .candidates("NOTIFICATION_DELIVER", storeId, PageRequest.of(0, 100))
-                .getContent())
+            options.candidates("NOTIFICATION_DELIVER", null, PageRequest.of(0, 100)).getContent())
         .extracting(ServiceExecutionIdentityService.Candidate::id)
         .contains(serviceId);
-    assertThat(
-            options
-                .candidates("NOTIFICATION_DELIVER", otherStore, PageRequest.of(0, 100))
-                .getContent())
-        .extracting(ServiceExecutionIdentityService.Candidate::id)
-        .doesNotContain(serviceId);
-    assertThat(
-            options.candidates("SERVICE_IDENTITY_CHECK", null, PageRequest.of(0, 100)).getContent())
-        .extracting(ServiceExecutionIdentityService.Candidate::id)
-        .doesNotContain(serviceId);
     assertThat(options.taskTypes(email)).extracting(TaskOptions.TaskType::name).isSorted();
-    assertThat(
-            options.taskTypes(email).stream()
-                .filter(t -> t.name().equals("NOTIFICATION_DELIVER"))
-                .findFirst()
-                .orElseThrow()
-                .manualAllowed())
-        .isFalse();
+    var delivery =
+        options.taskTypes(email).stream()
+            .filter(t -> t.name().equals("NOTIFICATION_DELIVER"))
+            .findFirst()
+            .orElseThrow();
+    assertThat(delivery.manualAllowed()).isFalse();
+    assertThat(delivery.scope()).isEqualTo("PLATFORM");
     assertThat(
             options
                 .stores(PageRequest.of(0, 100, Sort.by(Store::getName, Store::getId)))
                 .getContent())
         .extracting(TaskOptions.StoreOption::id)
         .contains(storeId.toString());
-    assertThatThrownBy(() -> options.candidates("MISSING", storeId, PageRequest.of(0, 10)))
+    assertThatThrownBy(() -> options.candidates("MISSING", null, PageRequest.of(0, 10)))
         .isInstanceOf(ServiceException.class);
     assertThatThrownBy(
-            () -> options.candidates("NOTIFICATION_DELIVER", null, PageRequest.of(0, 10)))
+            () -> options.candidates("NOTIFICATION_DELIVER", storeId, PageRequest.of(0, 10)))
         .isInstanceOf(ServiceException.class);
-    assertThatThrownBy(
-            () -> options.candidates("NOTIFICATION_DELIVER", Long.MAX_VALUE, PageRequest.of(0, 10)))
-        .isInstanceOf(NotFoundException.class);
+    jdbc.update("update t_users set store_scope_type='SPECIFIC_STORES' where id=?", serviceId);
+    jdbc.update("insert into t_user_stores(user_id,store_id) values (?,?)", serviceId, storeId);
+    assertThat(
+            options.candidates("NOTIFICATION_DELIVER", null, PageRequest.of(0, 100)).getContent())
+        .extracting(ServiceExecutionIdentityService.Candidate::id)
+        .doesNotContain(serviceId);
+    assertThat(
+            options.candidates("SERVICE_IDENTITY_CHECK", null, PageRequest.of(0, 100)).getContent())
+        .extracting(ServiceExecutionIdentityService.Candidate::id)
+        .doesNotContain(serviceId);
+  }
+
+  @Test
+  void oneStorelessRunDeliversDueRowsOfEveryStore() throws Exception {
+    var here = queue(draft());
+    var source =
+        tx.execute(
+            status -> {
+              var row =
+                  OrderApplication.builder()
+                      .status(OrderApplicationStatus.PENDING)
+                      .businessDate(LocalDate.now())
+                      .contactEmail("other@example.invalid")
+                      .consentContact(
+                          new ContactSnapshot(null, null, "other@example.invalid", null))
+                      .contactConsent(
+                          new GuestContactConsent(
+                              "v1", "業務連絡に同意", "販促同意", true, false, OffsetDateTime.now()))
+                      .build();
+              row.setStoreId(otherStore);
+              return context.getBean(OrderApplicationRepository.class).saveAndFlush(row).getId();
+            });
+    var there =
+        DeliveryResponse.of(notifications.create(otherStore, email, content(source)).delivery());
+    notifications.queue(otherStore, email, there.id(), there.version(), "内容確認済み", false);
+    runTask();
+    await(here.id(), "SENT");
+    assertThat(DeliveryResponse.of(notifications.get(otherStore, email, there.id())).status())
+        .isEqualTo("SENT");
+    assertThat(transport.results)
+        .containsExactlyInAnyOrder("permitted@example.invalid", "other@example.invalid");
+  }
+
+  private String customerWithEmail(String address) {
+    return tx.execute(
+        status -> {
+          var newCustomer = Customer.builder().name("販促検証").build();
+          newCustomer.setStoreId(storeId);
+          var customer = context.getBean(CustomerRepository.class).saveAndFlush(newCustomer);
+          var contact =
+              CustomerContact.create(storeId, customer.getId(), ContactType.EMAIL, address);
+          contact.prefer(true);
+          contact.changePermission(ContactPurpose.BUSINESS, ContactPermissionStatus.ALLOWED);
+          context.getBean(CustomerContactRepository.class).saveAndFlush(contact);
+          return customer.getId();
+        });
+  }
+
+  private DeliveryContent marketing(DeliverySourceType type, String source) {
+    return new DeliveryContent(
+        type,
+        source,
+        DeliveryChannel.EMAIL,
+        DeliveryPurpose.MARKETING,
+        "ご案内",
+        "本文",
+        OffsetDateTime.now(),
+        UUID.randomUUID().toString());
+  }
+
+  @Test
+  void marketingFollowsCustomerLedgerConsentAndIsNotInferredFromOrderBusinessPermission() {
+    var resolver = context.getBean(DeliveryContact.class);
+    var order = order();
+    var business = resolver.resolve(storeId, marketing(DeliverySourceType.ORDER, order));
+    assertThat(business.decision()).isEqualTo(ContactDecision.NOT_ALLOWED);
+    var customer = customerWithEmail("ledger@example.invalid");
+    jdbc.update("update t_orders set customer_id=? where id=?", customer, order);
+    var unknown = resolver.resolve(storeId, marketing(DeliverySourceType.ORDER, order));
+    assertThat(unknown.decision()).isEqualTo(ContactDecision.NOT_ALLOWED);
+    jdbc.update(
+        "update t_customer_contacts set marketing_status='ALLOWED' where customer_id=?", customer);
+    var allowed = resolver.resolve(storeId, marketing(DeliverySourceType.ORDER, order));
+    assertThat(allowed)
+        .extracting(r -> r.decision(), r -> r.address())
+        .containsExactly(ContactDecision.ALLOWED, "ledger@example.invalid");
+    assertThat(
+            resolver
+                .resolve(storeId, marketing(DeliverySourceType.APPLICATION, guest()))
+                .decision())
+        .isEqualTo(ContactDecision.NOT_ALLOWED);
+    var application = guest();
+    jdbc.update("update t_order_applications set order_id=? where id=?", order, application);
+    assertThat(
+            resolver
+                .resolve(storeId, marketing(DeliverySourceType.APPLICATION, application))
+                .address())
+        .isEqualTo("ledger@example.invalid");
+  }
+
+  @Test
+  void dedupeKeyStaysUniqueAmongGroupLevelRows() {
+    var insert =
+        "insert into t_notification_deliveries(id,attributed_store_id,source_type,source_id,channel,purpose,subject,body,scheduled_at,dedupe_key,status,attempt_count) values (?,null,'ORDER','1','EMAIL','BUSINESS','件名','本文',now(),'group-key','DRAFT',0)";
+    jdbc.update(insert, UUID.randomUUID().toString().substring(0, 32));
+    assertThatThrownBy(() -> jdbc.update(insert, UUID.randomUUID().toString().substring(0, 32)))
+        .hasMessageContaining("uq_t_notification_deliveries_key");
+    jdbc.update("delete from t_notification_deliveries where dedupe_key='group-key'");
+  }
+
+  @Test
+  void deliveryTableHoldsAPolymorphicSourceAndEnumeratesNoChannelOrPurpose() {
+    assertThat(
+            jdbc.queryForList(
+                "select column_name from information_schema.columns where table_schema=current_schema() and table_name='t_notification_deliveries'",
+                String.class))
+        .contains("source_type", "source_id", "attributed_store_id")
+        .doesNotContain("order_id", "application_id", "store_id");
+    assertThat(
+            jdbc.queryForList(
+                "select conname from pg_constraint where conrelid='t_notification_deliveries'::regclass and contype in ('c','f')",
+                String.class))
+        .containsExactlyInAnyOrder(
+            "ck_t_notification_deliveries_status",
+            "fk_t_notification_deliveries_attributed_store_id");
   }
 
   static class DeferredEvents implements Executor {
@@ -679,11 +795,15 @@ class NotificationIntegrationTest {
     }
   }
 
-  static class FakeTransport implements EmailTransport {
+  static class FakeTransport implements ContactTransport {
     final List<String> results = new CopyOnWriteArrayList<>();
     volatile Result outcome = Result.SENT;
     volatile boolean crash;
     Runnable afterSend = () -> {};
+
+    public ContactType type() {
+      return ContactType.EMAIL;
+    }
 
     public boolean available() {
       return outcome != Result.UNAVAILABLE;
@@ -719,7 +839,9 @@ class NotificationIntegrationTest {
     GuestApplicationConsent.class,
     BusinessContactPolicy.class,
     BusinessContactRestrictions.class,
-    GuestContactImports.class
+    GuestContactImports.class,
+    SourceCustomers.class,
+    MarketingContacts.class
   })
   static class Config {
     @Bean
