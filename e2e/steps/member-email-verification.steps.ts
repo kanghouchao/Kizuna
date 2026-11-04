@@ -59,3 +59,34 @@ Then("登録したメールアドレスに確認画面のリンクつきの検�
   expect(mail.firstLink?.slice(0, prefix.length)).toBe(prefix);
   expect(mail.firstLink?.slice(prefix.length)).toMatch(/^[A-Za-z0-9_-]{43}$/);
 });
+
+When("届いた検証メールのリンクを開く", async ({ page, request }) => {
+  const mail = await latestMailTo(request, memberEmail);
+  // 登録で自動ログインしたタブのまま開く。確認端点は陳腐な Bearer を見ない。
+  await page.goto(mail.firstLink!);
+});
+
+Then("メールアドレスの確認が完了したと表示される", async ({ page }) => {
+  await expect(page.getByRole("heading", { name: "メールアドレスを確認しました" })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("link", { name: "ログイン画面へ" })).toBeVisible();
+});
+
+Then("会員ポータルを開き直すと未検証の案内が出ない", async ({ page }) => {
+  // 案内は /me が届くまで出ないので、/me の応答と描画を待ってから不在を確かめる（待たない不在の断言は空振りで通る）。
+  const me = page.waitForResponse(
+    response => response.request().method() === "GET" && response.url().endsWith("/api/me"),
+  );
+  await page.goto(`${APP_URL}/member/`);
+  expect((await (await me).json()).email_verified).toBe(true);
+  await expect(page.getByRole("heading", { level: 1, name: /さん$/ })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText("メールアドレスの確認が済んでいません")).toHaveCount(0);
+});
+
+When("壊れたトークンの確認リンクを開く", async ({ page }) => {
+  await page.goto(`${APP_URL}/auth/verify-email#not-a-token`);
+});
+
+Then("メールアドレスを確認できなかったと表示される", async ({ page }) => {
+  await expect(page.getByRole("heading", { name: "メールアドレスを確認できませんでした" })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText("確認リンクが無効か、有効期限が切れています。", { exact: false })).toBeVisible();
+});
