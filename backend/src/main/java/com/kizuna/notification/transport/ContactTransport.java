@@ -1,9 +1,11 @@
 package com.kizuna.notification.transport;
 
-import com.kizuna.customer.domain.ContactType;
-
-/** 連絡先種別ごとの送信手段。種別ごとに一つの実装を置き、送信正本は具体実装を知らない。 */
+/** チャネルごとの送信手段。チャネルごとに一つの実装を置き、送信正本は具体実装を知らない。 */
 public interface ContactTransport {
+  enum Channel {
+    EMAIL
+  }
+
   enum Result {
     SENT,
     UNAVAILABLE,
@@ -11,7 +13,7 @@ public interface ContactTransport {
     UNKNOWN
   }
 
-  ContactType type();
+  Channel type();
 
   boolean available();
 

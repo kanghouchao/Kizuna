@@ -9,7 +9,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.audit.recording.AuditActor;
-import com.kizuna.customer.domain.ContactType;
 import com.kizuna.notification.transport.ContactTransport;
 import com.kizuna.notificationdelivery.application.ContactDecision;
 import com.kizuna.notificationdelivery.application.DeliveryAttempts;
@@ -67,7 +66,7 @@ class NotificationApplicationTest {
 
   private static DeliveryTransports transports() {
     var email = mock(ContactTransport.class);
-    when(email.type()).thenReturn(ContactType.EMAIL);
+    when(email.type()).thenReturn(ContactTransport.Channel.EMAIL);
     return new DeliveryTransports(List.of(email));
   }
 

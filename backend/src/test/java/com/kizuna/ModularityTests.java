@@ -61,6 +61,15 @@ class ModularityTests {
             "OperationReceipts", "Fingerprint", "ReceiptKey", "Committed", "Receipt");
   }
 
+  // 送信手段は会員登録などの業務モジュールからも直接呼ばれるので、業務モジュールを参照すると依存の環ができる。
+  @Test
+  void notificationDependsOnNoBusinessModule() {
+    var notification = modules.getModuleByName("notification").orElseThrow();
+    assertThat(notification.getDirectDependencies(modules).uniqueModules())
+        .extracting(module -> module.getIdentifier().toString())
+        .containsExactly("settings");
+  }
+
   // チャネルの追加が送信正本を変えないよう、送信正本は送信手段の抽象だけを知り、その実装やメール基盤を参照しない。
   @Test
   void notificationDeliveryDependsOnNoConcreteChannel() {

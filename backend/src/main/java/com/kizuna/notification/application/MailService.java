@@ -1,6 +1,5 @@
 package com.kizuna.notification.application;
 
-import com.kizuna.customer.domain.ContactType;
 import com.kizuna.notification.transport.ContactTransport;
 import com.kizuna.settings.application.SmtpSettings;
 import com.kizuna.settings.application.SystemConfigService;
@@ -30,8 +29,8 @@ public class MailService implements ContactTransport {
   }
 
   @Override
-  public ContactType type() {
-    return ContactType.EMAIL;
+  public Channel type() {
+    return Channel.EMAIL;
   }
 
   @Override
