@@ -127,7 +127,7 @@ class DeliveryDomainTest {
         .isInstanceOf(ServiceException.class);
     var marketing =
         new DeliveryContent(
-            DeliverySourceType.ORDER,
+            DeliverySourceType.MEMBER,
             "1",
             DeliveryChannel.EMAIL,
             DeliveryPurpose.MARKETING,
@@ -136,6 +136,11 @@ class DeliveryDomainTest {
             OffsetDateTime.now(),
             "a");
     assertThat(NotificationDelivery.draft(null, marketing).getAttributedStoreId()).isNull();
+    // 会員宛はグループ級だけ、受注・ゲスト申請は店舗の行だけ。
+    assertThatThrownBy(() -> NotificationDelivery.draft(7L, marketing))
+        .isInstanceOf(ServiceException.class);
+    assertThatThrownBy(() -> NotificationDelivery.draft(null, content("本文")))
+        .isInstanceOf(ServiceException.class);
     assertThatThrownBy(() -> content(" ")).isInstanceOf(ServiceException.class);
     assertThatThrownBy(
             () -> content("本文").validateNewSchedule(OffsetDateTime.parse("2020-01-01T00:00Z")))

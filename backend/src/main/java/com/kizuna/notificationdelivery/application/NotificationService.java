@@ -11,6 +11,7 @@ import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.user.domain.PermissionCode;
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -33,14 +34,15 @@ public class NotificationService {
   @Transactional
   public Created create(Long storeId, String email, DeliveryContent content) {
     var actor = actors.require(storeId, email, PermissionCode.NOTIFICATION_MANAGE);
-    var existing = deliveries.findByAttributedStoreIdAndDedupeKey(storeId, content.dedupeKey());
+    var existing = byKey(storeId, content.dedupeKey());
     if (existing.isPresent()) {
       existing.get().requireSame(content);
       return new Created(response(storeId, existing.get()), false);
     }
     content.validateNewSchedule(OffsetDateTime.now(clock));
+    var draft = NotificationDelivery.draft(storeId, content);
     contacts.resolve(storeId, content);
-    var row = deliveries.saveAndFlush(NotificationDelivery.draft(storeId, content));
+    var row = deliveries.saveAndFlush(draft);
     audit.append(row, actor, "NOTIFICATION_CREATED");
     return new Created(response(storeId, row), true);
   }
@@ -49,9 +51,7 @@ public class NotificationService {
   public Created replay(Long storeId, String email, DeliveryContent content) {
     actors.require(storeId, email, PermissionCode.NOTIFICATION_MANAGE);
     var row =
-        deliveries
-            .findByAttributedStoreIdAndDedupeKey(storeId, content.dedupeKey())
-            .orElseThrow(() -> new NotFoundException("通知が見つかりません"));
+        byKey(storeId, content.dedupeKey()).orElseThrow(() -> new NotFoundException("通知が見つかりません"));
     row.requireSame(content);
     return new Created(response(storeId, row), false);
   }
@@ -59,7 +59,9 @@ public class NotificationService {
   @Transactional(readOnly = true)
   public Page<NotificationDelivery> list(Long storeId, String email, Pageable pageable) {
     actors.require(storeId, email, PermissionCode.NOTIFICATION_VIEW);
-    return deliveries.findByAttributedStoreId(storeId, pageable);
+    return storeId == null
+        ? deliveries.findByAttributedStoreIdIsNull(pageable)
+        : deliveries.findByAttributedStoreId(storeId, pageable);
   }
 
   @Transactional(readOnly = true)
@@ -72,10 +74,7 @@ public class NotificationService {
   public DeliveryView queue(
       Long storeId, String email, String id, Long version, String reason, boolean retry) {
     var actor = actors.require(storeId, email, PermissionCode.NOTIFICATION_SEND);
-    var row =
-        deliveries
-            .findByIdAndAttributedStoreIdForUpdate(id, storeId)
-            .orElseThrow(() -> new NotFoundException("通知が見つかりません"));
+    var row = lock(storeId, id);
     contacts.resolve(storeId, row.content());
     row.queue(version, reason, retry);
     deliveries.flush();
@@ -92,10 +91,7 @@ public class NotificationService {
       DeliveryResolution outcome,
       String reason) {
     var actor = actors.require(storeId, email, PermissionCode.NOTIFICATION_SEND);
-    var row =
-        deliveries
-            .findByIdAndAttributedStoreIdForUpdate(id, storeId)
-            .orElseThrow(() -> new NotFoundException("通知が見つかりません"));
+    var row = lock(storeId, id);
     row.resolve(version, outcome, reason);
     deliveries.flush();
     attempts.saveAndFlush(
@@ -111,9 +107,24 @@ public class NotificationService {
     return attempts.findByDeliveryId(id, pageable);
   }
 
+  // storeId が null ならグループ級の行。NotificationActors が ALL_STORES を確かめた後にだけ届く。
+  private Optional<NotificationDelivery> byKey(Long storeId, String key) {
+    return storeId == null
+        ? deliveries.findByAttributedStoreIdIsNullAndDedupeKey(key)
+        : deliveries.findByAttributedStoreIdAndDedupeKey(storeId, key);
+  }
+
   private NotificationDelivery require(Long storeId, String id) {
-    return deliveries
-        .findByIdAndAttributedStoreId(id, storeId)
+    return (storeId == null
+            ? deliveries.findByIdAndAttributedStoreIdIsNull(id)
+            : deliveries.findByIdAndAttributedStoreId(id, storeId))
+        .orElseThrow(() -> new NotFoundException("通知が見つかりません"));
+  }
+
+  private NotificationDelivery lock(Long storeId, String id) {
+    return (storeId == null
+            ? deliveries.findByIdAndAttributedStoreIdIsNullForUpdate(id)
+            : deliveries.findByIdAndAttributedStoreIdForUpdate(id, storeId))
         .orElseThrow(() -> new NotFoundException("通知が見つかりません"));
   }
 

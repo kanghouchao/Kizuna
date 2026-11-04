@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import com.kizuna.notificationdelivery.application.NotificationActors;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.RoleRepository;
+import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -44,9 +45,21 @@ class NotificationActorsTest {
   }
 
   @Test
-  void missingStoreIsDeniedEvenWithEveryGrant() {
+  void groupRowsNeedAllStoresEvenWhenEveryStoreIsAuthorized() {
     when(user.authorizes(null)).thenReturn(true);
+    when(user.getStoreScopeType()).thenReturn(StoreScopeType.SPECIFIC_STORES);
     assertThatThrownBy(() -> actors.require(null, "actor", PermissionCode.NOTIFICATION_MANAGE))
+        .isInstanceOf(AccessDeniedException.class);
+
+    when(user.getStoreScopeType()).thenReturn(StoreScopeType.ALL_STORES);
+    assertThat(actors.require(null, "actor", PermissionCode.NOTIFICATION_MANAGE).id())
+        .isEqualTo(1L);
+  }
+
+  @Test
+  void groupRowsStillNeedTheNotificationPermissions() {
+    when(user.getStoreScopeType()).thenReturn(StoreScopeType.ALL_STORES);
+    assertThatThrownBy(() -> actors.require(null, "actor", PermissionCode.NOTIFICATION_SEND))
         .isInstanceOf(AccessDeniedException.class);
   }
 }

@@ -1,6 +1,7 @@
 package com.kizuna.notificationdelivery.domain;
 
 import com.kizuna.shared.exception.ConflictException;
+import com.kizuna.shared.exception.ServiceException;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -57,7 +58,10 @@ public class NotificationDelivery extends DeliveryRecord {
   @Column(length = 500)
   private String reason;
 
+  /** 会員宛はグループ級（帰属店舗 null）、受注・ゲスト申請は店舗の行。店舗の職員が会員へ送る経路を作らない。 */
   public static NotificationDelivery draft(Long attributedStoreId, DeliveryContent input) {
+    if ((input.sourceType() == DeliverySourceType.MEMBER) != (attributedStoreId == null))
+      throw new ServiceException("会員宛の通知はグループで、受注・ゲスト申請の通知は店舗で作成してください");
     var row = new NotificationDelivery();
     row.attributedStoreId = attributedStoreId;
     row.sourceType = input.sourceType();

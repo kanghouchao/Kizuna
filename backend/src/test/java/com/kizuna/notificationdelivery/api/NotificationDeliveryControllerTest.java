@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -24,12 +26,16 @@ import com.kizuna.notificationdelivery.domain.DeliverySourceType;
 import com.kizuna.notificationdelivery.domain.DeliveryStatus;
 import com.kizuna.notificationdelivery.domain.NotificationDelivery;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import org.hibernate.exception.ConstraintViolationException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -44,11 +50,15 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 /** handler が X-Store-ID で名乗られた店舗をそのまま service へ渡すことの単体テスト。 */
 @WebMvcTest(NotificationDeliveryController.class)
@@ -334,6 +344,92 @@ class NotificationDeliveryControllerTest {
         .andExpect(jsonPath("$.content[0].task_execution_id").doesNotExist())
         .andExpect(jsonPath("$.content[0].reason").value("未配信を確認"))
         .andExpect(jsonPath("$.content[0].actor_name").doesNotExist());
+  }
+
+  /** 店舗集合の解決は JwtAuthenticationToken の主体にだけ掛かるので、Bearer の職員を文脈と principal の両方に載せる。 */
+  private static RequestPostProcessor staff(String... permissions) {
+    var token =
+        new JwtAuthenticationToken(
+            Jwt.withTokenValue("staff").header("alg", "none").subject("user").build(),
+            Arrays.stream(permissions).map(SimpleGrantedAuthority::new).toList(),
+            "user");
+    SecurityContextHolder.getContext().setAuthentication(token);
+    return request -> {
+      request.setUserPrincipal(token);
+      return request;
+    };
+  }
+
+  @AfterEach
+  void clearAuthentication() {
+    SecurityContextHolder.clearContext();
+  }
+
+  @Test
+  @DisplayName("店舗を名乗らない一覧は、全店舗を授権された職員ならグループ級（null）で service を呼ぶこと")
+  void groupListPassesNoStoreForAllStoreStaff() throws Exception {
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(true, Set.of()));
+    when(notifications.list(isNull(), eq("user"), any()))
+        .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 50), 0));
+
+    mockMvc
+        .perform(get("/notification-deliveries").with(staff("PERM_NOTIFICATION_VIEW")))
+        .andExpect(status().isOk());
+
+    verify(notifications).list(isNull(), eq("user"), any());
+  }
+
+  @Test
+  @DisplayName("全店舗を授権された職員はグループ級の通知へ送信予約できること")
+  void groupQueueReachesServiceForAllStoreStaff() throws Exception {
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(true, Set.of()));
+    when(notifications.queue(null, "user", "101", 0L, "確認済み", false)).thenReturn(view());
+
+    mockMvc
+        .perform(
+            post("/notification-deliveries/101/queue")
+                .with(staff("PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_SEND"))
+                .contentType("application/json")
+                .content("{\"version\":0,\"reason\":\"確認済み\"}"))
+        .andExpect(status().isOk());
+  }
+
+  @Test
+  @DisplayName("全店舗を授権されていない職員は、どの端点でもグループ級の通知に到達できないこと")
+  void groupRowsAreForbiddenWithoutAllStores() throws Exception {
+    for (StoreScope scope : Arrays.asList(new StoreScope(false, Set.of(STORE_ID)), null)) {
+      when(storeScopeResolver.resolve(any())).thenReturn(scope);
+      var all =
+          staff("PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_MANAGE", "PERM_NOTIFICATION_SEND");
+      var action = "{\"version\":0,\"reason\":\"確認済み\"}";
+      for (var request :
+          List.of(
+              get("/notification-deliveries").with(all),
+              get("/notification-deliveries/101").with(all),
+              get("/notification-deliveries/101/attempts").with(all),
+              post("/notification-deliveries/101/queue")
+                  .with(all)
+                  .contentType("application/json")
+                  .content(action),
+              post("/notification-deliveries/101/retries")
+                  .with(all)
+                  .contentType("application/json")
+                  .content(action),
+              post("/notification-deliveries/101/resolutions")
+                  .with(all)
+                  .contentType("application/json")
+                  .content("{\"version\":0,\"outcome\":\"SENT\",\"reason\":\"確認\"}"),
+              post("/notification-deliveries")
+                  .with(all)
+                  .contentType("application/json")
+                  .content(
+                      "{\"source_type\":\"MEMBER\",\"source_id\":\"1\",\"channel\":\"EMAIL\","
+                          + "\"purpose\":\"BUSINESS\",\"subject\":\"件名\",\"body\":\"本文\","
+                          + "\"scheduled_at\":\"2026-10-07T09:00:00+09:00\",\"dedupe_key\":\"k\"}")))
+        mockMvc.perform(request).andExpect(status().isForbidden());
+    }
+
+    verifyNoInteractions(notifications);
   }
 
   private static DeliveryView view() {

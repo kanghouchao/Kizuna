@@ -240,6 +240,27 @@ class MenuServiceTest {
     assertThat(menuService.getMyMenus()).extracting(MenuNode::name).containsExactly("Dashboard");
   }
 
+  @Test
+  void getMyMenus_showsGroupLeafSharingAPermissionOnlyToAllStoreStaff() {
+    var group = new Menu();
+    group.setLabel("Customers");
+    group.setChildren(
+        List.of(
+            menu("StoreNotifications", "TASK_MANAGE"),
+            allStores(menu("GroupNotifications", "TASK_MANAGE"))));
+    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(List.of(group));
+
+    authenticateTaskOperator("SPECIFIC_STORES");
+    assertThat(menuService.getMyMenus().getFirst().items())
+        .extracting(MenuNode::name)
+        .containsExactly("StoreNotifications");
+
+    authenticateTaskOperator("ALL_STORES");
+    assertThat(menuService.getMyMenus().getFirst().items())
+        .extracting(MenuNode::name)
+        .containsExactly("StoreNotifications", "GroupNotifications");
+  }
+
   /** 作用域はトークンでなく保持器（要求ごとの解決器）が持つ。null は解決不能（CAST / MEMBER 等）。 */
   private void authenticateTaskOperator(String scopeType) {
     var builder =
@@ -263,7 +284,14 @@ class MenuServiceTest {
   private List<Menu> taskMenus() {
     var group = new Menu();
     group.setLabel("Operations");
-    group.setChildren(List.of(menu("Executions", "TASK_MANAGE"), menu("Audit", "AUDIT_VIEW")));
+    group.setChildren(
+        List.of(
+            allStores(menu("Executions", "TASK_MANAGE")), allStores(menu("Audit", "AUDIT_VIEW"))));
     return List.of(menu("Dashboard", null), group);
+  }
+
+  private static Menu allStores(Menu menu) {
+    menu.setRequiresAllStores(true);
+    return menu;
   }
 }

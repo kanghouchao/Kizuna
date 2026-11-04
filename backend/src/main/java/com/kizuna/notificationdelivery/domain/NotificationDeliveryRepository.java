@@ -26,6 +26,17 @@ public interface NotificationDeliveryRepository extends Repository<NotificationD
   @Query("select d from NotificationDelivery d where d.id=:id and d.attributedStoreId=:storeId")
   Optional<NotificationDelivery> findByIdAndAttributedStoreIdForUpdate(String id, Long storeId);
 
+  // グループ級（帰属店舗 null）の行。店舗の行とは別の照会で引き、null 許容の単一条件にしない。
+  Optional<NotificationDelivery> findByAttributedStoreIdIsNullAndDedupeKey(String key);
+
+  Page<NotificationDelivery> findByAttributedStoreIdIsNull(Pageable pageable);
+
+  Optional<NotificationDelivery> findByIdAndAttributedStoreIdIsNull(String id);
+
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select d from NotificationDelivery d where d.id=:id and d.attributedStoreId is null")
+  Optional<NotificationDelivery> findByIdAndAttributedStoreIdIsNullForUpdate(String id);
+
   /** 送信の定期処理（グループ全体）が引き渡した行を、その行の ID で取る。店舗を跨ぐのは意図どおり。 */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select d from NotificationDelivery d where d.id=:id")

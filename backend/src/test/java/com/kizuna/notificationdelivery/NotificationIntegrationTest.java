@@ -15,6 +15,10 @@ import com.kizuna.customer.domain.Customer;
 import com.kizuna.customer.domain.CustomerContact;
 import com.kizuna.customer.domain.CustomerContactRepository;
 import com.kizuna.customer.domain.CustomerRepository;
+import com.kizuna.member.application.MemberLoginAddress;
+import com.kizuna.member.application.MemberLookupService;
+import com.kizuna.membernotification.application.MemberNotificationSettingService;
+import com.kizuna.membernotification.contact.MemberContacts;
 import com.kizuna.notification.transport.ContactTransport;
 import com.kizuna.notificationdelivery.api.dto.DeliveryResponse;
 import com.kizuna.notificationdelivery.application.ContactDecision;
@@ -27,6 +31,7 @@ import com.kizuna.notificationdelivery.domain.DeliveryContent;
 import com.kizuna.notificationdelivery.domain.DeliveryPurpose;
 import com.kizuna.notificationdelivery.domain.DeliveryResolution;
 import com.kizuna.notificationdelivery.domain.DeliverySourceType;
+import com.kizuna.notificationdelivery.domain.NotificationDelivery;
 import com.kizuna.order.application.BusinessContactPermissions;
 import com.kizuna.order.application.GuestApplicationConsent;
 import com.kizuna.order.contact.BusinessContactPolicy;
@@ -65,6 +70,7 @@ import com.kizuna.task.application.TaskRegistry;
 import com.kizuna.task.execution.TaskCommand;
 import com.kizuna.task.execution.TaskExecutor;
 import com.kizuna.user.application.ActorIdentityService;
+import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
 import java.time.Clock;
 import java.time.Duration;
@@ -905,6 +911,201 @@ class NotificationIntegrationTest {
             "fk_t_notification_deliveries_attributed_store_id");
   }
 
+  private long member(String address, String business, String marketing, boolean withdrawn) {
+    var user =
+        jdbc.queryForObject(
+            "insert into t_users(display_name,user_type,store_scope_type,email,password) values ('検証会員','MEMBER','SPECIFIC_STORES',?,'x') returning id",
+            Long.class,
+            address);
+    var member =
+        jdbc.queryForObject(
+            "insert into t_members(member_code,user_id,withdrawn_at,withdrawal_reason,withdrawn_by) values (?,?,?,?,?) returning id",
+            Long.class,
+            UUID.randomUUID().toString().substring(0, 20),
+            user,
+            withdrawn ? OffsetDateTime.now() : null,
+            withdrawn ? "検証" : null,
+            withdrawn ? user : null);
+    if (business != null)
+      jdbc.update(
+          "insert into t_member_notification_settings(member_id,purpose,status) values (?,'BUSINESS',?)",
+          member,
+          business);
+    if (marketing != null)
+      jdbc.update(
+          "insert into t_member_notification_settings(member_id,purpose,status) values (?,'MARKETING',?)",
+          member,
+          marketing);
+    return member;
+  }
+
+  private DeliveryContent memberContent(long member, DeliveryPurpose purpose) {
+    return new DeliveryContent(
+        DeliverySourceType.MEMBER,
+        Long.toString(member),
+        DeliveryChannel.EMAIL,
+        purpose,
+        "期限のご案内",
+        "会員宛の本文",
+        OffsetDateTime.now().minusMinutes(1),
+        UUID.randomUUID().toString());
+  }
+
+  private DeliveryResponse groupQueued(long member) {
+    var row =
+        DeliveryResponse.of(
+            notifications
+                .create(null, email, memberContent(member, DeliveryPurpose.BUSINESS))
+                .delivery());
+    return DeliveryResponse.of(
+        notifications.queue(null, email, row.id(), row.version(), "内容確認済み", false));
+  }
+
+  private DeliveryResponse awaitGroup(String id, String status) throws Exception {
+    long deadline = System.nanoTime() + Duration.ofSeconds(15).toNanos();
+    DeliveryResponse row;
+    do {
+      row = DeliveryResponse.of(notifications.get(null, email, id));
+      if (row.status().equals(status)) return row;
+      Thread.sleep(20);
+    } while (System.nanoTime() < deadline);
+    assertThat(row.status()).isEqualTo(status);
+    return row;
+  }
+
+  private String lastFailure(String id) {
+    return notifications
+        .history(null, email, id, PageRequest.of(0, 1, Sort.by("id").descending()))
+        .getContent()
+        .getFirst()
+        .getFailureCode();
+  }
+
+  @Test
+  void memberNoticeIsSentOnlyToMembersWhoAllowedBusinessContact() throws Exception {
+    var allowed = groupQueued(member("allowed@example.invalid", "ALLOWED", null, false));
+    var unconfirmed = groupQueued(member("unknown@example.invalid", null, null, false));
+    var denied = groupQueued(member("denied@example.invalid", "DENIED", "ALLOWED", false));
+    var withdrawn = groupQueued(member("left@example.invalid", "ALLOWED", null, true));
+    runTask();
+
+    assertThat(awaitGroup(allowed.id(), "SENT").contactDecision()).isEqualTo("ALLOWED");
+    for (var row : List.of(unconfirmed, denied, withdrawn)) {
+      assertThat(awaitGroup(row.id(), "BLOCKED").contactDecision()).isEqualTo("NOT_ALLOWED");
+      assertThat(lastFailure(row.id())).isEqualTo("CONTACT_NOT_ALLOWED");
+    }
+    assertThat(transport.results).containsExactly("allowed@example.invalid");
+  }
+
+  @Test
+  void memberMarketingFollowsOnlyTheMarketingSetting() {
+    var resolver = context.getBean(DeliveryContact.class);
+    var businessOnly = member("biz@example.invalid", "ALLOWED", null, false);
+    assertThat(
+            resolver
+                .resolve(null, marketing(DeliverySourceType.MEMBER, Long.toString(businessOnly)))
+                .decision())
+        .isEqualTo(ContactDecision.NOT_ALLOWED);
+    var marketingOnly = member("promo@example.invalid", "DENIED", "ALLOWED", false);
+    assertThat(
+            resolver.resolve(
+                null, marketing(DeliverySourceType.MEMBER, Long.toString(marketingOnly))))
+        .extracting(r -> r.decision(), r -> r.address())
+        .containsExactly(ContactDecision.ALLOWED, "promo@example.invalid");
+    var refused = member("no-promo@example.invalid", "ALLOWED", "DENIED", false);
+    assertThat(
+            resolver
+                .resolve(null, marketing(DeliverySourceType.MEMBER, Long.toString(refused)))
+                .decision())
+        .isEqualTo(ContactDecision.NOT_ALLOWED);
+  }
+
+  @Test
+  void groupRowsAreSeparateFromStoreRowsAndNeedAllStores() {
+    var group = groupQueued(member("group@example.invalid", "ALLOWED", null, false));
+    var store = draft();
+    assertThat(notifications.list(storeId, email, PageRequest.of(0, 50)).getContent())
+        .extracting(NotificationDelivery::getId)
+        .containsExactly(store.id());
+    assertThat(notifications.list(null, email, PageRequest.of(0, 50)).getContent())
+        .extracting(NotificationDelivery::getId)
+        .containsExactly(group.id());
+    assertThatThrownBy(() -> notifications.get(storeId, email, group.id()))
+        .isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> notifications.get(null, email, store.id()))
+        .isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(
+            () -> notifications.queue(storeId, email, group.id(), group.version(), "店舗から操作", true))
+        .isInstanceOf(NotFoundException.class);
+
+    var scoped =
+        jdbc.queryForObject(
+            "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'店舗の通知担当','STAFF','SPECIFIC_STORES') returning id",
+            Long.class,
+            "scoped-" + email);
+    jdbc.update("insert into t_user_stores(user_id,store_id) values (?,?)", scoped, storeId);
+    jdbc.update(
+        "insert into t_user_roles(user_id,role_id) select ?,role_id from t_user_roles where user_id=?",
+        scoped,
+        operatorId);
+    assertThat(notifications.list(storeId, "scoped-" + email, PageRequest.of(0, 50))).hasSize(1);
+    assertThatThrownBy(() -> notifications.list(null, "scoped-" + email, PageRequest.of(0, 50)))
+        .isInstanceOf(AccessDeniedException.class);
+    assertThatThrownBy(() -> notifications.get(null, "scoped-" + email, group.id()))
+        .isInstanceOf(AccessDeniedException.class);
+  }
+
+  @Test
+  void memberSourceIsGroupOnlyAndMustExist() {
+    var member = member("exists@example.invalid", null, null, false);
+    assertThatThrownBy(
+            () ->
+                notifications.create(
+                    storeId, email, memberContent(member, DeliveryPurpose.BUSINESS)))
+        .isInstanceOf(ServiceException.class);
+    assertThatThrownBy(() -> notifications.create(null, email, content(guest())))
+        .isInstanceOf(ServiceException.class);
+    assertThatThrownBy(
+            () ->
+                notifications.create(
+                    null, email, memberContent(Long.MAX_VALUE, DeliveryPurpose.BUSINESS)))
+        .isInstanceOf(NotFoundException.class);
+    assertThat(jdbc.queryForObject("select count(*) from t_notification_deliveries", Long.class))
+        .isZero();
+  }
+
+  @Test
+  void groupRowsCanBeRetriedAndJudgedWithoutLeakingTheAddress() throws Exception {
+    var member = member("later@example.invalid", null, null, false);
+    var blocked = groupQueued(member);
+    runTask();
+    blocked = awaitGroup(blocked.id(), "BLOCKED");
+    jdbc.update(
+        "insert into t_member_notification_settings(member_id,purpose,status) values (?,'BUSINESS','ALLOWED')",
+        member);
+    notifications.queue(null, email, blocked.id(), blocked.version(), "本人が許可したので再送", true);
+    transport.outcome = ContactTransport.Result.UNKNOWN;
+    runTask();
+    var unknown = awaitGroup(blocked.id(), "UNKNOWN");
+    var judged =
+        DeliveryResponse.of(
+            notifications.resolve(
+                null, email, unknown.id(), unknown.version(), DeliveryResolution.SENT, "受信を確認"));
+    assertThat(judged.status()).isEqualTo("SENT");
+    assertThat(transport.results).containsExactly("later@example.invalid");
+
+    var audits =
+        jdbc.queryForList(
+            "select originating_store_id,source_type,after_values::text as after from t_audit_events where target_id=?",
+            blocked.id());
+    assertThat(audits).isNotEmpty();
+    for (var audit : audits) {
+      assertThat(audit.get("originating_store_id")).isNull();
+      assertThat((String) audit.get("after"))
+          .doesNotContain("later@example.invalid", "会員宛の本文", "期限のご案内");
+    }
+  }
+
   static class DeferredEvents implements Executor {
     private final ConcurrentLinkedQueue<Runnable> tasks = new ConcurrentLinkedQueue<>();
 
@@ -964,7 +1165,12 @@ class NotificationIntegrationTest {
     BusinessContactRestrictions.class,
     GuestContactImports.class,
     SourceCustomers.class,
-    MarketingContacts.class
+    MarketingContacts.class,
+    MemberContacts.class,
+    MemberLoginAddress.class,
+    MemberNotificationSettingService.class,
+    MemberLookupService.class,
+    BusinessAudit.class
   })
   static class Config {
     @Bean
