@@ -20,6 +20,8 @@ public record RemunerationStatementResponse(
     Long guaranteeTotal,
     long bonusTotal,
     Long total,
+    int acceptedDays,
+    int acceptableDays,
     List<Day> days,
     Page<OrderRemunerationFacts.Item> orders,
     Page<BonusItem> bonusAwards) {
@@ -36,6 +38,8 @@ public record RemunerationStatementResponse(
         s.guaranteeTotal(),
         s.bonusTotal(),
         s.total(),
+        s.acceptedDays(),
+        s.acceptableDays(),
         s.days(),
         s.orders(),
         s.bonusAwards());

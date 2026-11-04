@@ -324,3 +324,112 @@ databaseChangeLog:
         - sql:
             sql: |
               CREATE INDEX idx_t_remuneration_changes_resource ON t_remuneration_changes(store_id, resource_type, resource_id, created_at, id);
+  - changeSet:
+      id: store-v0100-018-statement_acceptances
+      author: kizuna
+      changes:
+        - createTable:
+            tableName: t_statement_acceptances
+            columns:
+              - column:
+                  name: id
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_statement_acceptances
+              - column:
+                  name: store_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: person_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: business_date
+                  type: DATE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: accepted_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: content_digest
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: order_amount
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: guarantee_amount
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: bonus_amount
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: content
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+        # 承諾は本人が認めた時点の記録で、店舗の削除に連鎖させて消さない（行がある店舗は削除を拒む）。
+        - addForeignKeyConstraint:
+            baseTableName: t_statement_acceptances
+            baseColumnNames: store_id
+            referencedTableName: t_stores
+            referencedColumnNames: id
+            constraintName: fk_t_statement_acceptances_store_id
+            onDelete: NO ACTION
+        - addForeignKeyConstraint:
+            baseTableName: t_statement_acceptances
+            baseColumnNames: person_id
+            referencedTableName: t_casts
+            referencedColumnNames: id
+            constraintName: fk_t_statement_acceptances_person_id
+            onDelete: NO ACTION
+        - sql:
+            sql: |
+              CREATE UNIQUE INDEX uq_t_statement_acceptances_content ON t_statement_acceptances(store_id, person_id, business_date, content_digest);
+              ALTER TABLE t_statement_acceptances ADD CONSTRAINT ck_t_statement_acceptances_amount CHECK (order_amount BETWEEN 0 AND 9007199254740991 AND guarantee_amount BETWEEN 0 AND 9007199254740991 AND bonus_amount BETWEEN 0 AND 9007199254740991);
+        - sql:
+            splitStatements: false
+            sql: |-
+              CREATE FUNCTION reject_statement_acceptance_mutation() RETURNS trigger LANGUAGE plpgsql AS $$
+              BEGIN
+                RAISE EXCEPTION '明細の承諾は変更できません' USING ERRCODE = '55000';
+              END;
+              $$;
+        - sql:
+            sql: >-
+              CREATE TRIGGER tr_t_statement_acceptances_immutable
+              BEFORE UPDATE OR DELETE OR TRUNCATE ON t_statement_acceptances
+              FOR EACH STATEMENT EXECUTE FUNCTION reject_statement_acceptance_mutation();

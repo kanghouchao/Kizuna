@@ -9,6 +9,8 @@ import type {
   GuaranteeInput,
   BonusInput,
   CancellationInput,
+  Acceptance,
+  AcceptanceInput,
 } from '../model/types';
 const guaranteeBase = '/remuneration-guarantees';
 const bonusBase = '/bonus-awards';
@@ -34,6 +36,9 @@ export const remunerationApi = {
         },
       })
     ).data;
+  },
+  async accept(body: AcceptanceInput): Promise<Acceptance> {
+    return (await apiClient.post<Acceptance>('/me/statement-acceptances', body)).data;
   },
   async guarantees(personId: number, page: number): Promise<GuaranteeList> {
     return (

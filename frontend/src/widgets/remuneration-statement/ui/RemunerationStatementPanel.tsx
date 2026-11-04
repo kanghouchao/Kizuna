@@ -1,7 +1,8 @@
 'use client';
 import { useState } from 'react';
 import { remunerationApi, type StatementScope, type Day } from '../api';
-import { useResource } from '@/shared/lib';
+import { getApiErrorMessage, isConflict, useResource } from '@/shared/lib';
+import { notify } from '@/shared/notify';
 import {
   Button,
   RegionError,
@@ -13,10 +14,10 @@ import {
   TableRow,
   TableCard,
 } from '@/shared/ui';
+import { DayAcceptanceCell } from './DayAcceptanceCell';
 import { Paging } from './Paging';
+import { yen } from './yen';
 import { RemunerationManagement } from './RemunerationManagement';
-const yen = (value: number | undefined) =>
-  value === undefined ? '計算待ち' : `¥${value.toLocaleString('ja-JP')}`;
 const labels: Record<Day['guarantee_status'], string> = {
   NOT_ELIGIBLE: '4時間未満・実績なし',
   PENDING_ATTENDANCE: '退勤記録待ち',
@@ -68,7 +69,8 @@ function Statement({
 }) {
   const [orderPage, setOrderPage] = useState(0),
     [bonusPage, setBonusPage] = useState(0),
-    [revision, setRevision] = useState(0);
+    [revision, setRevision] = useState(0),
+    [sending, setSending] = useState(false);
   const result = useResource(
     () => remunerationApi.statement(scope, month, orderPage, bonusPage),
     [
@@ -82,6 +84,31 @@ function Statement({
     ]
   );
   const data = !result.isLoading && result.failure === null ? result.data : null;
+  // 409 は見ていた内容が古いことを示す。どの結果でも明細を取り直し、現在の状態と要約を示す。
+  const accept =
+    scope.scope === 'self'
+      ? async (day: Day) => {
+          if (day.content_digest === undefined) return;
+          setSending(true);
+          try {
+            await remunerationApi.accept({
+              store_id: scope.storeId,
+              business_date: day.business_date,
+              content_digest: day.content_digest,
+            });
+            notify.success(`${day.business_date} の明細を承諾しました`);
+          } catch (error) {
+            if (isConflict(error))
+              notify.warning(
+                '明細の内容が変わっていたため、最新の明細を表示しました。内容を確かめてから承諾してください'
+              );
+            else notify.error(getApiErrorMessage(error, '明細を承諾できませんでした'));
+          } finally {
+            setSending(false);
+            setRevision(v => v + 1);
+          }
+        }
+      : undefined;
   return (
     <div className="min-w-0 space-y-6 rounded-lg border p-4 sm:p-6">
       <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
@@ -127,6 +154,9 @@ function Statement({
               {yen(data.known_guarantee_total)} です。
             </p>
           )}
+          <p>
+            承諾済み {data.accepted_days} 日 / 承諾できる日 {data.acceptable_days} 日
+          </p>
           <p className="text-sm text-muted-foreground">
             生成日時：
             {new Date(data.generated_at).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })}
@@ -141,6 +171,7 @@ function Statement({
                   <TableHead>出勤・条件</TableHead>
                   <TableHead>保証不足分</TableHead>
                   <TableHead>ボーナス</TableHead>
+                  <TableHead>承諾</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -165,6 +196,9 @@ function Statement({
                     </TableCell>
                     <TableCell>{yen(day.guarantee_amount)}</TableCell>
                     <TableCell>{yen(day.bonus_amount)}</TableCell>
+                    <TableCell className="whitespace-normal">
+                      <DayAcceptanceCell day={day} onAccept={accept} sending={sending} />
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

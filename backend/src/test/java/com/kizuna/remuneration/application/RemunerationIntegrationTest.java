@@ -52,7 +52,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.YearMonth;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
@@ -567,8 +566,8 @@ class RemunerationIntegrationTest {
     }
 
     @Override
-    public Map<LocalDate, Long> daily(Long store, Long person, YearMonth month) {
-      var result = super.daily(store, person, month);
+    public List<Basis> basis(Long store, Long person, LocalDate start, LocalDate end) {
+      var result = super.basis(store, person, start, end);
       var gate = reached;
       if (gate != null) {
         gate.countDown();
@@ -632,6 +631,7 @@ class RemunerationIntegrationTest {
   @Import({
     RemunerationManagementService.class,
     RemunerationStatementService.class,
+    StatementContents.class,
     RemunerationRecords.class,
     RemunerationPersonLookup.class,
     AttendanceFacts.class,

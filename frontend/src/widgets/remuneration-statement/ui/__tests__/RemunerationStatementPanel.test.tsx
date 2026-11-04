@@ -48,6 +48,8 @@ const data: Statement = {
   order_total: 7000,
   known_guarantee_total: 0,
   bonus_total: 1000,
+  accepted_days: 0,
+  acceptable_days: 0,
   days: [
     {
       business_date: '2026-09-30',
@@ -56,6 +58,8 @@ const data: Statement = {
       attendance_incomplete: true,
       guarantee_status: 'PENDING_ATTENDANCE',
       bonus_amount: 1000,
+      acceptance_state: 'NOT_ACCEPTABLE',
+      not_acceptable_reason: 'GUARANTEE_UNDETERMINED',
     },
   ],
   orders: page,

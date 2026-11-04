@@ -17,6 +17,10 @@ final class RemunerationInput {
     }
   }
 
+  static void store(Long id) {
+    if (id == null || id <= 0) throw new ServiceException("店舗の指定が不正です");
+  }
+
   static void person(Long id) {
     if (id == null || id <= 0) throw new ServiceException("キャスト本人の指定が不正です");
   }
