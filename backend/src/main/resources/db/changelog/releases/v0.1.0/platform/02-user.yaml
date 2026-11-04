@@ -78,6 +78,12 @@ databaseChangeLog:
                   type: TIMESTAMP WITH TIME ZONE
                   remarks: 退会日時（未退会は NULL）
               - column:
+                  # 本人がこのメールアドレスを受け取れた事実（ADR 0040）。検証は宛先に束縛され、
+                  # メールアドレスが変われば NULL に戻る。職員が手で埋める口は無い。
+                  name: email_verified_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  remarks: メールアドレスの検証日時（未検証は NULL）
+              - column:
                   name: created_at
                   type: TIMESTAMP WITH TIME ZONE
                   defaultValueComputed: CURRENT_TIMESTAMP

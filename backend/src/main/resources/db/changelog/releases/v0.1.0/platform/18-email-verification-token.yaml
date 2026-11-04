@@ -1,0 +1,99 @@
+databaseChangeLog:
+  - changeSet:
+      id: platform-v0100-018-email-verification-token-schema
+      author: kanghouchao
+      # メールアドレスの検証トークン（ADR 0040）。検証メールのリンクに載る生値は送信で一度使われるきり
+      # どこにも残らず、行が持つのは SHA-256 のダイジェストだけ — バックアップや診断経路から未消費の
+      # トークンを取り出せないようにする。トークンは発行時の宛先（email）に束縛され、宛先が変われば
+      # 古いトークンで新しい宛先を検証済みにはできない。
+      preConditions:
+        - dbms:
+            type: postgresql
+      changes:
+        - createTable:
+            tableName: t_email_verification_tokens
+            remarks: メールアドレスの検証トークン（保存はダイジェストのみ）
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    primaryKeyName: pk_t_email_verification_tokens
+              - column:
+                  name: user_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+                  remarks: 検証する利用者
+              - column:
+                  name: token_digest
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_t_email_verification_tokens_digest
+                  remarks: 生値の SHA-256（16 進。照合はこの値で行い、生値は保存しない）
+              - column:
+                  name: email
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+                  remarks: 発行時の宛先メールアドレス（検証はこの宛先に束縛される）
+              - column:
+                  name: issued_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+                  remarks: 発行の日時
+              - column:
+                  name: expires_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+                  remarks: 有効期限（発行から 24 時間）
+              - column:
+                  name: consumed_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  remarks: 消費の日時（未消費は NULL）
+              - column:
+                  name: revoked_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  remarks: 失効の日時（再発行・宛先の変更で失効。生きている間は NULL）
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: CURRENT_TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+                  remarks: 楽観ロック用バージョン
+        # トークンは利用者の属性であって独立した資産ではなく、利用者が消えた後の行は照合先を持たない。
+        - addForeignKeyConstraint:
+            constraintName: fk_t_email_verification_tokens_user
+            baseTableName: t_email_verification_tokens
+            baseColumnNames: user_id
+            referencedTableName: t_users
+            referencedColumnNames: id
+            onDelete: CASCADE
+        # 「利用者ごとに生きたトークンは高々 1 本」を DB 側の最終防波堤として固定する。期限は索引で
+        # 表せないので期限切れの未消費行も対象になり、再発行は期限切れの行も失効させる。
+        # DbConstraint に載せない — 発火は発行側の欠陥であり、業務例外へ写像せず大きく失敗させる。
+        - sql:
+            sql: >-
+              CREATE UNIQUE INDEX uq_t_email_verification_tokens_live_user
+              ON t_email_verification_tokens (user_id)
+              WHERE consumed_at IS NULL AND revoked_at IS NULL

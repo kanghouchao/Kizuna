@@ -8,4 +8,5 @@ public record MeView(
     String displayName,
     String userType,
     List<String> permissions,
-    boolean lineLinked) {}
+    boolean lineLinked,
+    boolean emailVerified) {}

@@ -70,6 +70,16 @@ class ModularityTests {
         .containsExactly("settings");
   }
 
+  // 検証メールは本文に秘密（トークン）が載るので送信正本を通さず、member が送信手段を直接呼ぶ（ADR 0040）。
+  @Test
+  void memberCallsTransportWithoutNotificationDelivery() {
+    var member = modules.getModuleByName("member").orElseThrow();
+    assertThat(member.getDirectDependencies(modules).uniqueModules())
+        .extracting(module -> module.getIdentifier().toString())
+        .contains("notification")
+        .doesNotContain("notificationdelivery");
+  }
+
   // チャネルの追加が送信正本を変えないよう、送信正本は送信手段の抽象だけを知り、その実装やメール基盤を参照しない。
   @Test
   void notificationDeliveryDependsOnNoConcreteChannel() {

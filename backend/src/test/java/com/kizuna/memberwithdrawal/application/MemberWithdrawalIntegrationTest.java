@@ -13,6 +13,7 @@ import com.kizuna.customer.application.CustomerMemberLinkDirectory;
 import com.kizuna.customer.application.CustomerMemberLinkService;
 import com.kizuna.customer.application.CustomerMemberLinkWithdrawal;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
+import com.kizuna.member.application.EmailVerificationMail;
 import com.kizuna.member.application.MemberDirectoryService;
 import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberRegistrationCommand;
@@ -23,6 +24,7 @@ import com.kizuna.member.domain.MemberAlreadyWithdrawnException;
 import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.memberconsole.api.dto.MemberDetailResponse;
 import com.kizuna.memberconsole.application.MemberConsoleService;
+import com.kizuna.notification.transport.ContactTransport;
 import com.kizuna.order.domain.OrderApplicationRepository;
 import com.kizuna.order.withdrawal.MemberWithdrawalApplications;
 import com.kizuna.point.application.MemberLedgerQueryService;
@@ -695,6 +697,7 @@ class MemberWithdrawalIntegrationTest {
     MemberWithdrawal.class,
     MemberLookupService.class,
     MemberRegistrationService.class,
+    EmailVerificationMail.class,
     CredentialOperations.class,
     RoleManageHolderGuard.class,
     PointLedgerService.class,
@@ -771,6 +774,13 @@ class MemberWithdrawalIntegrationTest {
       var settings = mock(SystemConfigService.class);
       when(settings.pointSettings()).thenReturn(new PointSettings(100, 1, 1));
       return settings;
+    }
+
+    @Bean
+    ContactTransport mail() {
+      var mail = mock(ContactTransport.class);
+      when(mail.type()).thenReturn(ContactTransport.Channel.EMAIL);
+      return mail;
     }
   }
 }

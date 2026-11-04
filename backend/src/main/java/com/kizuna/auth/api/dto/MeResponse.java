@@ -9,16 +9,24 @@ import java.util.List;
  * <p>{@code permissions} は保持ロールの権限並集（enum 名の昇順）。画面の出し分けはこれと本人種別だけで決まり、 「どのコンソールに着地するか」のような導出値は持たない。
  *
  * <p>{@code lineLinked} は LINE アカウントを連携済みか。LINE ユーザー ID 自体は本人にも返さない（連携の有無だけが 画面の分岐に必要な情報）。
+ *
+ * <p>{@code emailVerified} はログイン用メールアドレスの検証が済んでいるか（ADR 0040）。権限と本人種別を変えないので、変化しても資格情報の版は進めない。
  */
 public record MeResponse(
     String email,
     String displayName,
     String userType,
     List<String> permissions,
-    boolean lineLinked) {
+    boolean lineLinked,
+    boolean emailVerified) {
 
   public static MeResponse of(MeView me) {
     return new MeResponse(
-        me.email(), me.displayName(), me.userType(), me.permissions(), me.lineLinked());
+        me.email(),
+        me.displayName(),
+        me.userType(),
+        me.permissions(),
+        me.lineLinked(),
+        me.emailVerified());
   }
 }

@@ -80,6 +80,10 @@ public class User extends BaseEntity {
   @Column(name = "withdrawn_at")
   private OffsetDateTime withdrawnAt;
 
+  /** メールアドレスの検証日時（未検証は null、ADR 0040）。検証は宛先に束縛され、職員が手で埋める口は無い。 */
+  @Column(name = "email_verified_at")
+  private OffsetDateTime emailVerifiedAt;
+
   @Enumerated(EnumType.STRING)
   @Column(name = "user_type", nullable = false, length = 20)
   private UserType userType;
@@ -191,6 +195,10 @@ public class User extends BaseEntity {
 
   public boolean isWithdrawn() {
     return withdrawnAt != null;
+  }
+
+  public boolean isEmailVerified() {
+    return emailVerifiedAt != null;
   }
 
   /** 発行済みセッションを失効させる（版を 1 つ進める）。本人属性も授権も変えない、失効そのものが目的の操作に使う。 */
