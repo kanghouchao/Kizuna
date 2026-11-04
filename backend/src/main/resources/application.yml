@@ -31,6 +31,10 @@ spring:
       "[mail.smtp.connectiontimeout]": ${SMTP_CONNECTION_TIMEOUT_MS:5000}
       "[mail.smtp.timeout]": ${SMTP_READ_TIMEOUT_MS:10000}
       "[mail.smtp.writetimeout]": ${SMTP_WRITE_TIMEOUT_MS:10000}
+      # SPRING_MAIL_PROTOCOL=smtps のとき JavaMail は mail.smtps.* を読む。DB の SMTP 設定は常に smtp。
+      "[mail.smtps.connectiontimeout]": ${SMTP_CONNECTION_TIMEOUT_MS:5000}
+      "[mail.smtps.timeout]": ${SMTP_READ_TIMEOUT_MS:10000}
+      "[mail.smtps.writetimeout]": ${SMTP_WRITE_TIMEOUT_MS:10000}
   jpa:
     show-sql: ${SPRING_JPA_SHOW_SQL:true}
     open-in-view: ${SPRING_JPA_OPEN_IN_VIEW:false}
