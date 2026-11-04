@@ -1,6 +1,7 @@
 import { expect, type APIRequestContext } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
 import { APP_URL } from "../base-url";
+import { latestMailTo } from "./mailpit";
 import {
   adjustCustomerPoints,
   createCustomer,
@@ -20,6 +21,10 @@ let memberEmail = "";
 let memberCode = "";
 let memberDisplayName = "";
 let createdCustomerId = "";
+// 検証状態の比較用。表示名の共通部分で 2 人だけを一覧に出す。
+let comparisonName = "";
+let verifiedCode = "";
+let unverifiedCode = "";
 
 async function searchMembers(page: import("@playwright/test").Page, query: string) {
   await page.getByLabel("検索語").fill(query);
@@ -63,13 +68,6 @@ Then("会員一覧にコンソール検証用の会員が表示される", async
 Then("会員一覧に該当する会員がいない", async ({ page }) => {
   await expect(page.getByText("該当する会員がいません")).toBeVisible();
   await expect(page.getByRole("link", { name: memberCode, exact: true })).toHaveCount(0);
-});
-
-// 登録直後の会員は未検証。検証済みとの出し分けはフロントエンドの単体テストで固定する。
-Then("会員一覧のコンソール検証用の会員の行でメールアドレスが未検証と読める", async ({ page }) => {
-  const row = page.getByRole("row").filter({ hasText: memberCode });
-  await expect(row.getByText("未検証", { exact: true })).toBeVisible();
-  await expect(row.getByText("検証済み", { exact: true })).toHaveCount(0);
 });
 
 When("会員一覧からコンソール検証用の会員の詳細を開く", async ({ page }) => {
@@ -126,6 +124,51 @@ Then("コンソール検証用の会員の資格情報ではログインでき�
   expect(response.status()).toBe(401);
 });
 
+Given(
+  "検証状態の比較用に、検証メールの確認を済ませた会員と未検証の会員を登録する",
+  async ({ request }) => {
+    const suffix = Date.now();
+    comparisonName = `E2E検証比較-${suffix}`;
+    const verifiedEmail = `member-verified-e2e-${suffix}@kizuna.test`;
+    verifiedCode = await registerMember(request, verifiedEmail, MEMBER_PASSWORD, `${comparisonName}-済`);
+    unverifiedCode = await registerMember(
+      request,
+      `member-unverified-e2e-${suffix}@kizuna.test`,
+      MEMBER_PASSWORD,
+      `${comparisonName}-未`,
+    );
+    // 本人がリンクを開いたときと同じく、届いたリンクのフラグメントのトークンを確認端点へ渡す。
+    const link = (await latestMailTo(request, verifiedEmail)).firstLink;
+    const token = link?.split("#")[1];
+    expect(token, `検証メールのリンク: ${link}`).toBeTruthy();
+    const response = await request.post("/api/auth/email-verification/confirmation", { data: { token } });
+    expect(response.status(), await response.text()).toBe(204);
+  },
+);
+
+When("会員一覧を比較用の会員の表示名で検索する", async ({ page }) => {
+  await searchMembers(page, comparisonName);
+});
+
+Then("会員一覧で確認済みの会員は検証済み、未検証の会員は未検証と読める", async ({ page }) => {
+  const verified = page.getByRole("row").filter({ hasText: verifiedCode });
+  const unverified = page.getByRole("row").filter({ hasText: unverifiedCode });
+  await expect(verified.getByText("検証済み", { exact: true })).toBeVisible();
+  await expect(verified.getByText("未検証", { exact: true })).toHaveCount(0);
+  await expect(unverified.getByText("未検証", { exact: true })).toBeVisible();
+  await expect(unverified.getByText("検証済み", { exact: true })).toHaveCount(0);
+});
+
+When("会員一覧から確認済みの会員の詳細を開く", async ({ page }) => {
+  await page.getByRole("link", { name: verifiedCode, exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/members\/\d+$/);
+});
+
+Then("会員詳細に検証日時が出る", async ({ page }) => {
+  const field = page.locator("dl > div").filter({ has: page.getByText("メール検証", { exact: true }) });
+  await expect(field.getByText(/^\d{4}\/\d{1,2}\/\d{1,2} \d{1,2}:\d{2}:\d{2}$/)).toBeVisible();
+});
+
 async function storeAdminGet(request: APIRequestContext, path: string) {
   const token = await loginAsStoreAdmin(request);
   return request.get(path, { headers: { Authorization: `Bearer ${token}` } });
@@ -144,6 +187,9 @@ After(async ({ request }) => {
   memberCode = "";
   memberDisplayName = "";
   createdCustomerId = "";
+  comparisonName = "";
+  verifiedCode = "";
+  unverifiedCode = "";
   if (customerId) {
     const adminToken = await loginAsStoreAdmin(request);
     await deleteCustomer(request, adminToken, customerId);
