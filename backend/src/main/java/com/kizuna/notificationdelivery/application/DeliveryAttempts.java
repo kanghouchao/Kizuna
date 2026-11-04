@@ -1,13 +1,13 @@
 package com.kizuna.notificationdelivery.application;
 
 import com.kizuna.audit.recording.AuditActor;
-import com.kizuna.notification.transport.EmailTransport;
+import com.kizuna.notification.transport.ContactTransport;
 import com.kizuna.notificationdelivery.domain.DeliveryAttempt;
 import com.kizuna.notificationdelivery.domain.DeliveryAttemptRepository;
+import com.kizuna.notificationdelivery.domain.DeliveryChannel;
 import com.kizuna.notificationdelivery.domain.DeliveryStatus;
 import com.kizuna.notificationdelivery.domain.NotificationDelivery;
 import com.kizuna.notificationdelivery.domain.NotificationDeliveryRepository;
-import com.kizuna.order.contact.BusinessContactDecision;
 import com.kizuna.shared.exception.NotFoundException;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -27,7 +27,7 @@ public class DeliveryAttempts {
   private final DeliveryAudit audit;
   private final Clock clock;
 
-  public record Envelope(String recipient, String subject, String body) {}
+  public record Envelope(DeliveryChannel channel, String recipient, String subject, String body) {}
 
   private record Locked(NotificationDelivery delivery, DeliveryAttempt attempt) {}
 
@@ -52,17 +52,17 @@ public class DeliveryAttempts {
     var locked = lock(event);
     if (locked.attempt().getStatus() != DeliveryStatus.SENDING || allowed(locked, event) == null)
       return null;
-    var decision = contacts.decide(event.storeId(), locked.delivery().content());
-    if (decision.decision() != BusinessContactDecision.ALLOWED) {
+    var row = locked.delivery();
+    var recipient = contacts.resolve(row.getAttributedStoreId(), row.content());
+    if (recipient.decision() != ContactDecision.ALLOWED) {
       finish(locked, event, DeliveryStatus.BLOCKED, "CONTACT_NOT_ALLOWED");
       return null;
     }
-    return new Envelope(
-        decision.value(), locked.delivery().getSubject(), locked.delivery().getBody());
+    return new Envelope(row.getChannel(), recipient.address(), row.getSubject(), row.getBody());
   }
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
-  public void complete(DeliveryDispatch event, EmailTransport.Result result) {
+  public void complete(DeliveryDispatch event, ContactTransport.Result result) {
     var locked = lock(event);
     if (locked.attempt().getStatus() != DeliveryStatus.SENDING) return;
     var status =
@@ -71,14 +71,15 @@ public class DeliveryAttempts {
           case UNKNOWN -> DeliveryStatus.UNKNOWN;
           case FAILED, UNAVAILABLE -> DeliveryStatus.FAILED;
         };
-    finish(locked, event, status, result == EmailTransport.Result.SENT ? null : result.name());
+    finish(locked, event, status, result == ContactTransport.Result.SENT ? null : result.name());
   }
 
   private AuditActor allowed(Locked locked, DeliveryDispatch event) {
     try {
-      var actor = authorization.require(event.serviceUserId(), event.storeId());
-      if (contacts.decide(event.storeId(), locked.delivery().content()).decision()
-          != BusinessContactDecision.ALLOWED) {
+      var actor = authorization.require(event.serviceUserId());
+      var row = locked.delivery();
+      if (contacts.resolve(row.getAttributedStoreId(), row.content()).decision()
+          != ContactDecision.ALLOWED) {
         finish(locked, event, DeliveryStatus.BLOCKED, "CONTACT_NOT_ALLOWED");
         return null;
       }
@@ -95,11 +96,11 @@ public class DeliveryAttempts {
   private Locked lock(DeliveryDispatch event) {
     var row =
         deliveries
-            .findByIdAndStoreIdForUpdate(event.deliveryId(), event.storeId())
+            .findByIdForUpdate(event.deliveryId())
             .orElseThrow(() -> new NotFoundException("通知が見つかりません"));
     var attempt =
         attempts
-            .findByIdAndStoreId(event.attemptId(), event.storeId())
+            .findById(event.attemptId())
             .orElseThrow(() -> new NotFoundException("送信試行が見つかりません"));
     if (!attempt.getDeliveryId().equals(row.getId())
         || !attempt.getServiceUserId().equals(event.serviceUserId())

@@ -6,27 +6,22 @@ import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 
 public record DeliveryContent(
-    SourceType sourceType,
+    DeliverySourceType sourceType,
     String sourceId,
-    String channel,
-    String purpose,
+    DeliveryChannel channel,
+    DeliveryPurpose purpose,
     String subject,
     String body,
     OffsetDateTime scheduledAt,
     String dedupeKey) {
-  public enum SourceType {
-    ORDER,
-    APPLICATION
-  }
-
   public DeliveryContent {
     sourceId = clean(sourceId, 32);
     subject = clean(subject, 200);
     dedupeKey = clean(dedupeKey, 120);
     if (sourceType == null
         || !sourceId.matches("[0-9]{1,32}")
-        || !"EMAIL".equals(channel)
-        || !"BUSINESS".equals(purpose)
+        || channel == null
+        || purpose == null
         || !dedupeKey.matches("[a-zA-Z0-9.:_-]{1,120}")
         || body == null
         || body.isBlank()
@@ -35,7 +30,7 @@ public record DeliveryContent(
         || subject.indexOf('\n') >= 0
         || subject.indexOf('\r') >= 0
         || scheduledAt == null) {
-      throw new ServiceException("起点・業務メールの内容・予約日時・要求キーを確認してください");
+      throw new ServiceException("起点・通知の内容・予約日時・要求キーを確認してください");
     }
     body = body.replace("\r\n", "\n");
     scheduledAt = scheduledAt.withOffsetSameInstant(ZoneOffset.UTC).truncatedTo(ChronoUnit.MICROS);

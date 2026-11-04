@@ -1,7 +1,6 @@
 package com.kizuna.notificationdelivery.domain;
 
 import com.kizuna.shared.exception.ConflictException;
-import com.kizuna.shared.persistence.StoreScopedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -16,7 +15,7 @@ import lombok.NoArgsConstructor;
 @Table(name = "t_notification_attempts")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class DeliveryAttempt extends StoreScopedEntity {
+public class DeliveryAttempt extends DeliveryRecord {
   @Column(nullable = false, updatable = false, length = 32)
   private String deliveryId;
 
@@ -54,7 +53,6 @@ public class DeliveryAttempt extends StoreScopedEntity {
       String serviceName,
       OffsetDateTime now) {
     var attempt = new DeliveryAttempt();
-    attempt.setStoreId(row.getStoreId());
     attempt.deliveryId = row.getId();
     attempt.attemptNumber = row.getAttemptCount();
     attempt.taskExecutionId = executionId;

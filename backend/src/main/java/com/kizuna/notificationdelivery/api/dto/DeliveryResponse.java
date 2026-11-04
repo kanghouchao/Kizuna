@@ -26,9 +26,9 @@ public record DeliveryResponse(
     return new DeliveryResponse(
         d.getId(),
         d.getSourceType().name(),
-        d.sourceId(),
-        d.getChannel(),
-        d.getPurpose(),
+        d.getSourceId(),
+        d.getChannel().name(),
+        d.getPurpose().name(),
         d.getSubject(),
         d.getBody(),
         d.getScheduledAt(),

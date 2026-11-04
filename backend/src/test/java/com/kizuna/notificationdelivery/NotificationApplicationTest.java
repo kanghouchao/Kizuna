@@ -9,24 +9,30 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.audit.recording.AuditActor;
-import com.kizuna.notification.transport.EmailTransport;
+import com.kizuna.customer.domain.ContactType;
+import com.kizuna.notification.transport.ContactTransport;
+import com.kizuna.notificationdelivery.application.ContactDecision;
 import com.kizuna.notificationdelivery.application.DeliveryAttempts;
 import com.kizuna.notificationdelivery.application.DeliveryAudit;
 import com.kizuna.notificationdelivery.application.DeliveryAuthorization;
 import com.kizuna.notificationdelivery.application.DeliveryContact;
 import com.kizuna.notificationdelivery.application.DeliveryDispatch;
+import com.kizuna.notificationdelivery.application.DeliveryRecipient;
+import com.kizuna.notificationdelivery.application.DeliveryTransports;
 import com.kizuna.notificationdelivery.application.NotificationActors;
 import com.kizuna.notificationdelivery.application.NotificationDeliveryTask;
 import com.kizuna.notificationdelivery.application.NotificationService;
 import com.kizuna.notificationdelivery.domain.DeliveryAttempt;
 import com.kizuna.notificationdelivery.domain.DeliveryAttemptRepository;
+import com.kizuna.notificationdelivery.domain.DeliveryChannel;
 import com.kizuna.notificationdelivery.domain.DeliveryContent;
+import com.kizuna.notificationdelivery.domain.DeliveryPurpose;
+import com.kizuna.notificationdelivery.domain.DeliverySourceType;
 import com.kizuna.notificationdelivery.domain.DeliveryStatus;
 import com.kizuna.notificationdelivery.domain.NotificationDelivery;
 import com.kizuna.notificationdelivery.domain.NotificationDeliveryRepository;
-import com.kizuna.order.contact.BusinessContactDecision;
-import com.kizuna.order.contact.OrderBusinessContact;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.task.execution.TaskContext;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
 import com.kizuna.user.domain.PermissionCode;
@@ -43,8 +49,9 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Limit;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.test.util.ReflectionTestUtils;
 
-/** 通知の各口が、引数（または送信事象）で受けた店舗だけを repository へ渡すことの単体テスト。 */
+/** 職員の口は引数の店舗だけを repository へ渡し、送信の定期処理は店舗を指定せずに全店舗の到来分を扱うことの単体テスト。 */
 class NotificationApplicationTest {
   private static final Long STORE_ID = 7L;
   private static final AuditActor STAFF = new AuditActor(1L, "STAFF", "担当者");
@@ -57,24 +64,27 @@ class NotificationApplicationTest {
   private final DeliveryContact contacts = mock(DeliveryContact.class);
   private final DeliveryAudit audit = mock(DeliveryAudit.class);
   private final NotificationService service =
-      new NotificationService(
-          deliveries, attempts, actors, contacts, audit, mock(EmailTransport.class), clock);
+      new NotificationService(deliveries, attempts, actors, contacts, audit, transports(), clock);
+
+  private static DeliveryTransports transports() {
+    var email = mock(ContactTransport.class);
+    when(email.type()).thenReturn(ContactType.EMAIL);
+    return new DeliveryTransports(List.of(email));
+  }
 
   @BeforeEach
   void setup() {
     when(actors.require(eq(STORE_ID), eq("actor"), any())).thenReturn(STAFF);
-    when(contacts.decide(eq(STORE_ID), any()))
-        .thenReturn(
-            new OrderBusinessContact.Decision(
-                "permitted@example.invalid", BusinessContactDecision.ALLOWED));
+    when(contacts.resolve(eq(STORE_ID), any()))
+        .thenReturn(new DeliveryRecipient("permitted@example.invalid", ContactDecision.ALLOWED));
   }
 
   private static DeliveryContent content() {
     return new DeliveryContent(
-        DeliveryContent.SourceType.ORDER,
+        DeliverySourceType.ORDER,
         "123",
-        "EMAIL",
-        "BUSINESS",
+        DeliveryChannel.EMAIL,
+        DeliveryPurpose.BUSINESS,
         "件名",
         "本文",
         OffsetDateTime.parse("2026-10-07T09:00:00+09:00"),
@@ -83,7 +93,7 @@ class NotificationApplicationTest {
 
   private static NotificationDelivery row() {
     var row = NotificationDelivery.draft(STORE_ID, content());
-    row.setId("101");
+    ReflectionTestUtils.setField(row, "id", "101");
     return row;
   }
 
@@ -91,35 +101,36 @@ class NotificationApplicationTest {
   void createLooksUpTheKeyAndDraftsTheRowInTheGivenStore() {
     when(deliveries.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
     assertThat(service.create(STORE_ID, "actor", content()).created()).isTrue();
-    verify(deliveries).findByStoreIdAndDedupeKey(STORE_ID, "key");
+    verify(deliveries).findByAttributedStoreIdAndDedupeKey(STORE_ID, "key");
     var saved = ArgumentCaptor.forClass(NotificationDelivery.class);
     verify(deliveries).saveAndFlush(saved.capture());
-    assertThat(saved.getValue().getStoreId()).isEqualTo(STORE_ID);
+    assertThat(saved.getValue().getAttributedStoreId()).isEqualTo(STORE_ID);
   }
 
   @Test
   void readsListsAndLocksOnlyWithinTheGivenStore() {
     var row = row();
-    when(deliveries.findByIdAndStoreId("101", STORE_ID)).thenReturn(Optional.of(row));
-    when(deliveries.findByIdAndStoreIdForUpdate("101", STORE_ID)).thenReturn(Optional.of(row));
+    when(deliveries.findByIdAndAttributedStoreId("101", STORE_ID)).thenReturn(Optional.of(row));
+    when(deliveries.findByIdAndAttributedStoreIdForUpdate("101", STORE_ID))
+        .thenReturn(Optional.of(row));
     assertThat(service.get(STORE_ID, "actor", "101").row().getId()).isEqualTo("101");
     assertThat(service.queue(STORE_ID, "actor", "101", null, "確認済み", false).row().getStatus())
         .isEqualTo(DeliveryStatus.QUEUED);
     var pageable = PageRequest.of(0, 10);
-    when(attempts.findByStoreIdAndDeliveryId(STORE_ID, "101", pageable))
+    when(attempts.findByDeliveryId("101", pageable)).thenReturn(new PageImpl<>(List.of()));
+    when(deliveries.findByAttributedStoreId(STORE_ID, pageable))
         .thenReturn(new PageImpl<>(List.of()));
-    when(deliveries.findByStoreId(STORE_ID, pageable)).thenReturn(new PageImpl<>(List.of()));
     service.history(STORE_ID, "actor", "101", pageable);
-    verify(attempts).findByStoreIdAndDeliveryId(STORE_ID, "101", pageable);
+    verify(attempts).findByDeliveryId("101", pageable);
     service.list(STORE_ID, "actor", pageable);
-    verify(deliveries).findByStoreId(STORE_ID, pageable);
+    verify(deliveries).findByAttributedStoreId(STORE_ID, pageable);
   }
 
   @Test
   void anotherStoresDeliveryIsNotFound() {
     var other = STORE_ID + 1;
     when(actors.require(eq(other), eq("actor"), any())).thenReturn(STAFF);
-    when(deliveries.findByIdAndStoreId("101", STORE_ID)).thenReturn(Optional.of(row()));
+    when(deliveries.findByIdAndAttributedStoreId("101", STORE_ID)).thenReturn(Optional.of(row()));
     assertThatThrownBy(() -> service.get(other, "actor", "101"))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(() -> service.queue(other, "actor", "101", null, "確認済み", false))
@@ -127,46 +138,60 @@ class NotificationApplicationTest {
   }
 
   @Test
-  void sweepTakesOnlyTheTaskStoreAndCopiesItIntoAttemptAndEvent() {
+  void sweepIsGroupWideAndTakesDueRowsOfEveryStore() {
     var identities = mock(ServiceExecutionIdentityService.class);
     var events = mock(ApplicationEventPublisher.class);
     var task = new NotificationDeliveryTask(deliveries, attempts, identities, audit, events, clock);
-    when(identities.requireService(5L, PermissionCode.NOTIFICATION_DELIVER, STORE_ID))
+    assertThat(task.groupWide()).isTrue();
+    when(identities.requireService(5L, PermissionCode.NOTIFICATION_DELIVER, null))
         .thenReturn(SERVICE);
     var row = row();
     row.queue(null, "確認済み", false);
-    when(deliveries.findByStoreIdAndStatusAndScheduledAtLessThanEqualOrderByScheduledAtAscIdAsc(
-            STORE_ID, DeliveryStatus.QUEUED, OffsetDateTime.now(clock), Limit.of(100)))
+    when(deliveries.findByStatusAndScheduledAtLessThanEqualOrderByScheduledAtAscIdAsc(
+            DeliveryStatus.QUEUED, OffsetDateTime.now(clock), Limit.of(100)))
         .thenReturn(List.of(row));
     when(attempts.saveAndFlush(any()))
         .thenAnswer(
             call -> {
               DeliveryAttempt attempt = call.getArgument(0);
-              attempt.setId("201");
+              ReflectionTestUtils.setField(attempt, "id", "201");
               return attempt;
             });
-    assertThat(task.execute(new TaskContext(3L, 5L, STORE_ID, null, null))).isEqualTo(1);
-    var attempt = ArgumentCaptor.forClass(DeliveryAttempt.class);
-    verify(attempts).saveAndFlush(attempt.capture());
-    assertThat(attempt.getValue().getStoreId()).isEqualTo(STORE_ID);
+    assertThat(task.execute(new TaskContext(3L, 5L, null, null, null))).isEqualTo(1);
+    verify(identities).requireService(5L, PermissionCode.TASK_EXECUTE, null);
     var event = ArgumentCaptor.forClass(DeliveryDispatch.class);
     verify(events).publishEvent(event.capture());
-    assertThat(event.getValue().storeId()).isEqualTo(STORE_ID);
+    assertThat(event.getValue()).isEqualTo(new DeliveryDispatch("101", "201", 5L, 3L));
   }
 
   @Test
-  void claimLocksTheEventStoresRows() {
+  void sweepRejectsAStoreTarget() {
+    var task =
+        new NotificationDeliveryTask(
+            deliveries,
+            attempts,
+            mock(ServiceExecutionIdentityService.class),
+            audit,
+            mock(ApplicationEventPublisher.class),
+            clock);
+    assertThatThrownBy(() -> task.execute(new TaskContext(3L, 5L, STORE_ID, null, null)))
+        .isInstanceOf(ServiceException.class);
+  }
+
+  @Test
+  void claimLocksTheDispatchedRowByIdAndResolvesItsAttributedStore() {
     var authorization = mock(DeliveryAuthorization.class);
     var claims = new DeliveryAttempts(deliveries, attempts, authorization, contacts, audit, clock);
     var row = row();
     row.queue(null, "確認済み", false);
     row.dispatch();
     var attempt = DeliveryAttempt.dispatch(row, 3L, 5L, "通知SERVICE", OffsetDateTime.now(clock));
-    attempt.setId("201");
-    when(deliveries.findByIdAndStoreIdForUpdate("101", STORE_ID)).thenReturn(Optional.of(row));
-    when(attempts.findByIdAndStoreId("201", STORE_ID)).thenReturn(Optional.of(attempt));
-    when(authorization.require(5L, STORE_ID)).thenReturn(SERVICE);
-    assertThat(claims.claim(new DeliveryDispatch("101", "201", 5L, STORE_ID, 3L))).isTrue();
+    ReflectionTestUtils.setField(attempt, "id", "201");
+    when(deliveries.findByIdForUpdate("101")).thenReturn(Optional.of(row));
+    when(attempts.findById("201")).thenReturn(Optional.of(attempt));
+    when(authorization.require(5L)).thenReturn(SERVICE);
+    assertThat(claims.claim(new DeliveryDispatch("101", "201", 5L, 3L))).isTrue();
     assertThat(attempt.getStatus()).isEqualTo(DeliveryStatus.SENDING);
+    verify(contacts).resolve(STORE_ID, row.content());
   }
 }

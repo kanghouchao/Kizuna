@@ -3,7 +3,10 @@ package com.kizuna.notificationdelivery;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.kizuna.notificationdelivery.domain.DeliveryChannel;
 import com.kizuna.notificationdelivery.domain.DeliveryContent;
+import com.kizuna.notificationdelivery.domain.DeliveryPurpose;
+import com.kizuna.notificationdelivery.domain.DeliverySourceType;
 import com.kizuna.notificationdelivery.domain.DeliveryStatus;
 import com.kizuna.notificationdelivery.domain.NotificationDelivery;
 import com.kizuna.shared.exception.ConflictException;
@@ -14,10 +17,10 @@ import org.junit.jupiter.api.Test;
 class DeliveryDomainTest {
   private DeliveryContent content(String body) {
     return new DeliveryContent(
-        DeliveryContent.SourceType.ORDER,
+        DeliverySourceType.ORDER,
         "123",
-        "EMAIL",
-        "BUSINESS",
+        DeliveryChannel.EMAIL,
+        DeliveryPurpose.BUSINESS,
         "  予約確認  ",
         body,
         OffsetDateTime.parse("2026-10-07T09:00:00+09:00"),
@@ -28,7 +31,7 @@ class DeliveryDomainTest {
   void canonicalPayloadReplaysButDifferentContentCannotReuseKey() {
     var row = NotificationDelivery.draft(7L, content("一行目\r\n二行目"));
     row.requireSame(content("一行目\n二行目"));
-    assertThat(row.getStoreId()).isEqualTo(7L);
+    assertThat(row.getAttributedStoreId()).isEqualTo(7L);
     assertThat(row.getSubject()).isEqualTo("予約確認");
     assertThat(row.getScheduledAt().toString()).isEqualTo("2026-10-07T00:00Z");
     assertThatThrownBy(() -> row.requireSame(content("別本文"))).isInstanceOf(ConflictException.class);
@@ -66,19 +69,30 @@ class DeliveryDomainTest {
   }
 
   @Test
-  void unsupportedChannelsAndInvalidSchedulesCannotEnterDelivery() {
+  void missingDimensionsAndInvalidSchedulesCannotEnterDelivery() {
     assertThatThrownBy(
             () ->
                 new DeliveryContent(
-                    DeliveryContent.SourceType.ORDER,
+                    DeliverySourceType.ORDER,
                     "1",
-                    "SMS",
-                    "BUSINESS",
+                    null,
+                    DeliveryPurpose.BUSINESS,
                     "件名",
                     "本文",
                     OffsetDateTime.now(),
                     "a"))
         .isInstanceOf(ServiceException.class);
+    var marketing =
+        new DeliveryContent(
+            DeliverySourceType.ORDER,
+            "1",
+            DeliveryChannel.EMAIL,
+            DeliveryPurpose.MARKETING,
+            "件名",
+            "本文",
+            OffsetDateTime.now(),
+            "a");
+    assertThat(NotificationDelivery.draft(null, marketing).getAttributedStoreId()).isNull();
     assertThatThrownBy(() -> content(" ")).isInstanceOf(ServiceException.class);
     assertThatThrownBy(
             () -> content("本文").validateNewSchedule(OffsetDateTime.parse("2020-01-01T00:00Z")))

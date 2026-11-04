@@ -1,6 +1,5 @@
 package com.kizuna.notificationdelivery.application;
 
-import com.kizuna.notification.transport.EmailTransport;
 import com.kizuna.notificationdelivery.domain.DeliveryAttempt;
 import com.kizuna.notificationdelivery.domain.DeliveryAttemptRepository;
 import com.kizuna.notificationdelivery.domain.DeliveryContent;
@@ -24,7 +23,7 @@ public class NotificationService {
   private final NotificationActors actors;
   private final DeliveryContact contacts;
   private final DeliveryAudit audit;
-  private final EmailTransport transport;
+  private final DeliveryTransports transports;
   private final Clock clock;
 
   public record Created(DeliveryView delivery, boolean created) {}
@@ -32,13 +31,13 @@ public class NotificationService {
   @Transactional
   public Created create(Long storeId, String email, DeliveryContent content) {
     var actor = actors.require(storeId, email, PermissionCode.NOTIFICATION_MANAGE);
-    var existing = deliveries.findByStoreIdAndDedupeKey(storeId, content.dedupeKey());
+    var existing = deliveries.findByAttributedStoreIdAndDedupeKey(storeId, content.dedupeKey());
     if (existing.isPresent()) {
       existing.get().requireSame(content);
       return new Created(response(storeId, existing.get()), false);
     }
     content.validateNewSchedule(OffsetDateTime.now(clock));
-    contacts.decide(storeId, content);
+    contacts.resolve(storeId, content);
     var row = deliveries.saveAndFlush(NotificationDelivery.draft(storeId, content));
     audit.append(row, actor, "NOTIFICATION_CREATED");
     return new Created(response(storeId, row), true);
@@ -49,7 +48,7 @@ public class NotificationService {
     actors.require(storeId, email, PermissionCode.NOTIFICATION_MANAGE);
     var row =
         deliveries
-            .findByStoreIdAndDedupeKey(storeId, content.dedupeKey())
+            .findByAttributedStoreIdAndDedupeKey(storeId, content.dedupeKey())
             .orElseThrow(() -> new NotFoundException("通知が見つかりません"));
     row.requireSame(content);
     return new Created(response(storeId, row), false);
@@ -58,7 +57,7 @@ public class NotificationService {
   @Transactional(readOnly = true)
   public Page<NotificationDelivery> list(Long storeId, String email, Pageable pageable) {
     actors.require(storeId, email, PermissionCode.NOTIFICATION_VIEW);
-    return deliveries.findByStoreId(storeId, pageable);
+    return deliveries.findByAttributedStoreId(storeId, pageable);
   }
 
   @Transactional(readOnly = true)
@@ -73,9 +72,9 @@ public class NotificationService {
     var actor = actors.require(storeId, email, PermissionCode.NOTIFICATION_SEND);
     var row =
         deliveries
-            .findByIdAndStoreIdForUpdate(id, storeId)
+            .findByIdAndAttributedStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("通知が見つかりません"));
-    contacts.decide(storeId, row.content());
+    contacts.resolve(storeId, row.content());
     row.queue(version, reason, retry);
     deliveries.flush();
     audit.append(row, actor, retry ? "NOTIFICATION_RETRIED" : "NOTIFICATION_QUEUED");
@@ -86,17 +85,19 @@ public class NotificationService {
   public Page<DeliveryAttempt> history(Long storeId, String email, String id, Pageable pageable) {
     actors.require(storeId, email, PermissionCode.NOTIFICATION_VIEW);
     require(storeId, id);
-    return attempts.findByStoreIdAndDeliveryId(storeId, id, pageable);
+    return attempts.findByDeliveryId(id, pageable);
   }
 
   private NotificationDelivery require(Long storeId, String id) {
     return deliveries
-        .findByIdAndStoreId(id, storeId)
+        .findByIdAndAttributedStoreId(id, storeId)
         .orElseThrow(() -> new NotFoundException("通知が見つかりません"));
   }
 
   private DeliveryView response(Long storeId, NotificationDelivery row) {
     return new DeliveryView(
-        row, contacts.decide(storeId, row.content()).decision(), transport.available());
+        row,
+        contacts.resolve(storeId, row.content()).decision(),
+        transports.of(row.getChannel()).available());
   }
 }

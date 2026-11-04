@@ -1,7 +1,10 @@
 databaseChangeLog:
   - changeSet:
-      id: store-v0100-010-notification-delivery
+      id: platform-v0100-016-notification-delivery
       author: kanghouchao
+      # 業務を跨ぐ唯一の送信正本。attributed_store_id は「どの店舗の通知か」の帰属だけを表し、会員宛のグループ級の行で
+      # null になる（store_id という名は作用域を意味するため使わない）。起点は（source_type, source_id）の多態参照で
+      # 外部キーを張らず、用途・チャネルの値はコードの enum が正本なので check で列挙しない。
       changes:
         - createTable:
             tableName: t_notification_deliveries
@@ -14,10 +17,8 @@ databaseChangeLog:
                     primaryKey: true
                     primaryKeyName: pk_t_notification_deliveries
               - column:
-                  name: store_id
+                  name: attributed_store_id
                   type: BIGINT
-                  constraints:
-                    nullable: false
               - column:
                   name: created_at
                   type: TIMESTAMP WITH TIME ZONE
@@ -42,11 +43,10 @@ databaseChangeLog:
                   constraints:
                     nullable: false
               - column:
-                  name: order_id
+                  name: source_id
                   type: VARCHAR(32)
-              - column:
-                  name: application_id
-                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
               - column:
                   name: channel
                   type: VARCHAR(20)
@@ -100,11 +100,6 @@ databaseChangeLog:
                     nullable: false
                     primaryKey: true
                     primaryKeyName: pk_t_notification_attempts
-              - column:
-                  name: store_id
-                  type: BIGINT
-                  constraints:
-                    nullable: false
               - column:
                   name: created_at
                   type: TIMESTAMP WITH TIME ZONE
@@ -169,35 +164,15 @@ databaseChangeLog:
               - column:
                   name: failure_code
                   type: VARCHAR(40)
-        # 店舗削除は所属通知を連鎖削除し、通知が参照する業務起点と実行主体は履歴のため保護する。
+        # 店舗削除は帰属する通知を連鎖削除する（SET NULL ではグループ級の行に化けるため）。試行は通知に従い、
+        # 実行主体と定期処理の実行記録は履歴のため保護する。
         - addForeignKeyConstraint:
             baseTableName: t_notification_deliveries
-            baseColumnNames: store_id
+            baseColumnNames: attributed_store_id
             referencedTableName: t_stores
             referencedColumnNames: id
-            constraintName: fk_t_notification_deliveries_store_id
+            constraintName: fk_t_notification_deliveries_attributed_store_id
             onDelete: CASCADE
-        - addForeignKeyConstraint:
-            baseTableName: t_notification_attempts
-            baseColumnNames: store_id
-            referencedTableName: t_stores
-            referencedColumnNames: id
-            constraintName: fk_t_notification_attempts_store_id
-            onDelete: CASCADE
-        - addForeignKeyConstraint:
-            baseTableName: t_notification_deliveries
-            baseColumnNames: order_id
-            referencedTableName: t_orders
-            referencedColumnNames: id
-            constraintName: fk_t_notification_deliveries_order_id
-            onDelete: NO ACTION
-        - addForeignKeyConstraint:
-            baseTableName: t_notification_deliveries
-            baseColumnNames: application_id
-            referencedTableName: t_order_applications
-            referencedColumnNames: id
-            constraintName: fk_t_notification_deliveries_application_id
-            onDelete: NO ACTION
         - addForeignKeyConstraint:
             baseTableName: t_notification_attempts
             baseColumnNames: delivery_id
@@ -220,21 +195,15 @@ databaseChangeLog:
             constraintName: fk_t_notification_attempts_service_user_id
             onDelete: NO ACTION
         - addUniqueConstraint:
-            tableName: t_notification_deliveries
-            columnNames: store_id,dedupe_key
-            constraintName: uq_t_notification_deliveries_key
-        - addUniqueConstraint:
             tableName: t_notification_attempts
             columnNames: delivery_id,attempt_number
             constraintName: uq_t_notification_attempts_number
+        # 要求キーはグループ級（null）の行どうしでも重複させないため NULLS NOT DISTINCT にする。
         - sql:
             sql: |
-              ALTER TABLE t_notification_deliveries ADD CONSTRAINT ck_t_notification_deliveries_source CHECK
-                ((source_type = 'ORDER' AND order_id IS NOT NULL AND application_id IS NULL) OR
-                 (source_type = 'APPLICATION' AND application_id IS NOT NULL AND order_id IS NULL));
-              ALTER TABLE t_notification_deliveries ADD CONSTRAINT ck_t_notification_deliveries_channel CHECK (channel = 'EMAIL' AND purpose = 'BUSINESS');
+              CREATE UNIQUE INDEX uq_t_notification_deliveries_key ON t_notification_deliveries (attributed_store_id,dedupe_key) NULLS NOT DISTINCT;
               ALTER TABLE t_notification_deliveries ADD CONSTRAINT ck_t_notification_deliveries_status CHECK (status IN ('DRAFT','QUEUED','DISPATCHED','SENDING','SENT','FAILED','BLOCKED','UNKNOWN'));
               ALTER TABLE t_notification_attempts ADD CONSTRAINT ck_t_notification_attempts_status CHECK (status IN ('DISPATCHED','SENDING','SENT','FAILED','BLOCKED','UNKNOWN'));
-              CREATE INDEX idx_t_notification_deliveries_due ON t_notification_deliveries (store_id,scheduled_at,id) WHERE status = 'QUEUED';
-              CREATE INDEX idx_t_notification_deliveries_history ON t_notification_deliveries (store_id,id DESC);
-              CREATE INDEX idx_t_notification_attempts_history ON t_notification_attempts (store_id,delivery_id,id DESC);
+              CREATE INDEX idx_t_notification_deliveries_due ON t_notification_deliveries (scheduled_at,id) WHERE status = 'QUEUED';
+              CREATE INDEX idx_t_notification_deliveries_history ON t_notification_deliveries (attributed_store_id,id DESC);
+              CREATE INDEX idx_t_notification_attempts_history ON t_notification_attempts (delivery_id,id DESC);
