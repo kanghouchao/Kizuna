@@ -168,15 +168,14 @@ function History({ id }: { id: string }) {
 type ResolutionDraft = { outcome: DeliveryResolution | ''; reason: string };
 function Resolution({
   row,
+  write,
   onResolved,
-  reload,
 }: {
   row: Delivery;
+  write: ReturnType<typeof useVersionedWrite>;
   onResolved: (result: Delivery) => void;
-  reload: () => Promise<void>;
 }) {
   const form = useForm<ResolutionDraft>({ defaultValues: { outcome: '', reason: '' } });
-  const write = useVersionedWrite(reload);
   const labelId = useId();
   const resolve = async ({ outcome, reason }: ResolutionDraft) => {
     if (outcome === '') return;
@@ -271,6 +270,7 @@ function Detail({
   onMissing: () => void;
 }) {
   const detail = useResource(() => notificationApi.get(id), [id]);
+  const resolution = useVersionedWrite(detail.reload);
   const form = useForm<{ reason: string }>({ defaultValues: { reason: '' } });
   const active = useActive();
   const busy = useRef(false);
@@ -359,7 +359,7 @@ function Detail({
         variant="outline"
         disabled={form.formState.isSubmitting}
         onClick={() => {
-          void detail.reload();
+          void resolution.reload();
           setHistoryKey(n => n + 1);
         }}
       >
@@ -369,7 +369,7 @@ function Detail({
         <Resolution
           key={row.version}
           row={row}
-          reload={detail.reload}
+          write={resolution}
           onResolved={result => {
             if (!active.current) return;
             detail.setData(result);
