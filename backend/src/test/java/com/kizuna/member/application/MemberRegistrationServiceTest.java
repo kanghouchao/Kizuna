@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -37,6 +38,7 @@ class MemberRegistrationServiceTest {
   @Mock private UserRepository userRepository;
   @Mock private MemberRepository memberRepository;
   @Mock private PasswordEncoder passwordEncoder;
+  @Mock private EmailVerificationMail emailVerificationMail;
 
   @InjectMocks private MemberRegistrationService service;
 
@@ -83,6 +85,7 @@ class MemberRegistrationServiceTest {
     assertThat(member.getUserId()).isEqualTo(10L);
     assertThat(member.getMemberCode()).matches("\\d{12}");
     assertThat(memberCode).isEqualTo(member.getMemberCode());
+    verify(emailVerificationMail).issue(argThat(saved -> saved.getId() == 10L));
   }
 
   @Test
@@ -94,6 +97,7 @@ class MemberRegistrationServiceTest {
 
     verify(userRepository, never()).saveAndFlush(any());
     verify(memberRepository, never()).save(any());
+    verify(emailVerificationMail, never()).issue(any());
   }
 
   @Test
@@ -140,6 +144,7 @@ class MemberRegistrationServiceTest {
     ArgumentCaptor<String> rawPassword = ArgumentCaptor.forClass(String.class);
     verify(passwordEncoder).encode(rawPassword.capture());
     assertThat(rawPassword.getValue()).hasSizeGreaterThanOrEqualTo(32);
+    verify(emailVerificationMail).issue(argThat(saved -> saved.getId() == 10L));
   }
 
   @Test

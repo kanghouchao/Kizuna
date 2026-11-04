@@ -37,6 +37,7 @@ import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import jakarta.persistence.EntityManager;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -58,6 +59,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.annotation.Transactional;
 
 @ExtendWith(MockitoExtension.class)
@@ -331,6 +333,28 @@ class AuthServiceTest {
     assertThat(res).isPresent();
     assertThat(res.get().userType()).isEqualTo("CAST");
     assertThat(res.get().permissions()).isEmpty();
+    assertThat(res.get().emailVerified()).isFalse();
+  }
+
+  @Test
+  void me_reportsEmailVerifiedOnceVerifiedAtIsRecorded() {
+    User member =
+        User.builder()
+            .email("member@kizuna.test")
+            .password("stored-hash")
+            .displayName("会員")
+            .enabled(true)
+            .userType(UserType.MEMBER)
+            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+            .storeIds(Set.of())
+            .build();
+    ReflectionTestUtils.setField(member, "emailVerifiedAt", OffsetDateTime.now());
+    when(userRepository.findByEmail("member@kizuna.test")).thenReturn(Optional.of(member));
+
+    assertThat(authService.me("member@kizuna.test"))
+        .get()
+        .extracting(MeView::emailVerified)
+        .isEqualTo(true);
   }
 
   @Test

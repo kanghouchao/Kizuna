@@ -192,7 +192,8 @@ public class AuthService {
         user.getDisplayName(),
         user.getUserType().name(),
         permissions.stream().map(Enum::name).sorted().toList(),
-        user.getLineUserId() != null);
+        user.getLineUserId() != null,
+        user.isEmailVerified());
   }
 
   /**

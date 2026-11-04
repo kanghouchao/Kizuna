@@ -26,6 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>登録入口から生まれる身分は会員のみ（キャスト = 招待受諾、スタッフ = 管理者作成が成立経路）。作成する MEMBER は SPECIFIC_STORES +
  * 空集合（登録時点で紐づけ店舗なし）で、どの店舗も授権しない。
+ *
+ * <p>どちらの経路も利用者は未検証で生まれ、同じ取引で検証トークンを発行して検証メールをコミット後に送る（{@link EmailVerificationMail}）。
  */
 @Service
 @RequiredArgsConstructor
@@ -40,6 +42,7 @@ public class MemberRegistrationService {
   private final UserRepository userRepository;
   private final MemberRepository memberRepository;
   private final PasswordEncoder passwordEncoder;
+  private final EmailVerificationMail emailVerificationMail;
 
   private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
@@ -62,6 +65,7 @@ public class MemberRegistrationService {
     Member member =
         memberRepository.save(
             Member.builder().memberCode(issueCode()).userId(user.getId()).build());
+    emailVerificationMail.issue(user);
     return member.getMemberCode();
   }
 
@@ -98,6 +102,7 @@ public class MemberRegistrationService {
     // flush まで行い、会員行の制約違反も呼び出し元が登録チケットを消費する前に顕在化させる
     memberRepository.saveAndFlush(
         Member.builder().memberCode(issueCode()).userId(user.getId()).build());
+    emailVerificationMail.issue(user);
     return user;
   }
 
