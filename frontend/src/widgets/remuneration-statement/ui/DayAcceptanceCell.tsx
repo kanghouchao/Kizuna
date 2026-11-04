@@ -46,7 +46,7 @@ export function DayAcceptanceCell({
   const acceptable =
     day.acceptance_state === 'NOT_ACCEPTED' || day.acceptance_state === 'CHANGED_AFTER_ACCEPTANCE';
   return (
-    <div className="space-y-1">
+    <div className="flex flex-col items-start gap-1">
       <Badge variant="outline" className={`border-transparent ${state.className}`}>
         {state.label}
       </Badge>
