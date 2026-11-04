@@ -23,6 +23,7 @@ import org.springframework.mail.MailSendException;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
+import org.springframework.mock.env.MockEnvironment;
 
 @ExtendWith(MockitoExtension.class)
 class MailServiceTests {
@@ -37,7 +38,14 @@ class MailServiceTests {
 
   @BeforeEach
   void setUp() {
-    service = new MailService(systemConfigService, mailSenderProvider);
+    service =
+        new MailService(
+            systemConfigService,
+            mailSenderProvider,
+            new MockEnvironment()
+                .withProperty("spring.mail.properties.mail.smtp.timeout", "10000")
+                .withProperty("spring.mail.properties.mail.smtp.connectiontimeout", "5000")
+                .withProperty("spring.mail.properties.mail.smtp.starttls.enable", "true"));
   }
 
   @Test
@@ -135,6 +143,19 @@ class MailServiceTests {
     assertThat(impl.getUsername()).isEqualTo("user");
     assertThat(impl.getPassword()).isEqualTo("test-placeholder-secret");
     assertThat(impl.getJavaMailProperties().getProperty("mail.smtp.auth")).isEqualTo("true");
+  }
+
+  @Test
+  @DisplayName("DB の SMTP 設定で組む送信クライアントにも、設定ファイルの待ちの上限が載ること")
+  void resolveSender_appliesConfiguredTimeouts() {
+    JavaMailSenderImpl impl =
+        (JavaMailSenderImpl)
+            service.resolveSender(new SmtpSettings("smtp.example.com", 25, "", "", ""));
+
+    assertThat(impl.getJavaMailProperties())
+        .containsEntry("mail.smtp.timeout", "10000")
+        .containsEntry("mail.smtp.connectiontimeout", "5000")
+        .doesNotContainKey("mail.smtp.starttls.enable");
   }
 
   @Test

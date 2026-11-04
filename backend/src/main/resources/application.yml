@@ -24,6 +24,13 @@ spring:
       connection-test-query: SELECT 1
       data-source-properties:
         ssl: ${POSTGRES_SSL:false}
+  # SMTP の待ちの上限（ミリ秒）。JavaMail の既定は無制限で、検証メールはコミット後・応答前に同期で送るため、
+  # 応答の遅い SMTP が要求スレッドと DB 接続を握り続ける。DB の SMTP 設定で組む送信クライアントにも同じ値を使う（MailService）。
+  mail:
+    properties:
+      "[mail.smtp.connectiontimeout]": ${SMTP_CONNECTION_TIMEOUT_MS:5000}
+      "[mail.smtp.timeout]": ${SMTP_READ_TIMEOUT_MS:10000}
+      "[mail.smtp.writetimeout]": ${SMTP_WRITE_TIMEOUT_MS:10000}
   jpa:
     show-sql: ${SPRING_JPA_SHOW_SQL:true}
     open-in-view: ${SPRING_JPA_OPEN_IN_VIEW:false}
