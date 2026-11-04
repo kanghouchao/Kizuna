@@ -358,7 +358,14 @@ class NotificationIntegrationTest {
     notifications.queue(storeId, email, row.id(), failed.version(), "未送信の結果を確認して再試行", true);
     runTask();
     await(row.id(), "SENT");
-    assertThat(notifications.history(storeId, email, row.id(), PageRequest.of(0, 10)).getContent())
+    assertThat(
+            notifications
+                .history(
+                    storeId,
+                    email,
+                    row.id(),
+                    PageRequest.of(0, 10, Sort.by("attemptNumber").descending()))
+                .getContent())
         .extracting(
             a -> a.getAttemptNumber(),
             a -> a.getStatus().name(),
