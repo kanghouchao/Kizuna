@@ -23,6 +23,7 @@ const meFixture = {
   email: 'tanaka.hanako@example.com',
   display_name: '田中花子',
   line_linked: false,
+  email_verified: false,
 };
 
 function withMe(me: MeResponse | null, failure: 'error' | null = null) {

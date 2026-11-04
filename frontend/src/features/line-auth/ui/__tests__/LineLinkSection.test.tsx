@@ -34,6 +34,7 @@ function meResponse(lineLinked: boolean): MeResponse {
     user_type: 'MEMBER',
     permissions: [],
     line_linked: lineLinked,
+    email_verified: false,
   };
 }
 

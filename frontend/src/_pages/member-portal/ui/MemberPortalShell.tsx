@@ -1,5 +1,8 @@
 'use client';
 
+import { MeProvider } from '@/entities/user';
+import { EmailVerificationBanner } from './EmailVerificationBanner';
+
 interface MemberPortalShellProps {
   children: React.ReactNode;
 }
@@ -8,11 +11,15 @@ interface MemberPortalShellProps {
  * 会員ポータルの共通シェル。モバイル優先の単画面構成で、桌面向け Sidebar shell とは別系統。
  * 本人確認はしない — 未ログインは各画面の最初の API の 401 が全域の 401 経路でログインへ差し戻し、
  * 戻り先（店舗つきの予約導線・申領画面のフラグメント）もそこで預ける。
+ * /me はシェルで一度だけ取り、全画面の同じ位置に未検証の案内を出す。
  */
 export function MemberPortalShell({ children }: MemberPortalShellProps) {
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <main className="flex-1 overflow-y-auto">{children}</main>
-    </div>
+    <MeProvider>
+      <div className="flex min-h-screen flex-col bg-background">
+        <EmailVerificationBanner />
+        <main className="flex-1 overflow-y-auto">{children}</main>
+      </div>
+    </MeProvider>
   );
 }

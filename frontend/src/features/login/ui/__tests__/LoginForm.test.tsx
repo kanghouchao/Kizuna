@@ -35,6 +35,7 @@ function meResponse(overrides: Partial<MeResponse>): MeResponse {
     user_type: 'STAFF',
     permissions: [],
     line_linked: false,
+    email_verified: false,
     ...overrides,
   };
 }
