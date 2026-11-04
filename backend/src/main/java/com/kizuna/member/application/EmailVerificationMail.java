@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.OffsetDateTime;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
@@ -52,13 +53,18 @@ public class EmailVerificationMail {
     this.appProperties = appProperties;
   }
 
-  /** 利用者の現在の宛先へトークンを発行し、コミット後に検証メールを送る。取引の外では呼べない。 */
+  /**
+   * 利用者の生きたトークンを失効させて現在の宛先へ新しいトークンを発行し、コミット後に検証メールを送る。取引の外では呼べない。
+   *
+   * <p>挿入はその場で flush し、並行した発行との生きたトークンの一意索引の違反を呼び出し側の中で顕在化させる。
+   */
   @Transactional(propagation = Propagation.MANDATORY)
   public void issue(User user) {
     String token = randomToken();
-    tokenRepository.save(
-        EmailVerificationToken.issueFor(
-            user.getId(), digest(token), user.getEmail(), Timestamps.now()));
+    OffsetDateTime issuedAt = Timestamps.now();
+    tokenRepository.revokeLive(user.getId(), issuedAt);
+    tokenRepository.saveAndFlush(
+        EmailVerificationToken.issueFor(user.getId(), digest(token), user.getEmail(), issuedAt));
     Long userId = user.getId();
     String recipient = user.getEmail();
     String body = body(token);
