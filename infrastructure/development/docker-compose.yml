@@ -166,6 +166,9 @@ services:
   mailpit:
     image: axllent/mailpit:v1.32.0
     container_name: mailpit
+    environment:
+      # 公開した API を DNS リバインディングから守る。localhost / 127.0.0.1 は Mailpit が常に許可する
+      MP_ALLOWED_HOSTS: mailpit
     # healthcheck はイメージ同梱の HEALTHCHECK（/mailpit readyz）に任せる。backend の service_healthy が頼る
     ports:
       - "127.0.0.1:8025:8025"
