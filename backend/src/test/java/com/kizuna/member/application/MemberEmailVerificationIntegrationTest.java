@@ -1,20 +1,31 @@
 package com.kizuna.member.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.notification.transport.ContactTransport;
 import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.user.domain.UserRepository;
 import jakarta.persistence.EntityManagerFactory;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.Timestamp;
+import java.time.Clock;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -27,6 +38,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -57,6 +69,7 @@ class MemberEmailVerificationIntegrationTest {
   private TransactionTemplate tx;
   private MemberRegistrationService registration;
   private RecordingTransport transport;
+  private EmailVerificationConfirmation confirmation;
 
   @BeforeAll
   void connect() {
@@ -65,6 +78,7 @@ class MemberEmailVerificationIntegrationTest {
     tx = new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
     registration = context.getBean(MemberRegistrationService.class);
     transport = context.getBean(RecordingTransport.class);
+    confirmation = context.getBean(EmailVerificationConfirmation.class);
   }
 
   @AfterAll
@@ -144,6 +158,142 @@ class MemberEmailVerificationIntegrationTest {
         };
 
     assertBothPathsRegisterDespiteSendFailure();
+  }
+
+  @Test
+  void 有効なトークンで確認すると利用者が検証済みになり_トークンは消費される() {
+    String email = email();
+    String token = registerAndCaptureToken(email);
+
+    confirmation.confirm(token);
+
+    Map<String, Object> row =
+        jdbc.queryForMap(
+            "select u.email_verified_at, t.consumed_at from t_users u"
+                + " join t_email_verification_tokens t on t.user_id = u.id where u.email = ?",
+            email);
+    assertThat(row.get("email_verified_at")).isNotNull();
+    assertThat(row.get("consumed_at")).isNotNull();
+  }
+
+  @Test
+  void 同じトークンの再提示は拒否する() {
+    String token = registerAndCaptureToken(email());
+    confirmation.confirm(token);
+
+    assertRejected(token);
+  }
+
+  @Test
+  void 存在しないトークンは拒否する() {
+    assertRejected("not-a-token");
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "update t_email_verification_tokens set expires_at = now() - interval '1 second'"
+            + " where user_id = ?",
+        "update t_email_verification_tokens set revoked_at = now() where user_id = ?",
+        "update t_users set email = 'changed-' || email where id = ?",
+        "update t_users set withdrawn_at = now(), enabled = false where id = ?"
+      })
+  void 期限切れ_失効済み_宛先の不一致_退会済みはどれも同じ文言で拒否し_検証済みにしない(String breakage) {
+    String email = email();
+    String token = registerAndCaptureToken(email);
+    long userId = jdbc.queryForObject("select id from t_users where email = ?", Long.class, email);
+    jdbc.update(breakage, userId);
+
+    assertRejected(token);
+
+    assertThat(
+            jdbc.queryForObject(
+                "select email_verified_at is null from t_users where id = ?",
+                Boolean.class,
+                userId))
+        .isTrue();
+    assertThat(
+            jdbc.queryForObject(
+                "select consumed_at is null from t_email_verification_tokens where user_id = ?",
+                Boolean.class,
+                userId))
+        .isTrue();
+  }
+
+  @Test
+  void 同じトークンを並行して確認すると一方だけが通り_他方は拒否される() throws Exception {
+    String token = registerAndCaptureToken(email());
+    String digest = EmailVerificationMail.digest(token);
+    DataSource source = context.getBean(DataSource.class);
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    try (Connection blocker = source.getConnection()) {
+      // 先にトークン行を押さえ、両方の確認がロック待ちに並んでから放す。
+      blocker.setAutoCommit(false);
+      try (PreparedStatement lock =
+          blocker.prepareStatement(
+              "select id from t_email_verification_tokens where token_digest = ? for update")) {
+        lock.setString(1, digest);
+        lock.executeQuery();
+      }
+      List<Future<Throwable>> attempts =
+          List.of(pool.submit(() -> attempt(token)), pool.submit(() -> attempt(token)));
+      try {
+        awaitLockWaiters(2);
+      } finally {
+        blocker.commit();
+      }
+
+      List<Throwable> outcomes = new ArrayList<>();
+      for (Future<Throwable> attempt : attempts) {
+        outcomes.add(attempt.get(10, TimeUnit.SECONDS));
+      }
+      assertThat(outcomes).filteredOn(Objects::isNull).hasSize(1);
+      assertThat(outcomes)
+          .filteredOn(Objects::nonNull)
+          .singleElement()
+          .isInstanceOfSatisfying(
+              ServiceException.class,
+              rejected -> assertThat(rejected).hasMessage(EmailVerificationConfirmation.REJECTED));
+    } finally {
+      pool.shutdownNow();
+    }
+  }
+
+  private void awaitLockWaiters(int expected) throws InterruptedException {
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+    while (System.nanoTime() < deadline) {
+      long blocked =
+          jdbc.queryForObject(
+              "select count(*) from pg_stat_activity where datname=current_database() and wait_event_type='Lock'",
+              Long.class);
+      if (blocked >= expected) return;
+      Thread.sleep(20);
+    }
+    throw new AssertionError("並行の確認がトークン行のロック待ちで止まっていません");
+  }
+
+  private Throwable attempt(String token) {
+    try {
+      confirmation.confirm(token);
+      return null;
+    } catch (RuntimeException failure) {
+      return failure;
+    }
+  }
+
+  private void assertRejected(String token) {
+    assertThatThrownBy(() -> confirmation.confirm(token))
+        .isInstanceOf(ServiceException.class)
+        .hasMessage(EmailVerificationConfirmation.REJECTED);
+  }
+
+  private String registerAndCaptureToken(String email) {
+    transport.deliveries.clear();
+    tx.executeWithoutResult(
+        status -> registration.register(new MemberRegistrationCommand(email, "pass12345", "検証会員")));
+    Matcher link = LINK.matcher(transport.deliveries.get(0).body());
+    assertThat(link.find()).isTrue();
+    return link.group(1);
   }
 
   // afterCommit の例外は TransactionTemplate の呼び出し元へ伝播するので、ここで例外が無いことが応答を変えない証明になる。
@@ -252,7 +402,11 @@ class MemberEmailVerificationIntegrationTest {
   @Configuration
   @EnableTransactionManagement
   @EnableJpaRepositories(basePackageClasses = {UserRepository.class, MemberRepository.class})
-  @Import({MemberRegistrationService.class, EmailVerificationMail.class})
+  @Import({
+    MemberRegistrationService.class,
+    EmailVerificationMail.class,
+    EmailVerificationConfirmation.class
+  })
   static class Config {
     @Bean
     DataSource dataSource() {
@@ -301,6 +455,11 @@ class MemberEmailVerificationIntegrationTest {
       var properties = new AppProperties();
       properties.setDomain("kizuna.test");
       return properties;
+    }
+
+    @Bean
+    Clock clock() {
+      return Clock.systemUTC();
     }
 
     @Bean
