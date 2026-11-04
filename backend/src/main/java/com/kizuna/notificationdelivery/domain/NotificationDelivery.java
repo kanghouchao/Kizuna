@@ -91,6 +91,15 @@ public class NotificationDelivery extends DeliveryRecord {
     status = DeliveryStatus.QUEUED;
   }
 
+  /** 結果不明だけを職員の判定で終端へ移す。判定は試行の一つとして数える。 */
+  public void resolve(Long version, DeliveryResolution outcome, String reason) {
+    if (!Objects.equals(getVersion(), version) || status != DeliveryStatus.UNKNOWN)
+      throw new ConflictException("通知の状態が変わりました。再取得して確認してください");
+    this.reason = DeliveryContent.clean(reason, 500);
+    status = outcome.status();
+    attemptCount++;
+  }
+
   public void dispatch() {
     require(DeliveryStatus.QUEUED);
     status = DeliveryStatus.DISPATCHED;

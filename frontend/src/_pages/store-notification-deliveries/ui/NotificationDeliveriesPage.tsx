@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
 import { useForm } from 'react-hook-form';
 import {
   Delivery,
   DeliveryInput,
+  DeliveryResolution,
   DeliveryStatus,
   notificationApi,
 } from '@/entities/notification-delivery';
@@ -16,6 +17,7 @@ import {
   useListPage,
   useOperation,
   useResource,
+  useVersionedWrite,
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import {
@@ -33,6 +35,9 @@ import {
   FormLabel,
   FormMessage,
   Input,
+  Label,
+  RadioGroup,
+  RadioGroupItem,
   Textarea,
   Select,
   SelectContent,
@@ -73,14 +78,19 @@ const failureLabels: Record<string, string> = {
   CONTACT_NOT_ALLOWED: '最新の連絡可否で送信できません',
   AUTHORIZATION_DENIED: '実行主体の権限がありません',
   SOURCE_UNAVAILABLE: '業務起点を確認できません',
+  MANUAL_RESOLUTION: '職員がメール提供元の記録を確認して判定しました',
 };
-function Status({ status }: { status: DeliveryStatus }) {
+const resolutionLabels: Partial<Record<DeliveryStatus, string>> = {
+  SENT: '送達済みと判定',
+  FAILED: '未送達と判定',
+};
+function Status({ status, label }: { status: DeliveryStatus; label?: string }) {
   return (
     <Badge
       variant="outline"
       className={`border-transparent ${status === 'SENT' ? 'bg-success/10 text-success-strong' : ['FAILED', 'BLOCKED', 'UNKNOWN'].includes(status) ? 'bg-warning/10 text-warning-strong' : 'bg-muted text-foreground'}`}
     >
-      {statuses[status]}
+      {label ?? statuses[status]}
     </Badge>
   );
 }
@@ -118,20 +128,28 @@ function History({ id }: { id: string }) {
         <p>送信試行はありません</p>
       ) : (
         <ol className="space-y-3">
-          {history.rows.map(row => (
-            <li key={row.id} className="rounded-lg border p-4 space-y-2">
-              <p>
-                第{row.attempt_number}回 <Status status={row.status} />
-              </p>
-              <p className="text-sm">
-                {time(row.started_at)} / 実行 #{row.task_execution_id}
-              </p>
-              <p className="whitespace-pre-wrap wrap-anywhere">{row.reason}</p>
-              {row.failure_code && (
-                <p>{failureLabels[row.failure_code] ?? '送信を完了できませんでした'}</p>
-              )}
-            </li>
-          ))}
+          {history.rows.map(row => {
+            const manual = row.failure_code === 'MANUAL_RESOLUTION';
+            return (
+              <li key={row.id} className="rounded-lg border p-4 space-y-2">
+                <p>
+                  第{row.attempt_number}回{' '}
+                  <Status
+                    status={row.status}
+                    label={manual ? resolutionLabels[row.status] : undefined}
+                  />
+                </p>
+                <p className="text-sm">
+                  {time(row.started_at)} /{' '}
+                  {manual ? '職員の判定' : `実行 #${row.task_execution_id}`}
+                </p>
+                <p className="whitespace-pre-wrap wrap-anywhere">{row.reason}</p>
+                {row.failure_code && (
+                  <p>{failureLabels[row.failure_code] ?? '送信を完了できませんでした'}</p>
+                )}
+              </li>
+            );
+          })}
         </ol>
       )}
       {!history.failed && (
@@ -145,6 +163,100 @@ function History({ id }: { id: string }) {
         />
       )}
     </section>
+  );
+}
+type ResolutionDraft = { outcome: DeliveryResolution | ''; reason: string };
+function Resolution({
+  row,
+  onResolved,
+  reload,
+}: {
+  row: Delivery;
+  onResolved: (result: Delivery) => void;
+  reload: () => Promise<void>;
+}) {
+  const form = useForm<ResolutionDraft>({ defaultValues: { outcome: '', reason: '' } });
+  const write = useVersionedWrite(reload);
+  const labelId = useId();
+  const resolve = async ({ outcome, reason }: ResolutionDraft) => {
+    if (outcome === '') return;
+    await write.write(() => notificationApi.resolve(row.id, row.version, outcome, reason), {
+      success: '判定を記録しました',
+      failure: '判定を記録できませんでした',
+      onSuccess: onResolved,
+    });
+  };
+  return (
+    <Form {...form}>
+      <form
+        noValidate
+        onSubmit={event => void form.handleSubmit(resolve)(event)}
+        className="space-y-4 rounded-lg border p-4"
+      >
+        <p className="text-sm">
+          メール提供元の管理画面などで配信の記録を確認し、結果を判定してください。判定は送信試行の履歴に職員の判定として残ります。
+        </p>
+        {write.conflict && (
+          <div role="alert" className="space-y-2">
+            <p className="text-destructive-strong">
+              通知の状態が変わりました。最新の状態を取得してから判定してください。
+            </p>
+            <Button type="button" variant="outline" onClick={() => void write.reload()}>
+              最新の状態を取得して判定をやり直す
+            </Button>
+          </div>
+        )}
+        <FormField
+          control={form.control}
+          name="outcome"
+          rules={{ required: '判定を選択してください' }}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel id={labelId}>判定</FormLabel>
+              <FormControl>
+                <RadioGroup
+                  aria-labelledby={labelId}
+                  value={field.value}
+                  onValueChange={value => field.onChange(value as DeliveryResolution)}
+                  required
+                >
+                  <Label className="flex items-center gap-2 font-normal">
+                    <RadioGroupItem value="FAILED" ref={field.ref} />
+                    未送達（再試行できるようにする）
+                  </Label>
+                  <Label className="flex items-center gap-2 font-normal">
+                    <RadioGroupItem value="SENT" />
+                    送達済み（再試行しない）
+                  </Label>
+                </RadioGroup>
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="reason"
+          rules={{
+            required: '判定の理由を入力してください',
+            maxLength: { value: 500, message: '500文字以内で入力してください' },
+            validate: v => v.trim().length > 0 || '判定の理由を入力してください',
+          }}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>確認した内容・判定の理由</FormLabel>
+              <FormControl>
+                <Textarea {...field} required maxLength={500} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <Button type="submit" disabled={write.busy || form.formState.isSubmitting}>
+          判定を記録する
+        </Button>
+      </form>
+    </Form>
   );
 }
 function Detail({
@@ -240,7 +352,7 @@ function Detail({
       </p>
       {row.status === 'UNKNOWN' && (
         <p role="status" className="text-warning-strong">
-          送信結果が不明です。重複送信を防ぐため再試行できません。メール提供元の記録を確認してください。
+          送信結果が不明です。重複送信を防ぐため、このままでは再試行できません。未送達と判定した通知だけを再試行できます。
         </p>
       )}
       <Button
@@ -253,6 +365,19 @@ function Detail({
       >
         最新の状態を取得
       </Button>
+      {canSend && row.status === 'UNKNOWN' && (
+        <Resolution
+          key={row.version}
+          row={row}
+          reload={detail.reload}
+          onResolved={result => {
+            if (!active.current) return;
+            detail.setData(result);
+            setHistoryKey(n => n + 1);
+            onChanged();
+          }}
+        />
+      )}
       {canSend && ['DRAFT', 'FAILED', 'BLOCKED'].includes(row.status) && (
         <Form {...form}>
           <form

@@ -26,6 +26,7 @@ jest.mock('@/entities/notification-delivery', () => ({
     create: jest.fn(),
     queue: jest.fn(),
     retry: jest.fn(),
+    resolve: jest.fn(),
     history: jest.fn(),
   },
 }));
@@ -102,6 +103,100 @@ test('結果不明では再試行を出さず未設定を成功として表示�
   expect(
     within(dialog).queryByRole('button', { name: '明示的に再試行する' })
   ).not.toBeInTheDocument();
+  expect(within(dialog).getByRole('button', { name: '判定を記録する' })).toBeVisible();
+});
+test('送信権限が無ければ結果不明の判定を出さない', async () => {
+  permission('NOTIFICATION_VIEW', 'NOTIFICATION_MANAGE');
+  api.get.mockResolvedValue({ ...row, status: 'UNKNOWN' });
+  render(<NotificationDeliveriesPage />);
+  const dialog = await detail();
+  expect(await within(dialog).findByText(/送信結果が不明です/)).toBeVisible();
+  expect(within(dialog).queryByRole('button', { name: '判定を記録する' })).not.toBeInTheDocument();
+});
+test('判定と理由が無ければ送らず、未送達と判定すると再試行の入力に切り替わる', async () => {
+  api.get.mockResolvedValue({ ...row, status: 'UNKNOWN', attempt_count: 1, version: 4 });
+  api.resolve.mockResolvedValue({ ...row, status: 'FAILED', attempt_count: 2, version: 5 });
+  render(<NotificationDeliveriesPage />);
+  const dialog = await detail();
+  fireEvent.click(await within(dialog).findByRole('button', { name: '判定を記録する' }));
+  expect(await within(dialog).findByText('判定を選択してください')).toBeVisible();
+  expect(within(dialog).getByText('判定の理由を入力してください')).toBeVisible();
+  expect(api.resolve).not.toHaveBeenCalled();
+  fireEvent.click(within(dialog).getByRole('radio', { name: /未送達/ }));
+  fireEvent.change(within(dialog).getByLabelText('確認した内容・判定の理由'), {
+    target: { value: '提供元の管理画面で未配信を確認' },
+  });
+  fireEvent.click(within(dialog).getByRole('button', { name: '判定を記録する' }));
+  await waitFor(() =>
+    expect(api.resolve).toHaveBeenCalledWith('10', 4, 'FAILED', '提供元の管理画面で未配信を確認')
+  );
+  expect(await within(dialog).findByRole('button', { name: '明示的に再試行する' })).toBeVisible();
+  expect(within(dialog).queryByRole('button', { name: '判定を記録する' })).not.toBeInTheDocument();
+  expect(notify.success).toHaveBeenCalledWith('判定を記録しました');
+  await waitFor(() => expect(api.history).toHaveBeenCalledTimes(2));
+});
+test('判定が競合したら最新の状態を取るまで送らない', async () => {
+  api.get
+    .mockResolvedValueOnce({ ...row, status: 'UNKNOWN', version: 4 })
+    .mockResolvedValueOnce({ ...row, status: 'SENT', version: 5 });
+  api.resolve.mockRejectedValue({
+    response: { status: 409, data: { error: '状態が変わりました' } },
+  });
+  render(<NotificationDeliveriesPage />);
+  const dialog = await detail();
+  fireEvent.click(await within(dialog).findByRole('radio', { name: /送達済み/ }));
+  fireEvent.change(within(dialog).getByLabelText('確認した内容・判定の理由'), {
+    target: { value: '配信を確認' },
+  });
+  fireEvent.click(within(dialog).getByRole('button', { name: '判定を記録する' }));
+  const conflict = await within(dialog).findByText(/通知の状態が変わりました/);
+  expect(conflict).toBeVisible();
+  fireEvent.click(within(dialog).getByRole('button', { name: '判定を記録する' }));
+  expect(api.resolve).toHaveBeenCalledTimes(1);
+  fireEvent.click(
+    within(dialog).getByRole('button', { name: '最新の状態を取得して判定をやり直す' })
+  );
+  await waitFor(() =>
+    expect(within(dialog).queryByRole('button', { name: '判定を記録する' })).not.toBeInTheDocument()
+  );
+  expect(api.get).toHaveBeenCalledTimes(2);
+});
+test('試行履歴は職員の判定を提供元の結果と区別して示す', async () => {
+  api.get.mockResolvedValue({ ...row, status: 'FAILED', attempt_count: 2 });
+  api.history.mockResolvedValue({
+    rows: [
+      {
+        id: 'a2',
+        attempt_number: 2,
+        status: 'FAILED',
+        failure_code: 'MANUAL_RESOLUTION',
+        started_at: '2026-10-07T02:00:00Z',
+        finished_at: '2026-10-07T02:00:00Z',
+        reason: '提供元で未配信を確認',
+      },
+      {
+        id: 'a1',
+        attempt_number: 1,
+        status: 'UNKNOWN',
+        failure_code: 'UNKNOWN',
+        started_at: '2026-10-07T01:00:00Z',
+        task_execution_id: 3,
+        reason: '内容確認',
+      },
+    ],
+    page: 0,
+    pageCount: 1,
+    total: 2,
+  });
+  render(<NotificationDeliveriesPage />);
+  const dialog = await detail();
+  const judged = (await within(dialog).findByText('提供元で未配信を確認')).closest('li')!;
+  expect(within(judged).getByText('未送達と判定')).toBeVisible();
+  expect(within(judged).getByText(/職員の判定/)).toBeVisible();
+  expect(judged).not.toHaveTextContent('実行 #');
+  const provider = within(dialog).getByText('内容確認').closest('li')!;
+  expect(provider).toHaveTextContent('実行 #3');
+  expect(within(provider).getByText('結果不明')).toBeVisible();
 });
 test('操作失敗後に理由を保持し連打で二重登録しない', async () => {
   let reject!: (e: Error) => void;

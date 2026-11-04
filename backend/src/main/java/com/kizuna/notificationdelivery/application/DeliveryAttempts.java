@@ -103,7 +103,7 @@ public class DeliveryAttempts {
             .findById(event.attemptId())
             .orElseThrow(() -> new NotFoundException("送信試行が見つかりません"));
     if (!attempt.getDeliveryId().equals(row.getId())
-        || !attempt.getServiceUserId().equals(event.serviceUserId())
+        || !attempt.getActorUserId().equals(event.serviceUserId())
         || !attempt.getTaskExecutionId().equals(event.executionId()))
       throw new AccessDeniedException("送信試行の指定が不正です");
     return new Locked(row, attempt);
@@ -117,6 +117,6 @@ public class DeliveryAttempts {
 
   private static AuditActor actor(Locked locked) {
     return new AuditActor(
-        locked.attempt().getServiceUserId(), "SERVICE", locked.attempt().getServiceName());
+        locked.attempt().getActorUserId(), "SERVICE", locked.attempt().getActorName());
   }
 }

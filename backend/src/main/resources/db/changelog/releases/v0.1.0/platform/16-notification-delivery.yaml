@@ -131,15 +131,13 @@ databaseChangeLog:
               - column:
                   name: task_execution_id
                   type: BIGINT
-                  constraints:
-                    nullable: false
               - column:
-                  name: service_user_id
+                  name: actor_user_id
                   type: BIGINT
                   constraints:
                     nullable: false
               - column:
-                  name: service_name
+                  name: actor_name
                   type: VARCHAR(255)
                   constraints:
                     nullable: false
@@ -165,7 +163,7 @@ databaseChangeLog:
                   name: failure_code
                   type: VARCHAR(40)
         # 店舗削除は帰属する通知を連鎖削除する（SET NULL ではグループ級の行に化けるため）。試行は通知に従い、
-        # 実行主体と定期処理の実行記録は履歴のため保護する。
+        # 実行主体（サービス ID または判定した職員）と定期処理の実行記録は履歴のため保護する。
         - addForeignKeyConstraint:
             baseTableName: t_notification_deliveries
             baseColumnNames: attributed_store_id
@@ -189,21 +187,23 @@ databaseChangeLog:
             onDelete: NO ACTION
         - addForeignKeyConstraint:
             baseTableName: t_notification_attempts
-            baseColumnNames: service_user_id
+            baseColumnNames: actor_user_id
             referencedTableName: t_users
             referencedColumnNames: id
-            constraintName: fk_t_notification_attempts_service_user_id
+            constraintName: fk_t_notification_attempts_actor_user_id
             onDelete: NO ACTION
         - addUniqueConstraint:
             tableName: t_notification_attempts
             columnNames: delivery_id,attempt_number
             constraintName: uq_t_notification_attempts_number
         # 要求キーはグループ級（null）の行どうしでも重複させないため NULLS NOT DISTINCT にする。
+        # 定期処理の実行を持たない試行は職員の判定だけで、判定は送達済みか未送達のどちらかに限る。
         - sql:
             sql: |
               CREATE UNIQUE INDEX uq_t_notification_deliveries_key ON t_notification_deliveries (attributed_store_id,dedupe_key) NULLS NOT DISTINCT;
               ALTER TABLE t_notification_deliveries ADD CONSTRAINT ck_t_notification_deliveries_status CHECK (status IN ('DRAFT','QUEUED','DISPATCHED','SENDING','SENT','FAILED','BLOCKED','UNKNOWN'));
               ALTER TABLE t_notification_attempts ADD CONSTRAINT ck_t_notification_attempts_status CHECK (status IN ('DISPATCHED','SENDING','SENT','FAILED','BLOCKED','UNKNOWN'));
+              ALTER TABLE t_notification_attempts ADD CONSTRAINT ck_t_notification_attempts_manual_resolution CHECK ((task_execution_id IS NULL) = (failure_code IS NOT DISTINCT FROM 'MANUAL_RESOLUTION') AND (task_execution_id IS NOT NULL OR status IN ('SENT','FAILED')));
               CREATE INDEX idx_t_notification_deliveries_due ON t_notification_deliveries (scheduled_at,id) WHERE status = 'QUEUED';
               CREATE INDEX idx_t_notification_deliveries_history ON t_notification_deliveries (attributed_store_id,id DESC);
               CREATE INDEX idx_t_notification_attempts_history ON t_notification_attempts (delivery_id,id DESC);

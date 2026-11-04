@@ -1,6 +1,12 @@
 import type { AxiosRequestConfig } from 'axios';
 import { apiClient, fromSpringPage, PageResult } from '@/shared/api';
-import { Delivery, DeliveryInput, DeliverySummary, DeliveryAttempt } from '../model/types';
+import {
+  Delivery,
+  DeliveryInput,
+  DeliveryResolution,
+  DeliverySummary,
+  DeliveryAttempt,
+} from '../model/types';
 const path = '/notification-deliveries';
 export const notificationApi = {
   list: async (page: number): Promise<PageResult<DeliverySummary>> =>
@@ -16,6 +22,13 @@ export const notificationApi = {
     (await apiClient.post(`${path}/${id}/queue`, { version, reason })).data,
   retry: async (id: string, version: number, reason: string): Promise<Delivery> =>
     (await apiClient.post(`${path}/${id}/retries`, { version, reason })).data,
+  resolve: async (
+    id: string,
+    version: number,
+    outcome: DeliveryResolution,
+    reason: string
+  ): Promise<Delivery> =>
+    (await apiClient.post(`${path}/${id}/resolutions`, { version, outcome, reason })).data,
   history: async (id: string, page: number): Promise<PageResult<DeliveryAttempt>> =>
     fromSpringPage(
       (await apiClient.get(`${path}/${id}/attempts`, { params: { page, size: 50 } })).data

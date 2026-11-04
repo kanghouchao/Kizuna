@@ -3,6 +3,7 @@ package com.kizuna.notificationdelivery.application;
 import com.kizuna.notificationdelivery.domain.DeliveryAttempt;
 import com.kizuna.notificationdelivery.domain.DeliveryAttemptRepository;
 import com.kizuna.notificationdelivery.domain.DeliveryContent;
+import com.kizuna.notificationdelivery.domain.DeliveryResolution;
 import com.kizuna.notificationdelivery.domain.NotificationDelivery;
 import com.kizuna.notificationdelivery.domain.NotificationDeliveryRepository;
 import com.kizuna.shared.exception.NotFoundException;
@@ -78,6 +79,27 @@ public class NotificationService {
     row.queue(version, reason, retry);
     deliveries.flush();
     audit.append(row, actor, retry ? "NOTIFICATION_RETRIED" : "NOTIFICATION_QUEUED");
+    return response(storeId, row);
+  }
+
+  @Transactional
+  public DeliveryView resolve(
+      Long storeId,
+      String email,
+      String id,
+      Long version,
+      DeliveryResolution outcome,
+      String reason) {
+    var actor = actors.require(storeId, email, PermissionCode.NOTIFICATION_SEND);
+    var row =
+        deliveries
+            .findByIdAndAttributedStoreIdForUpdate(id, storeId)
+            .orElseThrow(() -> new NotFoundException("通知が見つかりません"));
+    row.resolve(version, outcome, reason);
+    deliveries.flush();
+    attempts.saveAndFlush(
+        DeliveryAttempt.resolution(row, actor.id(), actor.name(), OffsetDateTime.now(clock)));
+    audit.append(row, actor, "NOTIFICATION_RESOLVED");
     return response(storeId, row);
   }
 

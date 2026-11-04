@@ -25,6 +25,7 @@ import com.kizuna.notificationdelivery.application.NotificationService;
 import com.kizuna.notificationdelivery.domain.DeliveryChannel;
 import com.kizuna.notificationdelivery.domain.DeliveryContent;
 import com.kizuna.notificationdelivery.domain.DeliveryPurpose;
+import com.kizuna.notificationdelivery.domain.DeliveryResolution;
 import com.kizuna.notificationdelivery.domain.DeliverySourceType;
 import com.kizuna.order.application.BusinessContactPermissions;
 import com.kizuna.order.application.GuestApplicationConsent;
@@ -90,6 +91,7 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.modulith.events.IncompleteEventPublications;
@@ -352,6 +354,144 @@ class NotificationIntegrationTest {
     assertThatThrownBy(
             () -> notifications.queue(storeId, email, next.id(), unknown.version(), "再送", true))
         .isInstanceOf(ConflictException.class);
+  }
+
+  private DeliveryResponse unknownDelivery() throws Exception {
+    transport.outcome = ContactTransport.Result.UNKNOWN;
+    var row = queue(draft());
+    runTask();
+    var unknown = await(row.id(), "UNKNOWN");
+    transport.outcome = ContactTransport.Result.SENT;
+    return unknown;
+  }
+
+  private DeliveryResponse resolve(
+      DeliveryResponse row, DeliveryResolution outcome, String reason) {
+    return DeliveryResponse.of(
+        notifications.resolve(storeId, email, row.id(), row.version(), outcome, reason));
+  }
+
+  @Test
+  void undeliveredJudgmentIsAHumanAttemptAuditedWithoutContentAndCanBeRetried() throws Exception {
+    var unknown = unknownDelivery();
+    var failed = resolve(unknown, DeliveryResolution.FAILED, "提供元の管理画面で未配信を確認");
+    assertThat(failed.status()).isEqualTo("FAILED");
+    assertThat(failed.attemptCount()).isEqualTo(2);
+    var judged =
+        notifications
+            .history(
+                storeId, email, unknown.id(), PageRequest.of(0, 10, Sort.by("id").descending()))
+            .getContent()
+            .getFirst();
+    assertThat(judged.getAttemptNumber()).isEqualTo(2);
+    assertThat(judged.getStatus().name()).isEqualTo("FAILED");
+    assertThat(judged.getFailureCode()).isEqualTo("MANUAL_RESOLUTION");
+    assertThat(judged.getTaskExecutionId()).isNull();
+    assertThat(judged.getReason()).isEqualTo("提供元の管理画面で未配信を確認");
+    assertThat(
+            jdbc.queryForObject(
+                "select actor_user_id from t_notification_attempts where id=?",
+                Long.class,
+                judged.getId()))
+        .isEqualTo(operatorId);
+    var audit =
+        jdbc.queryForMap(
+            "select actor_id,actor_name,originating_store_id,after_values::text as after from t_audit_events where target_id=? and action='NOTIFICATION_RESOLVED'",
+            unknown.id());
+    assertThat(audit.get("actor_id")).isEqualTo(operatorId);
+    assertThat(audit.get("actor_name")).isEqualTo("通知担当");
+    assertThat(audit.get("originating_store_id")).isEqualTo(storeId);
+    assertThat((String) audit.get("after"))
+        .contains("FAILED")
+        .doesNotContain("機密な本文", "受付確認", "未配信を確認", "example.invalid");
+
+    notifications.queue(storeId, email, unknown.id(), failed.version(), "未送達の判定にもとづき再送", true);
+    runTask();
+    await(unknown.id(), "SENT");
+    assertThat(transport.results).hasSize(2);
+    assertThat(
+            notifications.history(storeId, email, unknown.id(), PageRequest.of(0, 10)).getContent())
+        .extracting(a -> a.getAttemptNumber())
+        .containsExactlyInAnyOrder(1, 2, 3);
+  }
+
+  @Test
+  void deliveredJudgmentCannotBeRetriedAndOnlyUnknownCanBeJudgedOnce() throws Exception {
+    var unknown = unknownDelivery();
+    var sent = resolve(unknown, DeliveryResolution.SENT, "提供元で配信済みを確認");
+    assertThat(sent.status()).isEqualTo("SENT");
+    assertThatThrownBy(
+            () -> notifications.queue(storeId, email, unknown.id(), sent.version(), "再送", true))
+        .isInstanceOf(ConflictException.class);
+    assertThatThrownBy(() -> resolve(sent, DeliveryResolution.FAILED, "判定の上書き"))
+        .isInstanceOf(ConflictException.class);
+    assertThatThrownBy(() -> resolve(unknown, DeliveryResolution.FAILED, "古い版で判定"))
+        .isInstanceOf(ConflictException.class);
+
+    var draft = draft();
+    assertThatThrownBy(() -> resolve(draft, DeliveryResolution.FAILED, "下書きを判定"))
+        .isInstanceOf(ConflictException.class);
+    transport.outcome = ContactTransport.Result.FAILED;
+    var definite = queue(draft());
+    runTask();
+    var failed = await(definite.id(), "FAILED");
+    assertThatThrownBy(() -> resolve(failed, DeliveryResolution.SENT, "未送信を送達済みに"))
+        .isInstanceOf(ConflictException.class);
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from t_audit_events where action='NOTIFICATION_RESOLVED' and target_id in (?,?,?)",
+                Long.class,
+                unknown.id(),
+                draft.id(),
+                definite.id()))
+        .isEqualTo(1L);
+  }
+
+  @Test
+  void judgmentIsScopedToTheCurrentStoreAndRequiresSendPermission() throws Exception {
+    var unknown = unknownDelivery();
+    assertThatThrownBy(
+            () ->
+                notifications.resolve(
+                    otherStore,
+                    email,
+                    unknown.id(),
+                    unknown.version(),
+                    DeliveryResolution.FAILED,
+                    "別店舗から判定"))
+        .isInstanceOf(NotFoundException.class);
+    jdbc.update(
+        "delete from t_role_permissions where permission_id=(select id from t_permissions where code='NOTIFICATION_SEND') and role_id in (select role_id from t_user_roles where user_id=?)",
+        operatorId);
+    assertThatThrownBy(() -> resolve(unknown, DeliveryResolution.FAILED, "権限なしで判定"))
+        .isInstanceOf(AccessDeniedException.class);
+    assertThat(get(unknown.id()).status()).isEqualTo("UNKNOWN");
+  }
+
+  @Test
+  void onlyHumanJudgmentsMayLackATaskExecution() throws Exception {
+    var unknown = unknownDelivery();
+    for (var row :
+        List.of(
+            new Object[] {"FAILED", "UNAVAILABLE"},
+            new Object[] {"UNKNOWN", "MANUAL_RESOLUTION"},
+            new Object[] {"BLOCKED", "MANUAL_RESOLUTION"}))
+      assertThatThrownBy(
+              () ->
+                  jdbc.update(
+                      "insert into t_notification_attempts(id,delivery_id,attempt_number,actor_user_id,actor_name,reason,started_at,status,failure_code) values (?,?,9,?,'職員','理由',now(),?,?)",
+                      UUID.randomUUID().toString().replace("-", ""),
+                      unknown.id(),
+                      operatorId,
+                      row[0],
+                      row[1]))
+          .hasMessageContaining("ck_t_notification_attempts_manual_resolution");
+    assertThatThrownBy(
+            () ->
+                jdbc.update(
+                    "update t_notification_attempts set failure_code='MANUAL_RESOLUTION' where delivery_id=?",
+                    unknown.id()))
+        .hasMessageContaining("ck_t_notification_attempts_manual_resolution");
   }
 
   @Test

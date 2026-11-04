@@ -19,7 +19,9 @@ import com.kizuna.notificationdelivery.domain.DeliveryAttempt;
 import com.kizuna.notificationdelivery.domain.DeliveryChannel;
 import com.kizuna.notificationdelivery.domain.DeliveryContent;
 import com.kizuna.notificationdelivery.domain.DeliveryPurpose;
+import com.kizuna.notificationdelivery.domain.DeliveryResolution;
 import com.kizuna.notificationdelivery.domain.DeliverySourceType;
+import com.kizuna.notificationdelivery.domain.DeliveryStatus;
 import com.kizuna.notificationdelivery.domain.NotificationDelivery;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
@@ -240,6 +242,98 @@ class NotificationDeliveryControllerTest {
 
     assertThat(pageable.getValue().getSort())
         .isEqualTo(Sort.by(Sort.Direction.DESC, DeliveryAttempt::getId));
+  }
+
+  @Test
+  @DisplayName("結果不明の判定は名乗られた店舗・版・判定・理由で service を呼び、201 で通知を返すこと")
+  @WithMockUser(authorities = {"PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_SEND"})
+  void resolutionPassesTheCurrentStoreAndOutcome() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(notifications.resolve(STORE_ID, "user", "101", 3L, DeliveryResolution.FAILED, "未配信を確認"))
+        .thenReturn(view());
+
+    mockMvc
+        .perform(
+            post("/notification-deliveries/101/resolutions")
+                .header("X-Store-ID", STORE_ID.toString())
+                .principal(currentUser())
+                .contentType("application/json")
+                .content("{\"version\":3,\"outcome\":\"FAILED\",\"reason\":\"未配信を確認\"}"))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.id").value("101"))
+        .andExpect(jsonPath("$.attempt_count").value(0));
+
+    verify(notifications).resolve(STORE_ID, "user", "101", 3L, DeliveryResolution.FAILED, "未配信を確認");
+  }
+
+  @Test
+  @DisplayName("送信権限の無い職員の判定は 403 で、service を呼ばないこと")
+  @WithMockUser(authorities = {"PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_MANAGE"})
+  void resolutionRequiresSendPermission() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    mockMvc
+        .perform(
+            post("/notification-deliveries/101/resolutions")
+                .header("X-Store-ID", STORE_ID.toString())
+                .principal(currentUser())
+                .contentType("application/json")
+                .content("{\"version\":3,\"outcome\":\"SENT\",\"reason\":\"確認\"}"))
+        .andExpect(status().isForbidden());
+
+    verify(notifications, never()).resolve(any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("判定は送達済み・未送達の二つだけで、結果不明や空の理由は 400 で拒むこと")
+  @WithMockUser(authorities = {"PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_SEND"})
+  void resolutionRejectsOtherOutcomesAndBlankReason() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    for (var body :
+        List.of(
+            "{\"version\":3,\"outcome\":\"UNKNOWN\",\"reason\":\"確認\"}",
+            "{\"version\":3,\"outcome\":\"BLOCKED\",\"reason\":\"確認\"}",
+            "{\"version\":3,\"reason\":\"確認\"}",
+            "{\"version\":3,\"outcome\":\"SENT\",\"reason\":\"  \"}",
+            "{\"outcome\":\"SENT\",\"reason\":\"確認\"}"))
+      mockMvc
+          .perform(
+              post("/notification-deliveries/101/resolutions")
+                  .header("X-Store-ID", STORE_ID.toString())
+                  .principal(currentUser())
+                  .contentType("application/json")
+                  .content(body))
+          .andExpect(status().isBadRequest());
+
+    verify(notifications, never()).resolve(any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("職員の判定の試行は実行 ID を持たず、失敗コード MANUAL_RESOLUTION で返ること")
+  @WithMockUser(authorities = "PERM_NOTIFICATION_VIEW")
+  void historyShowsManualResolutionWithoutExecution() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    var row = view().row();
+    ReflectionTestUtils.setField(row, "status", DeliveryStatus.UNKNOWN);
+    row.resolve(null, DeliveryResolution.FAILED, "未配信を確認");
+    var attempt =
+        DeliveryAttempt.resolution(
+            row, 9L, "通知担当", OffsetDateTime.parse("2026-10-07T09:00:00+09:00"));
+    when(notifications.history(eq(STORE_ID), eq("user"), eq("101"), any()))
+        .thenReturn(new PageImpl<>(List.of(attempt), PageRequest.of(0, 50), 1));
+
+    mockMvc
+        .perform(
+            get("/notification-deliveries/101/attempts")
+                .header("X-Store-ID", STORE_ID.toString())
+                .principal(currentUser()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.content[0].status").value("FAILED"))
+        .andExpect(jsonPath("$.content[0].failure_code").value("MANUAL_RESOLUTION"))
+        .andExpect(jsonPath("$.content[0].task_execution_id").doesNotExist())
+        .andExpect(jsonPath("$.content[0].reason").value("未配信を確認"))
+        .andExpect(jsonPath("$.content[0].actor_name").doesNotExist());
   }
 
   private static DeliveryView view() {

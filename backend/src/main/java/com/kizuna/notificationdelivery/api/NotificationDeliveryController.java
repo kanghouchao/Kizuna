@@ -3,6 +3,7 @@ package com.kizuna.notificationdelivery.api;
 import com.kizuna.notificationdelivery.api.dto.DeliveryActionRequest;
 import com.kizuna.notificationdelivery.api.dto.DeliveryAttemptResponse;
 import com.kizuna.notificationdelivery.api.dto.DeliveryRequest;
+import com.kizuna.notificationdelivery.api.dto.DeliveryResolutionRequest;
 import com.kizuna.notificationdelivery.api.dto.DeliveryResponse;
 import com.kizuna.notificationdelivery.api.dto.DeliverySummary;
 import com.kizuna.notificationdelivery.application.NotificationService;
@@ -88,6 +89,25 @@ public class NotificationDeliveryController {
             DeliveryResponse.of(
                 notifications.queue(
                     storeId, auth.getName(), id, request.version(), request.reason(), true)));
+  }
+
+  @PostMapping("/{id}/resolutions")
+  @PreAuthorize("hasAuthority('PERM_NOTIFICATION_VIEW') and hasAuthority('PERM_NOTIFICATION_SEND')")
+  public ResponseEntity<DeliveryResponse> resolve(
+      @CurrentStore Long storeId,
+      Authentication auth,
+      @PathVariable String id,
+      @Valid @RequestBody DeliveryResolutionRequest request) {
+    return ResponseEntity.status(201)
+        .body(
+            DeliveryResponse.of(
+                notifications.resolve(
+                    storeId,
+                    auth.getName(),
+                    id,
+                    request.version(),
+                    request.outcome(),
+                    request.reason())));
   }
 
   @GetMapping("/{id}/attempts")
