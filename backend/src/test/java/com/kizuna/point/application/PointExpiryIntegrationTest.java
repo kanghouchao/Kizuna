@@ -382,7 +382,6 @@ class PointExpiryIntegrationTest {
             PointExpiryTask.NAME,
             UUID.randomUUID().toString(),
             serviceId,
-            null,
             AS_OF.plusDays(1),
             AS_OF.plusDays(1));
     assertThat(executor.executeScheduled(future).execution().status()).isEqualTo("FAILED");
@@ -397,13 +396,13 @@ class PointExpiryIntegrationTest {
                 tx(first)
                     .executeWithoutResult(
                         status -> {
-                          identities.requireService(serviceId, PermissionCode.POINT_EXPIRE, null);
+                          identities.requireService(serviceId, PermissionCode.POINT_EXPIRE);
                           second
                               .getBean(JdbcTemplate.class)
                               .update(
                                   "update t_users set store_scope_type='SPECIFIC_STORES' where id=?",
                                   serviceId);
-                          identities.requireService(serviceId, PermissionCode.POINT_EXPIRE, null);
+                          identities.requireService(serviceId, PermissionCode.POINT_EXPIRE);
                         }))
         .isInstanceOf(AccessDeniedException.class);
     assertThatThrownBy(() -> first.getBean(TaskExecutor.class).executeScheduled(command()))
@@ -436,7 +435,7 @@ class PointExpiryIntegrationTest {
                             .orElseThrow()
                             .getRoleIds()
                             .size();
-                        identities.requireService(serviceId, PermissionCode.POINT_EXPIRE, null);
+                        identities.requireService(serviceId, PermissionCode.POINT_EXPIRE);
                         switch (change) {
                           case "enabled" ->
                               external.update(
@@ -455,7 +454,7 @@ class PointExpiryIntegrationTest {
                                   "delete from t_role_permissions where role_id=?", expiryRole);
                           default -> throw new IllegalStateException();
                         }
-                        identities.requireService(serviceId, PermissionCode.POINT_EXPIRE, null);
+                        identities.requireService(serviceId, PermissionCode.POINT_EXPIRE);
                       }))
           .isInstanceOf(AccessDeniedException.class);
       external.update(
@@ -553,7 +552,6 @@ class PointExpiryIntegrationTest {
             PointExpiryTask.NAME,
             UUID.randomUUID().toString(),
             serviceId,
-            null,
             AS_OF.plusDays(1),
             AS_OF.plusDays(1));
     var failed = executor.executeScheduled(future).execution();
@@ -573,8 +571,7 @@ class PointExpiryIntegrationTest {
             .getBean(ServiceExecutionIdentityService.class)
             .candidates(
                 PageRequest.of(0, 1, Sort.by(User::getDisplayName, User::getId)),
-                PermissionCode.POINT_EXPIRE,
-                null);
+                PermissionCode.POINT_EXPIRE);
     assertThat(page.getTotalElements()).isEqualTo(1);
     assertThat(page.getContent().getFirst().id()).isEqualTo(serviceId);
     assertThat(
@@ -582,8 +579,7 @@ class PointExpiryIntegrationTest {
                 .getBean(ServiceExecutionIdentityService.class)
                 .candidates(
                     PageRequest.of(1, 1, Sort.by(User::getDisplayName, User::getId)),
-                    PermissionCode.POINT_EXPIRE,
-                    null)
+                    PermissionCode.POINT_EXPIRE)
                 .getContent())
         .isEmpty();
   }
@@ -616,7 +612,7 @@ class PointExpiryIntegrationTest {
 
   private TaskCommand command() {
     return new TaskCommand(
-        PointExpiryTask.NAME, UUID.randomUUID().toString(), serviceId, null, AS_OF, AS_OF);
+        PointExpiryTask.NAME, UUID.randomUUID().toString(), serviceId, AS_OF, AS_OF);
   }
 
   private record OrderFixture(String id, long storeId) {}

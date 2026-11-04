@@ -62,7 +62,7 @@ public class TaskExecutor {
     requireCleanBoundary();
     var existing = lifecycle.findReplay(command);
     if (existing.isPresent()) return new Submission(existing.get(), false);
-    var handler = registry.require(command);
+    var handler = registry.requireName(command.taskName());
     requireManualPermission(handler, operator);
     var service = requireService(command, handler);
     TaskLifecycle.Started started;
@@ -85,10 +85,9 @@ public class TaskExecutor {
             original.taskName(),
             original.logicalKey(),
             original.serviceUserId(),
-            original.storeId(),
             original.periodStart(),
             original.periodEnd());
-    var handler = registry.require(command);
+    var handler = registry.requireName(command.taskName());
     requireManualPermission(handler, operator);
     var service = requireService(command, handler);
     return run(lifecycle.retry(id, reason, operator, service).id());
@@ -105,16 +104,12 @@ public class TaskExecutor {
                 || !lifecycle.latest(request.getId()).getId().equals(id)) {
               throw new ConflictException("この実行試行は開始できません");
             }
-            var handler = registry.require(request.command());
+            var handler = registry.requireName(request.getTaskName());
             var service = requireService(request.command(), handler);
             long count =
                 handler.execute(
                     new TaskContext(
-                        id,
-                        service.id(),
-                        request.getTargetStoreId(),
-                        request.getPeriodStart(),
-                        request.getPeriodEnd()));
+                        id, service.id(), request.getPeriodStart(), request.getPeriodEnd()));
             attempt.succeed(count, OffsetDateTime.now(clock));
             lifecycle.auditState(
                 request, attempt, service, "TASK_SUCCEEDED", Map.of("status", "RUNNING"));
@@ -136,13 +131,10 @@ public class TaskExecutor {
   }
 
   private AuditActor requireService(TaskCommand command, TaskHandler handler) {
-    var service =
-        identities.requireService(
-            command.serviceUserId(), PermissionCode.TASK_EXECUTE, command.storeId());
+    var service = identities.requireService(command.serviceUserId(), PermissionCode.TASK_EXECUTE);
     return handler.permission() == PermissionCode.TASK_EXECUTE
         ? service
-        : identities.requireService(
-            command.serviceUserId(), handler.permission(), command.storeId());
+        : identities.requireService(command.serviceUserId(), handler.permission());
   }
 
   private void requireCleanBoundary() {

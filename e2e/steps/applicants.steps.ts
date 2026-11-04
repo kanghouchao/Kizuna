@@ -944,7 +944,6 @@ const anonymization = (serviceUserId: number) => ({
   task_name: "APPLICANT_ANONYMIZATION",
   logical_key: randomUUID(),
   service_user_id: serviceUserId,
-  store_id: null,
   period_start: today(),
   period_end: today(),
 });

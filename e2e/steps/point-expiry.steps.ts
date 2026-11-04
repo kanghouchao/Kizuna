@@ -46,7 +46,7 @@ When('失効処理の候補と再送と未来日の拒否を確認する', async
   expect(ids).toContain(serviceId);
   expect(ids).not.toContain(incompleteId);
   expect((await request.get('/api/task-executions/service-identities', { headers: headers(operator), params: { task_name: 'UNREGISTERED' } })).status()).toBe(400);
-  const body = { task_name: 'POINT_EXPIRY', logical_key: crypto.randomUUID(), service_user_id: serviceId, store_id: null, period_start: asOf, period_end: asOf };
+  const body = { task_name: 'POINT_EXPIRY', logical_key: crypto.randomUUID(), service_user_id: serviceId, period_start: asOf, period_end: asOf };
   expect((await request.post('/api/task-executions', { headers: headers(operator), data: { ...body, service_user_id: incompleteId } })).status()).toBe(403);
   expect((await request.post('/api/task-executions', { headers: headers(viewer), data: body })).status()).toBe(403);
   const first = await request.post('/api/task-executions', { headers: headers(operator), data: body });

@@ -286,7 +286,7 @@ class ApplicantAnonymizationIntegrationTest {
 
   private TaskCommand command() {
     return new TaskCommand(
-        "APPLICANT_ANONYMIZATION", UUID.randomUUID().toString(), serviceId, null, TODAY, TODAY);
+        "APPLICANT_ANONYMIZATION", UUID.randomUUID().toString(), serviceId, TODAY, TODAY);
   }
 
   private Map<String, Object> row(String id) {

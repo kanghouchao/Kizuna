@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -48,7 +47,7 @@ class PointExpiryTaskTest {
   private final Clock clock =
       Clock.fixed(Instant.parse("2026-10-07T15:00:00Z"), ZoneId.of("Asia/Tokyo"));
   private final LocalDate today = LocalDate.now(clock);
-  private final TaskContext context = new TaskContext(4L, 8L, null, today, today);
+  private final TaskContext context = new TaskContext(4L, 8L, today, today);
   private final PointExpiryTask task =
       new PointExpiryTask(
           new PointExpiryLedger(entries, allocations, members),
@@ -59,7 +58,7 @@ class PointExpiryTaskTest {
 
   @BeforeEach
   void authorize() {
-    when(identities.requireService(eq(8L), any(), isNull()))
+    when(identities.requireService(eq(8L), any()))
         .thenReturn(new AuditActor(8L, "SERVICE", "失効処理"));
     when(entries.saveAndFlush(any()))
         .thenAnswer(
@@ -120,12 +119,11 @@ class PointExpiryTaskTest {
   }
 
   @Test
-  void invalidRangeFutureOrStoreIsRejected() {
+  void invalidOrFutureRangeIsRejected() {
     for (var invalid :
         List.of(
-            new TaskContext(4L, 8L, null, today.plusDays(1), today.plusDays(1)),
-            new TaskContext(4L, 8L, null, today.minusDays(1), today),
-            new TaskContext(4L, 8L, 1L, today, today))) {
+            new TaskContext(4L, 8L, today.plusDays(1), today.plusDays(1)),
+            new TaskContext(4L, 8L, today.minusDays(1), today))) {
       assertThatThrownBy(() -> task.execute(invalid)).isInstanceOf(ServiceException.class);
     }
     verifyNoInteractions(entries);
@@ -136,7 +134,7 @@ class PointExpiryTaskTest {
     when(entries.findExpiryCandidates(eq(today), any())).thenReturn(List.of(1L));
     when(entries.lockExpiryCandidates(anyList()))
         .thenReturn(List.of(credit(1, 100, today.minusDays(1))));
-    when(identities.requireService(8L, PermissionCode.POINT_EXPIRE, null))
+    when(identities.requireService(8L, PermissionCode.POINT_EXPIRE))
         .thenReturn(new AuditActor(8L, "SERVICE", "失効処理"))
         .thenThrow(new AccessDeniedException("権限なし"));
     assertThatThrownBy(() -> task.execute(context)).isInstanceOf(AccessDeniedException.class);
@@ -159,7 +157,6 @@ class PointExpiryTaskTest {
   void registryMetadataAndEmptyRunAreAccurate() {
     assertThat(task.name()).isEqualTo("POINT_EXPIRY");
     assertThat(task.permission()).isEqualTo(PermissionCode.POINT_EXPIRE);
-    assertThat(task.groupWide()).isTrue();
     assertThat(task.execute(context)).isZero();
     properties.getPointsExpiry().setMaxLots(0);
     assertThatThrownBy(() -> task.execute(context)).isInstanceOf(ServiceException.class);

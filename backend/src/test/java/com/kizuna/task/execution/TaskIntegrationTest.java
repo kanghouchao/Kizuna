@@ -3,7 +3,6 @@ package com.kizuna.task.execution;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -86,7 +85,6 @@ class TaskIntegrationTest {
         "PROBE",
         UUID.randomUUID().toString(),
         SERVICE.id(),
-        null,
         LocalDate.of(2026, 10, 7),
         LocalDate.of(2026, 10, 7));
   }
@@ -147,7 +145,6 @@ class TaskIntegrationTest {
             command.taskName(),
             command.logicalKey(),
             101L,
-            null,
             command.periodStart(),
             command.periodEnd());
     assertThatThrownBy(() -> first.getBean(TaskExecutor.class).executeScheduled(different))
@@ -196,7 +193,7 @@ class TaskIntegrationTest {
   void permissionRevokedAfterSubmissionPreventsWork() {
     var identities = first.getBean(ServiceExecutionIdentityService.class);
     var calls = new AtomicInteger();
-    when(identities.requireService(any(), any(), isNull()))
+    when(identities.requireService(any(), any()))
         .thenAnswer(
             call -> {
               if (calls.incrementAndGet() > 1) throw new AccessDeniedException("停止済み");
@@ -241,7 +238,7 @@ class TaskIntegrationTest {
   }
 
   private static void authorize(ServiceExecutionIdentityService identities) {
-    when(identities.requireService(any(), any(), isNull())).thenReturn(SERVICE);
+    when(identities.requireService(any(), any())).thenReturn(SERVICE);
   }
 
   static class Probe implements TaskHandler {
@@ -260,10 +257,6 @@ class TaskIntegrationTest {
 
     public PermissionCode permission() {
       return PermissionCode.TASK_EXECUTE;
-    }
-
-    public boolean groupWide() {
-      return true;
     }
 
     public long execute(TaskContext context) {

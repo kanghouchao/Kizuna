@@ -13,7 +13,5 @@ public interface TaskHandler {
     return Optional.empty();
   }
 
-  boolean groupWide();
-
   long execute(TaskContext context);
 }

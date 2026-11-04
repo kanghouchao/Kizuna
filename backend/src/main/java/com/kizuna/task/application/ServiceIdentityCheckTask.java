@@ -15,10 +15,6 @@ public class ServiceIdentityCheckTask implements TaskHandler {
     return PermissionCode.TASK_EXECUTE;
   }
 
-  public boolean groupWide() {
-    return true;
-  }
-
   public long execute(TaskContext context) {
     return 0;
   }

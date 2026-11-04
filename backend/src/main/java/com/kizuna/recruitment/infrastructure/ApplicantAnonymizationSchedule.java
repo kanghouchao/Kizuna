@@ -39,6 +39,6 @@ public class ApplicantAnonymizationSchedule {
     LocalDate today = LocalDate.now(clock);
     executor.executeScheduled(
         new TaskCommand(
-            ApplicantAnonymizationTask.NAME, today.toString(), serviceUserId, null, today, today));
+            ApplicantAnonymizationTask.NAME, today.toString(), serviceUserId, today, today));
   }
 }

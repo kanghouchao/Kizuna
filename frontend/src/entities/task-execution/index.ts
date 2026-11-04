@@ -5,5 +5,4 @@ export type {
   ExecutionRequest,
   ServiceCandidate,
   TaskType,
-  TaskStoreOption,
 } from './model/types';

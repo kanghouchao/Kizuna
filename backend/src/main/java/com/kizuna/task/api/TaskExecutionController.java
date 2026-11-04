@@ -64,10 +64,9 @@ public class TaskExecutionController {
               size = 20,
               sort = {"displayName", "id"})
           Pageable pageable,
-      @RequestParam(name = "task_name", defaultValue = "SERVICE_IDENTITY_CHECK") String taskName,
-      @RequestParam(name = "store_id", required = false) Long storeId) {
+      @RequestParam(name = "task_name", defaultValue = "SERVICE_IDENTITY_CHECK") String taskName) {
     identities.requireOperator(auth.getName(), PermissionCode.TASK_MANAGE);
-    return options.candidates(taskName, storeId, pageable);
+    return options.candidates(taskName, pageable);
   }
 
   @GetMapping("/task-types")
@@ -75,18 +74,6 @@ public class TaskExecutionController {
   public List<TaskOptions.TaskType> taskTypes(Authentication auth) {
     identities.requireOperator(auth.getName(), PermissionCode.TASK_MANAGE);
     return options.taskTypes(auth.getName());
-  }
-
-  @GetMapping("/stores")
-  @PreAuthorize("hasAuthority('PERM_TASK_MANAGE')")
-  public Page<TaskOptions.StoreOption> stores(
-      Authentication auth,
-      @PageableDefault(
-              size = 20,
-              sort = {"name", "id"})
-          Pageable pageable) {
-    identities.requireOperator(auth.getName(), PermissionCode.TASK_MANAGE);
-    return options.stores(pageable);
   }
 
   @GetMapping("/{id}")

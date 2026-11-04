@@ -41,17 +41,10 @@ public class PointExpiryTask implements TaskHandler {
     return Optional.of(PermissionCode.POINT_EXPIRE);
   }
 
-  public boolean groupWide() {
-    return true;
-  }
-
   @Transactional(propagation = Propagation.MANDATORY)
   public long execute(TaskContext context) {
     LocalDate asOf = context.periodEnd();
-    if (context.storeId() != null
-        || asOf == null
-        || !asOf.equals(context.periodStart())
-        || asOf.isAfter(LocalDate.now(clock))) {
+    if (asOf == null || !asOf.equals(context.periodStart()) || asOf.isAfter(LocalDate.now(clock))) {
       throw new ServiceException("失効処理は本日以前の一日を対象に指定してください");
     }
     requireIdentity(context);
@@ -82,7 +75,7 @@ public class PointExpiryTask implements TaskHandler {
   }
 
   private AuditActor requireIdentity(TaskContext context) {
-    identities.requireService(context.serviceUserId(), PermissionCode.TASK_EXECUTE, null);
-    return identities.requireService(context.serviceUserId(), permission(), null);
+    identities.requireService(context.serviceUserId(), PermissionCode.TASK_EXECUTE);
+    return identities.requireService(context.serviceUserId(), permission());
   }
 }

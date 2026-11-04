@@ -5,8 +5,6 @@ export interface ExecutionSummary {
   task_name: string;
   service_user_id: number;
   service_name: string;
-  store_id: number | null;
-  store_name: string | null;
   period_start: string;
   period_end: string;
   origin: string;
@@ -31,17 +29,11 @@ export interface ExecutionRequest {
   task_name: string;
   logical_key: string;
   service_user_id: number;
-  store_id: string | null;
   period_start: string;
   period_end: string;
 }
 
 export interface TaskType {
   name: string;
-  scope: 'PLATFORM' | 'STORE';
   manual_allowed: boolean;
-}
-export interface TaskStoreOption {
-  id: string;
-  name: string;
 }

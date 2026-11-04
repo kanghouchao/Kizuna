@@ -21,24 +21,31 @@ class ServiceExecutionIdentityServiceTest {
   void groupWideWorkRequiresExplicitAllStoresAndCurrentPermission() {
     var users = mock(UserRepository.class);
     var roles = mock(RoleRepository.class);
+    var specific = service(31L, StoreScopeType.SPECIFIC_STORES, Set.of(1L));
+    var allStores = service(32L, StoreScopeType.ALL_STORES, Set.of());
+    when(users.findById(31L)).thenReturn(Optional.of(specific));
+    when(users.findById(32L)).thenReturn(Optional.of(allStores));
+    when(roles.findIdsByPermissionCode("TASK_EXECUTE")).thenReturn(Set.of(7L));
+    var service = new ServiceExecutionIdentityService(users, roles);
+    assertThatThrownBy(() -> service.requireService(31L, PermissionCode.TASK_EXECUTE))
+        .isInstanceOf(AccessDeniedException.class);
+    assertThat(service.requireService(32L, PermissionCode.TASK_EXECUTE).id()).isEqualTo(32L);
+    when(roles.findIdsByPermissionCode("TASK_EXECUTE")).thenReturn(Set.of());
+    assertThatThrownBy(() -> service.requireService(32L, PermissionCode.TASK_EXECUTE))
+        .isInstanceOf(AccessDeniedException.class);
+  }
+
+  private static User service(Long id, StoreScopeType scope, Set<Long> storeIds) {
     var user =
         User.builder()
             .displayName("失効処理")
             .userType(UserType.SERVICE)
             .enabled(true)
             .roleIds(Set.of(7L))
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of(1L))
+            .storeScopeType(scope)
+            .storeIds(storeIds)
             .build();
-    user.setId(31L);
-    when(users.findById(31L)).thenReturn(Optional.of(user));
-    when(roles.findIdsByPermissionCode("TASK_EXECUTE")).thenReturn(Set.of(7L));
-    var service = new ServiceExecutionIdentityService(users, roles);
-    assertThatThrownBy(() -> service.requireService(31L, PermissionCode.TASK_EXECUTE, null))
-        .isInstanceOf(AccessDeniedException.class);
-    assertThat(service.requireService(31L, PermissionCode.TASK_EXECUTE, 1L).id()).isEqualTo(31L);
-    when(roles.findIdsByPermissionCode("TASK_EXECUTE")).thenReturn(Set.of());
-    assertThatThrownBy(() -> service.requireService(31L, PermissionCode.TASK_EXECUTE, 1L))
-        .isInstanceOf(AccessDeniedException.class);
+    user.setId(id);
+    return user;
   }
 }

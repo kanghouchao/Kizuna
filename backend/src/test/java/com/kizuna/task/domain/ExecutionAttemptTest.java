@@ -12,7 +12,7 @@ class ExecutionAttemptTest {
 
   @Test
   void completedWorkCannotBeRewrittenAsFailure() {
-    var attempt = ExecutionAttempt.start(11L, 1, null, "MANUAL", 21L, "初回実行", NOW, "定期処理", null);
+    var attempt = ExecutionAttempt.start(11L, 1, null, "MANUAL", 21L, "初回実行", NOW, "定期処理");
     attempt.succeed(3, NOW.plusSeconds(1));
     assertThat(attempt.getStatus()).isEqualTo(ExecutionStatus.SUCCEEDED);
     assertThat(attempt.getProcessedCount()).isEqualTo(3);

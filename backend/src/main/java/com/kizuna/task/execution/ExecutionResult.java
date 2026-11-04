@@ -12,8 +12,6 @@ public record ExecutionResult(
     String logicalKey,
     Long serviceUserId,
     String serviceName,
-    Long storeId,
-    String storeName,
     LocalDate periodStart,
     LocalDate periodEnd,
     String origin,

@@ -30,9 +30,6 @@ databaseChangeLog:
                   constraints:
                     nullable: false
               - column:
-                  name: target_store_id
-                  type: BIGINT
-              - column:
                   name: period_start
                   type: DATE
                   constraints:
@@ -81,9 +78,6 @@ databaseChangeLog:
                   type: VARCHAR(255)
                   constraints:
                     nullable: false
-              - column:
-                  name: store_name
-                  type: VARCHAR(255)
               - column:
                   name: attempt_number
                   type: INTEGER
