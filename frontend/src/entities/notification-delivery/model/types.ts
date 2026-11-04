@@ -2,7 +2,7 @@ export type DeliveryStatus =
   'DRAFT' | 'QUEUED' | 'DISPATCHED' | 'SENDING' | 'SENT' | 'FAILED' | 'BLOCKED' | 'UNKNOWN';
 export interface DeliverySummary {
   id: string;
-  source_type: 'ORDER' | 'APPLICATION';
+  source_type: 'ORDER' | 'APPLICATION' | 'MEMBER';
   source_id: string;
   channel: 'EMAIL';
   purpose: 'BUSINESS';

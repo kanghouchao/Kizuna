@@ -1,7 +1,7 @@
 import { expect, type APIRequestContext, type Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
-import { createConsentingGuestApplication, createPermissionRole, createStaffFixture, loginUser, loginViaUiAndEnterStore, STORE_HEADERS, openLoginForm } from './store-api';
+import { createConsentingGuestApplication, createPermissionRole, createStaffFixture, createStoreStaffFixture, expectSidebarLinkAbsentEverywhere, loginInBrowser, loginUser, loginViaUiAndEnterStore, memberIdOf, registerMember, selectRailContext, STORE1_ID, STORE_HEADERS, openLoginForm } from './store-api';
 const { Given, When, Then, After } = createBdd();
 let email = '';
 let password = '';
@@ -227,4 +227,107 @@ Then('結果不明の通知を未送達と判定して再試行できる', async
     data: { version: delivery.version, outcome: 'SENT', reason: '重ねて判定' },
   });
   expect(again.status()).toBe(409);
+});
+
+// グループ級の行は X-Store-ID を付けない要求で扱う。
+const groupHeaders = () => ({ Authorization: `Bearer ${operator}` });
+let allowedDelivery = '';
+let unconfirmedDelivery = '';
+const memberOf = new Map<string, string>();
+
+async function memberDelivery(request: APIRequestContext, memberEmail: string, allow: boolean) {
+  const memberPassword = 'Member-' + Date.now().toString() + '-fixture';
+  await registerMember(request, memberEmail, memberPassword, '通知の会員');
+  if (allow) {
+    const member = await loginUser(request, memberEmail, memberPassword);
+    const chosen = await request.put('/api/me/member/notification-settings/BUSINESS', {
+      headers: { Authorization: `Bearer ${member}` },
+      data: { status: 'ALLOWED' },
+    });
+    expect(chosen.status(), await chosen.text()).toBe(200);
+  }
+  const memberId = await memberIdOf(request, admin, memberEmail);
+  const created = await request.post('/api/notification-deliveries', {
+    headers: groupHeaders(),
+    data: {
+      source_type: 'MEMBER',
+      source_id: memberId,
+      channel: 'EMAIL',
+      purpose: 'BUSINESS',
+      subject: 'ポイントのご案内',
+      body: 'ポイントの期限が近づいています。',
+      scheduled_at: '2026-01-01T01:00:00Z',
+      dedupe_key: 'member-' + memberId,
+    },
+  });
+  expect(created.status(), await created.text()).toBe(201);
+  const row = await created.json();
+  expect(JSON.stringify(row)).not.toContain(memberEmail);
+  memberOf.set(row.id, memberId);
+  return row.id as string;
+}
+
+Given('業務連絡を許可した会員と許可していない会員に会員宛の通知が起票されている', async ({ request }) => {
+  const suffix = Date.now().toString();
+  allowedDelivery = await memberDelivery(request, 'allowed-' + suffix + '@example.invalid', true);
+  unconfirmedDelivery = await memberDelivery(request, 'unconfirmed-' + suffix + '@example.invalid', false);
+  // 会員宛の行は店舗の行と混ざらない。
+  const storeList = await request.get('/api/notification-deliveries', { headers: headers(), params: { size: 100 } });
+  const storeIds = (await storeList.json()).content.map((row: { id: string }) => row.id);
+  expect(storeIds).not.toContain(allowedDelivery);
+  expect((await request.get(`/api/notification-deliveries/${allowedDelivery}`, { headers: headers() })).status()).toBe(404);
+});
+
+When('担当者がグループの業務通知で会員宛の通知を確認して送信待ちにする', async ({ page, $testInfo }) => {
+  await loginAsOperator(page);
+  await selectRailContext(page, 'グループ');
+  await page.locator('aside').locator('a[href="/admin/notification-deliveries"]').click();
+  await expect(page).toHaveURL(/\/admin\/notification-deliveries/);
+  await expect(page.getByText('会員宛の業務メールと送信履歴', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '通知を作成', exact: true })).toHaveCount(0);
+  const detail = page.getByRole('dialog', { name: '通知の内容・送信履歴' });
+  for (const [id, decision] of [[allowedDelivery, '業務連絡が許可されています'], [unconfirmedDelivery, '業務連絡の許可が確認できません']]) {
+    const [response] = await Promise.all([
+      page.waitForResponse(r => r.url().endsWith(`/notification-deliveries/${id}`) && r.request().method() === 'GET'),
+      page
+        .getByRole('row')
+        .filter({ has: page.getByRole('cell').filter({ hasText: new RegExp(`^会員${memberOf.get(id)}$`) }) })
+        .getByRole('button', { name: '内容・履歴' })
+        .click(),
+    ]);
+    expect(response.request().headers()['x-store-id']).toBeUndefined();
+    await expect(detail.getByText(decision, { exact: true })).toBeVisible();
+    await detail.getByLabel('内容を確認した理由・再試行の理由').fill('会員宛の内容を確認');
+    await detail.getByRole('button', { name: '確認して送信待ちにする' }).click();
+    await expect(detail.getByText('送信待ち', { exact: true })).toBeVisible();
+    if (id === allowedDelivery)
+      await page.screenshot({ path: $testInfo.outputPath('notification-group.png'), fullPage: true, animations: 'disabled' });
+    await detail.press('Escape');
+  }
+});
+
+Then('許可した会員宛だけが送信に進み、許可していない会員宛は送信不可になる', async ({ request }) => {
+  const statusOf = async (id: string) => (await (await request.get(`/api/notification-deliveries/${id}`, { headers: groupHeaders() })).json()).status;
+  // 接続先が未設定の環境なので、許可した会員宛は送信手段の段で未送信になる（連絡可否の段は通過している）。
+  await expect.poll(() => statusOf(allowedDelivery)).toBe('FAILED');
+  await expect.poll(() => statusOf(unconfirmedDelivery)).toBe('BLOCKED');
+  const lastFailure = async (id: string) => (await (await request.get(`/api/notification-deliveries/${id}/attempts`, { headers: groupHeaders() })).json()).content[0].failure_code;
+  expect(await lastFailure(allowedDelivery)).toBe('UNAVAILABLE');
+  expect(await lastFailure(unconfirmedDelivery)).toBe('CONTACT_NOT_ALLOWED');
+});
+
+Then('全店舗を担当しない職員はグループの業務通知に到達できない', async ({ page, request }) => {
+  const suffix = Date.now().toString();
+  const scopedEmail = 'notification-scoped-' + suffix + '@kizuna.test';
+  const scopedPassword = 'Notification-' + suffix + '-scoped';
+  const role = await createPermissionRole(request, admin, '店舗通知-' + suffix, ['NOTIFICATION_VIEW', 'NOTIFICATION_SEND', 'MEMBER_VIEW']);
+  await createStoreStaffFixture(request, admin, scopedEmail, scopedPassword, [role], [Number(STORE1_ID)]);
+  const scoped = await loginUser(request, scopedEmail, scopedPassword);
+  expect((await request.get('/api/notification-deliveries', { headers: { Authorization: `Bearer ${scoped}` } })).status()).toBe(403);
+  expect((await request.get(`/api/notification-deliveries/${allowedDelivery}`, { headers: { Authorization: `Bearer ${scoped}` } })).status()).toBe(403);
+  expect((await request.get('/api/notification-deliveries', { headers: { ...STORE_HEADERS, Authorization: `Bearer ${scoped}` } })).status()).toBe(200);
+  await page.context().clearCookies();
+  await loginInBrowser(page, scopedEmail, scopedPassword);
+  await page.goto(`${APP_URL}/admin/dashboard`);
+  await expectSidebarLinkAbsentEverywhere(page, aside => aside.locator('a[href="/admin/notification-deliveries"]'));
 });
