@@ -1,6 +1,7 @@
 package com.kizuna.point.application;
 
 import com.kizuna.member.application.MemberLookupService;
+import com.kizuna.point.domain.ExpiringCreditView;
 import com.kizuna.point.domain.PointAllocation;
 import com.kizuna.point.domain.PointAllocationRepository;
 import com.kizuna.point.domain.PointConsumption;
@@ -50,7 +51,7 @@ public class PointExpiryLedger {
     if (credits.isEmpty()) return List.of();
     Map<Long, Integer> consumed =
         allocations
-            .findConsumedBySourceEntryIds(credits.stream().map(PointEntry::getId).toList())
+            .findConsumedBySourceEntryIds(credits.stream().map(ExpiringCreditView::getId).toList())
             .stream()
             .collect(
                 Collectors.toMap(
@@ -58,7 +59,8 @@ public class PointExpiryLedger {
     var result = new ArrayList<ExpiringBalance>();
     credits.stream()
         .collect(
-            Collectors.groupingBy(PointEntry::getMemberId, LinkedHashMap::new, Collectors.toList()))
+            Collectors.groupingBy(
+                ExpiringCreditView::getMemberId, LinkedHashMap::new, Collectors.toList()))
         .forEach(
             (memberId, lots) ->
                 new PointLedger(
