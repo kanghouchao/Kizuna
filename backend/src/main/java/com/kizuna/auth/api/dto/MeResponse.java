@@ -4,7 +4,8 @@ import com.kizuna.auth.application.MeView;
 import java.util.List;
 
 /**
- * GET /me の応答。JSON キーは Jackson 設定により snake_case（display_name / user_type / line_linked）。
+ * GET /me の応答。JSON キーは Jackson 設定により snake_case（display_name / user_type / line_linked /
+ * email_verified）。
  *
  * <p>{@code permissions} は保持ロールの権限並集（enum 名の昇順）。画面の出し分けはこれと本人種別だけで決まり、 「どのコンソールに着地するか」のような導出値は持たない。
  *
