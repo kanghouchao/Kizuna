@@ -65,6 +65,13 @@ task up
 授権は実行開始と確定前の検証点ごとに、別の短い読み取り専用取引で確定済みの状態を読み直す。
 最後の検証後に確定した権限の取り消しは、次の検証点から有効になる。
 
+期限前案内の起票（処理名 `POINT_EXPIRY_NOTICE`）も既定で停止している。明示的に `app.points-expiry-notice.enabled=true` と
+`app.points-expiry-notice.service-user-id` を設定した環境だけで日次に実行し、システム設定 `point_expiry_notice_days` の日数後に
+期限を迎える未消費ポイントを持つ会員へ、会員と期限日ごとに一通の案内を送信待ちで起票する。権限は失効と同じく、
+サービス ID に `TASK_EXECUTE`・`POINT_EXPIRE` と `ALL_STORES`、手動実行に運用者の `TASK_MANAGE`・`POINT_EXPIRE` と `ALL_STORES`。
+`app.points-expiry-notice.cron` の既定は `0 0 9 * * *`（起票した案内は次の送信で届くので、会員に届く時刻を朝にしている）、
+`app.points-expiry-notice.max-lots` は 10,000。案内は業務通知の送信で届くので、送信の定期処理も有効にする。
+
 ## 応募者の匿名化の運用
 
 保持期間を過ぎた応募者の匿名化は既定で停止している。明示的に `app.applicant-anonymization.enabled=true` と
@@ -79,6 +86,16 @@ task up
 添付の実体を先に削除し、DB 側の更新と監査 `APPLICANT_ANONYMIZED`（状態・版のみ）は一つの取引で確定する。
 途中で失敗すると DB 側は全件取り消され、処理の実行履歴に失敗が残る。実体だけが消えた応募者も次回の実行・再試行で同じく匿名化される（実体の不在は成功扱い）。
 匿名化は取り消せない。行・選考状態・状態履歴と理由文・担当者名・面接日時と面接担当者名・在籍 ID は残り、在籍には触れない。
+
+## 業務通知の送信の運用
+
+送信予定を過ぎた業務通知を送信器へ引き渡す処理（処理名 `NOTIFICATION_DELIVER`）は既定で停止している。
+明示的に `app.notification-delivery.enabled=true` と `app.notification-delivery.service-user-id` を設定した環境だけで、
+`app.notification-delivery.cron`（既定 `0 * * * * *`、毎分）に従って全店舗と会員宛の通知を一回最大 100 件ずつ扱う。
+停止中は送信待ちの通知が溜まるだけで、処理画面からの手動実行で流せる。
+サービス ID には `TASK_EXECUTE`・`NOTIFICATION_DELIVER` と `ALL_STORES`、手動の新規実行・再試行には運用者の
+`TASK_MANAGE`・`NOTIFICATION_DELIVER` と `ALL_STORES` が要る。定期実行の実行キーは起動した分（UTC、例 `2026-11-04T00:05:00Z`）で、
+同じ分の起動は一つにまとまるので、cron は一分以上の間隔にする。
 
 ## 文書案内
 

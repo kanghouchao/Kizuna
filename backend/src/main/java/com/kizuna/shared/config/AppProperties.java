@@ -46,7 +46,21 @@ public class AppProperties {
   @Getter
   @Setter
   public static class PointsExpiryNotice {
+    // 起票した案内はすぐ送信待ちになるので、この時刻が会員に届く時刻になる。深夜を避けて朝に置く。
+    private String cron = "0 0 9 * * *";
+    private boolean enabled = false;
+    private Long serviceUserId;
     private int maxLots = 10_000;
+  }
+
+  private NotificationDelivery notificationDelivery = new NotificationDelivery();
+
+  @Getter
+  @Setter
+  public static class NotificationDelivery {
+    private String cron = "0 * * * * *";
+    private boolean enabled = false;
+    private Long serviceUserId;
   }
 
   private ApplicantAnonymization applicantAnonymization = new ApplicantAnonymization();

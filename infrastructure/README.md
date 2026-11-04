@@ -80,17 +80,19 @@ release の `.env` に `APP_PRIVATE_ATTACHMENTS_ENABLED=true` と二つの資格
 
 ## 定期処理の有効化
 
-応募者の匿名化（処理名 `APPLICANT_ANONYMIZATION`、毎日 0:15）とポイント失効（処理名 `POINT_EXPIRY`、毎日 0:05）は、どちらも既定で無効である。時刻は `APP_TIMEZONE` の業務タイムゾーンで決まる。実行主体は対話ログインできないサービス ID（[ADR 0025](../docs/adr/0025-service-identity-lives-in-t-users-without-credentials.md)）で、稼働中のシステムで作る行なので、id は compose ではなく `.env` に書く。
+応募者の匿名化（処理名 `APPLICANT_ANONYMIZATION`、毎日 0:15）、ポイント失効（処理名 `POINT_EXPIRY`、毎日 0:05）、ポイント期限前案内の起票（処理名 `POINT_EXPIRY_NOTICE`、毎日 9:00）、業務通知の送信（処理名 `NOTIFICATION_DELIVER`、毎分）は、どれも既定で無効である。時刻は `APP_TIMEZONE` の業務タイムゾーンで決まる。実行主体は対話ログインできないサービス ID（[ADR 0025](../docs/adr/0025-service-identity-lives-in-t-users-without-credentials.md)）で、稼働中のシステムで作る行なので、id は compose ではなく `.env` に書く。
 
 | 処理 | 有効化フラグ | サービス ID | 処理固有の権限 |
 |---|---|---|---|
 | 応募者の匿名化 | `APP_APPLICANT_ANONYMIZATION_ENABLED` | `APP_APPLICANT_ANONYMIZATION_SERVICE_USER_ID` | `APPLICANT_ANONYMIZE` |
 | ポイント失効 | `APP_POINTS_EXPIRY_ENABLED` | `APP_POINTS_EXPIRY_SERVICE_USER_ID` | `POINT_EXPIRE` |
+| ポイント期限前案内の起票 | `APP_POINTS_EXPIRY_NOTICE_ENABLED` | `APP_POINTS_EXPIRY_NOTICE_SERVICE_USER_ID` | `POINT_EXPIRE` |
+| 業務通知の送信 | `APP_NOTIFICATION_DELIVERY_ENABLED` | `APP_NOTIFICATION_DELIVERY_SERVICE_USER_ID` | `NOTIFICATION_DELIVER` |
 
 有効にしたのにサービス ID が空、または 0 以下だと backend は起動に失敗する。サービス ID の授権が足りない場合は起動には成功し、実行の時点で拒否される。
 
-1. **ロールを作る**：ロール管理で、`TASK_EXECUTE` と処理固有の権限を持つロールを作る。システムロールはサービス ID に授けられないので、新しいロールにする。二つの処理を一つのサービス ID で動かすなら、一つのロールに三つの権限を持たせてよい。
-2. **サービス ID を作る**：サービスID管理で、1 のロールを授け、店舗集合を「全店舗」（`ALL_STORES`）にして作る。どちらの処理もグループ全体が対象で、個別店舗の授権では実行を拒否される。作成後の詳細に出る id を控える。
+1. **ロールを作る**：ロール管理で、`TASK_EXECUTE` と処理固有の権限を持つロールを作る。システムロールはサービス ID に授けられないので、新しいロールにする。複数の処理を一つのサービス ID で動かすなら、一つのロールに `TASK_EXECUTE` とそれぞれの処理固有の権限を持たせてよい。期限前案内は送信の処理が流して初めて会員に届くので、期限前案内を有効にするなら業務通知の送信も有効にする。
+2. **サービス ID を作る**：サービスID管理で、1 のロールを授け、店舗集合を「全店舗」（`ALL_STORES`）にして作る。どの処理もグループ全体が対象で、個別店舗の授権では実行を拒否される。作成後の詳細に出る id を控える。
 3. **`.env` に書いて有効化する**：環境ディレクトリの `.env` に次を書き、その環境ディレクトリで backend を作り直す。`task restart` は古い環境変数のまま再起動するので使わない。
 
    ```dotenv
@@ -102,11 +104,11 @@ release の `.env` に `APP_PRIVATE_ATTACHMENTS_ENABLED=true` と二つの資格
    docker compose -p kizuna up -d --wait backend
    ```
 
-   ポイント失効も同じく `APP_POINTS_EXPIRY_ENABLED` と `APP_POINTS_EXPIRY_SERVICE_USER_ID` を書く。
+   ほかの処理も同じく、表の有効化フラグとサービス ID を書く。
 
-4. **手動で実行して記録を確かめる**：処理の実行履歴で、処理を選び、実行主体に 2 のサービス ID、対象日に本日を指定して実行する。操作する担当者のアカウントには `TASK_MANAGE` に加えて処理固有の権限（`APPLICANT_ANONYMIZE` / `POINT_EXPIRE`）と全店舗の授権が要る。`APPLICANT_ANONYMIZE` は既定のロールのどれにも入っていないので、担当者のロールに足しておく（`POINT_EXPIRE` は既定ロール「統括」に入っている）。
+4. **手動で実行して記録を確かめる**：処理の実行履歴で、処理を選び、実行主体に 2 のサービス ID、対象日に本日を指定して実行する。操作する担当者のアカウントには `TASK_MANAGE` に加えて処理固有の権限（`APPLICANT_ANONYMIZE` / `POINT_EXPIRE` / `NOTIFICATION_DELIVER`）と全店舗の授権が要る。`APPLICANT_ANONYMIZE` は既定のロールのどれにも入っていないので、担当者のロールに足しておく（`POINT_EXPIRE` と `NOTIFICATION_DELIVER` は既定ロール「統括」に入っている）。
    成功の記録が一覧に残り、処理件数が出ることを確かめる。
-5. **翌日に定期実行を確かめる**：翌日、処理の実行履歴にその日の記録が増えていることを確かめる。定期実行の記録は実行キーが日付そのもの（例 `2026-10-31`）で、画面からの手動実行は無作為な実行キーになるので見分けられる。記録が無ければ、サービス ID の授権が足りないなどで実行前に拒否されているので、backend のログを見る。
+5. **定期実行を確かめる**：日次の処理は翌日、業務通知の送信は数分後に、処理の実行履歴に記録が増えていることを確かめる。定期実行の記録は、日次の処理なら実行キーが日付そのもの（例 `2026-10-31`）、業務通知の送信なら起動した分の UTC 時刻（例 `2026-10-31T00:05:00Z`）で、画面からの手動実行は無作為な実行キーになるので見分けられる。記録が無ければ、サービス ID の授権が足りないなどで実行前に拒否されているので、backend のログを見る。
 
    ```bash
    task -d infrastructure/<環境> logs service=backend
