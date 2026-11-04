@@ -28,4 +28,7 @@ public interface SystemConfigService {
 
   /** 応募者の保持期間の型付きスナップショット（キー名の知識は settings 側に閉じる）。 */
   ApplicantRetentionSettings applicantRetentionSettings();
+
+  /** ポイント期限前案内の型付きスナップショット（キー名の知識は settings 側に閉じる）。 */
+  PointExpiryNoticeSettings pointExpiryNoticeSettings();
 }

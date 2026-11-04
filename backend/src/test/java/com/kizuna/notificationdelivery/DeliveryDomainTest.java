@@ -40,6 +40,30 @@ class DeliveryDomainTest {
   }
 
   @Test
+  void taskIssuedMemberNoticeStartsQueuedAtGroupLevelOnly() {
+    var member =
+        new DeliveryContent(
+            DeliverySourceType.MEMBER,
+            "9",
+            DeliveryChannel.EMAIL,
+            DeliveryPurpose.BUSINESS,
+            "期限のお知らせ",
+            "本文",
+            OffsetDateTime.parse("2026-10-07T09:00:00+09:00"),
+            "notice-key");
+    var row = NotificationDelivery.queued(null, member, "  定期処理  ");
+    assertThat(row.getStatus()).isEqualTo(DeliveryStatus.QUEUED);
+    assertThat(row.getReason()).isEqualTo("定期処理");
+    assertThat(row.getAttemptCount()).isZero();
+    row.dispatch();
+    assertThat(row.getAttemptCount()).isEqualTo(1);
+    assertThatThrownBy(() -> NotificationDelivery.queued(7L, member, "定期処理"))
+        .isInstanceOf(ServiceException.class);
+    assertThatThrownBy(() -> NotificationDelivery.queued(null, member, " "))
+        .isInstanceOf(ServiceException.class);
+  }
+
+  @Test
   void sentAndUnknownCannotBeRetriedButDefiniteFailureCan() {
     for (var terminal :
         new DeliveryStatus[] {

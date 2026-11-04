@@ -50,6 +50,22 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
       """)
   List<Long> findExpiryCandidates(@Param("asOf") LocalDate asOf, Limit limit);
 
+  /** その日に期限を迎える加算ロットのうち未消費の残りがあるもの。期限前案内の対象を読むだけでロックしない。 */
+  @Query(
+      """
+      select e from com.kizuna.point.domain.PointEntry e
+      where e.amount > 0 and e.expiresOn = :expiresOn
+        and e.entryType <> com.kizuna.point.domain.PointEntryType.USE_CANCEL
+        and e.amount > (select coalesce(sum(case
+          when debit.entryType = com.kizuna.point.domain.PointEntryType.USE_CANCEL
+          then -a.amount else a.amount end), 0)
+          from com.kizuna.point.domain.PointEntry debit join debit.allocations a
+          where a.sourceEntryId = e.id)
+      order by e.memberId, e.id
+      """)
+  List<PointEntry> findUnconsumedCreditsExpiringOn(
+      @Param("expiresOn") LocalDate expiresOn, Limit limit);
+
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query(
       "select e from com.kizuna.point.domain.PointEntry e where e.id in :ids"
