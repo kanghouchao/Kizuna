@@ -58,7 +58,8 @@ When("業務連絡を {string} にする", async ({ page }, label: string) => {
     radio.click(),
   ]);
   await expect(radio).toBeChecked();
-  await expect(page.getByText("通知の設定を保存しました")).toBeVisible();
+  // 直前の選択の成功通知がまだ残っていることがあるので、最後に出たものを見る。
+  await expect(page.getByText("通知の設定を保存しました").last()).toBeVisible();
 });
 
 Then(
