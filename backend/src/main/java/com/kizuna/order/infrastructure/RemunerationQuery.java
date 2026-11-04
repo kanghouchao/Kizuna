@@ -12,7 +12,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -89,22 +88,22 @@ public class RemunerationQuery {
         .orElseThrow(() -> new NotFoundException("キャスト本人が見つかりません"));
   }
 
-  public Map<LocalDate, Long> dailyTotals(Long storeId, Long personId, YearMonth month) {
-    var rows =
-        bind(
-                entityManager.createQuery(
-                    "select o.businessDate, coalesce(sum(case when o.completionInvalidated then 0 else o.accruedRemuneration end), 0) "
-                        + ORDERS
-                        + " group by o.businessDate",
-                    Tuple.class),
-                storeId,
-                personId,
-                month.atDay(1),
-                month.atEndOfMonth())
-            .getResultList();
-    var result = new HashMap<LocalDate, Long>();
-    for (var row : rows) result.put(row.get(0, LocalDate.class), row.get(1, Long.class));
-    return result;
+  public record BasisRow(
+      LocalDate businessDate, String orderId, int accruedRemuneration, boolean invalidated) {}
+
+  /** 期間の完了受注を一件ずつ返す。一本人・一店舗・一月に収まるので頁を切らない。 */
+  public List<BasisRow> basis(Long storeId, Long personId, LocalDate start, LocalDate end) {
+    return bind(
+            entityManager.createQuery(
+                "select new com.kizuna.order.infrastructure.RemunerationQuery$BasisRow(o.businessDate, o.id, o.accruedRemuneration, o.completionInvalidated) "
+                    + ORDERS
+                    + " order by o.businessDate, o.id",
+                BasisRow.class),
+            storeId,
+            personId,
+            start,
+            end)
+        .getResultList();
   }
 
   public long total(Long storeId, Long personId, YearMonth month) {

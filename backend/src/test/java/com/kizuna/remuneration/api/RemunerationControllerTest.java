@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.jayway.jsonpath.JsonPath;
 import com.kizuna.cast.remuneration.RemunerationPersonLookup;
 import com.kizuna.order.remuneration.OrderRemunerationFacts;
 import com.kizuna.receipt.once.Committed;
@@ -22,13 +23,18 @@ import com.kizuna.receipt.once.Receipt;
 import com.kizuna.receipt.once.ReceiptKey;
 import com.kizuna.remuneration.api.dto.RemunerationRequests.BonusCreateRequest;
 import com.kizuna.remuneration.api.me.SelfRemunerationStatementController;
+import com.kizuna.remuneration.api.me.SelfStatementAcceptanceController;
 import com.kizuna.remuneration.application.RemunerationManagementService;
 import com.kizuna.remuneration.application.RemunerationStatementService;
+import com.kizuna.remuneration.application.StatementAcceptanceService;
+import com.kizuna.remuneration.application.StatementContents;
 import com.kizuna.remuneration.domain.BonusAward;
 import com.kizuna.remuneration.domain.GuaranteeState;
 import com.kizuna.remuneration.domain.GuaranteeTerm;
 import com.kizuna.remuneration.domain.RemunerationChange;
 import com.kizuna.remuneration.domain.RemunerationChangeRepository;
+import com.kizuna.remuneration.domain.StatementAcceptance;
+import com.kizuna.remuneration.domain.StatementAcceptanceRepository;
 import com.kizuna.remuneration.infrastructure.RemunerationRecords;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.settings.application.SystemConfigService;
@@ -40,7 +46,6 @@ import com.kizuna.shift.remuneration.AttendanceFacts;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.application.StoreScopeResolver;
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -66,18 +71,22 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.PlatformTransactionManager;
 
 @WebMvcTest({
   GuaranteeController.class,
   BonusController.class,
   RemunerationStatementController.class,
-  SelfRemunerationStatementController.class
+  SelfRemunerationStatementController.class,
+  SelfStatementAcceptanceController.class
 })
 @Import({
   RemunerationControllerTest.Security.class,
   RemunerationStatementService.class,
   RemunerationManagementService.class,
+  StatementContents.class,
+  StatementAcceptanceService.class,
   StoreScopeHolder.class
 })
 @WithMockUser(
@@ -98,6 +107,7 @@ class RemunerationControllerTest {
   @Autowired MockMvc mvc;
   @MockitoBean RemunerationRecords records;
   @MockitoBean RemunerationChangeRepository changes;
+  @MockitoBean StatementAcceptanceRepository acceptances;
   @MockitoBean RemunerationPersonLookup people;
   @MockitoBean OrderRemunerationFacts orders;
   @MockitoBean AttendanceFacts attendances;
@@ -119,7 +129,8 @@ class RemunerationControllerTest {
     when(people.require(1L, 999L)).thenThrow(new NotFoundException("見つかりません"));
     when(actors.requireUserId("person@example.test")).thenReturn(12L);
     when(people.self(12L)).thenReturn(34L);
-    when(orders.daily(eq(1L), eq(34L), any())).thenReturn(Map.of(DAY, 7000L));
+    when(orders.basis(eq(1L), eq(34L), any(), any()))
+        .thenReturn(List.of(new OrderRemunerationFacts.Basis(DAY, "o1", 7000, false)));
     when(orders.orders(eq(1L), eq(34L), any(), any())).thenReturn(new PageImpl<>(List.of()));
     when(attendances.between(eq(1L), eq(34L), any(), any()))
         .thenReturn(
@@ -128,8 +139,9 @@ class RemunerationControllerTest {
                     DAY, DAY.atTime(20, 0), DAY.plusDays(1).atTime(0, 0))));
     when(records.activeTerms(1L, 34L))
         .thenReturn(List.of(new GuaranteeTerm(34L, DAY, GuaranteeState.ACTIVE, 10000L, "日額")));
-    when(records.bonusDays(eq(1L), eq(34L), any(), any()))
-        .thenReturn(List.of(new RemunerationRecords.BonusDay(DAY, BigDecimal.valueOf(2000))));
+    var bonus = BonusAward.builder().personId(34L).date(DAY).amount(2000).reason("指名").build();
+    ReflectionTestUtils.setField(bonus, "id", "b1");
+    when(records.activeBonuses(eq(1L), eq(34L), any(), any())).thenReturn(List.of(bonus));
     when(records.bonuses(eq(1L), eq(34L), any(), any(), any()))
         .thenReturn(new PageImpl<>(List.of()));
     when(dates.currentBusinessDate()).thenReturn(DAY);
@@ -214,6 +226,115 @@ class RemunerationControllerTest {
         .hasExactlyElementsOfTypes(BonusAward.class, RemunerationChange.class);
     assertThat(persisted.getAllValues())
         .allSatisfy(row -> assertThat(((StoreScopedEntity) row).getStoreId()).isEqualTo(7L));
+  }
+
+  private String acceptableDigest() throws Exception {
+    when(dates.currentBusinessDate()).thenReturn(DAY.plusDays(1));
+    when(dates.hasEnded(DAY)).thenReturn(true);
+    var body =
+        mvc.perform(
+                get("/me/remuneration-statements")
+                    .principal(() -> "person@example.test")
+                    .param("store_id", "1")
+                    .param("month", "2026-09"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.days[29].acceptance_state").value("NOT_ACCEPTED"))
+            .andExpect(jsonPath("$.days[29].latest_acceptance").doesNotExist())
+            .andExpect(jsonPath("$.days[0].acceptance_state").value("NOT_ACCEPTABLE"))
+            .andExpect(jsonPath("$.days[0].not_acceptable_reason").value("ALL_ZERO"))
+            .andExpect(jsonPath("$.days[0].content_digest").doesNotExist())
+            .andExpect(jsonPath("$.accepted_days").value(0))
+            .andExpect(jsonPath("$.acceptable_days").value(1))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    return JsonPath.read(body, "$.days[29].content_digest");
+  }
+
+  private ResultActions accept(String digest) throws Exception {
+    return mvc.perform(
+        post("/me/statement-acceptances")
+            .principal(() -> "person@example.test")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(
+                "{\"store_id\":1,\"business_date\":\"2026-09-30\",\"content_digest\":\""
+                    + digest
+                    + "\"}"));
+  }
+
+  @Test
+  void acceptanceCreatesOnceAndThenReturnsTheSameRow() throws Exception {
+    String digest = acceptableDigest();
+    when(acceptances.saveAndFlush(any()))
+        .thenAnswer(
+            call -> {
+              StatementAcceptance row = call.getArgument(0);
+              ReflectionTestUtils.setField(row, "id", "acc");
+              when(acceptances.findByStoreIdAndPersonIdAndBusinessDateAndContentDigest(
+                      1L, 34L, DAY, digest))
+                  .thenReturn(Optional.of(row));
+              return row;
+            });
+    accept(digest)
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.id").value("acc"))
+        .andExpect(jsonPath("$.order_amount").value(7000))
+        .andExpect(jsonPath("$.guarantee_amount").value(3000))
+        .andExpect(jsonPath("$.bonus_amount").value(2000))
+        .andExpect(jsonPath("$.content").doesNotExist())
+        .andExpect(jsonPath("$.person_id").doesNotExist());
+    accept(digest).andExpect(status().isOk()).andExpect(jsonPath("$.id").value("acc"));
+    verify(acceptances, times(1)).saveAndFlush(any());
+    verify(audit, times(1))
+        .record(
+            eq("person@example.test"),
+            eq(1L),
+            eq("STATEMENT_ACCEPTED"),
+            eq("STATEMENT_ACCEPTANCE"),
+            eq("acc"),
+            eq(null),
+            eq(null),
+            eq(Map.of()),
+            eq(
+                Map.of(
+                    "order_amount", "7000",
+                    "guarantee_amount", "3000",
+                    "bonus_amount", "2000",
+                    "total", "12000")));
+  }
+
+  @Test
+  void acceptanceOfOtherContentIsAConflictAndAnOpenDayIsRefused() throws Exception {
+    acceptableDigest();
+    accept("a".repeat(64)).andExpect(status().isConflict());
+    when(dates.hasEnded(DAY)).thenReturn(false);
+    accept("a".repeat(64)).andExpect(status().isBadRequest());
+    verify(acceptances, times(0)).saveAndFlush(any());
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "{\"business_date\":\"2026-09-30\",\"content_digest\":\"%s\"}",
+        "{\"store_id\":1,\"content_digest\":\"%s\"}",
+        "{\"store_id\":1,\"business_date\":\"2026-09-30\",\"content_digest\":\"ABC\"}"
+      })
+  void malformedAcceptanceIsRejected(String body) throws Exception {
+    mvc.perform(
+            post("/me/statement-acceptances")
+                .principal(() -> "person@example.test")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body.formatted("a".repeat(64))))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  @WithMockUser(
+      username = "person@example.test",
+      authorities = {"PERM_ORDER_MANAGE", "PERM_REMUNERATION_VIEW", "PERM_REMUNERATION_CORRECT"})
+  void staffCannotAcceptOnBehalfOfThePerson() throws Exception {
+    accept("a".repeat(64)).andExpect(status().isForbidden());
+    verify(acceptances, times(0)).saveAndFlush(any());
   }
 
   @Test

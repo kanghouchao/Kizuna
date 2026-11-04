@@ -45,6 +45,22 @@ export interface Day {
     'NOT_ELIGIBLE' | 'PENDING_ATTENDANCE' | 'NOT_CONFIGURED' | 'STOPPED' | 'CALCULATED';
   guarantee_amount?: number;
   bonus_amount: number;
+  acceptance_state: 'NOT_ACCEPTABLE' | 'NOT_ACCEPTED' | 'ACCEPTED' | 'CHANGED_AFTER_ACCEPTANCE';
+  not_acceptable_reason?: 'BUSINESS_DAY_NOT_ENDED' | 'GUARANTEE_UNDETERMINED' | 'ALL_ZERO';
+  content_digest?: string;
+  latest_acceptance?: Acceptance;
+}
+export interface Acceptance {
+  id: string;
+  accepted_at: string;
+  order_amount: number;
+  guarantee_amount: number;
+  bonus_amount: number;
+}
+export interface AcceptanceInput {
+  store_id: number;
+  business_date: string;
+  content_digest: string;
 }
 export interface Statement {
   store_id: number;
@@ -58,6 +74,8 @@ export interface Statement {
   guarantee_total?: number;
   bonus_total: number;
   total?: number;
+  accepted_days: number;
+  acceptable_days: number;
   days: Day[];
   orders: Page<{
     order_id: string;

@@ -2,15 +2,17 @@ package com.kizuna.remuneration.application;
 
 import com.kizuna.cast.remuneration.RemunerationPersonLookup;
 import com.kizuna.order.remuneration.OrderRemunerationFacts;
+import com.kizuna.remuneration.application.RemunerationStatement.AcceptanceSummary;
 import com.kizuna.remuneration.application.RemunerationStatement.BonusItem;
 import com.kizuna.remuneration.application.RemunerationStatement.Day;
-import com.kizuna.remuneration.domain.AttendanceDuration;
-import com.kizuna.remuneration.domain.DailyGuarantee;
-import com.kizuna.remuneration.domain.GuaranteeTerm;
+import com.kizuna.remuneration.domain.AcceptanceState;
+import com.kizuna.remuneration.domain.DayAcceptance;
 import com.kizuna.remuneration.domain.RemunerationAmounts;
+import com.kizuna.remuneration.domain.StatementAcceptance;
+import com.kizuna.remuneration.domain.StatementAcceptanceRepository;
 import com.kizuna.remuneration.infrastructure.RemunerationRecords;
+import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.persistence.Timestamps;
-import com.kizuna.shift.remuneration.AttendanceFacts;
 import com.kizuna.user.application.ActorIdentityService;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -26,9 +28,11 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class RemunerationStatementService {
   private final RemunerationRecords records;
+  private final StatementAcceptanceRepository acceptances;
   private final RemunerationPersonLookup people;
   private final OrderRemunerationFacts orders;
-  private final AttendanceFacts attendances;
+  private final StatementContents contents;
+  private final BusinessDateService businessDates;
   private final ActorIdentityService actors;
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -47,51 +51,47 @@ public class RemunerationStatementService {
 
   private RemunerationStatement read(
       Long store, Long person, String month, Pageable orderPageable, Pageable bonusPageable) {
-    RemunerationInput.person(store);
+    RemunerationInput.store(store);
     RemunerationInput.person(person);
     var target = RemunerationInput.month(month);
     var identity = people.require(store, person);
-    var amounts = orders.daily(store, person, target);
-    var attendance = new HashMap<LocalDate, List<AttendanceDuration.Interval>>();
-    for (var fact : attendances.between(store, person, target.atDay(1), target.atEndOfMonth()))
-      attendance
-          .computeIfAbsent(fact.businessDate(), d -> new ArrayList<>())
-          .add(new AttendanceDuration.Interval(fact.start(), fact.end()));
-    var bonusAmounts = new HashMap<LocalDate, Long>();
-    for (var b : records.bonusDays(store, person, target.atDay(1), target.atEndOfMonth()))
-      bonusAmounts.put(b.day(), b.checkedAmount());
-    var terms = records.activeTerms(store, person);
-    int termIndex = 0;
-    GuaranteeTerm term = null;
+    LocalDate start = target.atDay(1), end = target.atEndOfMonth();
+    // 営業日の終了は明細に対して一度だけ決める。日ごとに引くと境界を跨いだ応答の中で承諾可否の基準がずれる。
+    var current = businessDates.currentBusinessDate();
+    var accepted = new HashMap<LocalDate, List<StatementAcceptance>>();
+    for (var a : acceptances.findInPeriod(store, person, start, end))
+      accepted.computeIfAbsent(a.getBusinessDate(), d -> new ArrayList<>()).add(a);
     long orderTotal = 0, guaranteeKnown = 0, bonusTotal = 0;
+    int acceptedDays = 0, acceptableDays = 0;
     boolean complete = true;
     var days = new ArrayList<Day>();
-    for (LocalDate day = target.atDay(1);
-        !day.isAfter(target.atEndOfMonth());
-        day = day.plusDays(1)) {
-      while (termIndex < terms.size() && !terms.get(termIndex).getEffectiveFrom().isAfter(day))
-        term = terms.get(termIndex++);
-      long orderAmount = amounts.getOrDefault(day, 0L),
-          bonusAmount = bonusAmounts.getOrDefault(day, 0L);
-      var duration = AttendanceDuration.of(attendance.getOrDefault(day, List.of()));
-      var state = term == null ? null : term.getState();
-      Long daily = term == null ? null : term.getDailyAmount();
-      var guarantee = DailyGuarantee.calculate(state, daily, duration, orderAmount);
-      if (guarantee.amount() == null) complete = false;
-      else guaranteeKnown = RemunerationAmounts.add(guaranteeKnown, guarantee.amount());
-      orderTotal = RemunerationAmounts.add(orderTotal, orderAmount);
-      bonusTotal = RemunerationAmounts.add(bonusTotal, bonusAmount);
+    for (var dayContent : contents.between(store, person, start, end)) {
+      var day = dayContent.businessDate();
+      var content = dayContent.content();
+      var acceptance =
+          DayAcceptance.resolve(
+              content, day.isBefore(current), accepted.getOrDefault(day, List.of()));
+      if (content.guaranteeAmount() == null) complete = false;
+      else guaranteeKnown = RemunerationAmounts.add(guaranteeKnown, content.guaranteeAmount());
+      orderTotal = RemunerationAmounts.add(orderTotal, content.orderAmount());
+      bonusTotal = RemunerationAmounts.add(bonusTotal, content.bonusAmount());
+      if (acceptance.state() != AcceptanceState.NOT_ACCEPTABLE) acceptableDays++;
+      if (acceptance.state() == AcceptanceState.ACCEPTED) acceptedDays++;
       days.add(
           new Day(
               day,
-              orderAmount,
-              state,
-              daily,
-              duration.closedDuration().toString(),
-              duration.incomplete(),
-              guarantee.status(),
-              guarantee.amount(),
-              bonusAmount));
+              content.orderAmount(),
+              content.guaranteeState(),
+              content.dailyAmount(),
+              content.closedDuration(),
+              dayContent.attendanceIncomplete(),
+              content.guaranteeStatus(),
+              content.guaranteeAmount(),
+              content.bonusAmount(),
+              acceptance.state(),
+              acceptance.reason(),
+              acceptance.contentDigest(),
+              AcceptanceSummary.of(acceptance.latest())));
     }
     Long total =
         complete
@@ -110,10 +110,12 @@ public class RemunerationStatementService {
         complete ? guaranteeKnown : null,
         bonusTotal,
         total,
+        acceptedDays,
+        acceptableDays,
         List.copyOf(days),
         orders.orders(store, person, target, orderPageable),
         records
-            .bonuses(store, person, target.atDay(1), target.atEndOfMonth(), bonusPageable)
+            .bonuses(store, person, start, end, bonusPageable)
             .map(
                 b ->
                     new BonusItem(

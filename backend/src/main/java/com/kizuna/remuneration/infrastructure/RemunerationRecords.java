@@ -3,12 +3,9 @@ package com.kizuna.remuneration.infrastructure;
 import com.kizuna.remuneration.domain.BonusAward;
 import com.kizuna.remuneration.domain.GuaranteeTerm;
 import com.kizuna.remuneration.domain.GuaranteeTimeline;
-import com.kizuna.remuneration.domain.RemunerationAmounts;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.exception.ServiceException;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -145,20 +142,10 @@ public class RemunerationRecords {
     return new PageImpl<>(rows, page, total);
   }
 
-  public record BonusDay(LocalDate day, BigDecimal amount) {
-    public long checkedAmount() {
-      try {
-        return RemunerationAmounts.require(amount.longValueExact());
-      } catch (ArithmeticException e) {
-        throw new ServiceException("ボーナス合計が扱える金額の範囲を超えています");
-      }
-    }
-  }
-
-  public List<BonusDay> bonusDays(Long store, Long person, LocalDate start, LocalDate end) {
+  public List<BonusAward> activeBonuses(Long store, Long person, LocalDate start, LocalDate end) {
     return em.createQuery(
-            "select new com.kizuna.remuneration.infrastructure.RemunerationRecords$BonusDay(b.awardDate, sum(cast(b.amount as BigDecimal))) from BonusAward b where b.storeId=:store and b.personId=:person and b.cancelledAt is null and b.awardDate>=:start and b.awardDate<=:end group by b.awardDate",
-            BonusDay.class)
+            "select b from BonusAward b where b.storeId=:store and b.personId=:person and b.cancelledAt is null and b.awardDate>=:start and b.awardDate<=:end order by b.awardDate, b.id",
+            BonusAward.class)
         .setParameter("store", store)
         .setParameter("person", person)
         .setParameter("start", start)

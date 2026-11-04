@@ -1,4 +1,9 @@
-import { expect, type APIRequestContext, type Page } from "@playwright/test";
+import {
+  expect,
+  type APIRequestContext,
+  type BrowserContext,
+  type Page,
+} from "@playwright/test";
 import { createBdd } from "playwright-bdd";
 import { randomUUID } from "node:crypto";
 import { APP_URL } from "../base-url";
@@ -39,6 +44,8 @@ let token = "",
   otherStore = "";
 let personId = 0;
 let courseId = "";
+let castContext: BrowserContext | undefined;
+let castPage: Page | undefined;
 const headers = (auth = token, storeId = STORE1_ID) => ({
   ...STORE_HEADERS,
   "X-Store-ID": storeId,
@@ -51,6 +58,21 @@ async function statement(request: APIRequestContext, targetMonth = month) {
   });
   expect(response.status(), await response.text()).toBe(200);
   return response.json();
+}
+async function openSelfStatement(page: Page) {
+  await openLoginForm(page);
+  await page.getByLabel("メールアドレス", { exact: true }).fill(castEmail);
+  await page.getByLabel("パスワード", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "ログイン", exact: true }).click();
+  await page.waitForURL(/\/cast\//);
+  await page.goto(APP_URL + "/cast/remunerations/monthly");
+  await page.getByRole("combobox", { name: "店舗" }).click();
+  await page.getByRole("option").first().click();
+  await page.getByLabel("対象月").fill(month);
+  await page.getByRole("button", { name: "照会", exact: true }).click();
+  await page
+    .getByRole("button", { name: "保証・ボーナスを含む月次明細" })
+    .click();
 }
 Given(
   "保証検証の本人に重複する歴史在籍の四時間実績と受注がある",
@@ -343,19 +365,7 @@ Then(
       viewport: { width: 390, height: 844 },
     });
     const page = await context.newPage();
-    await openLoginForm(page);
-    await page.getByLabel("メールアドレス", { exact: true }).fill(castEmail);
-    await page.getByLabel("パスワード", { exact: true }).fill(password);
-    await page.getByRole("button", { name: "ログイン", exact: true }).click();
-    await page.waitForURL(/\/cast\//);
-    await page.goto(APP_URL + "/cast/remunerations/monthly");
-    await page.getByRole("combobox", { name: "店舗" }).click();
-    await page.getByRole("option").first().click();
-    await page.getByLabel("対象月").fill(month);
-    await page.getByRole("button", { name: "照会", exact: true }).click();
-    await page
-      .getByRole("button", { name: "保証・ボーナスを含む月次明細" })
-      .click();
+    await openSelfStatement(page);
     await expect(
       page.getByText("¥10,000", { exact: true }).first(),
     ).toBeVisible();
@@ -499,6 +509,9 @@ Then("授権外店舗と無権限の内訳操作は拒否される", async ({ re
 });
 
 After({ tags: "@remuneration-components" }, async ({ request }) => {
+  await castContext?.close();
+  castContext = undefined;
+  castPage = undefined;
   if (!courseId) return;
   await deleteService(request, manager, courseId, 1);
   courseId = "";
@@ -681,3 +694,124 @@ Then(
     expect(data.bonus_awards.content).toHaveLength(2);
   },
 );
+
+// 受注・ボーナスの根拠表にも同じ営業日の行があるので、承諾状態を持つ日別行だけに絞る。
+const acceptanceRow = () =>
+  castPage!
+    .getByRole("row", { name: new RegExp(date) })
+    .filter({ hasText: /未承諾|承諾済み|承諾後に変更あり|承諾不可/ });
+async function awardBonus(request: APIRequestContext, amount: number) {
+  const response = await request.post("/api/bonus-awards", {
+    headers: headers(),
+    data: {
+      person_id: personId,
+      award_date: date,
+      amount,
+      reason: "追加付与",
+      request_id: randomUUID(),
+    },
+  });
+  expect(response.status(), await response.text()).toBe(201);
+}
+Given("担当が原月の日額保証を記録している", async ({ request }) => {
+  const response = await request.post("/api/remuneration-guarantees", {
+    headers: headers(),
+    data: {
+      person_id: personId,
+      effective_from: date,
+      state: "ACTIVE",
+      daily_amount: 10000,
+      reason: "日額契約",
+      expected_version: 0,
+      request_id: randomUUID(),
+    },
+  });
+  expect(response.status(), await response.text()).toBe(201);
+});
+When(
+  "本人がポータルの月次明細で原月末日を承諾する",
+  async ({ browser, $testInfo }) => {
+    castContext = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+    });
+    castPage = await castContext.newPage();
+    await openSelfStatement(castPage);
+    await expect(acceptanceRow()).toContainText("未承諾");
+    await castPage.getByRole("button", { name: `${date} を承諾` }).click();
+    await expect(acceptanceRow()).toContainText("承諾済み");
+    await expect(acceptanceRow()).toContainText("最新の承諾");
+    await expect(castPage.getByText(/承諾済み 1 日/)).toBeVisible();
+    await acceptanceRow().scrollIntoViewIfNeeded();
+    await castPage.screenshot({
+      animations: "disabled",
+      path: $testInfo.outputPath("acceptance-self-light.png"),
+    });
+  },
+);
+Then("店舗側の明細に承諾済みが読み取り専用で載る", async ({ request }) => {
+  const data = await statement(request);
+  const day = data.days.find(
+    (d: { business_date: string }) => d.business_date === date,
+  );
+  expect(day.acceptance_state).toBe("ACCEPTED");
+  expect(day.latest_acceptance.order_amount).toBe(7000);
+  expect(day.latest_acceptance.guarantee_amount).toBe(3000);
+  expect(data.accepted_days).toBe(1);
+  expect(JSON.stringify(day.latest_acceptance)).not.toContain("保証根拠顧客");
+});
+When("承諾後に担当がボーナスを付与する", async ({ request }) => {
+  await awardBonus(request, 500);
+});
+Then("本人の画面は承諾後に変更ありと差分を示す", async ({ $testInfo }) => {
+  await castPage!.getByRole("button", { name: "内訳を再照会" }).click();
+  await expect(acceptanceRow()).toContainText("承諾後に変更あり");
+  await expect(acceptanceRow()).toContainText("ボーナス ¥0 → ¥500");
+  await acceptanceRow().scrollIntoViewIfNeeded();
+  await castPage!.evaluate(() =>
+    document.documentElement.classList.add("dark"),
+  );
+  await castPage!.screenshot({
+    animations: "disabled",
+    path: $testInfo.outputPath("acceptance-changed-dark.png"),
+  });
+  await castPage!.evaluate(() =>
+    document.documentElement.classList.remove("dark"),
+  );
+});
+When(
+  "本人が古い明細のまま再承諾する間に担当がさらにボーナスを付与する",
+  async ({ request }) => {
+    await awardBonus(request, 300);
+    await castPage!.getByRole("button", { name: `${date} を再承諾` }).click();
+  },
+);
+Then("承諾は差し戻され明細が最新の差分へ取り直される", async () => {
+  await expect(
+    castPage!.getByText(
+      "警告：明細の内容が変わっていたため、最新の明細を表示しました。内容を確かめてから承諾してください",
+    ),
+  ).toBeVisible();
+  await expect(acceptanceRow()).toContainText("ボーナス ¥0 → ¥800");
+  await expect(acceptanceRow()).toContainText("承諾後に変更あり");
+});
+When("本人が最新の内容を再承諾する", async () => {
+  await castPage!.getByRole("button", { name: `${date} を再承諾` }).click();
+  await expect(acceptanceRow()).toContainText("承諾済み");
+});
+Then("承諾済みに戻り本人以外の承諾は拒まれる", async ({ request }) => {
+  const data = await statement(request);
+  const day = data.days.find(
+    (d: { business_date: string }) => d.business_date === date,
+  );
+  expect(day.acceptance_state).toBe("ACCEPTED");
+  expect(day.latest_acceptance.bonus_amount).toBe(800);
+  const proxy = await request.post("/api/me/statement-acceptances", {
+    headers: { Authorization: `Bearer ${token}` },
+    data: {
+      store_id: Number(STORE1_ID),
+      business_date: date,
+      content_digest: day.content_digest,
+    },
+  });
+  expect(proxy.status()).toBe(403);
+});

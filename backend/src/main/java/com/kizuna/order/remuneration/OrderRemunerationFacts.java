@@ -3,7 +3,7 @@ package com.kizuna.order.remuneration;
 import com.kizuna.order.infrastructure.RemunerationQuery;
 import java.time.LocalDate;
 import java.time.YearMonth;
-import java.util.Map;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -21,8 +21,14 @@ public class OrderRemunerationFacts {
       long accruedRemuneration,
       boolean completionInvalidated) {}
 
-  public Map<LocalDate, Long> daily(Long storeId, Long personId, YearMonth month) {
-    return query.dailyTotals(storeId, personId, month);
+  public record Basis(
+      LocalDate businessDate, String orderId, long accruedRemuneration, boolean invalidated) {}
+
+  public List<Basis> basis(Long storeId, Long personId, LocalDate start, LocalDate end) {
+    return query.basis(storeId, personId, start, end).stream()
+        .map(
+            o -> new Basis(o.businessDate(), o.orderId(), o.accruedRemuneration(), o.invalidated()))
+        .toList();
   }
 
   public Page<Item> orders(Long storeId, Long personId, YearMonth month, Pageable page) {
