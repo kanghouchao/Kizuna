@@ -37,6 +37,9 @@ export interface DeliveryAttempt {
   failure_code?: string;
   started_at: string;
   finished_at?: string;
-  task_execution_id: number;
+  /** 職員の判定（failure_code が MANUAL_RESOLUTION）の試行は定期処理の実行を持たない */
+  task_execution_id?: number;
   reason: string;
 }
+/** 結果不明の通知に職員が下す判定 */
+export type DeliveryResolution = 'SENT' | 'FAILED';

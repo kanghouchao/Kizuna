@@ -3,9 +3,11 @@ package com.kizuna.notificationdelivery;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.kizuna.notificationdelivery.domain.DeliveryAttempt;
 import com.kizuna.notificationdelivery.domain.DeliveryChannel;
 import com.kizuna.notificationdelivery.domain.DeliveryContent;
 import com.kizuna.notificationdelivery.domain.DeliveryPurpose;
+import com.kizuna.notificationdelivery.domain.DeliveryResolution;
 import com.kizuna.notificationdelivery.domain.DeliverySourceType;
 import com.kizuna.notificationdelivery.domain.DeliveryStatus;
 import com.kizuna.notificationdelivery.domain.NotificationDelivery;
@@ -57,6 +59,47 @@ class DeliveryDomainTest {
         assertThat(row.getAttemptCount()).isEqualTo(2);
       }
     }
+  }
+
+  private NotificationDelivery unknown() {
+    var row = NotificationDelivery.draft(7L, content("本文"));
+    row.queue(null, "確認済み", false);
+    row.dispatch();
+    row.sending();
+    row.finish(DeliveryStatus.UNKNOWN);
+    return row;
+  }
+
+  @Test
+  void onlyUnknownIsResolvedAndOnlyUndeliveredJudgmentCanBeRetried() {
+    var failed = unknown();
+    failed.resolve(null, DeliveryResolution.FAILED, "  提供元で未配信を確認  ");
+    assertThat(failed.getStatus()).isEqualTo(DeliveryStatus.FAILED);
+    assertThat(failed.getAttemptCount()).isEqualTo(2);
+    var attempt = DeliveryAttempt.resolution(failed, 9L, "通知担当", OffsetDateTime.now());
+    assertThat(attempt.getAttemptNumber()).isEqualTo(2);
+    assertThat(attempt.getStatus()).isEqualTo(DeliveryStatus.FAILED);
+    assertThat(attempt.getFailureCode()).isEqualTo("MANUAL_RESOLUTION");
+    assertThat(attempt.getTaskExecutionId()).isNull();
+    assertThat(attempt.getReason()).isEqualTo("提供元で未配信を確認");
+    assertThat(attempt.getStartedAt()).isEqualTo(attempt.getFinishedAt());
+    assertThatThrownBy(() -> failed.resolve(null, DeliveryResolution.SENT, "重ねて判定"))
+        .isInstanceOf(ConflictException.class);
+    failed.queue(null, "未送達の判定にもとづき再送", true);
+    assertThat(failed.getStatus()).isEqualTo(DeliveryStatus.QUEUED);
+
+    var sent = unknown();
+    sent.resolve(null, DeliveryResolution.SENT, "提供元で配信を確認");
+    assertThat(sent.getStatus()).isEqualTo(DeliveryStatus.SENT);
+    assertThatThrownBy(() -> sent.queue(null, "再送", true)).isInstanceOf(ConflictException.class);
+
+    assertThatThrownBy(() -> unknown().resolve(5L, DeliveryResolution.FAILED, "古い版"))
+        .isInstanceOf(ConflictException.class);
+    assertThatThrownBy(() -> unknown().resolve(null, DeliveryResolution.FAILED, " "))
+        .isInstanceOf(ServiceException.class);
+    var draft = NotificationDelivery.draft(7L, content("本文"));
+    assertThatThrownBy(() -> draft.resolve(null, DeliveryResolution.FAILED, "下書き"))
+        .isInstanceOf(ConflictException.class);
   }
 
   @Test

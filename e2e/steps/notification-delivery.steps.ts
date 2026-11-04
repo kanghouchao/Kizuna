@@ -1,19 +1,20 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type APIRequestContext, type Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
 import { createConsentingGuestApplication, createPermissionRole, createStaffFixture, loginUser, loginViaUiAndEnterStore, STORE_HEADERS, openLoginForm } from './store-api';
-const { Given, When, Then } = createBdd();
+const { Given, When, Then, After } = createBdd();
 let email = '';
 let password = '';
 let operator = '';
 let applicationId = '';
 let deliveryId = '';
 let serviceName = '';
+let admin = '';
 const headers = () => ({ ...STORE_HEADERS, Authorization: `Bearer ${operator}` });
 
 Given('業務通知の担当者とサービス主体と同意済みゲスト申請がある', async ({ request, page }) => {
   await loginViaUiAndEnterStore(page);
-  const admin = await loginUser(request, 'admin@kizuna.test', 'pass1234');
+  admin = await loginUser(request, 'admin@kizuna.test', 'pass1234');
   expect((await request.get('/api/notification-deliveries', { headers: { ...STORE_HEADERS, Authorization: `Bearer ${admin}` } })).status()).toBe(403);
   const suffix = Date.now().toString();
   email = 'notification-' + suffix + '@kizuna.test';
@@ -31,13 +32,17 @@ Given('業務通知の担当者とサービス主体と同意済みゲスト申�
   applicationId = await createConsentingGuestApplication(request, 'notification-' + suffix + '@example.invalid');
 });
 
-When('担当者が通知を作成して内容を確認し送信待ちにする', async ({ page, request, $testInfo }) => {
+async function loginAsOperator(page: Page) {
   await page.context().clearCookies();
   await openLoginForm(page);
   await page.getByLabel('メールアドレス', { exact: true }).fill(email);
   await page.getByLabel('パスワード', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/dashboard/, { timeout: 15000 });
+}
+
+When('担当者が通知を作成して内容を確認し送信待ちにする', async ({ page, request, $testInfo }) => {
+  await loginAsOperator(page);
   await page.goto(`${APP_URL}/store/notification-deliveries`);
   await page.getByRole('button', { name: '通知を作成', exact: true }).click();
   const create = page.getByRole('dialog', { name: '業務通知を作成' });
@@ -135,4 +140,91 @@ Then('未設定の通知を成功扱いせず履歴から明示的に再試行�
   await expect(detail.getByText('第2回', { exact: false })).toBeVisible();
   await detail.getByText('第1回', { exact: false }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: $testInfo.outputPath('notification-retry-history.png'), fullPage: true, animations: 'disabled' });
+});
+
+async function putConfig(request: APIRequestContext, key: string, value: string) {
+  const response = await request.put(`/api/system-configs/${key}`, {
+    headers: { Authorization: `Bearer ${admin}` },
+    data: { config_value: value },
+  });
+  expect(response.status(), await response.text()).toBe(200);
+}
+
+// 閉じたポートへの接続失敗は MailService が「受理されたか分からない」として結果不明に倒す。
+Given('メールの接続先が送信結果を確かめられない状態にある', async ({ request }) => {
+  await putConfig(request, 'smtp_port', '1');
+  await putConfig(request, 'smtp_host', '127.0.0.1');
+});
+
+// 空でない smtp_host を残すと後続の通知シナリオが送信不能の前提を失うので、種の既定値へ必ず戻す。
+After({ tags: '@notification-unknown-resolution' }, async ({ request }) => {
+  await putConfig(request, 'smtp_host', '');
+  await putConfig(request, 'smtp_port', '25');
+});
+
+When('担当者が送信待ちにした通知を管理画面で実行する', async ({ page, request }) => {
+  const created = await request.post('/api/notification-deliveries', {
+    headers: headers(),
+    data: {
+      source_type: 'APPLICATION',
+      source_id: applicationId,
+      channel: 'EMAIL',
+      purpose: 'BUSINESS',
+      subject: 'ご予約の確認',
+      body: 'ご予約内容の確認をお願いします。',
+      scheduled_at: '2026-01-01T01:00:00Z',
+      dedupe_key: 'unknown-' + applicationId,
+    },
+  });
+  expect(created.status(), await created.text()).toBe(201);
+  const row = await created.json();
+  deliveryId = row.id;
+  expect(row.transport_availability).toBe('AVAILABLE');
+  const queued = await request.post(`/api/notification-deliveries/${deliveryId}/queue`, {
+    headers: headers(),
+    data: { version: row.version, reason: '内容と業務連絡の許可を確認' },
+  });
+  expect(queued.status(), await queued.text()).toBe(200);
+  await loginAsOperator(page);
+  await executeNotifications(page);
+});
+
+Then('結果不明の通知を未送達と判定して再試行できる', async ({ page, request, $testInfo }) => {
+  await expect.poll(async () => {
+    const response = await request.get(`/api/notification-deliveries/${deliveryId}`, { headers: headers() });
+    expect(response.status()).toBe(200);
+    return (await response.json()).status;
+  }, { timeout: 30000 }).toBe('UNKNOWN');
+  await page.goto(`${APP_URL}/store/notification-deliveries`);
+  await page.getByRole('row').filter({ hasText: applicationId }).getByRole('button', { name: '内容・履歴' }).click();
+  const detail = page.getByRole('dialog', { name: '通知の内容・送信履歴' });
+  await expect(detail.getByText(/送信結果が不明です/)).toBeVisible();
+  await expect(detail.getByRole('button', { name: '明示的に再試行する' })).toHaveCount(0);
+  await detail.getByRole('radio', { name: /未送達/ }).click();
+  await detail.getByLabel('確認した内容・判定の理由').fill('提供元の管理画面で未配信を確認');
+  await page.screenshot({ path: $testInfo.outputPath('notification-unknown-form.png'), fullPage: true, animations: 'disabled' });
+  await detail.getByRole('button', { name: '判定を記録する' }).click();
+  await expect(page.getByText('判定を記録しました', { exact: true })).toBeVisible();
+  await expect(detail.getByRole('button', { name: '判定を記録する' })).toHaveCount(0);
+  const judged = detail.getByRole('listitem').filter({ hasText: '提供元の管理画面で未配信を確認' });
+  await expect(judged.getByText('未送達と判定', { exact: true })).toBeVisible();
+  await expect(judged.getByText(/職員の判定/)).toBeVisible();
+  await page.screenshot({ path: $testInfo.outputPath('notification-unknown-resolved.png'), fullPage: true, animations: 'disabled' });
+  await detail.getByLabel('内容を確認した理由・再試行の理由').fill('未送達の判定にもとづき再試行');
+  await detail.getByRole('button', { name: '明示的に再試行する' }).click();
+  await expect(detail.getByText('送信待ち', { exact: true })).toBeVisible();
+
+  const delivery = await (await request.get(`/api/notification-deliveries/${deliveryId}`, { headers: headers() })).json();
+  expect(delivery.status).toBe('QUEUED');
+  const history = await request.get(`/api/notification-deliveries/${deliveryId}/attempts`, { headers: headers() });
+  const attempts = (await history.json()).content;
+  expect(attempts).toHaveLength(2);
+  expect(attempts[0]).toMatchObject({ attempt_number: 2, status: 'FAILED', failure_code: 'MANUAL_RESOLUTION', reason: '提供元の管理画面で未配信を確認' });
+  expect(attempts[0].task_execution_id).toBeUndefined();
+  expect(attempts[1]).toMatchObject({ attempt_number: 1, status: 'UNKNOWN', failure_code: 'UNKNOWN' });
+  const again = await request.post(`/api/notification-deliveries/${deliveryId}/resolutions`, {
+    headers: headers(),
+    data: { version: delivery.version, outcome: 'SENT', reason: '重ねて判定' },
+  });
+  expect(again.status()).toBe(409);
 });

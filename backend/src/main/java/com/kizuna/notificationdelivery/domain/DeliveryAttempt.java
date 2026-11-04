@@ -16,20 +16,22 @@ import lombok.NoArgsConstructor;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class DeliveryAttempt extends DeliveryRecord {
+  public static final String MANUAL_RESOLUTION = "MANUAL_RESOLUTION";
+
   @Column(nullable = false, updatable = false, length = 32)
   private String deliveryId;
 
   @Column(nullable = false, updatable = false)
   private int attemptNumber;
 
-  @Column(nullable = false, updatable = false)
+  @Column(updatable = false)
   private Long taskExecutionId;
 
   @Column(nullable = false, updatable = false)
-  private Long serviceUserId;
+  private Long actorUserId;
 
   @Column(nullable = false, length = 255)
-  private String serviceName;
+  private String actorName;
 
   @Column(nullable = false, updatable = false, length = 500)
   private String reason;
@@ -56,17 +58,33 @@ public class DeliveryAttempt extends DeliveryRecord {
     attempt.deliveryId = row.getId();
     attempt.attemptNumber = row.getAttemptCount();
     attempt.taskExecutionId = executionId;
-    attempt.serviceUserId = serviceId;
-    attempt.serviceName = serviceName;
+    attempt.actorUserId = serviceId;
+    attempt.actorName = serviceName;
     attempt.reason = row.getReason();
     attempt.startedAt = now;
     attempt.status = DeliveryStatus.DISPATCHED;
     return attempt;
   }
 
+  /** 職員の判定は定期処理の実行を持たない試行として残し、失敗コードで提供元の結果と区別する。 */
+  public static DeliveryAttempt resolution(
+      NotificationDelivery row, Long staffId, String staffName, OffsetDateTime now) {
+    var attempt = new DeliveryAttempt();
+    attempt.deliveryId = row.getId();
+    attempt.attemptNumber = row.getAttemptCount();
+    attempt.actorUserId = staffId;
+    attempt.actorName = staffName;
+    attempt.reason = row.getReason();
+    attempt.startedAt = now;
+    attempt.finishedAt = now;
+    attempt.status = row.getStatus();
+    attempt.failureCode = MANUAL_RESOLUTION;
+    return attempt;
+  }
+
   public void sending(String serviceName) {
     if (status != DeliveryStatus.DISPATCHED) throw new ConflictException("この試行は開始できません");
-    this.serviceName = serviceName;
+    this.actorName = serviceName;
     status = DeliveryStatus.SENDING;
   }
 
