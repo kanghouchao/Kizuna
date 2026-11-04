@@ -209,7 +209,7 @@ Then(
   },
 );
 
-// 空でない smtp_host を残すと、後続の通知配信シナリオが送信不能の前提を失う。
+// 空でない smtp_host を残すと、後続の通知配信シナリオのメールが Mailpit に届かなくなる。
 // 退避に成功した場合だけ戻し、退避前に落ちたシナリオが空値で上書きしないようにする。
 After({ tags: "@benefit-config-audit" }, async ({ request }) => {
   if (originalHost === null) return;

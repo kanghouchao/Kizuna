@@ -1,15 +1,19 @@
 import { expect, type APIRequestContext, type Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
+import { latestMailTo } from './mailpit';
 import { createConsentingGuestApplication, createPermissionRole, createStaffFixture, createStoreStaffFixture, expectSidebarLinkAbsentEverywhere, loginInBrowser, loginUser, loginViaUiAndEnterStore, memberIdOf, registerMember, selectRailContext, STORE1_ID, STORE_HEADERS, openLoginForm } from './store-api';
 const { Given, When, Then, After } = createBdd();
 let email = '';
 let password = '';
 let operator = '';
 let applicationId = '';
+let guestEmail = '';
 let deliveryId = '';
 let serviceName = '';
 let admin = '';
+const GUEST_BODY = 'ご予約内容の確認をお願いします。';
+const GUEST_LINK = 'http://store1.kizuna.test/reservation';
 const headers = () => ({ ...STORE_HEADERS, Authorization: `Bearer ${operator}` });
 
 Given('業務通知の担当者とサービス主体と同意済みゲスト申請がある', async ({ request, page }) => {
@@ -29,7 +33,8 @@ Given('業務通知の担当者とサービス主体と同意済みゲスト申�
     data: { display_name: serviceName, role_ids: [executionRole], store_scope_type: 'ALL_STORES', store_ids: [] },
   });
   expect(service.status(), await service.text()).toBe(201);
-  applicationId = await createConsentingGuestApplication(request, 'notification-' + suffix + '@example.invalid');
+  guestEmail = 'notification-' + suffix + '@example.invalid';
+  applicationId = await createConsentingGuestApplication(request, guestEmail);
 });
 
 async function loginAsOperator(page: Page) {
@@ -50,7 +55,7 @@ When('担当者が通知を作成して内容を確認し送信待ちにする',
   await page.getByRole('option', { name: 'ゲスト申請', exact: true }).click();
   await create.getByLabel('受注・ゲスト申請ID').fill(applicationId);
   await create.getByLabel('件名', { exact: true }).fill('ご予約の確認');
-  await create.getByLabel('本文', { exact: true }).fill('ご予約内容の確認をお願いします。');
+  await create.getByLabel('本文', { exact: true }).fill(`${GUEST_BODY}\n${GUEST_LINK}`);
   await create.getByLabel('送信予定（この端末の時刻）').fill('2026-01-01T10:00');
   const [created] = await Promise.all([
     page.waitForResponse(response => response.url().endsWith('/notification-deliveries') && response.request().method() === 'POST'),
@@ -60,7 +65,7 @@ When('担当者が通知を作成して内容を確認し送信待ちにする',
   const row = await created.json();
   deliveryId = row.id;
   expect(row.contact_decision).toBe('ALLOWED');
-  expect(row.transport_availability).toBe('UNAVAILABLE');
+  expect(row.transport_availability).toBe('AVAILABLE');
   expect(JSON.stringify(row)).not.toContain('@example.invalid');
   const detail = page.getByRole('dialog', { name: '通知の内容・送信履歴' });
   await expect(detail.getByText('業務連絡が許可されています', { exact: true })).toBeVisible();
@@ -103,43 +108,27 @@ When('管理画面で店舗の業務通知を実行する', async ({ page }) => 
   await executeNotifications(page);
 });
 
-Then('未設定の通知を成功扱いせず履歴から明示的に再試行できる', async ({ page, request, $testInfo }) => {
+Then('通知は送信済みになり、確認した件名と本文のメールがゲスト申請の宛先に届く', async ({ page, request, $testInfo }) => {
   await expect.poll(async () => {
     const response = await request.get(`/api/notification-deliveries/${deliveryId}`, { headers: headers() });
     expect(response.status()).toBe(200);
     return (await response.json()).status;
-  }).toBe('FAILED');
-  await page.goto(`${APP_URL}/store/notification-deliveries`);
-  await page.getByRole('button', { name: '内容・履歴' }).first().click();
-  const detail = page.getByRole('dialog', { name: '通知の内容・送信履歴' });
-  await expect(detail.getByText('送信設定が利用できません', { exact: true })).toBeVisible();
-  await expect(detail.getByText('未送信', { exact: true }).first()).toBeVisible();
-  await detail.getByLabel('内容を確認した理由・再試行の理由').fill('未送信の結果を確認して再試行');
-  await detail.getByRole('button', { name: '明示的に再試行する' }).click();
-  await expect(detail.getByText('送信待ち', { exact: true })).toBeVisible();
+  }).toBe('SENT');
+  const mail = await latestMailTo(request, guestEmail);
+  expect(mail.subject).toBe('ご予約の確認');
+  expect(mail.text).toContain(GUEST_BODY);
+  expect(mail.firstLink).toBe(GUEST_LINK);
   const history = await request.get(`/api/notification-deliveries/${deliveryId}/attempts`, { headers: headers() });
   expect(history.status()).toBe(200);
   const attempts = (await history.json()).content;
   expect(attempts).toHaveLength(1);
-  expect(attempts[0].failure_code).toBe('UNAVAILABLE');
-  expect(attempts[0].reason).toBe('内容と業務連絡の許可を確認');
-  await detail.press('Escape');
-  await executeNotifications(page);
-  await expect.poll(async () => {
-    const response = await request.get(`/api/notification-deliveries/${deliveryId}`, { headers: headers() });
-    return (await response.json()).status;
-  }).toBe('FAILED');
-  const retried = await request.get(`/api/notification-deliveries/${deliveryId}/attempts`, { headers: headers() });
-  const retryHistory = (await retried.json()).content;
-  expect(retryHistory).toHaveLength(2);
-  expect(retryHistory[0].attempt_number).toBe(2);
-  expect(retryHistory[0].failure_code).toBe('UNAVAILABLE');
-  expect(retryHistory[0].reason).toBe('未送信の結果を確認して再試行');
+  expect(attempts[0]).toMatchObject({ attempt_number: 1, status: 'SENT', reason: '内容と業務連絡の許可を確認' });
   await page.goto(`${APP_URL}/store/notification-deliveries`);
-  await page.getByRole('button', { name: '内容・履歴' }).first().click();
-  await expect(detail.getByText('第2回', { exact: false })).toBeVisible();
-  await detail.getByText('第1回', { exact: false }).scrollIntoViewIfNeeded();
-  await page.screenshot({ path: $testInfo.outputPath('notification-retry-history.png'), fullPage: true, animations: 'disabled' });
+  await page.getByRole('row').filter({ hasText: applicationId }).getByRole('button', { name: '内容・履歴' }).click();
+  const detail = page.getByRole('dialog', { name: '通知の内容・送信履歴' });
+  await expect(detail.getByText('メール提供元受理', { exact: true }).first()).toBeVisible();
+  await expect(detail.getByRole('button', { name: '明示的に再試行する' })).toHaveCount(0);
+  await page.screenshot({ path: $testInfo.outputPath('notification-sent-history.png'), fullPage: true, animations: 'disabled' });
 });
 
 async function putConfig(request: APIRequestContext, key: string, value: string) {
@@ -156,7 +145,7 @@ Given('メールの接続先が送信結果を確かめられない状態にあ�
   await putConfig(request, 'smtp_host', '127.0.0.1');
 });
 
-// 空でない smtp_host を残すと後続の通知シナリオが送信不能の前提を失うので、種の既定値へ必ず戻す。
+// 空でない smtp_host を残すと後続の通知シナリオのメールが Mailpit に届かなくなるので、種の既定値へ必ず戻す。
 After({ tags: '@notification-unknown-resolution' }, async ({ request }) => {
   await putConfig(request, 'smtp_host', '');
   await putConfig(request, 'smtp_port', '25');
@@ -232,6 +221,7 @@ Then('結果不明の通知を未送達と判定して再試行できる', async
 // グループ級の行は X-Store-ID を付けない要求で扱う。
 const groupHeaders = () => ({ Authorization: `Bearer ${operator}` });
 let allowedDelivery = '';
+let allowedEmail = '';
 let unconfirmedDelivery = '';
 const memberOf = new Map<string, string>();
 
@@ -269,7 +259,8 @@ async function memberDelivery(request: APIRequestContext, memberEmail: string, a
 
 Given('業務連絡を許可した会員と許可していない会員に会員宛の通知が起票されている', async ({ request }) => {
   const suffix = Date.now().toString();
-  allowedDelivery = await memberDelivery(request, 'allowed-' + suffix + '@example.invalid', true);
+  allowedEmail = 'allowed-' + suffix + '@example.invalid';
+  allowedDelivery = await memberDelivery(request, allowedEmail, true);
   unconfirmedDelivery = await memberDelivery(request, 'unconfirmed-' + suffix + '@example.invalid', false);
   // 会員宛の行は店舗の行と混ざらない。
   const storeList = await request.get('/api/notification-deliveries', { headers: headers(), params: { size: 100 } });
@@ -306,14 +297,15 @@ When('担当者がグループの業務通知で会員宛の通知を確認し�
   }
 });
 
-Then('許可した会員宛だけが送信に進み、許可していない会員宛は送信不可になる', async ({ request }) => {
+Then('許可した会員宛だけが送信されて届き、許可していない会員宛は送信不可になる', async ({ request }) => {
   const statusOf = async (id: string) => (await (await request.get(`/api/notification-deliveries/${id}`, { headers: groupHeaders() })).json()).status;
-  // 接続先が未設定の環境なので、許可した会員宛は送信手段の段で未送信になる（連絡可否の段は通過している）。
-  await expect.poll(() => statusOf(allowedDelivery)).toBe('FAILED');
+  await expect.poll(() => statusOf(allowedDelivery)).toBe('SENT');
   await expect.poll(() => statusOf(unconfirmedDelivery)).toBe('BLOCKED');
   const lastFailure = async (id: string) => (await (await request.get(`/api/notification-deliveries/${id}/attempts`, { headers: groupHeaders() })).json()).content[0].failure_code;
-  expect(await lastFailure(allowedDelivery)).toBe('UNAVAILABLE');
   expect(await lastFailure(unconfirmedDelivery)).toBe('CONTACT_NOT_ALLOWED');
+  const mail = await latestMailTo(request, allowedEmail);
+  expect(mail.subject).toBe('ポイントのご案内');
+  expect(mail.text).toContain('ポイントの期限が近づいています。');
 });
 
 Then('全店舗を担当しない職員はグループの業務通知に到達できない', async ({ page, request }) => {

@@ -87,8 +87,9 @@ E2E は**開発スタック（project `kizuna`）を使いません**。専用�
 - `base-url.ts` — 店舗の `BASE_URL` とアプリドメインの `APP_URL` の既定値
 - `playwright.config.ts` — `defineBddProject` による 2 プロジェクトと Playwright 設定。
   `chromium` は `dependencies` で `initial-setup` の完了を待ち、`initial-setup` が失敗すると実行されません
-- `docker-compose.e2e.yml` — E2E 専用の使い捨てフルスタック（DB / Redis / SeaweedFS /
-  backend / frontend / gateway ＋ テストランナー）
+- `docker-compose.e2e.yml` — E2E 専用の使い捨てフルスタック（DB / Redis / SeaweedFS / Mailpit /
+  backend / frontend / gateway ＋ テストランナー）。backend が送ったメールは Mailpit に届き、
+  ステップからは `steps/mailpit.ts` の `latestMailTo` で宛先ごとに読む
 
 ブラウザの `baseURL` は環境変数 `BASE_URL`（既定 `http://store1.kizuna.test`）で
 切り替えます。アプリドメイン側は `APP_URL`（既定 `http://kizuna.test`）です。
