@@ -89,6 +89,8 @@ release の `.env` に `APP_PRIVATE_ATTACHMENTS_ENABLED=true` と二つの資格
 | ポイント期限前案内の起票 | `APP_POINTS_EXPIRY_NOTICE_ENABLED` | `APP_POINTS_EXPIRY_NOTICE_SERVICE_USER_ID` | `POINT_EXPIRE` |
 | 業務通知の送信 | `APP_NOTIFICATION_DELIVERY_ENABLED` | `APP_NOTIFICATION_DELIVERY_SERVICE_USER_ID` | `NOTIFICATION_DELIVER` |
 
+起動時刻は、ポイント期限前案内の起票を `APP_POINTS_EXPIRY_NOTICE_CRON`、業務通知の送信を `APP_NOTIFICATION_DELIVERY_CRON`（どちらも秒から始まる六項目の cron）で変えられる。書かなければ上の既定の時刻で動く。
+
 有効にしたのにサービス ID が空、または 0 以下だと backend は起動に失敗する。サービス ID の授権が足りない場合は起動には成功し、実行の時点で拒否される。
 
 1. **ロールを作る**：ロール管理で、`TASK_EXECUTE` と処理固有の権限を持つロールを作る。システムロールはサービス ID に授けられないので、新しいロールにする。複数の処理を一つのサービス ID で動かすなら、一つのロールに `TASK_EXECUTE` とそれぞれの処理固有の権限を持たせてよい。期限前案内は送信の処理が流して初めて会員に届くので、期限前案内を有効にするなら業務通知の送信も有効にする。
