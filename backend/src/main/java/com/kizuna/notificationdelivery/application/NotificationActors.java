@@ -3,6 +3,7 @@ package com.kizuna.notificationdelivery.application;
 import com.kizuna.audit.recording.AuditActor;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.RoleRepository;
+import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.util.Collections;
@@ -16,12 +17,14 @@ public class NotificationActors {
   private final UserRepository users;
   private final RoleRepository roles;
 
+  /** storeId が null ならグループ級の行の操作で、全店舗を授権された職員だけに許す。 */
   public AuditActor require(Long storeId, String email, PermissionCode action) {
     var user = users.findByEmail(email).orElseThrow(NotificationActors::denied);
-    if (storeId == null
-        || user.getUserType() != UserType.STAFF
+    if (user.getUserType() != UserType.STAFF
         || !Boolean.TRUE.equals(user.getEnabled())
-        || !user.authorizes(storeId)
+        || !(storeId == null
+            ? user.getStoreScopeType() == StoreScopeType.ALL_STORES
+            : user.authorizes(storeId))
         || Collections.disjoint(
             user.getRoleIds(),
             roles.findIdsByPermissionCode(PermissionCode.NOTIFICATION_VIEW.name()))

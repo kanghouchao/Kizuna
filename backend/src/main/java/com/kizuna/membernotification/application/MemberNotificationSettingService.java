@@ -65,6 +65,15 @@ public class MemberNotificationSettingService {
     return effective(settings.findByMemberId(memberId));
   }
 
+  /** 会員 ID で引く用途の実効値。会員宛の通知の送信直前の判定が読む。 */
+  @Transactional(readOnly = true)
+  public ContactPermissionStatus effective(long memberId, ContactPurpose purpose) {
+    return settings
+        .findByMemberIdAndPurpose(memberId, purpose)
+        .map(MemberNotificationSetting::getStatus)
+        .orElse(MemberNotificationSetting.defaultFor(purpose, EMAIL_VERIFIED));
+  }
+
   private long memberIdOf(long userId) {
     return memberLookup
         .findByUserId(userId)

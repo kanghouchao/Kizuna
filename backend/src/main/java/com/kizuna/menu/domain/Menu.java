@@ -47,6 +47,9 @@ public class Menu {
 
   private String permission;
 
+  @Column(name = "requires_all_stores", nullable = false)
+  private boolean requiresAllStores;
+
   @Column(name = "sort_order", nullable = false)
   private Integer sortOrder;
 

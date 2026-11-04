@@ -3,7 +3,6 @@ package com.kizuna.menu.application;
 import com.kizuna.menu.domain.Menu;
 import com.kizuna.shared.security.Authorities;
 import com.kizuna.shared.storescope.StoreScope;
-import com.kizuna.user.domain.PermissionCode;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -18,10 +17,10 @@ final class MenuTreeAssembler {
   private MenuTreeAssembler() {}
 
   static List<MenuNode> assemble(List<Menu> roots, StoreScope scope) {
-    Set<String> userAuthorities = currentUserAuthorities(scope);
+    Viewer viewer = new Viewer(currentUserAuthorities(), scope != null && scope.allStores());
     return roots.stream()
-        .filter(menu -> visible(menu, userAuthorities))
-        .map(menu -> toNode(menu, userAuthorities))
+        .filter(menu -> visible(menu, viewer))
+        .map(menu -> toNode(menu, viewer))
         .filter(MenuTreeAssembler::reachable)
         .collect(Collectors.toList());
   }
@@ -35,13 +34,15 @@ final class MenuTreeAssembler {
     return menu.path() != null || !menu.items().isEmpty();
   }
 
-  private static MenuNode toNode(Menu menu, Set<String> userAuthorities) {
+  private record Viewer(Set<String> authorities, boolean allStores) {}
+
+  private static MenuNode toNode(Menu menu, Viewer viewer) {
     List<MenuNode> children =
         menu.getChildren() == null
             ? Collections.emptyList()
             : menu.getChildren().stream()
-                .filter(child -> visible(child, userAuthorities))
-                .map(child -> toNode(child, userAuthorities))
+                .filter(child -> visible(child, viewer))
+                .map(child -> toNode(child, viewer))
                 .collect(Collectors.toList());
 
     return new MenuNode(menu.getLabel(), menu.getPath(), menu.getIcon(), children);
@@ -49,32 +50,28 @@ final class MenuTreeAssembler {
 
   /**
    * 見出し節（遷移先を持たず子を持つ）は子に見えるものが一つでもあれば出す — 節自身の permission は見ない。葉は permission で判定し、permission
-   * の無い葉は全員に見える。
+   * の無い葉は全員に見える。全店舗を要する葉（定期処理・監査・グループ級の通知）は、全店舗を担当しない利用者には出さない。
    */
-  private static boolean visible(Menu menu, Set<String> userAuthorities) {
+  private static boolean visible(Menu menu, Viewer viewer) {
     if (menu.getPath() == null && menu.getChildren() != null && !menu.getChildren().isEmpty()) {
-      return menu.getChildren().stream().anyMatch(child -> visible(child, userAuthorities));
+      return menu.getChildren().stream().anyMatch(child -> visible(child, viewer));
+    }
+    if (menu.isRequiresAllStores() && !viewer.allStores()) {
+      return false;
     }
     if (menu.getPermission() == null || menu.getPermission().isEmpty()) {
       return true;
     }
-    return userAuthorities.contains(Authorities.permission(menu.getPermission()));
+    return viewer.authorities().contains(Authorities.permission(menu.getPermission()));
   }
 
-  /** 全店舗を担当しない利用者には、全店舗作用域を要する画面（定期処理・監査）の節を出さない。 */
-  private static Set<String> currentUserAuthorities(StoreScope scope) {
+  private static Set<String> currentUserAuthorities() {
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
     if (auth == null) {
       return Collections.emptySet();
     }
-    Set<String> authorities =
-        auth.getAuthorities().stream()
-            .map(GrantedAuthority::getAuthority)
-            .collect(Collectors.toSet());
-    if (scope == null || !scope.allStores()) {
-      authorities.remove(PermissionCode.TASK_MANAGE.authority());
-      authorities.remove(PermissionCode.AUDIT_VIEW.authority());
-    }
-    return authorities;
+    return auth.getAuthorities().stream()
+        .map(GrantedAuthority::getAuthority)
+        .collect(Collectors.toSet());
   }
 }
