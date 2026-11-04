@@ -166,18 +166,21 @@ function Statement({
               <TableHeader>
                 <TableRow>
                   <TableHead>営業日</TableHead>
+                  <TableHead>承諾</TableHead>
                   <TableHead>受注報酬</TableHead>
                   <TableHead>日額</TableHead>
                   <TableHead>出勤・条件</TableHead>
                   <TableHead>保証不足分</TableHead>
                   <TableHead>ボーナス</TableHead>
-                  <TableHead>承諾</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {data.days.map(day => (
                   <TableRow key={day.business_date}>
                     <TableCell>{day.business_date}</TableCell>
+                    <TableCell className="whitespace-normal">
+                      <DayAcceptanceCell day={day} onAccept={accept} sending={sending} />
+                    </TableCell>
                     <TableCell>{yen(day.order_amount)}</TableCell>
                     <TableCell>
                       {day.daily_amount === undefined ? '—' : yen(day.daily_amount)}
@@ -196,9 +199,6 @@ function Statement({
                     </TableCell>
                     <TableCell>{yen(day.guarantee_amount)}</TableCell>
                     <TableCell>{yen(day.bonus_amount)}</TableCell>
-                    <TableCell className="whitespace-normal">
-                      <DayAcceptanceCell day={day} onAccept={accept} sending={sending} />
-                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

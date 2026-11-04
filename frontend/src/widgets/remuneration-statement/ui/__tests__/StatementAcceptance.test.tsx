@@ -98,6 +98,14 @@ beforeEach(() => {
 });
 it('本人の日別行に四つの状態と承諾の操作、変更ありの差分を示す', async () => {
   await open('self');
+  // 狭い幅で横に送らなくても、営業日と承諾の状態・操作が並んで見えるようにする
+  const [daily] = screen.getAllByRole('table');
+  expect(
+    within(daily)
+      .getAllByRole('columnheader')
+      .slice(0, 2)
+      .map(h => h.textContent)
+  ).toEqual(['営業日', '承諾']);
   expect(within(row('2026-09-27')).getByText('未承諾')).toBeInTheDocument();
   expect(
     within(row('2026-09-27')).getByRole('button', { name: '2026-09-27 を承諾' })
