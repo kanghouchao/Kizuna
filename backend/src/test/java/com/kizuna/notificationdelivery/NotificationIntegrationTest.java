@@ -1138,8 +1138,8 @@ class NotificationIntegrationTest {
     volatile boolean crash;
     Runnable afterSend = () -> {};
 
-    public ContactType type() {
-      return ContactType.EMAIL;
+    public Channel type() {
+      return Channel.EMAIL;
     }
 
     public boolean available() {

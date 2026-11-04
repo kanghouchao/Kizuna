@@ -8,7 +8,6 @@ import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.customer.contact.BusinessContactRestrictions;
 import com.kizuna.customer.contact.GuestContactImports;
 import com.kizuna.customer.contact.MarketingContacts;
-import com.kizuna.customer.domain.ContactType;
 import com.kizuna.member.application.MemberDisplayNames;
 import com.kizuna.member.application.MemberLoginAddress;
 import com.kizuna.member.application.MemberLookupService;
@@ -402,8 +401,8 @@ class PointExpiryNoticeIntegrationTest {
   static class FakeTransport implements ContactTransport {
     final List<String> results = new CopyOnWriteArrayList<>();
 
-    public ContactType type() {
-      return ContactType.EMAIL;
+    public Channel type() {
+      return Channel.EMAIL;
     }
 
     public boolean available() {
