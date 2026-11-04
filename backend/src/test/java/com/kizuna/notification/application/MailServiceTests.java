@@ -45,6 +45,7 @@ class MailServiceTests {
             new MockEnvironment()
                 .withProperty("spring.mail.properties.mail.smtp.timeout", "10000")
                 .withProperty("spring.mail.properties.mail.smtp.connectiontimeout", "5000")
+                .withProperty("spring.mail.properties.mail.smtp.writetimeout", "10000")
                 .withProperty("spring.mail.properties.mail.smtp.starttls.enable", "true"));
   }
 
@@ -155,6 +156,7 @@ class MailServiceTests {
     assertThat(impl.getJavaMailProperties())
         .containsEntry("mail.smtp.timeout", "10000")
         .containsEntry("mail.smtp.connectiontimeout", "5000")
+        .containsEntry("mail.smtp.writetimeout", "10000")
         .doesNotContainKey("mail.smtp.starttls.enable");
   }
 
