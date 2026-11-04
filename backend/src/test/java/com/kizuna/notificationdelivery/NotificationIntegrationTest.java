@@ -1035,6 +1035,19 @@ class NotificationIntegrationTest {
     assertThatThrownBy(() -> notifications.get(null, email, store.id()))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
+            () -> notifications.queue(null, email, store.id(), store.version(), "グループから操作", false))
+        .isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(
+            () ->
+                notifications.resolve(
+                    null, email, store.id(), store.version(), DeliveryResolution.SENT, "グループから判定"))
+        .isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> notifications.history(null, email, store.id(), PageRequest.of(0, 10)))
+        .isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(
+            () -> notifications.history(storeId, email, group.id(), PageRequest.of(0, 10)))
+        .isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(
             () -> notifications.queue(storeId, email, group.id(), group.version(), "店舗から操作", true))
         .isInstanceOf(NotFoundException.class);
 

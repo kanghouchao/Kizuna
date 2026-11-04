@@ -17,7 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 会員本人による通知設定の照会と変更（GLOSSARY「会員の通知設定」）。対象は検証済みトークンの利用者 ID で固定し、職員の閲覧・代理変更の口は持たない。
- * 店舗の顧客連絡先の連絡可否は読みも書きもしない。
+ * 会員宛の通知の送信判定には用途ごとの実効値だけを渡す。店舗の顧客連絡先の連絡可否は読みも書きもしない。
  */
 @Service
 @RequiredArgsConstructor
