@@ -452,6 +452,39 @@ class SystemConfigServiceImplTest {
         .isEqualTo(new ApplicantRetentionSettings(null, null, null));
   }
 
+  @Test
+  void pointExpiryNoticeSettings_readsTheConfiguredDays() {
+    when(systemConfigRepository.findByConfigKey("point_expiry_notice_days"))
+        .thenReturn(Optional.of(config("point_expiry_notice_days", " 7 ")));
+
+    assertThat(systemConfigService.pointExpiryNoticeSettings())
+        .isEqualTo(new PointExpiryNoticeSettings(7));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"", "abc", "0", "366"})
+  void pointExpiryNoticeSettings_unsetOrInvalidIsNull(String value) {
+    // 未設定を 0 日と読むと失効当日の案内になり、処理が黙って別の意味で動く
+    when(systemConfigRepository.findByConfigKey("point_expiry_notice_days"))
+        .thenReturn(Optional.of(config("point_expiry_notice_days", value)));
+
+    assertThat(systemConfigService.pointExpiryNoticeSettings())
+        .isEqualTo(new PointExpiryNoticeSettings(null));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"0", "366", "-3"})
+  void updateConfig_expiryNoticeDaysOutOfRange(String value) {
+    SystemConfig config =
+        SystemConfig.builder().configKey("point_expiry_notice_days").valueType("NUMBER").build();
+    when(systemConfigRepository.findByConfigKey("point_expiry_notice_days"))
+        .thenReturn(Optional.of(config));
+
+    assertThrows(
+        ServiceException.class,
+        () -> systemConfigService.updateConfig("point_expiry_notice_days", value));
+  }
+
   private SystemConfig config(String key, String value) {
     return SystemConfig.builder().configKey(key).configValue(value).build();
   }

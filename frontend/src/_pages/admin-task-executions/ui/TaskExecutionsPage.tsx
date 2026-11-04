@@ -176,17 +176,41 @@ function ExecutionDetail({ id, onChanged }: { id: number; onChanged: (id: number
   );
 }
 
+const TASK_COPY: Record<string, { label: string; description: string; action: string }> = {
+  SERVICE_IDENTITY_CHECK: {
+    label: 'サービスIDの実行確認',
+    description:
+      '選択したサービスIDの現在の権限を確認し、実行履歴に記録します。対象日は確認記録の対象日です。',
+    action: '実行確認を記録',
+  },
+  POINT_EXPIRY: {
+    label: '期限切れポイントの記帳',
+    description:
+      '対象日より前に期限を過ぎた未消費ポイントを記帳します。利用可能な残高は変わりません。本日以前の日付を指定してください。',
+    action: '期限切れポイントを記帳',
+  },
+  POINT_EXPIRY_NOTICE: {
+    label: 'ポイント期限前案内の起票',
+    description:
+      '対象日からシステム設定の日数後に有効期限を迎える未消費ポイントを持つ会員へ、期限日ごとに一通の案内を送信待ちで起票します。送信は業務通知の送信で行われ、業務連絡を許可した会員にだけ届きます。残高は変わりません。本日以前の日付を指定してください。',
+    action: '期限前案内を起票',
+  },
+  APPLICANT_ANONYMIZATION: {
+    label: '保持期間を過ぎた応募者の匿名化',
+    description:
+      '対象日の時点で保持期間を過ぎた終端状態の応募者を全店舗から匿名化します。個人情報と添付は削除され、元に戻せません。本日以前の日付を指定してください。',
+    action: '保持期間を過ぎた応募者を匿名化',
+  },
+  NOTIFICATION_DELIVER: {
+    label: '業務通知の送信',
+    description:
+      '全店舗の送信予定を過ぎた通知を最大100件、送信器へ引き渡します。対象日は実行記録の日付です。送信結果は店舗の業務通知で確認してください。',
+    action: '通知を送信器へ引き渡す',
+  },
+};
+
 function taskLabel(name: string) {
-  return (
-    (
-      {
-        SERVICE_IDENTITY_CHECK: 'サービスIDの実行確認',
-        POINT_EXPIRY: '期限切れポイントの記帳',
-        APPLICANT_ANONYMIZATION: '保持期間を過ぎた応募者の匿名化',
-        NOTIFICATION_DELIVER: '業務通知の送信',
-      } as Record<string, string>
-    )[name] ?? name
-  );
+  return TASK_COPY[name]?.label ?? name;
 }
 export default function TaskExecutionsPage() {
   const list = useListPage(page => taskExecutionApi.list(page));
@@ -288,13 +312,7 @@ export default function TaskExecutionsPage() {
           <p role="status">この処理の手動実行権限がありません。</p>
         )}
         <p className="text-sm text-muted-foreground">
-          {taskName === 'POINT_EXPIRY'
-            ? '対象日より前に期限を過ぎた未消費ポイントを記帳します。利用可能な残高は変わりません。本日以前の日付を指定してください。'
-            : taskName === 'APPLICANT_ANONYMIZATION'
-              ? '対象日の時点で保持期間を過ぎた終端状態の応募者を全店舗から匿名化します。個人情報と添付は削除され、元に戻せません。本日以前の日付を指定してください。'
-              : taskName === 'NOTIFICATION_DELIVER'
-                ? '全店舗の送信予定を過ぎた通知を最大100件、送信器へ引き渡します。対象日は実行記録の日付です。送信結果は店舗の業務通知で確認してください。'
-                : '選択したサービスIDの現在の権限を確認し、実行履歴に記録します。対象日は確認記録の対象日です。'}
+          {(TASK_COPY[taskName] ?? TASK_COPY.SERVICE_IDENTITY_CHECK).description}
         </p>
         {catalog.isLoading || candidates.isLoading ? (
           <p>読み込み中...</p>
@@ -401,13 +419,7 @@ export default function TaskExecutionsPage() {
               >
                 {form.formState.isSubmitting
                   ? '実行中...'
-                  : taskName === 'POINT_EXPIRY'
-                    ? '期限切れポイントを記帳'
-                    : taskName === 'APPLICANT_ANONYMIZATION'
-                      ? '保持期間を過ぎた応募者を匿名化'
-                      : taskName === 'NOTIFICATION_DELIVER'
-                        ? '通知を送信器へ引き渡す'
-                        : '実行確認を記録'}
+                  : (TASK_COPY[taskName] ?? TASK_COPY.SERVICE_IDENTITY_CHECK).action}
               </Button>
             </form>
           </Form>

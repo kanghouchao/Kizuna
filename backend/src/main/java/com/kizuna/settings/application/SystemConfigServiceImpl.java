@@ -37,6 +37,11 @@ public class SystemConfigServiceImpl implements SystemConfigService {
 
   private static final int MAX_RETENTION_MONTHS = 1200;
 
+  private static final String EXPIRY_NOTICE_DAYS = "point_expiry_notice_days";
+
+  /** 案内は失効の 1 日以上前、1 年以内に出す。 */
+  private static final int MAX_EXPIRY_NOTICE_DAYS = 365;
+
   /** 監査に前後値を残してよい設定。ここに無い key（秘密を含む）は値を持たず、変化したことだけを残す。 */
   private static final Set<String> VALUE_AUDITED_KEYS =
       Set.of("smtp_host", "smtp_port", "smtp_username", "smtp_from", "line_channel_id");
@@ -183,6 +188,19 @@ public class SystemConfigServiceImpl implements SystemConfigService {
         monthsValue("applicant_retention_hired_months"));
   }
 
+  /** 都度読む。理由は {@link #pointSettings} と同じ。 */
+  @Override
+  @Transactional(readOnly = true)
+  public PointExpiryNoticeSettings pointExpiryNoticeSettings() {
+    String raw = rawValue(EXPIRY_NOTICE_DAYS).trim();
+    try {
+      int days = Integer.parseInt(raw);
+      return new PointExpiryNoticeSettings(days < 1 || days > MAX_EXPIRY_NOTICE_DAYS ? null : days);
+    } catch (NumberFormatException e) {
+      return new PointExpiryNoticeSettings(null);
+    }
+  }
+
   /** 保持期間の読み取り。未設定・範囲外を含む不正値は null（何もしない）へ倒す — 匿名化は取り返しがつかないため、疑わしい値で消す側へ倒さない。 */
   private Integer monthsValue(String configKey) {
     String raw = rawValue(configKey);
@@ -240,6 +258,14 @@ public class SystemConfigServiceImpl implements SystemConfigService {
           && (parsed < 0 || parsed > MAX_RETENTION_MONTHS)) {
         throw new ServiceException(
             "保持期間は 0 から " + MAX_RETENTION_MONTHS + " か月の整数で指定してください: " + config.getConfigKey());
+      }
+      if (EXPIRY_NOTICE_DAYS.equals(config.getConfigKey())
+          && (parsed < 1 || parsed > MAX_EXPIRY_NOTICE_DAYS)) {
+        throw new ServiceException(
+            "期限前案内の日数は 1 から "
+                + MAX_EXPIRY_NOTICE_DAYS
+                + " 日の整数で指定してください: "
+                + config.getConfigKey());
       }
     }
     // 解釈できない時刻は読み手が 00:00 へ倒すため、保存だけが成功して暦日と同じ挙動へ静かに入れ替わる。

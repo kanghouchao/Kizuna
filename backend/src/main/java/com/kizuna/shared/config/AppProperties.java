@@ -41,6 +41,14 @@ public class AppProperties {
     private int maxLots = 10_000;
   }
 
+  private PointsExpiryNotice pointsExpiryNotice = new PointsExpiryNotice();
+
+  @Getter
+  @Setter
+  public static class PointsExpiryNotice {
+    private int maxLots = 10_000;
+  }
+
   private ApplicantAnonymization applicantAnonymization = new ApplicantAnonymization();
 
   @Getter

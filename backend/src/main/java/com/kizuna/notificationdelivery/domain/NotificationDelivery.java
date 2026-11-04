@@ -76,6 +76,15 @@ public class NotificationDelivery extends DeliveryRecord {
     return row;
   }
 
+  /** 人の確認を経ずに送る業務の起票。下書きを経ずに送信待ちで作る。 */
+  public static NotificationDelivery queued(
+      Long attributedStoreId, DeliveryContent input, String reason) {
+    var row = draft(attributedStoreId, input);
+    row.reason = DeliveryContent.clean(reason, 500);
+    row.status = DeliveryStatus.QUEUED;
+    return row;
+  }
+
   public DeliveryContent content() {
     return new DeliveryContent(
         sourceType, sourceId, channel, purpose, subject, body, scheduledAt, dedupeKey);

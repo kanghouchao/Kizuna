@@ -241,6 +241,40 @@ test('処理を切り替えるとその処理の候補を取得し、店舗を�
   });
 });
 
+test('ポイント期限前案内は説明と専用の実行ボタンを出し、その処理名で実行を送る', async () => {
+  tasks.taskTypes.mockResolvedValue([
+    { name: 'SERVICE_IDENTITY_CHECK', manual_allowed: true },
+    { name: 'POINT_EXPIRY_NOTICE', manual_allowed: true },
+  ]);
+  tasks.list.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
+  tasks.candidates.mockImplementation(async (_page, name) => ({
+    rows: name === 'POINT_EXPIRY_NOTICE' ? [{ id: 30, display_name: '案内主体' }] : [],
+    page: 0,
+    pageCount: 1,
+    total: name === 'POINT_EXPIRY_NOTICE' ? 1 : 0,
+  }));
+  render(<TaskExecutionsPage />);
+  const selector = await screen.findByRole('combobox', { name: '処理' });
+  await waitFor(() => expect(selector).not.toBeDisabled());
+  fireEvent.click(selector);
+  const type = await screen.findByRole('option', { name: 'ポイント期限前案内の起票' });
+  fireEvent.pointerDown(type);
+  fireEvent.click(type);
+  await waitFor(() => expect(tasks.candidates).toHaveBeenLastCalledWith(0, 'POINT_EXPIRY_NOTICE'));
+  expect(screen.getByText(/業務連絡を許可した会員にだけ届きます/)).toBeVisible();
+  fireEvent.click(await screen.findByRole('combobox', { name: '実行主体' }));
+  const service = await screen.findByRole('option', { name: '案内主体' });
+  fireEvent.pointerDown(service);
+  fireEvent.click(service);
+  fireEvent.change(screen.getByLabelText('対象日'), { target: { value: '2026-10-07' } });
+  tasks.create.mockRejectedValue(new Error('network'));
+  fireEvent.click(screen.getByRole('button', { name: '期限前案内を起票' }));
+  await waitFor(() => expect(tasks.create).toHaveBeenCalled());
+  expect(tasks.create.mock.calls[0][0]).toEqual(
+    expect.objectContaining({ task_name: 'POINT_EXPIRY_NOTICE', service_user_id: 30 })
+  );
+});
+
 test('登録処理の手動権限がなければ実行操作を送らない', async () => {
   tasks.taskTypes.mockResolvedValue([{ name: 'SERVICE_IDENTITY_CHECK', manual_allowed: false }]);
   tasks.list.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });

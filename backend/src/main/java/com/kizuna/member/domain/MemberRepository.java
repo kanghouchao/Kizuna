@@ -1,6 +1,8 @@
 package com.kizuna.member.domain;
 
 import jakarta.persistence.LockModeType;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -63,6 +65,13 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select m.id from com.kizuna.member.domain.Member m where m.id = :id")
   Optional<Long> lockIdForUpdate(@Param("id") Long id);
+
+  /** 会員宛の通知の文案に入れる表示名。会員の集約はグループ級なので会員 ID だけで引く。 */
+  @Query(
+      "select m.id as memberId, u.displayName as displayName"
+          + " from com.kizuna.member.domain.Member m"
+          + " join com.kizuna.user.domain.User u on u.id = m.userId where m.id in :ids")
+  List<MemberDisplayNameView> findDisplayNames(@Param("ids") Collection<Long> ids);
 
   // 職員の会員検索。退会済みの行も対象にするので識別子で単一結果を前提にしない（ADR 0029）。
   // 利用者は FQCN で参照する（HQL の予約語衝突を避ける既存規約）。検索語は呼出側が '!' で

@@ -32,6 +32,54 @@ public class PointExpiryLedger {
 
   public record ExpiryEntry(Long id, Long memberId, int amount) {}
 
+  public record ExpiringBalance(long memberId, long points) {}
+
+  /**
+   * {@code expiresOn} に期限を迎える未消費量を会員ごとに返す（期限前案内）。量は職員の会員画面と同じ期限別残高の定義で数え、
+   * 台帳には書かない。ロックしないので、読んだ後の利用は数に反映されない。
+   */
+  @Transactional(propagation = Propagation.MANDATORY)
+  public List<ExpiringBalance> expiringOn(LocalDate expiresOn, LocalDate today, int maxLots) {
+    if (maxLots < 1 || maxLots >= Integer.MAX_VALUE) {
+      throw new ServiceException("期限前案内のロット上限が不正です");
+    }
+    var credits = entries.findUnconsumedCreditsExpiringOn(expiresOn, Limit.of(maxLots + 1));
+    if (credits.size() > maxLots) {
+      throw new ServiceException("期限前案内の対象が処理上限を超えています。実行設定を確認してください");
+    }
+    if (credits.isEmpty()) return List.of();
+    Map<Long, Integer> consumed =
+        allocations
+            .findConsumedBySourceEntryIds(credits.stream().map(PointEntry::getId).toList())
+            .stream()
+            .collect(
+                Collectors.toMap(
+                    PointConsumption::getSourceEntryId, row -> Math.toIntExact(row.getConsumed())));
+    var result = new ArrayList<ExpiringBalance>();
+    credits.stream()
+        .collect(
+            Collectors.groupingBy(PointEntry::getMemberId, LinkedHashMap::new, Collectors.toList()))
+        .forEach(
+            (memberId, lots) ->
+                new PointLedger(
+                        lots.stream()
+                            .map(
+                                credit ->
+                                    new PointLot(
+                                        credit.getId(),
+                                        credit.getAmount(),
+                                        credit.getExpiresOn(),
+                                        consumed.getOrDefault(credit.getId(), 0)))
+                            .toList(),
+                        today)
+                    .balanceByExpiry().stream()
+                        .filter(balance -> expiresOn.equals(balance.expiresOn()))
+                        .forEach(
+                            balance ->
+                                result.add(new ExpiringBalance(memberId, balance.points()))));
+    return List.copyOf(result);
+  }
+
   /** 授権済み処理の取引へ参加し、監査に必要な識別子と記帳量だけを公開する。 */
   @Transactional(propagation = Propagation.MANDATORY)
   public List<ExpiryEntry> materialize(LocalDate asOf, long executionId, int maxLots) {

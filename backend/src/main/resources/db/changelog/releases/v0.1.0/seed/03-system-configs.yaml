@@ -88,6 +88,15 @@ databaseChangeLog:
               - column: { name: category, value: "POINT" }
               - column: { name: description, value: "ポイント利用の単位" }
               - column: { name: value_type, value: "NUMBER" }
+        # ポイント期限前案内を失効の何日前に起票するか。空欄では案内の処理が実行を拒む。
+        - insert:
+            tableName: t_system_configs
+            columns:
+              - column: { name: config_key, value: "point_expiry_notice_days" }
+              - column: { name: config_value, value: "7" }
+              - column: { name: category, value: "POINT" }
+              - column: { name: description, value: "ポイント期限前案内を送る失効までの日数" }
+              - column: { name: value_type, value: "NUMBER" }
         # 会員ランクの昇格閾値。SILVER / GOLD それぞれ「利用回数」か「付与の累計純額」の
         # どちらか一方の達成で上がる（OR）。占位値であり運営が随時調整する。
         # 0 以下はその条件が成立しえないことを意味する（未設定を「常に達成」と読ませない）。
