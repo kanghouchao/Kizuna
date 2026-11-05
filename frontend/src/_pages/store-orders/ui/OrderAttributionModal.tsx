@@ -197,7 +197,7 @@ export function OrderAttributionModal({
       : correctionTarget !== null
         ? '誤付与の差し引き'
         : '会員帰属の訂正';
-  // 差し引きの段は DialogFrameActions で自分の操作を置くので、footer と form は渡さない
+  // 差し引きの段は DialogFrameActions で自分の操作を置く。footer は QR の閉じると親が描く段のものだけ
   const inChildStep = receiptToken !== null || correctionTarget !== null;
   const showsNotFound = !inChildStep && !isLoading && failure === 'notFound';
   const showsStatus =
