@@ -200,3 +200,37 @@ it('同じ明細の名称が訂正で変わっても、変更前のセルに訂�
     '深夜加算（新版）\n費用 ¥2,000 / 報酬 ¥1,000',
   ]);
 });
+
+it('同じ特殊サービスの名称が訂正で変わっても、変更前のセルに訂正前の名称を残す', async () => {
+  const special = {
+    service_id: 'sp1',
+    revision_id: 'sr1',
+    revision_number: 1,
+    terms_version: 1,
+    name: '特別対応（旧称）',
+    charge_type: 'PAID' as const,
+    price: 3000,
+    remuneration: 1500,
+    consent_event_id: 'ce1',
+    consent_version: 1,
+    adoption_basis: 'ACCEPTED_TERMS' as const,
+    enrollment_id: 'en1',
+  };
+  fetchHistory.mockResolvedValue({
+    rows: [
+      {
+        ...entry,
+        before: { ...snapshot, special_services: [special] },
+        after: { ...snapshot, special_services: [{ ...special, name: '特別対応（新称）' }] },
+      },
+    ],
+    page: 0,
+    pageCount: 1,
+    total: 1,
+  });
+  render(<OrderCorrectionHistory orderId="o1" />);
+  await screen.findByText('提供コースの訂正');
+  const [, before, after] = cellsOf('特殊サービス');
+  expect(before).toContain('特別対応（旧称）');
+  expect(after).toContain('特別対応（新称）');
+});
