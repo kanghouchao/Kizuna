@@ -102,17 +102,17 @@ default / modern / classic は同一の `--storefront-*` 契約を各 theme.css 
 
 既存 primitive を `@/shared/ui` から使う。vendored への画面別変更は consumer の className で表す。
 
-| 用途             | 規則                                                                                                                  |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------- |
-| 主／副／破壊操作 | Button の default / outline / destructive。遷移は `render={<Link href="…" />}`、ボタン本文は Button の children       |
-| 入力             | Input / Textarea / Select / Checkbox / Switch / RadioGroup / Label                                                    |
-| モーダル         | 中央の Dialog を DialogFrame で描く（下記）。横スライド Drawer は追加しない                                           |
-| 破壊確認         | ConfirmDialog。window.confirm や画面内での AlertDialog 再構築をしない                                                 |
-| 検索選択         | 共有 Combobox を公開入口から使う。サーバ検索は `filter={null}`。候補取得・検索語・選択の業務制御はページ slice に置く |
-| 表／タブ         | TableCard + Table / Tabs                                                                                              |
-| 状態             | outline Badge と tint、`border-transparent`                                                                           |
-| 読み込み         | 形が既知なら Skeleton、未知または小領域は「読み込み中...」。手製 animate-pulse を作らない                             |
-| 進捗             | `bg-muted h-2 rounded-full` と `bg-primary-strong`                                                                    |
+| 用途             | 規則                                                                                                                         |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 主／副／破壊操作 | Button の default / outline / destructive。遷移は `render={<Link href="…" />}`、ボタン本文は Button の children              |
+| 入力             | Input / Textarea / Select / Checkbox / Switch / RadioGroup / Label                                                           |
+| モーダル         | [下記の基準](#ダイアログか画面か)で先に判定する。中央の Dialog を DialogFrame で描く（下記）。横スライド Drawer は追加しない |
+| 破壊確認         | ConfirmDialog。window.confirm や画面内での AlertDialog 再構築をしない                                                        |
+| 検索選択         | 共有 Combobox を公開入口から使う。サーバ検索は `filter={null}`。候補取得・検索語・選択の業務制御はページ slice に置く        |
+| 表／タブ         | TableCard + Table / Tabs                                                                                                     |
+| 状態             | outline Badge と tint、`border-transparent`                                                                                  |
+| 読み込み         | 形が既知なら Skeleton、未知または小領域は「読み込み中...」。手製 animate-pulse を作らない                                    |
+| 進捗             | `bg-muted h-2 rounded-full` と `bg-primary-strong`                                                                           |
 
 - DialogFrame は題名帯（DialogTitle・DialogDescription）と操作帯（DialogFooter）を固定し、本文だけをスクロールする。主操作は操作帯の右端、副操作はその左。本文の部品が自前の form と操作を持つときは DialogFrameActions で操作帯へ置き、submit は `form={id}` で結び付ける。
 - 幅は段の名前で選ぶ: `sm` 28rem（確認・1 列の小フォーム）/ `md` 42rem（キー値の詳細・2 列のフォーム）/ `lg` 56rem（本文が多列の表）。ほかの幅を足さない。
@@ -124,6 +124,25 @@ default / modern / classic は同一の `--storefront-*` 契約を各 theme.css 
 - 統計カードは注釈・数値・増減の順。カテゴリ chip は chart tint と foreground。ランキングは 32px の primary tint の順位と名前、右端に金額／件数。
 - 選択 preview は label 内の sr-only radio、選択時 `border-primary ring-2 ring-primary bg-primary/10`。説明は未選択時だけ muted、hover／選択時は foreground。focus-visible を label に伝播する。
 - 本人ポータルの固定下部 tab は 24px icon + 12px label、content に `pb-16`。選択文字は primary-strong、非選択 hover は背景と文字を同時に変更する。
+
+### ダイアログか画面か
+
+作業をダイアログに置く前に、次の基準で判定する。いずれかに当たる作業は独立画面にする。
+
+- (a) 内容が伸びる: 増減する行、高さ上限の無い選択一覧、入れ子の一覧、大きな表。
+- (b) 2 件を見比べる、またはダイアログの外の情報を見ないと決められない。
+- (c) 1 つの枠で複数の段階・複数のモードを切り替える。同じフォームを初期値だけ変えて使う登録・変更は「複数モード」に数えない。
+- (d) その上にさらにダイアログを重ねる必要がある。ConfirmDialog と一度きりの値の表示は数えない。
+- (e) 日常的に繰り返す業務操作。
+
+ダイアログに残すのは、目的が 1 つ・1 段階・フォームが固定で枠の中の情報だけで完結する短い操作、破壊確認、一度きりの値の表示に限る。「URL で共有したいか」は基準に入れない。画面にした結果であって、画面にする理由ではないため。
+
+一度きりの値（伝票QRコードの生値、一時パスワードなど、後から取り直せない値）は閉じないダイアログで出す。
+
+- 作業画面で送信が成功したらその画面の上に、一覧の行の操作で発行したら一覧の上に出す。作業画面の上に出した値は、閉じたら一覧へ遷移する。
+- Esc・背景押下では閉じず、閉じるボタン（×）も出さない（`onOpenChange` の閉じる要求を無視し `showCloseButton={false}`）。操作帯のボタンでだけ閉じる。
+- 値はメモリにだけ持ち、画面遷移・再読込で再表示しない。
+- 離脱を防ぐのはモーダルであること自体（サイドバーへ触れられない）に任せる。App Router には画面内遷移を止める仕組みが無く、サイドバーのリンクを自前で横取りするのは脆いため。
 
 ### キー値と変更前後
 
