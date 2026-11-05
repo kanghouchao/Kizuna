@@ -11,8 +11,13 @@ const { When, Then } = createBdd();
 let createdStaffName = '';
 let createdStaffEmail = '';
 
-const createDialog = (page: Page) => page.getByRole('dialog', { name: '従業員を追加' });
+const CREATE_URL = /\/admin\/staff\/create\/?$/;
+const LIST_URL = /\/admin\/staff\/?$/;
+const EDIT_URL = /\/admin\/staff\/\d+\/edit\/?$/;
 const createHeading = (page: Page) => page.getByRole('heading', { name: '従業員を追加', exact: true });
+const editHeading = (page: Page) =>
+  page.getByRole('heading', { name: `${createdStaffName} の権限を編集`, exact: true });
+const resultPanel = (page: Page) => page.getByRole('region', { name: 'この設定の結果' });
 
 async function searchStaff(page: Page, keyword: string) {
   await page.getByLabel('従業員を検索', { exact: true }).fill(keyword);
@@ -32,34 +37,34 @@ async function findCreatedStaffRow(page: Page) {
   return row;
 }
 
-async function openCreateDialog(page: Page) {
-  await page.getByRole('button', { name: '従業員を追加', exact: true }).click();
+// 追加は一覧の link から作成画面へ遷移する（画面遷移は link のまま保つ）。
+async function openCreatePage(page: Page) {
+  await page.getByRole('link', { name: '従業員を追加', exact: true }).click();
+  await expect(page).toHaveURL(CREATE_URL, { timeout: 15000 });
   await expect(createHeading(page)).toBeVisible();
-  return createDialog(page);
 }
 
-/** 追加モーダルの入力欄を埋め、ロールを選ぶ。担当店舗の指定と送信は呼び手が行う。 */
-async function fillCreateDialog(page: Page, baseName: string, roleLabels: string[]) {
+/** 作成画面の入力欄を埋め、ロールを選ぶ。担当店舗の指定と送信は呼び手が行う。 */
+async function fillCreatePage(page: Page, baseName: string, roleLabels: string[]) {
   createdStaffName = `${baseName}-${Date.now()}`;
   createdStaffEmail = `staff-e2e-${Date.now()}@kizuna.test`;
-  const dialog = await openCreateDialog(page);
-  await dialog.getByLabel('メールアドレス', { exact: true }).fill(createdStaffEmail);
-  await dialog.getByLabel('初期パスワード', { exact: true }).fill('pass1234');
-  await dialog.getByLabel('氏名', { exact: true }).fill(createdStaffName);
+  await openCreatePage(page);
+  await page.getByLabel('メールアドレス', { exact: true }).fill(createdStaffEmail);
+  await page.getByLabel('初期パスワード', { exact: true }).fill('pass1234');
+  await page.getByLabel('氏名', { exact: true }).fill(createdStaffName);
   // ロールはチェックボックス複数選択（兼務があるため単選ドロップダウンではない）。
   for (const roleLabel of roleLabels) {
-    await dialog.getByRole('checkbox', { name: roleLabel, exact: true }).check();
+    await page.getByRole('checkbox', { name: roleLabel, exact: true }).check();
   }
-  return dialog;
 }
 
 async function addStaffInStore(page: Page, baseName: string, roleLabels: string[], storeName: string) {
-  const dialog = await fillCreateDialog(page, baseName, roleLabels);
-  await dialog.getByRole('radio', { name: '個別店舗', exact: true }).click();
-  await dialog.getByRole('checkbox', { name: storeName, exact: true }).check();
-  await dialog.getByRole('button', { name: '追加する', exact: true }).click();
-  // 成功時のみモーダルが閉じる（失敗時はエラートーストのまま開いたまま）。
-  await expect(createHeading(page)).toBeHidden({ timeout: 15000 });
+  await fillCreatePage(page, baseName, roleLabels);
+  await page.getByRole('radio', { name: '個別店舗', exact: true }).click();
+  await page.getByRole('checkbox', { name: storeName, exact: true }).check();
+  await page.getByRole('button', { name: '追加する', exact: true }).click();
+  // 成功時だけ一覧へ戻る（失敗時はエラートーストのまま作成画面に留まる）。
+  await expect(page).toHaveURL(LIST_URL, { timeout: 15000 });
 }
 
 // 遷移をサイドバーのリンク経由にすることで、メニュー行そのものの可視性も同時に固定する。
@@ -67,7 +72,7 @@ When('従業員管理画面を開く', async ({ page }) => {
   const link = await revealSidebarLink(page, aside => aside.getByRole('link', { name: '従業員管理', exact: true }));
   await link.click();
   await expect(page).toHaveURL(/\/admin\/staff\/?$/, { timeout: 15000 });
-  await expect(page.getByRole('button', { name: '従業員を追加', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: '従業員を追加', exact: true })).toBeVisible();
 });
 
 When(
@@ -87,28 +92,31 @@ When(
 When(
   '氏名 {string}・ロール {string}・全店舗で従業員を追加しようとする',
   async ({ page }, baseName: string, roleLabel: string) => {
-    const dialog = await fillCreateDialog(page, baseName, [roleLabel]);
+    await fillCreatePage(page, baseName, [roleLabel]);
     // 全店舗は担当店舗集合の上位集合なので、店舗部分集合の守衛がサーバで撥ねる。
     // 選択肢として出しておくのは、前端に「何を選べるか」の判定を複製させないためである。
-    await dialog.getByRole('radio', { name: '全店舗', exact: true }).click();
-    await dialog.getByRole('button', { name: '追加する', exact: true }).click();
+    await page.getByRole('radio', { name: '全店舗', exact: true }).click();
+    await page.getByRole('button', { name: '追加する', exact: true }).click();
   }
 );
 
-When('従業員追加モーダルを開く', async ({ page }) => {
-  await openCreateDialog(page);
+When('従業員追加画面を開く', async ({ page }) => {
+  await openCreatePage(page);
 });
 
 Then('ロールの選択肢に {string} がある', async ({ page }, roleLabel: string) => {
-  await expect(createDialog(page).getByRole('checkbox', { name: roleLabel, exact: true })).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: roleLabel, exact: true })).toBeVisible();
 });
 
 // 可授ロールはサーバが絞った集合そのままなので、選択肢に現れないこと自体が委譲上限の観測点になる。
+// 先に 1 つが描かれるのを待ち、読み込み中の空の組を「無い」と取り違えない。
 Then('ロールの選択肢に {string} がない', async ({ page }, roleLabel: string) => {
-  await expect(createDialog(page).getByRole('checkbox', { name: roleLabel, exact: true })).toHaveCount(0);
+  await expect(page.getByRole('group', { name: 'ロール', exact: true }).getByRole('checkbox').first()).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: roleLabel, exact: true })).toHaveCount(0);
 });
 
-Then('従業員追加モーダルは開いたままになる', async ({ page }) => {
+Then('従業員追加画面に留まる', async ({ page }) => {
+  await expect(page).toHaveURL(CREATE_URL);
   await expect(createHeading(page)).toBeVisible();
   await expect(page.getByRole('button', { name: '追加する', exact: true })).toBeEnabled({
     timeout: 15000,
@@ -116,12 +124,12 @@ Then('従業員追加モーダルは開いたままになる', async ({ page }) 
 });
 
 /**
- * 「モーダルが閉じない」だけだと、送信そのものが起きなかった場合にも真になる。
+ * 「画面に留まる」だけだと、送信そのものが起きなかった場合にも真になる。
  * 行が作られていないことまで見て、拒否したのがサーバであることを確かめる（toast の寿命に依存しない）。
  */
 Then('拒否された従業員は一覧に現れない', async ({ page }) => {
-  await page.getByRole('button', { name: 'キャンセル', exact: true }).click();
-  await expect(createHeading(page)).toBeHidden();
+  await page.getByRole('link', { name: 'キャンセル', exact: true }).click();
+  await expect(page).toHaveURL(LIST_URL, { timeout: 15000 });
   await searchStaff(page, createdStaffName);
   await expect(page.getByText('該当する従業員が見つかりません', { exact: true })).toBeVisible({
     timeout: 15000,
@@ -156,37 +164,27 @@ Then(
   }
 );
 
-When('{string} の編集モーダルを開く', async ({ page }, _label: string) => {
+When('{string} の編集画面を開く', async ({ page }, _label: string) => {
   const row = await findCreatedStaffRow(page);
-  await row.getByRole('button', { name: '編集', exact: true }).click();
-  await expect(
-    page.getByRole('heading', { name: `${createdStaffName} の権限を編集`, exact: true })
-  ).toBeVisible();
+  await row.getByRole('link', { name: '編集', exact: true }).click();
+  await expect(page).toHaveURL(EDIT_URL, { timeout: 15000 });
+  await expect(editHeading(page)).toBeVisible();
 });
 
 When('店舗集合を {string} に変更する', async ({ page }, scopeLabel: string) => {
-  const dialog = page.getByRole('dialog', { name: `${createdStaffName} の権限を編集` });
-  await dialog
+  await page
     .getByRole('group', { name: '担当店舗', exact: true })
     .getByRole('radio', { name: scopeLabel, exact: true })
     .click();
 });
 
 Then('設定結果の要約に {string} が表示される', async ({ page }, text: string) => {
-  // 「この設定の結果」見出しの直後の要約段落を特定する（店舗名ラベルと文言が重複しうるため、
-  // dialog.getByText(text) だけでは strict mode 違反になる。store-settings.steps.ts の
-  // 隣接セレクタ手法に倣う）。
-  const dialog = page.getByRole('dialog', { name: `${createdStaffName} の権限を編集` });
-  const summary = dialog.locator('p:text-is("この設定の結果") + p');
-  await expect(summary).toContainText(text);
+  // 結果は名前付きの領域に閉じている。同じ文言の選択肢（「全店舗」のラジオ等）と取り違えない。
+  await expect(resultPanel(page)).toContainText(text);
 });
 
 When('保存する', async ({ page }) => {
-  const dialog = page.getByRole('dialog', { name: `${createdStaffName} の権限を編集` });
-  const heading = page.getByRole('heading', {
-    name: `${createdStaffName} の権限を編集`,
-    exact: true,
-  });
-  await dialog.getByRole('button', { name: '保存する', exact: true }).click();
-  await expect(heading).toBeHidden({ timeout: 15000 });
+  await editHeading(page).waitFor();
+  await page.getByRole('button', { name: '保存する', exact: true }).click();
+  await expect(page).toHaveURL(LIST_URL, { timeout: 15000 });
 });

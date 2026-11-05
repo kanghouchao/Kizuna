@@ -7,14 +7,11 @@ import type {
   AuthorizedStore,
   StoreScopeType,
   RoleSummaryResponse,
-  StaffCreateRequest,
   StaffUpdateRequest,
   ServiceIdentityCreateRequest,
   ServiceIdentityResponse,
 } from '@/entities/user';
 import {
-  EMAIL_PATTERN,
-  EMAIL_PATTERN_MESSAGE,
   getApiErrorMessage,
   isConflict,
   useManagedList,
@@ -63,15 +60,8 @@ type CreateOptions = {
   successMessage: string;
   failureMessage: string;
   onCreated: () => void;
-} & (
-  | { identity: 'human'; create: (values: StaffCreateRequest) => Promise<unknown> }
-  | {
-      identity: 'service';
-      create: (
-        values: ServiceIdentityCreateRequest & { email?: never; password?: never }
-      ) => Promise<unknown>;
-    }
-);
+  create: (values: ServiceIdentityCreateRequest) => Promise<unknown>;
+};
 type EditOptions<T> = {
   mode: 'edit';
   resource: KeyedResource<T>;
@@ -86,8 +76,6 @@ type Props<T> = StaffModalProps & {
 } & (CreateOptions | EditOptions<T>);
 
 interface FormValues {
-  email: string;
-  password: string;
   display_name: string;
   role_ids: number[];
   storeSet: { storeScopeType: StoreScopeType; storeIds: number[] };
@@ -101,8 +89,6 @@ export function StaffModal<T extends ServiceIdentityResponse>(props: Props<T>) {
   const staff = resource?.data;
   const form = useForm<FormValues>({
     defaultValues: {
-      email: '',
-      password: '',
       display_name: '',
       role_ids: [],
       storeSet: {
@@ -129,8 +115,6 @@ export function StaffModal<T extends ServiceIdentityResponse>(props: Props<T>) {
   } = useManagedList(props.loadRoles);
   const initialized = useResourceInitialization(resource?.success ?? null, value =>
     reset({
-      email: '',
-      password: '',
       display_name: '',
       role_ids: (value.roles ?? []).flatMap(role => (role.id === undefined ? [] : [role.id])),
       // 範囲の欠落を全店舗にすると保存だけで授与範囲が拡大するため、個別店舗へ倒す。
@@ -162,10 +146,7 @@ export function StaffModal<T extends ServiceIdentityResponse>(props: Props<T>) {
     };
     try {
       if (props.mode === 'create') {
-        const identity = { ...grants, display_name: values.display_name };
-        if (props.identity === 'human')
-          await props.create({ ...identity, email: values.email, password: values.password });
-        else await props.create(identity);
+        await props.create({ ...grants, display_name: values.display_name });
         notify.success(props.successMessage);
         props.onCreated();
       } else {
@@ -247,41 +228,6 @@ export function StaffModal<T extends ServiceIdentityResponse>(props: Props<T>) {
             >
               {props.mode === 'create' && (
                 <>
-                  {props.identity === 'human' && (
-                    <>
-                      <FormField
-                        control={control}
-                        name="email"
-                        rules={{
-                          required: 'メールアドレスを入力してください',
-                          pattern: { value: EMAIL_PATTERN, message: EMAIL_PATTERN_MESSAGE },
-                        }}
-                        render={({ field }) => (
-                          <FormItem className="gap-1">
-                            <FormLabel>メールアドレス</FormLabel>
-                            <FormControl>
-                              <Input required type="email" maxLength={127} {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={control}
-                        name="password"
-                        rules={{ required: '初期パスワードを入力してください' }}
-                        render={({ field }) => (
-                          <FormItem className="gap-1">
-                            <FormLabel>初期パスワード</FormLabel>
-                            <FormControl>
-                              <Input required type="password" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </>
-                  )}
                   <FormField
                     control={control}
                     name="display_name"

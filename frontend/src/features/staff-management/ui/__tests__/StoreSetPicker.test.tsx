@@ -27,9 +27,9 @@ it('フォーム文脈なしで特典規則の店舗範囲を選べる', () => {
   }
   render(<Harness />);
   expect(screen.getByRole('group', { name: '適用店舗' })).toBeInTheDocument();
-  fireEvent.click(screen.getByLabelText('個別店舗'));
-  fireEvent.click(screen.getByLabelText('店舗A'));
+  fireEvent.click(screen.getByRole('radio', { name: '個別店舗' }));
+  fireEvent.click(screen.getByRole('checkbox', { name: '店舗A' }));
   expect(changed).toHaveBeenLastCalledWith({ storeScopeType: 'SPECIFIC_STORES', storeIds: [9] });
-  fireEvent.click(screen.getByLabelText('全店舗'));
+  fireEvent.click(screen.getByRole('radio', { name: '全店舗' }));
   expect(changed).toHaveBeenLastCalledWith({ storeScopeType: 'ALL_STORES', storeIds: [] });
 });

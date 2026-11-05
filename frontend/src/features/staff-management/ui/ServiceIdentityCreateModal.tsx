@@ -7,7 +7,7 @@ export function ServiceIdentityCreateModal(props: StaffCreateModalProps) {
     <StaffModal
       {...props}
       mode="create"
-      identity="service"
+
       title="サービスIDを追加"
       initialScope="SPECIFIC_STORES"
       loadRoles={serviceIdentityApi.grantableRoles}

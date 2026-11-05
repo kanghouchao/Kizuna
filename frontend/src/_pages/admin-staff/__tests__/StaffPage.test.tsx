@@ -22,37 +22,9 @@ jest.mock('@/entities/user/model/MeContext', () => ({
   useMe: jest.fn(),
 }));
 
-// モーダルは開くまで mount されないため、mock は mount = 表示として描画する
-jest.mock('@/features/staff-management', () => {
-  const React = require('react');
-  return {
-    StaffCreateModal: () => React.createElement('div', null, '作成モーダル表示中'),
-    StaffEditModal: ({
-      resource,
-      onUpdated,
-    }: {
-      resource: import('@/shared/lib').KeyedResource<StaffResponse>;
-      onUpdated: () => void;
-    }) =>
-      React.createElement(
-        'div',
-        null,
-        `編集モーダル:${resource.data?.display_name ?? '読み込み中'}`,
-        // 409 で本体が呼ぶ一覧再取得を、テストから起こせるようにする
-        React.createElement(
-          'button',
-          {
-            onClick: () => {
-              onUpdated();
-              void resource.reload();
-            },
-          },
-          '競合再取得'
-        )
-      ),
-    roleSetLabel: () => 'ロールラベル',
-  };
-});
+jest.mock('@/features/staff-management', () => ({
+  roleSetLabel: () => 'ロールラベル',
+}));
 
 jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
@@ -132,9 +104,6 @@ async function pickStore(optionName: string) {
 describe('従業員管理ページ', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedStaffApi.get.mockImplementation(async id =>
-      staff({ id, display_name: id === 2 ? '鈴木花子' : '山田太郎' })
-    );
     givenStores([]);
     meWith(['STAFF_MANAGE']);
     mockedStaffApi.list.mockResolvedValue(
@@ -156,31 +125,24 @@ describe('従業員管理ページ', () => {
     expect(screen.getByText('停止中')).toBeInTheDocument();
   });
 
-  // 編集の導線は行内のボタンのみ（行クリックは廃止。マウス専用の導線を残さない）
-  it('行内の編集ボタンで対象従業員の編集モーダルが開くこと', async () => {
+  // 作成・編集は独立画面。画面遷移は link のまま保つ
+  it('行内の編集は対象従業員の編集画面への link であること', async () => {
     render(<StaffPage />);
     await screen.findByText('山田太郎');
 
-    fireEvent.click(screen.getAllByRole('button', { name: '編集' })[0]);
-
-    expect(await screen.findByText('編集モーダル:山田太郎')).toBeInTheDocument();
+    const links = screen.getAllByRole('link', { name: '編集' });
+    expect(links[0]).toHaveAttribute('href', '/admin/staff/1/edit');
+    expect(links[1]).toHaveAttribute('href', '/admin/staff/2/edit');
   });
 
-  it('行そのものをクリックしても編集モーダルは開かないこと', async () => {
-    render(<StaffPage />);
-
-    fireEvent.click(await screen.findByText('鈴木花子'));
-
-    expect(screen.queryByText('編集モーダル:鈴木花子')).not.toBeInTheDocument();
-  });
-
-  it('従業員を追加ボタンで作成モーダルが開くこと', async () => {
+  it('従業員を追加は作成画面への link であること', async () => {
     render(<StaffPage />);
     await screen.findByText('山田太郎');
 
-    fireEvent.click(screen.getByRole('button', { name: '従業員を追加' }));
-
-    expect(screen.getByText('作成モーダル表示中')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '従業員を追加' })).toHaveAttribute(
+      'href',
+      '/admin/staff/create'
+    );
   });
 
   // 店舗の選択肢は店舗コンテキストの授権店舗をそのまま使い、ページで取り直さない
@@ -203,41 +165,6 @@ describe('従業員管理ページ', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('店舗一覧の取得に失敗しました');
     fireEvent.click(screen.getByRole('button', { name: '再試行' }));
     expect(reload).toHaveBeenCalledTimes(1);
-  });
-
-  // 409 の再取得は「最新の内容を確認してください」と言うための導線。対象が現在ページから
-  // 外れても（本人の改名で検索から外れる・他の追加で次ページへずれる）モーダルは閉じず、
-  // 版が古いまま再試行が 409 を繰り返さないよう id で最新値を取り直す。
-  it('再取得で対象が現在ページから外れても、id で最新値を取り直してモーダルを開いたままにすること', async () => {
-    mockedStaffApi.get
-      .mockResolvedValueOnce(staff({ id: 2, display_name: '鈴木花子' }))
-      .mockResolvedValue(staff({ id: 2, display_name: '鈴木花子（改名後）', version: 3 }));
-
-    render(<StaffPage />);
-    await screen.findByText('鈴木花子');
-    fireEvent.click(screen.getAllByRole('button', { name: '編集' })[1]);
-    expect(await screen.findByText('編集モーダル:鈴木花子')).toBeInTheDocument();
-
-    // 再取得後の頁には対象が居ない
-    mockedStaffApi.list.mockResolvedValue(paginated([staff({ id: 1, display_name: '山田太郎' })]));
-    fireEvent.click(screen.getByRole('button', { name: '競合再取得' }));
-
-    expect(await screen.findByText('編集モーダル:鈴木花子（改名後）')).toBeInTheDocument();
-    expect(mockedStaffApi.get).toHaveBeenCalledWith(2);
-  });
-
-  it('対象を取り直せなくてもモーダルは閉じないこと', async () => {
-    mockedStaffApi.get.mockRejectedValue(new Error('not found'));
-
-    render(<StaffPage />);
-    await screen.findByText('鈴木花子');
-    fireEvent.click(screen.getAllByRole('button', { name: '編集' })[1]);
-
-    mockedStaffApi.list.mockResolvedValue(paginated([staff({ id: 1, display_name: '山田太郎' })]));
-    fireEvent.click(screen.getByRole('button', { name: '競合再取得' }));
-
-    await waitFor(() => expect(mockedStaffApi.get).toHaveBeenCalledWith(2));
-    expect(screen.getByText('編集モーダル:読み込み中')).toBeInTheDocument();
   });
 
   it('検索は 0 起点の page/size/search のペイロードで再取得すること', async () => {
@@ -383,7 +310,7 @@ describe('従業員管理ページ固有の要素', () => {
     mockedStaffApi.list.mockResolvedValue(paginated([]));
   });
 
-  it('見出し（h1）・副題を備え、主アクションが button ロールのままであること', async () => {
+  it('見出し（h1）・副題を備えること', async () => {
     render(<StaffPage />);
     await screen.findByText('従業員が登録されていません');
 
@@ -391,8 +318,6 @@ describe('従業員管理ページ固有の要素', () => {
     expect(
       screen.getByText('従業員のロール・担当店舗・アカウント状態を管理します。')
     ).toBeInTheDocument();
-    // e2e（staff-management）は button ロールで取得するため、リンク化してはならない
-    expect(screen.getByRole('button', { name: '従業員を追加' })).toBeInTheDocument();
   });
 });
 
@@ -413,7 +338,8 @@ describe('行の操作可否', () => {
     await screen.findByText('本部の人');
 
     expect(screen.getByText('操作権限なし')).toBeInTheDocument();
-    for (const name of ['編集', '停止', '再開', 'パスワード再設定'])
+    expect(screen.queryByRole('link', { name: '編集' })).not.toBeInTheDocument();
+    for (const name of ['停止', '再開', 'パスワード再設定'])
       expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
   });
 
@@ -425,7 +351,7 @@ describe('行の操作可否', () => {
     render(<StaffPage />);
     await screen.findByText('山田太郎');
 
-    expect(screen.getByRole('button', { name: '編集' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '編集' })).toBeInTheDocument();
     for (const name of ['停止', '再開', 'パスワード再設定'])
       expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
   });
@@ -649,26 +575,4 @@ describe('パスワード再設定', () => {
       expect(screen.queryByDisplayValue('test-temporary-password')).not.toBeInTheDocument()
     );
   });
-});
-
-test('同じ ID の連続競合再取得では最後に開始した応答だけを採用する', async () => {
-  let resolveOld!: (value: StaffResponse) => void;
-  mockedStaffApi.list.mockResolvedValue(paginated([staff({ id: 1, display_name: '一覧' })]));
-  mockedStaffApi.get
-    .mockResolvedValueOnce(staff({ id: 1, display_name: '初期' }))
-    .mockReturnValueOnce(
-      new Promise(done => {
-        resolveOld = done;
-      })
-    )
-    .mockResolvedValueOnce(staff({ id: 1, display_name: '最新', version: 3 }));
-  render(<StaffPage />);
-  fireEvent.click(await screen.findByRole('button', { name: '編集' }));
-  await screen.findByText('編集モーダル:初期');
-  fireEvent.click(screen.getByRole('button', { name: '競合再取得' }));
-  fireEvent.click(screen.getByRole('button', { name: '競合再取得' }));
-  await screen.findByText('編集モーダル:最新');
-  await act(async () => resolveOld(staff({ id: 1, display_name: '古い応答', version: 2 })));
-  expect(screen.getByText('編集モーダル:最新')).toBeInTheDocument();
-  expect(screen.queryByText('編集モーダル:古い応答')).not.toBeInTheDocument();
 });

@@ -5,7 +5,7 @@ import { APP_URL } from '../base-url';
 const { When, Then } = createBdd();
 
 const ROLES_URL = `${APP_URL}/admin/roles`;
-const STAFF_URL = `${APP_URL}/admin/staff`;
+const STAFF_CREATE_URL = `${APP_URL}/admin/staff/create`;
 
 // 作成するロール名はシナリオごとに一意化する（失敗した過去 run の残骸との重複＝strict モード違反を
 // 避ける。staff-management.steps.ts の採番手法に倣う）。
@@ -43,13 +43,10 @@ Then(
 
 Then('従業員追加のロール選択に {string} が出る', async ({ page }, _label: string) => {
   // ロール管理で作ったロールが、授与側（従業員追加）の選択肢として実際に届くことまで見る。
-  await page.goto(STAFF_URL, { waitUntil: 'domcontentloaded' });
-  await page.getByRole('button', { name: '従業員を追加', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: '従業員を追加' });
-  await expect(dialog.getByRole('checkbox', { name: createdRoleName, exact: true })).toBeVisible({
+  await page.goto(STAFF_CREATE_URL, { waitUntil: 'domcontentloaded' });
+  await expect(page.getByRole('checkbox', { name: createdRoleName, exact: true })).toBeVisible({
     timeout: 15000,
   });
-  await dialog.getByRole('button', { name: 'キャンセル', exact: true }).click();
 });
 
 When('作成したロールを削除する', async ({ page }) => {

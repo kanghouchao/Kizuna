@@ -3,6 +3,7 @@
 import { useId, type ReactNode, type Ref } from 'react';
 import { RoleSummaryResponse } from '@/entities/user';
 import {
+  Checkbox,
   FormControl,
   FormDescription,
   FormItem,
@@ -26,12 +27,12 @@ interface RolePickerProps {
    * 検証で最初の問題になったときに焦点を受ける先。handleSubmit は登録済みの ref を焦点にするため、
    * 値だけを受け取った組は他の症状を出さずに焦点移動だけを失う。
    */
-  ref?: Ref<HTMLInputElement>;
+  ref?: Ref<HTMLElement>;
 }
 
 /**
  * ロールのチェックボックス複数選択（ロールはデータ — 選択肢は GET /roles から取得）。
- * 一覧の取得は親（モーダル）が行い、要約表示と選択肢で同じデータを共有する。
+ * 一覧の取得は親が行い、要約表示と選択肢で同じデータを共有する。
  *
  * 必須は「N のうち 1 つ以上」＝組の性質で、各項目に aria-required を撒くと「全部入れよ」に
  * なってしまう。要求は組の見出しと説明が担い、指摘も個々の項目ではなく組に紐づく。
@@ -60,7 +61,8 @@ export function RolePicker({
         ロール
       </span>
       <FormControl>
-        <div role="group" aria-labelledby={labelId} className="space-y-1 rounded-md border p-3">
+        {/* 2 列にするかは置かれた幅で決める。ダイアログの狭い枠では 1 列のまま */}
+        <div role="group" aria-labelledby={labelId} className="@container rounded-md border p-3">
           {isLoading ? (
             <p className="text-sm text-muted-foreground">読み込み中...</p>
           ) : failed ? (
@@ -70,21 +72,23 @@ export function RolePicker({
           ) : firstId === undefined && emptyHint ? (
             emptyHint
           ) : (
-            roles.map(role => {
-              const id = role.id;
-              if (id === undefined) return null;
-              return (
-                <Label key={id} className="font-normal">
-                  <input
-                    type="checkbox"
-                    checked={roleIds.includes(id)}
-                    onChange={() => toggle(id)}
-                    ref={id === firstId ? ref : undefined}
-                  />
-                  {role.name}
-                </Label>
-              );
-            })
+            <div className="grid gap-x-6 gap-y-2 @lg:grid-cols-2">
+              {roles.map(role => {
+                const id = role.id;
+                if (id === undefined) return null;
+                return (
+                  <Label key={id} className="min-w-0 items-start font-normal break-words">
+                    <Checkbox
+                      className="mt-0.5"
+                      checked={roleIds.includes(id)}
+                      onCheckedChange={() => toggle(id)}
+                      ref={id === firstId ? ref : undefined}
+                    />
+                    {role.name}
+                  </Label>
+                );
+              })}
+            </div>
           )}
         </div>
       </FormControl>
