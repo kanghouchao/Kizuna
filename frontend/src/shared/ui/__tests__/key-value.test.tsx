@@ -4,17 +4,19 @@ import { KeyValueList, KeyValueRow } from '../key-value';
 const rowOf = (label: string) => screen.getByText(label).closest('[data-layout]');
 
 describe('KeyValueList', () => {
-  it('長い値はラベルの下に置き、短い値はラベルと同じ行に置くこと', () => {
+  it('長い値はラベルの下に改行を保って置き、短い値はラベルと同じ行に置くこと', () => {
     render(
       <KeyValueList>
         <KeyValueRow label="操作">ROLE_CHANGED</KeyValueRow>
         <KeyValueRow label="理由" long>
-          顧客の申し出によりコース時間を訂正。
+          {'顧客の申し出によりコース時間を訂正。\n差額は次回来店時に調整する。'}
         </KeyValueRow>
       </KeyValueList>
     );
 
     expect(rowOf('理由')).toHaveAttribute('data-layout', 'stacked');
+    // 理由・本文は改行を含むため、値の改行をそのまま見せる。
+    expect(rowOf('理由')!.querySelector('dd')).toHaveClass('whitespace-pre-wrap');
     expect(rowOf('操作')).toHaveAttribute('data-layout', 'inline');
   });
 
