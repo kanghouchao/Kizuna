@@ -7,6 +7,7 @@ import {
   RoleCreateRequest,
   RoleResponse,
   RoleSummaryResponse,
+  GrantableRoleResponse,
   RoleUpdateRequest,
   StaffAccountPasswordResetResponse,
 } from '../model/types';
@@ -43,7 +44,7 @@ export const staffApi = {
     return response.data;
   },
   /** 行使者が授与できるロール（権限が行使者の部分集合のもの）だけを返す。 */
-  grantableRoles: async (): Promise<RoleSummaryResponse[]> => {
+  grantableRoles: async (): Promise<GrantableRoleResponse[]> => {
     const response = await apiClient.get('/staff/grantable-roles');
     return response.data;
   },

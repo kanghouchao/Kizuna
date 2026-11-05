@@ -142,6 +142,15 @@ export interface RoleSummaryResponse {
   permission_count: number;
 }
 
+// 従業員に付与できるロール（GET /staff/grantable-roles）。権限は目録の宣言順。
+// system は Java 側が primitive のため、キーは必ず応答に含まれる。
+export interface GrantableRoleResponse {
+  id?: number;
+  name?: string;
+  system: boolean;
+  permissions: PermissionResponse[];
+}
+
 // ロール詳細（GET /roles/{id} と作成・更新の応答）
 export interface RoleResponse {
   id?: number;

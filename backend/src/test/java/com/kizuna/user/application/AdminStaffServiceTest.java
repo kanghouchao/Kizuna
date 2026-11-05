@@ -19,6 +19,9 @@ import com.kizuna.user.domain.DuplicateStaffEmailException;
 import com.kizuna.user.domain.HqPasswordResetNotAllowedException;
 import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
+import com.kizuna.user.domain.Permission;
+import com.kizuna.user.domain.PermissionCode;
+import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.SelfPasswordResetNotAllowedException;
@@ -76,6 +79,7 @@ class AdminStaffServiceTest {
   @Mock private BusinessAudit businessAudit;
   @Mock private UserRepository repository;
   @Mock private RoleRepository roleRepository;
+  @Mock private PermissionRepository permissionRepository;
   @Mock private RoleManageHolderGuard roleManageHolderGuard;
   @Mock private PasswordEncoder encoder;
   private final List<Object> events = new ArrayList<>();
@@ -101,6 +105,7 @@ class AdminStaffServiceTest {
             businessAudit,
             repository,
             roleRepository,
+            permissionRepository,
             roleManageHolderGuard,
             encoder,
             credentialOperations,
@@ -112,6 +117,15 @@ class AdminStaffServiceTest {
               return roles().stream().filter(role -> ids.contains(role.getId())).toList();
             });
     when(roleRepository.findAll()).thenReturn(roles());
+    // id の昇順と目録の宣言順（ORDER_MANAGE → ORDER_CORRECT）をわざと逆にしておく
+    when(permissionRepository.findAllById(anyCollection()))
+        .thenAnswer(
+            invocation -> {
+              Collection<Long> ids = invocation.getArgument(0);
+              return permissions().stream()
+                  .filter(permission -> ids.contains(permission.getId()))
+                  .toList();
+            });
     when(roleRepository.findIdsByPermissionCode("ROLE_MANAGE")).thenReturn(Set.of(ADMIN_ROLE));
     when(repository.saveAndFlush(any()))
         .thenAnswer(
@@ -132,6 +146,20 @@ class AdminStaffServiceTest {
     Role role = Role.builder().name(name).systemRole(true).permissionIds(permissionIds).build();
     role.setId(id);
     return role;
+  }
+
+  private static Permission permission(long id, String code) {
+    Permission permission = new Permission(code);
+    permission.setId(id);
+    return permission;
+  }
+
+  private static List<Permission> permissions() {
+    return List.of(
+        permission(1L, "ORDER_CORRECT"),
+        permission(2L, "ORDER_MANAGE"),
+        permission(3L, "STAFF_MANAGE"),
+        permission(ROLE_MANAGE_PERMISSION, "ROLE_MANAGE"));
   }
 
   private static List<Role> roles() {
@@ -237,11 +265,30 @@ class AdminStaffServiceTest {
   void grantableRolesAreSubsetsOfActorPermissions() {
     manager(Set.of(1L));
 
-    List<RoleViews.Summary> roles = service.grantableRoles(ACTOR);
+    List<RoleViews.Grantable> roles = service.grantableRoles(ACTOR);
 
     assertThat(roles)
-        .extracting(RoleViews.Summary::id)
+        .extracting(RoleViews.Grantable::id)
         .containsExactlyInAnyOrder(MANAGER_ROLE, STAFF_ROLE);
+  }
+
+  @Test
+  @DisplayName("付与できるロールは権限コードを目録の宣言順で持つ（付与前に何が渡るかを読ませるため）")
+  void grantableRolesCarryPermissionCodesInCatalogOrder() {
+    manager(Set.of(1L));
+
+    List<RoleViews.Grantable> roles = service.grantableRoles(ACTOR);
+
+    assertThat(roles)
+        .filteredOn(role -> role.id().equals(MANAGER_ROLE))
+        .singleElement()
+        .extracting(RoleViews.Grantable::permissions)
+        .isEqualTo(List.of(PermissionCode.ORDER_MANAGE, PermissionCode.ORDER_CORRECT));
+    assertThat(roles)
+        .filteredOn(role -> role.id().equals(STAFF_ROLE))
+        .singleElement()
+        .extracting(RoleViews.Grantable::permissions)
+        .isEqualTo(List.of(PermissionCode.ORDER_CORRECT));
   }
 
   @Test
@@ -332,7 +379,7 @@ class AdminStaffServiceTest {
     when(encoder.encode("rawpass")).thenReturn("ENCODED");
 
     assertThat(service.grantableRoles(ACTOR))
-        .extracting(RoleViews.Summary::id)
+        .extracting(RoleViews.Grantable::id)
         .containsExactlyInAnyOrder(ADMIN_ROLE, MANAGER_ROLE, STAFF_ROLE);
     StaffView res =
         service.create(

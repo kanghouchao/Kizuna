@@ -1,5 +1,6 @@
 package com.kizuna.user.application;
 
+import com.kizuna.user.domain.PermissionCode;
 import java.util.Comparator;
 import java.util.List;
 
@@ -8,6 +9,9 @@ public final class RoleViews {
 
   /** ロール一覧・付与可能ロールの 1 件。権限は個数だけを持つ。 */
   public record Summary(Long id, String name, boolean system, long permissionCount) {}
+
+  /** 従業員に付与できるロールの 1 件。権限は目録の宣言順。 */
+  public record Grantable(Long id, String name, boolean system, List<PermissionCode> permissions) {}
 
   /** ロールの詳細。permissions は権限コードの昇順で、権限行の id は持たない。 */
   public record Detail(
