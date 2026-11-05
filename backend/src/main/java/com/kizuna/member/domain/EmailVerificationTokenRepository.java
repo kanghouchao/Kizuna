@@ -12,6 +12,17 @@ import org.springframework.data.jpa.repository.Query;
 public interface EmailVerificationTokenRepository
     extends JpaRepository<EmailVerificationToken, Long> {
 
+  int ISSUANCE_LOCK_NAMESPACE = 393;
+
+  // 再送の判定から発行までを利用者ごとに直列化する（取引の終わりまで保持）。利用者行のロックにしないのは、確認が
+  // トークン行→利用者行の順に押さえるため、逆順になってデッドロックしうるから。hash の衝突は無関係な利用者を待たせるだけ。
+  @Query(value = "select cast(pg_advisory_xact_lock(:namespace, :key) as text)", nativeQuery = true)
+  String lockIssuance(int namespace, int key);
+
+  default void lockIssuanceOf(Long userId) {
+    lockIssuance(ISSUANCE_LOCK_NAMESPACE, Long.hashCode(userId));
+  }
+
   /** ダイジェストで引いて行を押さえる。並行する同じトークンの確認は、後着がロック後に消費済みを見る。 */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query(

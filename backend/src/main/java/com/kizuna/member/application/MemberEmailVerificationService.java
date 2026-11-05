@@ -33,6 +33,7 @@ public class MemberEmailVerificationService {
 
   @Transactional
   public void resend(Long userId) {
+    tokenRepository.lockIssuanceOf(userId);
     User user =
         userRepository
             .findById(userId)
@@ -52,7 +53,7 @@ public class MemberEmailVerificationService {
             >= LIMIT_IN_WINDOW) {
       throw tooManyRequests();
     }
-    // 生きたトークンの一意索引に当たるのは、並行した再送が先に発行を済ませた場合だけ。
+    // 再送同士は上のロックで直列化される。一意索引はロックの外から割り込んだ発行に対する最後の防波堤で、当たれば同じく 429。
     IntegrityViolations.translateOnFailure(
         () -> {
           emailVerificationMail.issue(user);
