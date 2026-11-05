@@ -1,5 +1,4 @@
-import { chooseCourse, confirmPreview } from '../lib/orderTestSupport';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import OrderListPage from '../ui/OrdersPage';
 import CreateOrderPage from '../ui/OrderCreatePage';
 import {
@@ -250,7 +249,7 @@ describe('作業キューの描画', () => {
     stubQueue(confirmedOrder());
     render(<OrderListPage />);
 
-    expect(await screen.findByRole('button', { name: '確定' })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: '確定' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '謝絶' })).toBeInTheDocument();
     expect(screen.getByText('高橋美咲')).toBeInTheDocument();
     expect(screen.getByText(/会員コード: 000123456789/)).toBeInTheDocument();
@@ -265,44 +264,27 @@ describe('作業キューの描画', () => {
     render(<OrderListPage />);
 
     expect(await screen.findByText('失効')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '確定' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '確定' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '謝絶' })).not.toBeInTheDocument();
   });
 
-  it('確定は申請内容を予填したモーダルで行い、申請が受付箱から外れて作業キューを取り直すこと', async () => {
+  it('確定は申請ごとの確定画面へのリンクで、一覧の検索条件と並び順を運ぶこと', async () => {
+    visit(`${ORDERS_PATH}?customer_name=${encodeURIComponent('花子')}&sort_key=PAX`);
     stubInbox(pendingApplication());
-    mockedApplicationApi.confirm.mockResolvedValue({
-      business_contact_permissions: [],
-      special_services: [],
-      ...confirmedOrder({ id: 'order-9' }),
-      total_duration_minutes: 60,
-      total_remuneration: 7000,
-      fee_lines: [],
-    });
     render(<OrderListPage />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '確定' }));
-
-    const dialog = await screen.findByRole('dialog');
-    // 申請内容が予填される。ここで直した値は受注にだけ現れ、申請原文は動かない
-    await waitFor(() => expect(within(dialog).getByLabelText('人数')).toHaveValue(2));
-    fireEvent.change(within(dialog).getByLabelText('人数'), { target: { value: '5' } });
-    await chooseCourse();
-    // 確定後の取り直しでは、確定済みの申請はもう受付箱に返らない
-    stubInbox();
-    fireEvent.click(within(dialog).getByRole('button', { name: '確定する' }));
-    await confirmPreview();
-
+    expect(await screen.findByRole('link', { name: '確定' })).toHaveAttribute(
+      'href',
+      '/store/orders/applications/a1/confirm?customer_name=%E8%8A%B1%E5%AD%90&sort_key=PAX'
+    );
+    // 戻る・進むで条件が変われば、運ぶ条件も今の URL に合わせる
+    act(() => visit(`${ORDERS_PATH}?desc=true`));
     await waitFor(() =>
-      expect(mockedApplicationApi.confirm).toHaveBeenCalledWith(
-        'a1',
-        expect.objectContaining({ business_date: '2026-07-05', pax: 5 })
+      expect(screen.getByRole('link', { name: '確定' })).toHaveAttribute(
+        'href',
+        '/store/orders/applications/a1/confirm?desc=true'
       )
     );
-    // 受付箱も作業キューも表示中のページを取り直す（生まれた受注はどこに入るか分からない）
-    await waitFor(() => expect(screen.queryByText('高橋美咲')).not.toBeInTheDocument());
-    await waitFor(() => expect(mockedOrderApi.listWorkQueue).toHaveBeenCalledTimes(2));
-    expect(mockedApplicationApi.list).toHaveBeenCalledTimes(2);
   });
 
   it('識別子の無い申請の謝絶は要求を組まず、理由を名乗ること', async () => {
@@ -844,30 +826,6 @@ describe('新規オーダー登録', () => {
     // Web 申請の群（MEMBER_WEB / GUEST_WEB）は予約申請の確定だけが名乗る値（後端も拒否する）
     expect(screen.queryByText('Web 申請')).not.toBeInTheDocument();
   });
-});
-
-it('受注確定の退出中は入力を保ち、同じ申請を開き直すと初期値へ戻す', async () => {
-  stubInbox(pendingApplication());
-  render(<OrderListPage />);
-  fireEvent.click(await screen.findByRole('button', { name: '確定' }));
-  const popup = await screen.findByRole('dialog');
-  await waitFor(() => expect(within(popup).getByLabelText('人数')).toHaveValue(2));
-  fireEvent.change(within(popup).getByLabelText('人数'), { target: { value: '5' } });
-  let finish!: () => void;
-  const finished = new Promise<void>(resolve => {
-    finish = resolve;
-  });
-  const getAnimations = jest.fn(() => [{ finished }]);
-  Object.defineProperty(popup, 'getAnimations', { value: getAnimations });
-  fireEvent.click(within(popup).getByRole('button', { name: 'キャンセル' }));
-  await waitFor(() => expect(getAnimations).toHaveBeenCalled());
-  expect(popup).toHaveAttribute('data-closed');
-  expect(within(popup).getByLabelText('人数')).toHaveValue(5);
-  expect(mockedApplicationApi.confirm).not.toHaveBeenCalled();
-  await act(async () => finish());
-  await waitFor(() => expect(popup).not.toBeInTheDocument());
-  fireEvent.click(screen.getByRole('button', { name: '確定' }));
-  await waitFor(() => expect(screen.getByLabelText('人数')).toHaveValue(2));
 });
 
 describe('運営帳票の入口', () => {

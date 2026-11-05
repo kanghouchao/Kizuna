@@ -580,22 +580,23 @@ When('公開サイトで業務と販促に同意して申請する', async ({ pa
 Then('受付箱で連絡先を補正して顧客未設定で確定でき原文が残る', async ({ page, request }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto(`${APP_URL}/store/orders`);
-  await page.getByRole('listitem').filter({ hasText: customerName }).getByRole('button', { name: '確定', exact: true }).click();
-  const dialog = page.getByRole('dialog');
-  await expect(dialog.getByLabel('メール', { exact: true })).toHaveValue('Guest@EXAMPLE.COM');
-  await dialog.getByLabel('メール', { exact: true }).fill('corrected@example.com');
-  await dialog.getByRole('combobox', { name: '顧客の選択' }).click();
+  await page.getByRole('listitem').filter({ hasText: customerName }).getByRole('link', { name: '確定', exact: true }).click();
+  // 確定は独立画面。採用条件の確認だけが画面の上にダイアログで重なる
+  const form = page.getByRole('main').locator('form');
+  await expect(form.getByLabel('メール', { exact: true })).toHaveValue('Guest@EXAMPLE.COM');
+  await form.getByLabel('メール', { exact: true }).fill('corrected@example.com');
+  await form.getByRole('combobox', { name: '顧客の選択' }).click();
   await page.getByRole('option', { name: '顧客未設定', exact: true }).click();
-  await dialog.getByRole('combobox', { name: 'コース', exact: true }).click();
+  await form.getByRole('combobox', { name: 'コース', exact: true }).click();
   await page.getByLabel('コースを検索').fill(courseName);
   await page.getByRole('option', { name: new RegExp(courseName) }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   for (const colorScheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme });
-    await dialog.getByLabel('メール', { exact: true }).scrollIntoViewIfNeeded();
+    await form.getByLabel('メール', { exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: `test-results/guest-confirm-${colorScheme}.png` });
   }
-  await dialog.getByRole('button', { name: '確定する' }).click();
+  await form.getByRole('button', { name: '確定する' }).click();
   const [response] = await Promise.all([
     page.waitForResponse(resp => resp.url().endsWith('/confirmation') && resp.request().method() === 'POST'),
     page.getByRole('button', { name: 'この内容を確認して保存', exact: true }).click(),
@@ -689,36 +690,37 @@ Then('許可の保存に失敗しても入力を保持して再試行できる',
 Then('店舗で販促同意を明示取り込みし失敗後も入力を保って確定できる', async ({ page, request }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto(`${APP_URL}/store/orders`);
-  await page.getByRole('listitem').filter({ hasText: customerName }).getByRole('button', { name: '確定', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: '予約申請を確定' });
-  await expect(dialog.getByText('販促同意：選択済み')).toBeVisible();
-  await dialog.getByRole('combobox', { name: '顧客の選択' }).click();
+  await page.getByRole('listitem').filter({ hasText: customerName }).getByRole('link', { name: '確定', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1, name: '予約申請を確定' })).toBeVisible();
+  const form = page.getByRole('main').locator('form');
+  await expect(form.getByText('販促同意：選択済み')).toBeVisible();
+  await form.getByRole('combobox', { name: '顧客の選択' }).click();
   await page.getByRole('option', { name: '新規顧客', exact: true }).click();
-  await dialog.getByLabel('新規顧客名').fill(customerName);
-  await dialog.getByRole('checkbox', { name: 'メールを台帳へ取り込む', exact: true }).check();
-  const promotion = dialog.getByRole('checkbox', { name: 'メールの販促同意を取り込む', exact: true });
+  await form.getByLabel('新規顧客名').fill(customerName);
+  await form.getByRole('checkbox', { name: 'メールを台帳へ取り込む', exact: true }).check();
+  const promotion = form.getByRole('checkbox', { name: 'メールの販促同意を取り込む', exact: true });
   await expect(promotion).not.toBeChecked();
   await promotion.focus();
   await page.keyboard.press('Space');
-  await dialog.getByRole('combobox', { name: 'コース', exact: true }).click();
+  await form.getByRole('combobox', { name: 'コース', exact: true }).click();
   await page.getByLabel('コースを検索').fill(courseName);
   await page.getByRole('option', { name: new RegExp(courseName) }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   for (const colorScheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme });
     await promotion.scrollIntoViewIfNeeded();
-    expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBeTruthy();
+    expect(await form.evaluate(element => element.scrollWidth <= element.clientWidth)).toBeTruthy();
     await page.screenshot({ path: `test-results/guest-consent-import-${colorScheme}.png` });
   }
   const endpoint = `**/order-applications/${guestApplicationId}/confirmation`;
   await page.route(endpoint, route => route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ error: '条件が更新されました。再試算してください' }) }), { times: 1 });
-  await dialog.getByRole('button', { name: '確定する', exact: true }).click();
+  await form.getByRole('button', { name: '確定する', exact: true }).click();
   await expect(page.getByText(/販促許可を記録/)).toBeVisible();
   await page.getByRole('button', { name: 'この内容を確認して保存', exact: true }).click();
   await expect(page.getByText('条件が更新されました。再試算してください')).toBeVisible();
   await expect(promotion).toBeChecked();
-  await expect(dialog.getByLabel('新規顧客名')).toHaveValue(customerName);
-  await dialog.getByRole('button', { name: '確定する', exact: true }).click();
+  await expect(form.getByLabel('新規顧客名')).toHaveValue(customerName);
+  await form.getByRole('button', { name: '確定する', exact: true }).click();
   const [response] = await Promise.all([
     page.waitForResponse(resp => resp.url().endsWith(`/order-applications/${guestApplicationId}/confirmation`) && resp.request().method() === 'POST'),
     page.getByRole('button', { name: 'この内容を確認して保存', exact: true }).click(),

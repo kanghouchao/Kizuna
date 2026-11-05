@@ -1,30 +1,8 @@
-import { useEffect } from 'react';
 import { GuestContactImportsField } from './GuestContactImportsField';
-import { orderApplicationApi } from '@/entities/order';
-import { useResource } from '@/shared/lib';
-import { RegionError } from '@/shared/ui';
+import type { OrderApplicationDetail } from '@/entities/order';
 
-export function GuestApplicationConsentSection({
-  id,
-  onMissing,
-}: {
-  id: string;
-  onMissing: () => void;
-}) {
-  const detail = useResource(() => orderApplicationApi.detail(id), [id]);
-  useEffect(() => {
-    if (detail.failure === 'notFound') onMissing();
-  }, [detail.failure, onMissing]);
-  if (detail.failure === 'notFound') return null;
-  if (detail.isLoading) return <p>申請の同意を読み込み中...</p>;
-  if (detail.failure)
-    return (
-      <RegionError
-        message="申請の同意を取得できませんでした"
-        onRetry={() => void detail.reload()}
-      />
-    );
-  const consent = detail.data?.contact_consent;
+export function GuestApplicationConsentSection({ detail }: { detail: OrderApplicationDetail }) {
+  const consent = detail.contact_consent;
   if (!consent) return null;
   return (
     <section className="min-w-0 space-y-3 rounded-lg border p-4 text-sm break-words">
@@ -34,7 +12,7 @@ export function GuestApplicationConsentSection({
       <p>{consent.marketing_text}</p>
       <p>販促同意：{consent.marketing_allowed ? '選択済み' : '未選択'}</p>
       <p>取得日時：{consent.acquired_at}</p>
-      {detail.data?.business_contact_permissions.map(permission => (
+      {detail.business_contact_permissions.map(permission => (
         <p key={permission.type} className="break-all">
           {permission.value}：
           {permission.decision === 'STORE_DENIED'
@@ -44,7 +22,7 @@ export function GuestApplicationConsentSection({
               : '連絡不可'}
         </p>
       ))}
-      {detail.data && <GuestContactImportsField detail={detail.data} />}
+      <GuestContactImportsField detail={detail} />
       <p>同意原文は台帳の変更によって書き換わりません。</p>
     </section>
   );
