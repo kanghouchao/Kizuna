@@ -8,9 +8,13 @@ import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.customer.contact.BusinessContactRestrictions;
 import com.kizuna.customer.contact.GuestContactImports;
 import com.kizuna.customer.contact.MarketingContacts;
+import com.kizuna.member.application.EmailVerificationConfirmation;
+import com.kizuna.member.application.EmailVerificationMail;
 import com.kizuna.member.application.MemberDisplayNames;
 import com.kizuna.member.application.MemberLoginAddress;
 import com.kizuna.member.application.MemberLookupService;
+import com.kizuna.member.application.MemberRegistrationCommand;
+import com.kizuna.member.application.MemberRegistrationService;
 import com.kizuna.membernotification.application.MemberNotificationSettingService;
 import com.kizuna.membernotification.contact.MemberContacts;
 import com.kizuna.notification.transport.ContactTransport;
@@ -47,6 +51,8 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executor;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -66,6 +72,8 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -75,6 +83,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class PointExpiryNoticeIntegrationTest {
   private static final ZoneId ZONE = ZoneId.of("Asia/Tokyo");
   private static final int DAYS = 5;
+  private static final Pattern LINK = Pattern.compile("/auth/verify-email#([A-Za-z0-9_-]{43})");
   private ConfigurableApplicationContext context;
   private JdbcTemplate jdbc;
   private TransactionTemplate tx;
@@ -147,6 +156,7 @@ class PointExpiryNoticeIntegrationTest {
         operator.id(),
         noticeRole);
     transport.results.clear();
+    transport.bodies.clear();
     suffix = UUID.randomUUID().toString().substring(0, 8);
     today = LocalDate.now(ZONE);
     target = today.plusDays(DAYS);
@@ -225,6 +235,35 @@ class PointExpiryNoticeIntegrationTest {
     assertThat(status(denied)).isEqualTo("BLOCKED");
     assertThat(lastFailure(unconfirmed)).isEqualTo("CONTACT_NOT_ALLOWED");
     assertThat(transport.results).containsExactly(address("allowed"));
+  }
+
+  @Test
+  void registeredMemberWhoConfirmedTheVerificationMailReceivesTheNoticeWithoutChoosing() {
+    long verified = registered("verified", true);
+    credit(verified, 100, target);
+    long unverified = registered("unverified", false);
+    credit(unverified, 100, target);
+    long refused = registered("refused", true);
+    jdbc.update(
+        "insert into t_member_notification_settings(member_id,purpose,status) values (?,'BUSINESS','DENIED')",
+        refused);
+    credit(refused, 100, target);
+    transport.results.clear();
+    assertThat(noticeRun().execution().processedCount()).isEqualTo(3);
+
+    var deliver =
+        new TaskCommand(
+            "NOTIFICATION_DELIVER", UUID.randomUUID().toString(), deliverService, today, today);
+    assertThat(context.getBean(TaskExecutor.class).executeScheduled(deliver).execution().status())
+        .isEqualTo("SUCCEEDED");
+    context.getBean(DeferredEvents.class).drain();
+
+    assertThat(status(verified)).isEqualTo("SENT");
+    assertThat(status(unverified)).isEqualTo("BLOCKED");
+    assertThat(lastFailure(unverified)).isEqualTo("CONTACT_NOT_ALLOWED");
+    assertThat(status(refused)).isEqualTo("BLOCKED");
+    assertThat(lastFailure(refused)).isEqualTo("CONTACT_NOT_ALLOWED");
+    assertThat(transport.results).containsExactly(address("verified"));
   }
 
   @Test
@@ -326,6 +365,23 @@ class PointExpiryNoticeIntegrationTest {
     return member;
   }
 
+  // 会員登録の口から作り、confirm なら届いた検証メールのリンクのトークンで確認まで済ませる。
+  private long registered(String name, boolean confirm) {
+    String email = address(name);
+    context
+        .getBean(MemberRegistrationService.class)
+        .register(new MemberRegistrationCommand(email, "pass12345", name));
+    if (confirm) {
+      Matcher link = LINK.matcher(transport.bodies.getLast());
+      assertThat(link.find()).isTrue();
+      context.getBean(EmailVerificationConfirmation.class).confirm(link.group(1));
+    }
+    return jdbc.queryForObject(
+        "select m.id from t_members m join t_users u on u.id=m.user_id where u.email=?",
+        Long.class,
+        email);
+  }
+
   private long credit(long member, int amount, LocalDate expiry) {
     return tx.execute(
         status ->
@@ -400,6 +456,7 @@ class PointExpiryNoticeIntegrationTest {
 
   static class FakeTransport implements ContactTransport {
     final List<String> results = new CopyOnWriteArrayList<>();
+    final List<String> bodies = new CopyOnWriteArrayList<>();
 
     public Channel type() {
       return Channel.EMAIL;
@@ -411,6 +468,7 @@ class PointExpiryNoticeIntegrationTest {
 
     public Result deliver(String recipient, String subject, String body) {
       results.add(recipient);
+      bodies.add(body);
       return Result.SENT;
     }
   }
@@ -445,6 +503,9 @@ class PointExpiryNoticeIntegrationTest {
     MarketingContacts.class,
     MemberContacts.class,
     MemberLoginAddress.class,
+    MemberRegistrationService.class,
+    EmailVerificationMail.class,
+    EmailVerificationConfirmation.class,
     MemberNotificationSettingService.class,
     MemberLookupService.class,
     BusinessAudit.class
@@ -463,6 +524,11 @@ class PointExpiryNoticeIntegrationTest {
     @Bean
     AppProperties properties() {
       return new AppProperties();
+    }
+
+    @Bean
+    PasswordEncoder passwordEncoder() {
+      return new BCryptPasswordEncoder(4);
     }
 
     @Bean

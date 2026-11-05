@@ -2,6 +2,7 @@ package com.kizuna.membernotification.application;
 
 import com.kizuna.customer.domain.ContactPermissionStatus;
 import com.kizuna.customer.domain.ContactPurpose;
+import com.kizuna.member.application.MemberLoginAddress;
 import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberLookupService.MemberLookup;
 import com.kizuna.membernotification.domain.MemberNotificationSetting;
@@ -23,16 +24,15 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MemberNotificationSettingService {
 
-  // 業務の既定を左右するメールアドレスの検証の機構が無いので、全会員を未検証として既定を導く（ADR 0040）。
-  private static final boolean EMAIL_VERIFIED = false;
-
   private final MemberLookupService memberLookup;
+  private final MemberLoginAddress addresses;
   private final MemberNotificationSettingRepository settings;
   private final BusinessAudit audit;
 
   @Transactional(readOnly = true)
   public MemberNotificationSettings view(long userId) {
-    return effective(settings.findByMemberId(memberIdOf(userId)));
+    long memberId = memberIdOf(userId);
+    return effective(settings.findByMemberId(memberId), emailVerified(memberId));
   }
 
   /** 用途の選択を書く。行の有無の読みから挿入までを会員行のロックで直列化し、値が変わったときだけ業務監査に残す。 */
@@ -46,7 +46,8 @@ public class MemberNotificationSettingService {
     ContactPermissionStatus before =
         current
             .map(MemberNotificationSetting::getStatus)
-            .orElse(MemberNotificationSetting.defaultFor(purpose, EMAIL_VERIFIED));
+            .orElseGet(
+                () -> MemberNotificationSetting.defaultFor(purpose, emailVerified(memberId)));
     current.ifPresentOrElse(
         row -> row.choose(status),
         () -> settings.save(MemberNotificationSetting.chosen(memberId, purpose, status)));
@@ -62,7 +63,7 @@ public class MemberNotificationSettingService {
           Map.of("purpose", purpose.name(), "status", before.name()),
           Map.of("purpose", purpose.name(), "status", status.name()));
     }
-    return effective(settings.findByMemberId(memberId));
+    return effective(settings.findByMemberId(memberId), emailVerified(memberId));
   }
 
   /** 会員 ID で引く用途の実効値。会員宛の通知の送信直前の判定が読む。 */
@@ -71,7 +72,15 @@ public class MemberNotificationSettingService {
     return settings
         .findByMemberIdAndPurpose(memberId, purpose)
         .map(MemberNotificationSetting::getStatus)
-        .orElse(MemberNotificationSetting.defaultFor(purpose, EMAIL_VERIFIED));
+        .orElseGet(() -> MemberNotificationSetting.defaultFor(purpose, emailVerified(memberId)));
+  }
+
+  // 既定は解決のたびに今の検証状態から導く（行に写さない理由は MemberNotificationSetting に記す）。
+  private boolean emailVerified(long memberId) {
+    return addresses
+        .of(memberId)
+        .map(MemberLoginAddress.Address::emailVerified)
+        .orElseThrow(() -> new IllegalStateException("会員の宛先が存在しません"));
   }
 
   private long memberIdOf(long userId) {
@@ -81,17 +90,19 @@ public class MemberNotificationSettingService {
         .orElseThrow(() -> new StaleSessionException("会員情報が存在しません"));
   }
 
-  private static MemberNotificationSettings effective(List<MemberNotificationSetting> rows) {
+  private static MemberNotificationSettings effective(
+      List<MemberNotificationSetting> rows, boolean emailVerified) {
     return new MemberNotificationSettings(
-        statusOf(rows, ContactPurpose.BUSINESS), statusOf(rows, ContactPurpose.MARKETING));
+        statusOf(rows, ContactPurpose.BUSINESS, emailVerified),
+        statusOf(rows, ContactPurpose.MARKETING, emailVerified));
   }
 
   private static ContactPermissionStatus statusOf(
-      List<MemberNotificationSetting> rows, ContactPurpose purpose) {
+      List<MemberNotificationSetting> rows, ContactPurpose purpose, boolean emailVerified) {
     return rows.stream()
         .filter(row -> row.getPurpose() == purpose)
         .map(MemberNotificationSetting::getStatus)
         .findFirst()
-        .orElse(MemberNotificationSetting.defaultFor(purpose, EMAIL_VERIFIED));
+        .orElse(MemberNotificationSetting.defaultFor(purpose, emailVerified));
   }
 }
