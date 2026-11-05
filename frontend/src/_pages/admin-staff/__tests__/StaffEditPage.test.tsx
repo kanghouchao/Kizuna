@@ -166,6 +166,50 @@ describe('従業員の権限編集ページ', () => {
     );
   });
 
+  it('ロール目録の読み込み中も、結果は保持中のロールを未選択と述べない', async () => {
+    mockedStaffApi.grantableRoles.mockReturnValue(new Promise(() => {}));
+    render(<StaffEditPage />);
+
+    const result = await screen.findByRole('region', { name: 'この設定の結果' });
+    expect(result).toHaveTextContent('山田太郎さんは 選択中の 1 ロール として');
+    expect(result).not.toHaveTextContent('未選択');
+    expect(within(result).getByRole('heading', { name: '付与される権限' })).toBeInTheDocument();
+  });
+
+  it('店舗一覧を取得できなければ、結果は保持中の店舗を未選択と述べない', async () => {
+    mockedStoreContext.mockReturnValue({
+      stores: null,
+      currentStoreId: undefined,
+      loadFailed: true,
+      reload: jest.fn(),
+      switchStore: jest.fn(),
+    } as unknown as ReturnType<typeof useStoreContext>);
+    render(<StaffEditPage />);
+
+    const result = await screen.findByRole('region', { name: 'この設定の結果' });
+    expect(result).toHaveTextContent('として 選択中の 1 店舗 のデータにアクセスできます');
+    expect(within(result).getByRole('heading', { name: '対象店舗（1 店舗）' })).toBeInTheDocument();
+    expect(
+      within(result).getByText('店舗一覧を取得できないため、選択中の店舗を表示できません。')
+    ).toBeInTheDocument();
+    expect(within(result).queryByText('店舗が選ばれていません。')).not.toBeInTheDocument();
+  });
+
+  it('店舗一覧の読み込み中も、結果は保持中の店舗を未選択と述べない', async () => {
+    mockedStoreContext.mockReturnValue({
+      stores: null,
+      currentStoreId: undefined,
+      loadFailed: false,
+      reload: jest.fn(),
+      switchStore: jest.fn(),
+    } as unknown as ReturnType<typeof useStoreContext>);
+    render(<StaffEditPage />);
+
+    const result = await screen.findByRole('region', { name: 'この設定の結果' });
+    expect(result).toHaveTextContent('として 選択中の 1 店舗 のデータにアクセスできます');
+    expect(within(result).queryByText('店舗が選ばれていません。')).not.toBeInTheDocument();
+  });
+
   it('見つからない従業員は一覧への導線だけを出す', async () => {
     mockedStaffApi.get.mockRejectedValue({ response: { status: 404 } });
     render(<StaffEditPage />);
