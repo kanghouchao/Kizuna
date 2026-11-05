@@ -10,6 +10,7 @@ import { OrderCourseField } from './OrderCourseField';
 import { OrderSpecialServicesField } from './OrderSpecialServicesField';
 
 import { FeePreviewValues } from '../lib/feePreview';
+import { orderFormDefaults } from '../lib/orderFormAssembly';
 import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { OrderFeeLineInput, ReceptionRoute, WebApplicationReceptionRoute } from '@/entities/order';
@@ -70,20 +71,7 @@ interface OrderFormProps {
 export function OrderForm({ onSubmit, isSubmitting }: OrderFormProps) {
   const router = useRouter();
   const form = useForm<OrderFormData & FeePreviewValues>({
-    defaultValues: {
-      business_contact_permissions: [],
-      receptionist_id: '',
-      business_date: new Date().toISOString().split('T')[0],
-      customer_selection: { mode: 'NONE' },
-      contact_snapshot: { name: '', phone_number: '', email: '', line_id: '' },
-      pax: 1,
-      reception_route: 'PHONE',
-      special_service_ids: [],
-      course_id: '',
-      fee_lines: [],
-      acquisition_source: '',
-      medium_id: '',
-    },
+    defaultValues: orderFormDefaults(),
   });
   const { register, handleSubmit, control } = form;
 
