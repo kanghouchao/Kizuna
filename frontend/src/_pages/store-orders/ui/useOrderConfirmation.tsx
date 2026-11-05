@@ -75,7 +75,9 @@ export function useOrderConfirmation(target?: string) {
       setOpen(true);
     });
   const preview = resource.data?.preview;
-  const failed = resource.failure || resource.data?.error;
+  const failed = !resource.isLoading && (resource.failure || resource.data?.error);
+  const reloadable = failed && orderConflictField(resource.data?.cause) === 'expected_version';
+  const confirmable = !resource.isLoading && !failed && preview;
   const dialog = (
     <Dialog
       open={open && job?.scope === scope}
@@ -92,32 +94,30 @@ export function useOrderConfirmation(target?: string) {
             <Button type="button" variant="outline" onClick={() => close(null)}>
               入力に戻る
             </Button>
-            {failed
-              ? orderConflictField(resource.data?.cause) === 'expected_version' && (
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      reject.current?.(resource.data?.cause);
-                      resolve.current = null;
-                      reject.current = null;
-                      setOpen(false);
-                    }}
-                  >
-                    最新の受注を読み直す
-                  </Button>
-                )
-              : preview &&
-                !resource.isLoading && (
-                  <Button
-                    type="button"
-                    onClick={() => {
-                      setPrevious({ scope, preview });
-                      close(preview.confirmation_token);
-                    }}
-                  >
-                    この内容を確認して保存
-                  </Button>
-                )}
+            {reloadable && (
+              <Button
+                type="button"
+                onClick={() => {
+                  reject.current?.(resource.data?.cause);
+                  resolve.current = null;
+                  reject.current = null;
+                  setOpen(false);
+                }}
+              >
+                最新の受注を読み直す
+              </Button>
+            )}
+            {confirmable && (
+              <Button
+                type="button"
+                onClick={() => {
+                  setPrevious({ scope, preview });
+                  close(preview.confirmation_token);
+                }}
+              >
+                この内容を確認して保存
+              </Button>
+            )}
           </>
         }
       >
