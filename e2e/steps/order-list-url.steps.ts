@@ -67,6 +67,7 @@ Then('URL と入力欄は条件なしに戻る', async ({ page }) => {
   await expect(page).toHaveURL(url => url.pathname.endsWith('/store/orders') && url.search === '');
   await expect(customerInput(page)).toHaveValue('');
   expect(lastQuery.get('customer_name')).toBeNull();
+  expect(lastQuery.get('desc')).not.toBe('true');
 });
 
 When('ブラウザで進む', async ({ page }) => {
@@ -81,9 +82,11 @@ When('受注一覧を再読込する', async ({ page }) => {
   // 再読込はセッションの復元から始まるので、作業キューの要求を待ってから確かめる
   const query = await workQueueQueryAfter(page, () => page.reload());
   expect(query.get('customer_name')).toBe(keyword);
+  expect(query.get('desc')).not.toBe('true');
 });
 
 Then('入力欄に検索語が残り、その条件で作業キューを取得している', async ({ page }) => {
   await expect(customerInput(page)).toHaveValue(keyword);
   expect(new URL(page.url()).searchParams.get('customer_name')).toBe(keyword);
+  expect(new URL(page.url()).searchParams.get('desc')).toBeNull();
 });
