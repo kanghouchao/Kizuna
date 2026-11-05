@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon } from 'lucide-react';
 import {
   ORDER_SORT_KEY_LABELS,
@@ -56,18 +57,45 @@ interface SearchDraft {
 
 const EMPTY_DRAFT: SearchDraft = { customerName: '', businessDate: '' };
 
+const DEFAULT_SORT_KEY: OrderSortKey = 'BUSINESS_DATE';
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** 画面が適用している条件。並びは常にどれかが選ばれている。 */
+type AppliedCriteria = OrderListCriteria & { sort_key: OrderSortKey; desc: boolean };
+
 /**
- * 画面の入力を読み口の条件へ畳む。組み立てを 1 箇所に持つのは、検索・並び替え・初期表示の 3 経路が
- * 同じ条件を作るためで、散らすと片方だけが更新されて群ごとに違う母集合を見に行く。
+ * URL の query を読み口の条件へ読む。適用済みの条件は URL だけが持ち、再読込・戻る・進むで同じ一覧に着く。
+ * 手で書き換えられた値は既定へ倒す（不正な並びや日付をそのまま送ると一覧ごと取得に失敗する）。
  */
-function toCriteria(draft: SearchDraft, sortKey: OrderSortKey, desc: boolean): OrderListCriteria {
+function parseCriteria(query: string): AppliedCriteria {
+  const params = new URLSearchParams(query);
+  const sortKey = params.get('sort_key');
+  const businessDate = params.get('business_date');
   return {
-    customer_name: draft.customerName || undefined,
-    business_date: draft.businessDate || undefined,
-    sort_key: sortKey,
-    desc,
+    customer_name: params.get('customer_name') || undefined,
+    business_date: businessDate && ISO_DATE.test(businessDate) ? businessDate : undefined,
+    sort_key: SORT_KEYS.includes(sortKey as OrderSortKey)
+      ? (sortKey as OrderSortKey)
+      : DEFAULT_SORT_KEY,
+    desc: params.get('desc') === 'true',
   };
 }
+
+/** 条件を query へ書く。既定値は書かず、条件の無い一覧の URL を素のままに保つ。 */
+function toQuery(criteria: AppliedCriteria): string {
+  const params = new URLSearchParams();
+  if (criteria.customer_name) params.set('customer_name', criteria.customer_name);
+  if (criteria.business_date) params.set('business_date', criteria.business_date);
+  if (criteria.sort_key !== DEFAULT_SORT_KEY) params.set('sort_key', criteria.sort_key);
+  if (criteria.desc) params.set('desc', 'true');
+  return params.toString();
+}
+
+const toDraft = (criteria: OrderListCriteria): SearchDraft => ({
+  customerName: criteria.customer_name ?? '',
+  businessDate: criteria.business_date ?? '',
+});
 
 export default function OrderListPage() {
   // 完了後訂正は ORDER_CORRECT（店長）限定。導線の表示制御だけで、強制はサーバ側 @PreAuthorize。
@@ -76,11 +104,24 @@ export default function OrderListPage() {
   const canReport =
     hasPermission(me, 'OPERATIONAL_REPORT_VIEW') && hasPermission(me, 'ORDER_MANAGE');
 
-  // 入力中の値と「適用済み」の条件を分ける。取得は適用済みだけを読む（DESIGN.md）
-  const [draft, setDraft] = useState<SearchDraft>(EMPTY_DRAFT);
-  const [applied, setApplied] = useState<SearchDraft>(EMPTY_DRAFT);
-  const [sortKey, setSortKey] = useState<OrderSortKey>('BUSINESS_DATE');
-  const [descending, setDescending] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
+  // 参照ではなく文字列で畳む。参照が描画ごとに変わると、群が条件の変化と見て取り直し続ける
+  const query = useSearchParams().toString();
+  const criteria = useMemo(() => parseCriteria(query), [query]);
+  const { sort_key: sortKey, desc: descending } = criteria;
+
+  // 入力中の値と「適用済み」の条件（URL）を分ける。取得は適用済みだけを読む（DESIGN.md）。
+  // 戻る・進むで適用済みの検索語が変わったときだけ入力を合わせる — 並びだけの変更で未適用の入力を捨てない
+  const [draft, setDraft] = useState<SearchDraft>(() => toDraft(criteria));
+  const [draftSource, setDraftSource] = useState(criteria);
+  if (
+    draftSource.customer_name !== criteria.customer_name ||
+    draftSource.business_date !== criteria.business_date
+  ) {
+    setDraftSource(criteria);
+    setDraft(toDraft(criteria));
+  }
 
   // 退出中は対象を保持し、再度開くときだけ key を変えて入力と取得結果を初期化する。
   const [confirmingDialog, setConfirmingDialog] = useState<{
@@ -108,12 +149,6 @@ export default function OrderListPage() {
   const setCorrecting = (target: OrderArchiveRow) =>
     setCorrectingDialog(previous => ({ target, open: true, key: (previous?.key ?? 0) + 1 }));
 
-  // 群を跨いで同じ条件を当てる。参照が毎レンダー変わるとアーカイブが取り直し続けるため畳んで持つ
-  const criteria: OrderListCriteria = useMemo(
-    () => toCriteria(applied, sortKey, descending),
-    [applied, sortKey, descending]
-  );
-
   const queue = useListPage<OrderWorkQueueRow, OrderListCriteria>(
     (page, activeCriteria) =>
       orderApi.listWorkQueue({
@@ -124,6 +159,17 @@ export default function OrderListPage() {
       }),
     criteria
   );
+  const { search: searchQueue } = queue;
+
+  // 条件（URL）が変わったら取り直す。初回はフック自身の取得と重なるため飛ばす
+  const appliedRef = useRef(criteria);
+  useEffect(() => {
+    if (appliedRef.current === criteria) {
+      return;
+    }
+    appliedRef.current = criteria;
+    void searchQueue(criteria);
+  }, [criteria, searchQueue]);
 
   // 受付箱（未処理の予約申請）。検索・並びの条件は持たない — 希望日の早い順に処理するだけの箱で、
   // 条件を持たせると作業キューと 2 つの母集合を主張し合う。
@@ -138,16 +184,21 @@ export default function OrderListPage() {
     void queue.reload();
   };
 
-  const apply = (next: SearchDraft) => {
-    setApplied(next);
-    void queue.search(toCriteria(next, sortKey, descending));
+  // 条件の適用は履歴に積む（戻るで直前の条件へ戻れるように）。取得は URL の変化から起きる
+  const navigate = (next: AppliedCriteria) => {
+    const nextQuery = toQuery(next);
+    router.push(nextQuery ? `${pathname}?${nextQuery}` : pathname);
   };
 
-  const applySort = (key: OrderSortKey, desc: boolean) => {
-    setSortKey(key);
-    setDescending(desc);
-    void queue.search(toCriteria(applied, key, desc));
-  };
+  const apply = (next: SearchDraft) =>
+    navigate({
+      ...criteria,
+      customer_name: next.customerName || undefined,
+      business_date: next.businessDate || undefined,
+    });
+
+  const applySort = (key: OrderSortKey, desc: boolean) =>
+    navigate({ ...criteria, sort_key: key, desc });
 
   // アーカイブへ移った受注を群ごとに数える。件数の控えはたたんだままでも出ているので、移った先を
   // 取り直さないと「アーカイブに入ったのか」が画面のどこからも読めない

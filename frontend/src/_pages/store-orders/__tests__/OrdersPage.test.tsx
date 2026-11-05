@@ -13,7 +13,17 @@ import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 import { notify } from '@/shared/notify';
 
-const mockPush = jest.fn();
+// 一覧の URL を持つ履歴の代役。push で query が変わり、購読中の useSearchParams が描き直される
+const ORDERS_PATH = '/store/orders';
+let mockQuery = '';
+const mockQueryListeners = new Set<() => void>();
+const mockNavigate = (href: string) => {
+  const [path, query = ''] = href.split('?');
+  if (path !== ORDERS_PATH) return;
+  mockQuery = query;
+  mockQueryListeners.forEach(listener => listener());
+};
+const mockPush = jest.fn((href: string) => mockNavigate(href));
 
 jest.mock('@/entities/order', () => ({
   // 種別表などの定数は実物を通す。丸ごと差し替えると明細の欄が選択肢を組めない
@@ -44,11 +54,24 @@ jest.mock('@/entities/user/model/MeContext', () => ({
   useMe: jest.fn(),
 }));
 
-jest.mock('next/navigation', () => ({
-  useSearchParams: () => new URLSearchParams(),
-  useRouter: () => ({ push: mockPush, back: jest.fn() }),
-  useParams: () => ({}),
-}));
+jest.mock('next/navigation', () => {
+  const React = jest.requireActual('react');
+  return {
+    useSearchParams: () => {
+      const query = React.useSyncExternalStore(
+        (listener: () => void) => {
+          mockQueryListeners.add(listener);
+          return () => mockQueryListeners.delete(listener);
+        },
+        () => mockQuery
+      );
+      return React.useMemo(() => new URLSearchParams(query), [query]);
+    },
+    usePathname: () => ORDERS_PATH,
+    useRouter: () => ({ push: mockPush, back: jest.fn() }),
+    useParams: () => ({}),
+  };
+});
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
   useStoreContext: () => ({
@@ -182,6 +205,7 @@ const meWith = (permissions: PermissionCode[]) =>
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockQuery = '';
   mockedOrderApi.listWorkQueue.mockResolvedValue({ rows: [], page: 0, pageCount: 1, total: 0 });
   mockedOrderApi.listArchive.mockResolvedValue(EMPTY_ARCHIVE);
   mockedApplicationApi.list.mockResolvedValue({ rows: [], page: 0, pageCount: 1, total: 0 });
@@ -406,6 +430,107 @@ describe('検索と並び替え', () => {
     await waitFor(() =>
       expect(mockedOrderApi.listArchive).toHaveBeenLastCalledWith(
         expect.objectContaining({ desc: true })
+      )
+    );
+  });
+});
+
+describe('検索条件と並び順の URL', () => {
+  it('URL の条件で最初から取得し、入力欄と並びにも出すこと（再読込で条件が保たれる）', async () => {
+    mockQuery = 'customer_name=%E5%B1%B1%E7%94%B0&business_date=2026-07-03&sort_key=PAX&desc=true';
+    render(<OrderListPage />);
+
+    const expected = {
+      customer_name: '山田',
+      business_date: '2026-07-03',
+      sort_key: 'PAX',
+      desc: true,
+    };
+    await waitFor(() =>
+      expect(mockedOrderApi.listWorkQueue).toHaveBeenCalledWith(expect.objectContaining(expected))
+    );
+    // 既定の条件で一度取ってから取り直す形だと、古い条件の結果が一瞬出る
+    expect(mockedOrderApi.listWorkQueue).toHaveBeenCalledTimes(1);
+    await waitFor(() =>
+      expect(mockedOrderApi.listArchive).toHaveBeenCalledWith(expect.objectContaining(expected))
+    );
+    expect(screen.getByLabelText('お客様名')).toHaveValue('山田');
+    expect(screen.getByLabelText('営業日')).toHaveValue('2026-07-03');
+    expect(screen.getByRole('button', { name: /降順/ })).toBeInTheDocument();
+  });
+
+  it('検索と並び替えは条件を URL へ積み、既定値は query に書かないこと', async () => {
+    render(<OrderListPage />);
+    await waitFor(() => expect(mockedOrderApi.listWorkQueue).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByLabelText('お客様名'), { target: { value: '山田' } });
+    fireEvent.click(screen.getByRole('button', { name: '検索' }));
+    expect(mockPush).toHaveBeenLastCalledWith(`${ORDERS_PATH}?customer_name=%E5%B1%B1%E7%94%B0`);
+
+    fireEvent.click(screen.getByRole('button', { name: /昇順/ }));
+    expect(mockPush).toHaveBeenLastCalledWith(
+      `${ORDERS_PATH}?customer_name=%E5%B1%B1%E7%94%B0&desc=true`
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'クリア' }));
+    expect(mockPush).toHaveBeenLastCalledWith(`${ORDERS_PATH}?desc=true`);
+  });
+
+  it('戻る・進むで URL が変わると、その条件で取り直し入力欄も追従すること', async () => {
+    mockQuery = 'customer_name=%E5%B1%B1%E7%94%B0';
+    render(<OrderListPage />);
+    await waitFor(() => expect(mockedOrderApi.listWorkQueue).toHaveBeenCalledTimes(1));
+
+    act(() => mockNavigate(`${ORDERS_PATH}?customer_name=%E4%BD%90%E8%97%A4&sort_key=PAX`));
+
+    await waitFor(() =>
+      expect(mockedOrderApi.listWorkQueue).toHaveBeenLastCalledWith(
+        expect.objectContaining({ customer_name: '佐藤', sort_key: 'PAX', desc: false })
+      )
+    );
+    await waitFor(() =>
+      expect(mockedOrderApi.listArchive).toHaveBeenLastCalledWith(
+        expect.objectContaining({ customer_name: '佐藤', sort_key: 'PAX' })
+      )
+    );
+    expect(screen.getByLabelText('お客様名')).toHaveValue('佐藤');
+
+    act(() => mockNavigate(ORDERS_PATH));
+
+    await waitFor(() =>
+      expect(mockedOrderApi.listWorkQueue).toHaveBeenLastCalledWith(
+        expect.objectContaining({ customer_name: undefined, sort_key: 'BUSINESS_DATE' })
+      )
+    );
+    expect(screen.getByLabelText('お客様名')).toHaveValue('');
+  });
+
+  it('並びだけを変えても、未適用の入力は捨てないこと', async () => {
+    render(<OrderListPage />);
+    await waitFor(() => expect(mockedOrderApi.listWorkQueue).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByLabelText('お客様名'), { target: { value: '山' } });
+    fireEvent.click(screen.getByRole('button', { name: /昇順/ }));
+
+    await waitFor(() =>
+      expect(mockedOrderApi.listWorkQueue).toHaveBeenLastCalledWith(
+        expect.objectContaining({ customer_name: undefined, desc: true })
+      )
+    );
+    expect(screen.getByLabelText('お客様名')).toHaveValue('山');
+  });
+
+  it('URL の不正な並び・日付は既定へ倒して取得すること', async () => {
+    mockQuery = 'sort_key=DROP&desc=yes&business_date=2026-13';
+    render(<OrderListPage />);
+
+    await waitFor(() =>
+      expect(mockedOrderApi.listWorkQueue).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sort_key: 'BUSINESS_DATE',
+          desc: false,
+          business_date: undefined,
+        })
       )
     );
   });
