@@ -36,6 +36,7 @@ function feeLine(line: FeeLine | undefined) {
   if (!line) return '—';
   const sign = line.kind === 'DISCOUNT' || line.kind === 'POINT_REDEMPTION' ? '−' : '';
   return [
+    line.name,
     `費用 ${sign}${yen(line.amount)} / 報酬 ${yen(line.remuneration)}`,
     line.duration_minutes != null && `${line.duration_minutes} 分`,
     line.revision_id && `版本 ${line.revision_number}（${line.revision_id}）`,
@@ -92,10 +93,11 @@ function correctionRows(
       v => `${v.course.name} / 版本 ${v.course.revision_number} / ${v.course.duration_minutes} 分`
     ),
     ...pairs(before.fee_lines, after.fee_lines, line => line.line_id).map(pair => {
-      const line = (pair.after ?? pair.before)!;
+      // 同じ line_id でも加算の採り直しで名称が変わるため、名称は前後それぞれのセルに出す。
+      const kind = (pair.after ?? pair.before)!.kind;
       return {
         key: `line:${pair.key}`,
-        label: `明細：${line.name ?? ''}（${ORDER_FEE_LINE_KIND_LABELS[line.kind]}）`,
+        label: `明細：${ORDER_FEE_LINE_KIND_LABELS[kind]}`,
         before: feeLine(pair.before),
         after: feeLine(pair.after),
       };
