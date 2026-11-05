@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useState } from 'react';
+import { type ReactNode, useEffect, useId, useState } from 'react';
 import { useStoreContext } from '@/entities/user';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
@@ -15,7 +15,6 @@ import {
 } from '@/shared/lib';
 import {
   Button,
-  DialogFrameActions,
   Form,
   FormControl,
   FormField,
@@ -27,6 +26,10 @@ import {
   Textarea,
 } from '@/shared/ui';
 
+const Actions = ({ children }: { children: ReactNode }) => (
+  <div className="flex justify-end gap-3">{children}</div>
+);
+
 /** 理由の上限。台帳の理由欄（@Size(max = 500)）と同値。 */
 const REASON_MAX_LENGTH = 500;
 
@@ -37,7 +40,7 @@ interface AttributionCorrectionStepProps {
   /** 訂正の宛先を決める帰属記録。差し引く相手はこの記録が持つ会員で、顧客に今紐づく会員ではない。 */
   attributionId: number;
   memberCode?: string;
-  /** 送信中かどうかを親へ上げる。親はこれを見てダイアログの取り消し（ESC・背景押下）を塞ぐ。 */
+  /** 送信中かどうかを親へ上げる。親はこれを見て画面の「戻る」を塞ぐ。 */
   onBusyChange: (isBusy: boolean) => void;
   onDone: () => void;
 }
@@ -70,9 +73,11 @@ export function AttributionCorrectionStep({
     return (
       <>
         <p role="alert">この帰属記録は見つかりませんでした。</p>
-        <DialogFrameActions>
-          <Button onClick={onDone}>閉じる</Button>
-        </DialogFrameActions>
+        <Actions>
+          <Button type="button" onClick={onDone}>
+            帰属の表示へ
+          </Button>
+        </Actions>
       </>
     );
   }
@@ -177,11 +182,11 @@ function CorrectionForm({
             ? 'この来店ではポイントが付与されていないため、差し引く分はありません。'
             : '付与された分は差し引き済みです。'}
         </p>
-        <DialogFrameActions>
+        <Actions>
           <Button type="button" onClick={onDone}>
             完了
           </Button>
-        </DialogFrameActions>
+        </Actions>
       </>
     );
   }
@@ -266,14 +271,14 @@ function CorrectionForm({
           </p>
         </form>
       </Form>
-      <DialogFrameActions>
+      <Actions>
         <Button type="button" variant="outline" onClick={onDone} disabled={isSubmitting}>
           後で行う
         </Button>
         <Button type="submit" form={formId} disabled={isSubmitting}>
           {isSubmitting ? '処理中...' : '差し引く'}
         </Button>
-      </DialogFrameActions>
+      </Actions>
     </>
   );
 }

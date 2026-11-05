@@ -1,9 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import { AttributionCorrectionStep } from '../ui/AttributionCorrectionStep';
-import { OrderAttributionModal } from '../ui/OrderAttributionModal';
-import { Dialog, DialogFrame } from '@/shared/ui';
-import { OrderArchiveRow, OrderAttribution, orderApi } from '@/entities/order';
+import OrderAttributionPage from '../ui/OrderAttributionPage';
+import { Order, OrderAttribution, orderApi } from '@/entities/order';
 import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 jest.mock('@/entities/user', () => ({
@@ -29,6 +28,7 @@ jest.mock('@/shared/lib', () => ({
 
 jest.mock('@/entities/order', () => ({
   orderApi: {
+    get: jest.fn(),
     attribution: jest.fn(),
     invalidateAttribution: jest.fn(),
     reissueReceiptToken: jest.fn(),
@@ -48,6 +48,14 @@ jest.mock('qrcode.react', () => ({
   ),
 }));
 
+const mockReplace = jest.fn();
+let mockId = 'o1';
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: jest.fn(), replace: mockReplace, back: jest.fn() }),
+  useParams: () => ({ id: mockId }),
+}));
+
+const mockedGet = orderApi.get as jest.Mock;
 const mockedAttribution = orderApi.attribution as jest.Mock;
 const mockedInvalidate = orderApi.invalidateAttribution as jest.Mock;
 const mockedReissue = orderApi.reissueReceiptToken as jest.Mock;
@@ -70,12 +78,15 @@ const meWith = (permissions: PermissionCode[]) =>
     setMe: jest.fn(),
   });
 
-const completedOrder: OrderArchiveRow = {
+const completedOrder: Order = {
+  business_contact_permissions: [],
   completion_invalidated: false,
   accrued_remuneration: 0,
+  total_duration_minutes: 60,
   total_remuneration: 7000,
   requires_attention: false,
   unresolved_special_service_count: 0,
+  special_services: [],
   course: {
     service_id: 'course-1',
     revision_id: 'r1',
@@ -87,10 +98,12 @@ const completedOrder: OrderArchiveRow = {
     adoption_basis: 'CURRENT_SETTING' as const,
     adopted_at: '2026-09-15T00:00:00Z',
   },
+  fee_lines: [],
   id: 'o1',
   status: 'COMPLETED',
   business_date: '2026-08-10',
   customer_name: '山田太郎',
+  version: 3,
 };
 
 const attributed: OrderAttribution = {
@@ -128,27 +141,38 @@ const reclaimedByOther: OrderAttribution = {
   pending_correction_member_code: '123456789012',
 };
 
-const renderModal = (onClose = jest.fn()) =>
-  render(<OrderAttributionModal open order={completedOrder} onClose={onClose} />);
+const renderPage = () => render(<OrderAttributionPage />);
 
-describe('OrderAttributionModal', () => {
+/** 無効化して差し引きの節まで進める。 */
+const invalidateAndOpenCorrection = async () => {
+  fireEvent.change(await screen.findByLabelText('無効化の理由'), {
+    target: { value: '取り違え' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: '無効化する' }));
+  return screen.findByLabelText('差し引くポイント');
+};
+
+describe('OrderAttributionPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockId = 'o1';
+    mockedGet.mockResolvedValue(completedOrder);
     mockedAttribution.mockResolvedValue(attributed);
     mockedCorrectionStatus.mockResolvedValue({ granted_points: 100, corrected_points: 0 });
     meWith(['ORDER_MANAGE', 'POINT_ADJUST']);
   });
 
-  it('閉じている間は帰属の現況を取りに行かない', () => {
-    // 一覧に常時 mount されているので、開くまで取りに行くと訂正しない画面が毎回読む
-    render(<OrderAttributionModal open order={null} onClose={jest.fn()} />);
+  it('見出しで受注を名指し、一覧へ戻るリンクを出す', async () => {
+    renderPage();
 
-    expect(mockedAttribution).not.toHaveBeenCalled();
+    expect(screen.getByRole('heading', { level: 1, name: '会員帰属の訂正' })).toBeInTheDocument();
+    expect(await screen.findByText('2026-08-10 / 山田太郎')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '戻る' })).toHaveAttribute('href', '/store/orders');
   });
 
   it('帰属している受注では会員コードと成立の機構を出し、理由を添えて無効化できる', async () => {
     mockedInvalidate.mockResolvedValue(invalidated);
-    renderModal();
+    renderPage();
 
     expect(await screen.findByText('123456789012')).toBeInTheDocument();
     expect(screen.getByText(/完了時の会員紐づけ/)).toBeInTheDocument();
@@ -169,7 +193,7 @@ describe('OrderAttributionModal', () => {
   });
 
   it('理由が空のまま無効化しようとしても要求を飛ばさない', async () => {
-    renderModal();
+    renderPage();
     await screen.findByLabelText('無効化の理由');
 
     fireEvent.click(screen.getByRole('button', { name: '無効化する' }));
@@ -185,25 +209,21 @@ describe('OrderAttributionModal', () => {
       // 台帳へ波及しないことを事後に知ると、誤付与が残ったまま訂正が済んだと見なされる。
       // 成立の機構によらず同じ文言を出す — どちらの経路でも台帳は動かない
       mockedAttribution.mockResolvedValue({ ...attributed, source });
-      renderModal();
+      renderPage();
 
       expect(await screen.findByText(/付与済みのポイントは自動では戻りません/)).toBeInTheDocument();
       expect(screen.getByText(/差し引く手続きへ進みます/)).toBeInTheDocument();
     }
   );
 
-  it('無効化に成功すると、そのまま差し引きの段へ送られること', async () => {
+  it('無効化に成功すると、そのまま差し引きの節へ送られること', async () => {
     mockedInvalidate.mockResolvedValue(invalidated);
-    renderModal();
+    renderPage();
 
-    fireEvent.change(await screen.findByLabelText('無効化の理由'), {
-      target: { value: '取り違え' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: '無効化する' }));
-
-    // ここで通常画面へ戻すと、誤って付与された分が相手の台帳に残ったまま「訂正が済んだ」ことになり、
+    // ここで通常の表示へ戻すと、誤って付与された分が相手の台帳に残ったまま「訂正が済んだ」ことになり、
     // やり残しに気づく機会がどこにも無くなる
-    expect(await screen.findByLabelText('差し引くポイント')).toBeInTheDocument();
+    await invalidateAndOpenCorrection();
+    expect(screen.getByRole('heading', { level: 2, name: '誤付与の差し引き' })).toBeInTheDocument();
     expect(screen.queryByLabelText('無効化の理由')).not.toBeInTheDocument();
     // 宛先は今まさに倒した記録そのもの。受注から導き直さない
     expect(mockedCorrectionStatus).toHaveBeenCalledWith('o1', 501);
@@ -214,15 +234,10 @@ describe('OrderAttributionModal', () => {
   it('差し引きは倒した帰属記録を名指し、付与の全額を既定値に取ること', async () => {
     mockedInvalidate.mockResolvedValue(invalidated);
     mockedCorrect.mockResolvedValue({ granted_points: 100, corrected_points: 100 });
-    renderModal();
-
-    fireEvent.change(await screen.findByLabelText('無効化の理由'), {
-      target: { value: '取り違え' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: '無効化する' }));
+    renderPage();
 
     // 取得できてからフォームを起こすので、既定値は最初に描かれたフレームから入っている
-    expect(await screen.findByLabelText('差し引くポイント')).toHaveValue(100);
+    expect(await invalidateAndOpenCorrection()).toHaveValue(100);
 
     // 差し引きが済めば残りの誤付与は無くなる。畳んだ後に現況を取り直すので、その応答を用意する
     mockedAttribution.mockResolvedValue({
@@ -242,14 +257,14 @@ describe('OrderAttributionModal', () => {
         idempotency_key: expect.any(String),
       })
     );
-    // 差し引きを終えると通常の画面へ戻り、正しい本人への再発行に進める
+    // 差し引きを終えると通常の表示へ戻り、正しい本人への再発行に進める
     expect(await screen.findByRole('button', { name: '伝票QRを再発行' })).toBeInTheDocument();
   });
 
   it('付与の無い来店では差し引く欄を出さないこと', async () => {
     mockedInvalidate.mockResolvedValue(invalidated);
     mockedCorrectionStatus.mockResolvedValue({ granted_points: 0, corrected_points: 0 });
-    renderModal();
+    renderPage();
 
     fireEvent.change(await screen.findByLabelText('無効化の理由'), {
       target: { value: '取り違え' },
@@ -261,21 +276,13 @@ describe('OrderAttributionModal', () => {
   });
 
   describe('差し引くポイントの検証', () => {
-    /** 差し引きの段まで進める（無効化 → 訂正の段）。 */
-    const openCorrectionStep = async () => {
-      mockedInvalidate.mockResolvedValue(invalidated);
-      renderModal();
-      fireEvent.change(await screen.findByLabelText('無効化の理由'), {
-        target: { value: '取り違え' },
-      });
-      fireEvent.click(screen.getByRole('button', { name: '無効化する' }));
-      return screen.findByLabelText('差し引くポイント');
-    };
+    beforeEach(() => mockedInvalidate.mockResolvedValue(invalidated));
 
     it('空欄のまま送っても要求を飛ばさないこと', async () => {
       // 空欄の valueAsNumber は NaN で、null でも空文字でもないため required は素通りする。
       // そのまま送ると JSON の null になり、欄の傍ではなくサーバの失敗として返ってくる
-      const input = await openCorrectionStep();
+      renderPage();
+      const input = await invalidateAndOpenCorrection();
       fireEvent.change(input, { target: { value: '' } });
       fireEvent.change(screen.getByLabelText('訂正の理由'), { target: { value: '誤付与の訂正' } });
       fireEvent.click(screen.getByRole('button', { name: '差し引く' }));
@@ -286,7 +293,8 @@ describe('OrderAttributionModal', () => {
 
     it('小数のまま送っても要求を飛ばさないこと', async () => {
       // noValidate は type="number" の暗黙の step=1 も止める。これが無いと 1.5 が int の points へ届く
-      const input = await openCorrectionStep();
+      renderPage();
+      const input = await invalidateAndOpenCorrection();
       fireEvent.change(input, { target: { value: '1.5' } });
       fireEvent.change(screen.getByLabelText('訂正の理由'), { target: { value: '誤付与の訂正' } });
       fireEvent.click(screen.getByRole('button', { name: '差し引く' }));
@@ -298,34 +306,43 @@ describe('OrderAttributionModal', () => {
     });
   });
 
+  it('差し引きを後に回すと通常の表示へ戻り、差し引きへの導線が残ること', async () => {
+    mockedInvalidate.mockResolvedValue(invalidated);
+    renderPage();
+    await invalidateAndOpenCorrection();
+
+    // 畳んだ後に現況を取り直す。差し引いていないので、残りの誤付与はそのまま名指される
+    mockedAttribution.mockResolvedValue(invalidated);
+    fireEvent.click(screen.getByRole('button', { name: '後で行う' }));
+
+    expect(await screen.findByRole('button', { name: 'ポイントを差し引く' })).toBeInTheDocument();
+    expect(mockedCorrect).not.toHaveBeenCalled();
+  });
+
   it('再発行が前の QR を殺すことを、押す手前で名乗る', async () => {
     // 2 度目の再発行は前に渡した QR を失効させる。押した後では取り戻せない副作用なので、
     // ボタンと同じ画面に出ていなければ操作者は自覚しないまま客の手元の QR を殺す
     mockedAttribution.mockResolvedValue(invalidated);
-    renderModal();
+    renderPage();
 
     expect(await screen.findByText(/前に発行した伝票QRは使えなくなります/)).toBeInTheDocument();
   });
 
   it('完了を無効化した受注では再発行の案内とボタンを出さない', async () => {
+    mockedGet.mockResolvedValue({ ...completedOrder, completion_invalidated: true });
     mockedAttribution.mockResolvedValue(invalidated);
-    render(
-      <OrderAttributionModal
-        open
-        order={{ ...completedOrder, completion_invalidated: true }}
-        onClose={jest.fn()}
-      />
-    );
+    renderPage();
+
     expect(await screen.findByText('無効化した受注に伝票は発行できません。')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '伝票QRを再発行' })).not.toBeInTheDocument();
     expect(screen.queryByText(/この来店を取り戻せます/)).not.toBeInTheDocument();
     expect(mockedReissue).not.toHaveBeenCalled();
   });
 
-  it('再発行した伝票の生値を QR が運ぶ', async () => {
+  it('再発行した伝票の生値を、Esc で閉じないダイアログの QR が運ぶ', async () => {
     mockedAttribution.mockResolvedValue(invalidated);
     mockedReissue.mockResolvedValue({ receipt_token: 'raw-token-value' });
-    renderModal();
+    renderPage();
 
     fireEvent.click(await screen.findByRole('button', { name: '伝票QRを再発行' }));
 
@@ -333,46 +350,34 @@ describe('OrderAttributionModal', () => {
     // 生値そのものへ退行しても描画は変わらないため、QR が運ぶ値を断言する
     expect(qr).toHaveAttribute('data-value', expect.stringContaining('raw-token-value'));
     expect(qr.getAttribute('data-value')).toContain('/member/receipts#');
+    expect(screen.getByRole('dialog')).toHaveTextContent('再発行から 90 日以内');
+
+    // 生値はこの応答にしか無い。誤って閉じると客が来店を取り戻す手段ごと消える
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(screen.getByTestId('qr')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: '閉じて一覧へ' }));
+    expect(mockReplace).toHaveBeenCalledWith('/store/orders');
   });
 
-  it('退出完了後は同じ受注でも再発行したトークンを保持しない', async () => {
+  it('再読込では再発行した伝票を出し直さない', async () => {
     mockedAttribution.mockResolvedValue(invalidated);
     mockedReissue.mockResolvedValue({ receipt_token: 'raw-token-value' });
-    const props = { order: completedOrder, onClose: jest.fn() };
-    const { rerender } = render(<OrderAttributionModal open {...props} />);
+    const { unmount } = renderPage();
     fireEvent.click(await screen.findByRole('button', { name: '伝票QRを再発行' }));
     await screen.findByTestId('qr');
 
-    rerender(<OrderAttributionModal open={false} {...props} />);
-    await waitFor(() => expect(screen.queryByTestId('qr')).not.toBeInTheDocument());
-    rerender(<OrderAttributionModal open {...props} />);
+    unmount();
+    renderPage();
 
     expect(await screen.findByRole('button', { name: '伝票QRを再発行' })).toBeInTheDocument();
     expect(screen.queryByTestId('qr')).not.toBeInTheDocument();
   });
 
-  it('QR を出している間は明示のボタン以外で閉じない', async () => {
-    mockedAttribution.mockResolvedValue(invalidated);
-    mockedReissue.mockResolvedValue({ receipt_token: 'raw-token-value' });
-    const onClose = jest.fn();
-    renderModal(onClose);
-
-    fireEvent.click(await screen.findByRole('button', { name: '伝票QRを再発行' }));
-    await screen.findByTestId('qr');
-
-    fireEvent.keyDown(document.body, { key: 'Escape' });
-    // 生値はこの応答にしか無い。誤って閉じると客が来店を取り戻す手段ごと消える
-    expect(onClose).not.toHaveBeenCalled();
-    // 押しても何も起きない右上の × は出さない
-    expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
-    expect(onClose).toHaveBeenCalled();
-  });
-
   it('帰属したことのない受注では再発行の導線を出さない', async () => {
     mockedAttribution.mockResolvedValue({ attributed: false });
-    renderModal();
+    renderPage();
 
     expect(await screen.findByText(/訂正の対象ではありません/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '伝票QRを再発行' })).not.toBeInTheDocument();
@@ -381,9 +386,33 @@ describe('OrderAttributionModal', () => {
   it('現況を読めなかったときは領域が失敗を名乗り、訂正の導線を出さない', async () => {
     // 読めなかった現況を「未帰属」で描くと、他人の来店が残っているのに再発行を勧めることになる
     mockedAttribution.mockRejectedValue(new Error('boom'));
-    renderModal();
+    renderPage();
 
     expect(await screen.findByText('帰属の状況を取得できませんでした')).toBeInTheDocument();
+    expect(screen.queryByLabelText('無効化の理由')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '伝票QRを再発行' })).not.toBeInTheDocument();
+  });
+
+  it('受注が見つからなければ一覧への導線だけを出す', async () => {
+    mockedGet.mockRejectedValue({ response: { status: 404 } });
+    renderPage();
+
+    expect(await screen.findByText('受注が見つかりません。')).toBeInTheDocument();
+    expect(screen.queryByLabelText('無効化の理由')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'オーダー一覧へ' })).toHaveAttribute(
+      'href',
+      '/store/orders'
+    );
+  });
+
+  it('完了していない受注では訂正の導線を出さない', async () => {
+    // 帰属が生まれるのは完了と事後申領の瞬間だけ。URL を直に開いても未完了の受注では何も操作させない
+    mockedGet.mockResolvedValue({ ...completedOrder, status: 'CONFIRMED' });
+    renderPage();
+
+    expect(
+      await screen.findByText('完了した受注だけが会員帰属を訂正できます。')
+    ).toBeInTheDocument();
     expect(screen.queryByLabelText('無効化の理由')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '伝票QRを再発行' })).not.toBeInTheDocument();
   });
@@ -392,7 +421,7 @@ describe('OrderAttributionModal', () => {
     // 後回しにした差し引きは、その間に現況が別人の有効な帰属へ入れ替わると受注からは名指せなくなる。
     // ここに導線が無いと、誤付与は相手の台帳に残ったまま二度と辿り着けない
     mockedAttribution.mockResolvedValue(reclaimedByOther);
-    renderModal();
+    renderPage();
 
     expect(await screen.findByText(/差し引かれていないポイントが残っています/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'ポイントを差し引く' }));
@@ -408,26 +437,25 @@ describe('OrderAttributionModal', () => {
       pending_correction_attribution_id: undefined,
       pending_correction_member_code: undefined,
     });
-    renderModal();
+    renderPage();
 
     await screen.findByText(/前に発行した伝票QRは使えなくなります/);
     expect(screen.queryByRole('button', { name: 'ポイントを差し引く' })).not.toBeInTheDocument();
   });
 
   it('ポイント調整の権限が無ければ無効化の導線も差し引きの導線も出さないこと', async () => {
-    // 無効化はこの PR で POINT_ADJUST 限定になった。押せる導線として描くと、理由を入力し終えてから
-    // 拒否されることになる
+    // 無効化は POINT_ADJUST 限定。押せる導線として描くと、理由を入力し終えてから拒否されることになる
     meWith(['ORDER_MANAGE']);
     mockedAttribution.mockResolvedValue(reclaimedByOther);
-    renderModal();
+    renderPage();
 
     expect(await screen.findByText(/ポイント調整の権限が必要です/)).toBeInTheDocument();
     expect(screen.queryByLabelText('無効化の理由')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'ポイントを差し引く' })).not.toBeInTheDocument();
   });
 
-  it('差し引きの送信中は明示のボタン以外で閉じないこと', async () => {
-    // 送信中に閉じると、訂正が成立したか分からないまま冪等キーが失われる。開き直しでは別のキーになり、
+  it('差し引きの送信中は戻れないこと', async () => {
+    // 送信中に離れると、訂正が成立したか分からないまま冪等キーが失われる。開き直しでは別のキーになり、
     // 二重に引かれたのかどうかを操作者が判じられない
     mockedInvalidate.mockResolvedValue(invalidated);
     let settle: (value: unknown) => void = () => {};
@@ -436,30 +464,45 @@ describe('OrderAttributionModal', () => {
         settle = resolve;
       })
     );
-    const onClose = jest.fn();
-    renderModal(onClose);
+    renderPage();
 
-    fireEvent.change(await screen.findByLabelText('無効化の理由'), {
-      target: { value: '取り違え' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: '無効化する' }));
-    await screen.findByLabelText('差し引くポイント');
+    await invalidateAndOpenCorrection();
     fireEvent.change(screen.getByLabelText('訂正の理由'), { target: { value: '誤付与の訂正' } });
     fireEvent.click(screen.getByRole('button', { name: '差し引く' }));
 
     await screen.findByRole('button', { name: '処理中...' });
-    fireEvent.keyDown(document.body, { key: 'Escape' });
-    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.queryByRole('link', { name: '戻る' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '戻る' })).toBeDisabled();
 
-    settle({ granted_points: 100, corrected_points: 100 });
+    await act(async () => settle({ granted_points: 100, corrected_points: 100 }));
     await waitFor(() => expect(notify.success).toHaveBeenCalled());
+    expect(await screen.findByRole('link', { name: '戻る' })).toBeInTheDocument();
+  });
+
+  it('再発行の送信中は戻れないこと', async () => {
+    // 生値は応答にしか現れない。待っている間に離れると、新しい QR は誰の手にも渡らず前の QR だけが死ぬ
+    mockedAttribution.mockResolvedValue(invalidated);
+    let settle: (value: unknown) => void = () => {};
+    mockedReissue.mockReturnValue(
+      new Promise(resolve => {
+        settle = resolve;
+      })
+    );
+    renderPage();
+
+    fireEvent.click(await screen.findByRole('button', { name: '伝票QRを再発行' }));
+
+    await screen.findByRole('button', { name: '発行中...' });
+    expect(screen.getByRole('button', { name: '戻る' })).toBeDisabled();
+    await act(async () => settle({ receipt_token: 'raw-token-value' }));
+    expect(await screen.findByTestId('qr')).toBeInTheDocument();
   });
 
   it('無効化の失敗はサーバの文言をそのまま知らせ、入力を残す', async () => {
     mockedInvalidate.mockRejectedValue({
       response: { data: { message: 'この受注は会員へ帰属していません' } },
     });
-    renderModal();
+    renderPage();
 
     fireEvent.change(await screen.findByLabelText('無効化の理由'), {
       target: { value: '取り違え' },
@@ -483,39 +526,34 @@ test('帰属記録の複合キーが変わったら旧上限と理由を隠す',
       })
     );
   const props = { orderId: 'o1', attributionId: 1, onBusyChange: jest.fn(), onDone: jest.fn() };
-  // 差し引きの段は外枠の操作帯へ操作を置くので、外枠の中で描く
-  const inFrame = (attributionId: number) => (
-    <Dialog open>
-      <DialogFrame size="sm" title="誤付与の差し引き">
-        <AttributionCorrectionStep {...props} attributionId={attributionId} />
-      </DialogFrame>
-    </Dialog>
-  );
-  const { rerender } = render(inFrame(1));
+  const { rerender } = render(<AttributionCorrectionStep {...props} attributionId={1} />);
   fireEvent.change(await screen.findByLabelText('訂正の理由'), { target: { value: '旧理由' } });
-  rerender(inFrame(2));
+  rerender(<AttributionCorrectionStep {...props} attributionId={2} />);
   expect(screen.queryByLabelText('訂正の理由')).not.toBeInTheDocument();
   await act(async () => resolve({ granted_points: 200, corrected_points: 50 }));
   expect(await screen.findByLabelText('差し引くポイント')).toHaveValue(150);
   expect(screen.getByLabelText('訂正の理由')).toHaveValue('');
 });
 
-test('旧対象の無効化応答は別対象の現況・通知・訂正段階へ反映しない', async () => {
+test('旧受注の無効化応答は別受注の現況・通知・差し引きの節へ反映しない', async () => {
   let resolve!: (value: OrderAttribution) => void;
+  mockId = 'o1';
   meWith(['POINT_ADJUST']);
+  mockedGet.mockResolvedValue(completedOrder);
   mockedAttribution.mockResolvedValue(attributed);
   mockedInvalidate.mockReturnValueOnce(
     new Promise(done => {
       resolve = done;
     })
   );
-  const props = { order: completedOrder, onClose: jest.fn() };
-  const { rerender } = render(<OrderAttributionModal open {...props} />);
+  const { rerender } = render(<OrderAttributionPage />);
   fireEvent.change(await screen.findByLabelText('無効化の理由'), { target: { value: '訂正' } });
   fireEvent.click(screen.getByRole('button', { name: '無効化する' }));
   await waitFor(() => expect(mockedInvalidate).toHaveBeenCalled());
+  mockedGet.mockResolvedValue({ ...completedOrder, id: 'o2' });
   mockedAttribution.mockResolvedValue({ ...attributed, id: 502, member_code: '999999999999' });
-  rerender(<OrderAttributionModal open {...props} order={{ ...completedOrder, id: 'o2' }} />);
+  mockId = 'o2';
+  rerender(<OrderAttributionPage />);
   await screen.findByText('999999999999');
   await act(async () => resolve(invalidated));
   expect(screen.getByText('999999999999')).toBeInTheDocument();

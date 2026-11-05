@@ -6,7 +6,6 @@ import { useMemo, useState } from 'react';
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon } from 'lucide-react';
 import {
   ORDER_SORT_KEY_LABELS,
-  OrderArchiveRow,
   OrderWorkQueueRow,
   OrderApplicationRow,
   OrderListCriteria,
@@ -20,7 +19,6 @@ import { storePath, useListPage } from '@/shared/lib';
 import { PageHeader } from '@/widgets/page-header';
 import { OrderApplicationCard } from './OrderApplicationCard';
 import { OrderArchiveSection } from './OrderArchiveSection';
-import { OrderAttributionModal } from './OrderAttributionModal';
 import { OrderQueueCard } from './OrderQueueCard';
 import { useSearchOnCriteriaChange } from '../lib/useSearchOnCriteriaChange';
 import { applicationConfirmHref, orderCompletionHref } from '../lib/orderListHref';
@@ -131,16 +129,6 @@ export default function OrderListPage() {
     setDraftSource(criteria);
     setDraft(toDraft(criteria));
   }
-
-  // 退出中は対象を保持し、再度開くときだけ key を変えて入力と取得結果を初期化する。
-  const [correctingDialog, setCorrectingDialog] = useState<{
-    target: OrderArchiveRow;
-    open: boolean;
-    key: number;
-  } | null>(null);
-  const correcting = correctingDialog?.target ?? null;
-  const setCorrecting = (target: OrderArchiveRow) =>
-    setCorrectingDialog(previous => ({ target, open: true, key: (previous?.key ?? 0) + 1 }));
 
   const queue = useListPage<OrderWorkQueueRow, OrderListCriteria>(
     (page, activeCriteria) =>
@@ -377,7 +365,6 @@ export default function OrderListPage() {
           status="COMPLETED"
           criteria={criteria}
           reloadToken={archived.COMPLETED}
-          onCorrectAttribution={setCorrecting}
           canCorrect={canCorrect}
         />
         <OrderArchiveSection
@@ -385,21 +372,9 @@ export default function OrderListPage() {
           status="CANCELLED"
           criteria={criteria}
           reloadToken={archived.CANCELLED}
-          onCorrectAttribution={setCorrecting}
           canCorrect={canCorrect}
         />
       </div>
-
-      {/* 訂正は受注の状態も会計欄も変えないため、一覧の取り直しは要らない */}
-      <OrderAttributionModal
-        key={`correcting-${correctingDialog?.key}`}
-        open={correctingDialog?.open ?? false}
-        order={correcting}
-        onClose={missing => {
-          setCorrectingDialog(previous => previous && { ...previous, open: false });
-          if (missing) setArchived(prev => ({ ...prev, COMPLETED: prev.COMPLETED + 1 }));
-        }}
-      />
     </div>
   );
 }
