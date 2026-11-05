@@ -93,6 +93,17 @@ export function StaffForm({ editing, locked = false, onSubmit }: StaffFormProps)
       : storeCatalog.filter(
           store => store.id !== undefined && storeSet.storeIds.includes(store.id)
         );
+  // 目録が未着・取得失敗の間は名前を引けない。保持中の選択を「未選択」と述べず件数で示す
+  const rolesUnavailable = rolesLoading || rolesFailed;
+  const storesUnavailable = stores === null;
+  const roleSummary =
+    rolesUnavailable && roleIds.length > 0
+      ? `選択中の ${roleIds.length} ロール`
+      : roleSetLabel(selectedRoles);
+  const storeSummary =
+    storesUnavailable && storeSet.storeScopeType !== 'ALL_STORES' && storeSet.storeIds.length > 0
+      ? `選択中の ${storeSet.storeIds.length} 店舗`
+      : storeSetLabel(storeSet.storeScopeType, storeSet.storeIds, storeCatalog);
   const subject = editing
     ? `${editing.displayName}さん`
     : displayName.trim()
@@ -230,16 +241,14 @@ export function StaffForm({ editing, locked = false, onSubmit }: StaffFormProps)
             </CardHeader>
             <CardContent className="space-y-5 text-sm">
               <p className="text-foreground break-words">
-                {subject}は{' '}
-                {rolesFailed ? `選択中の ${roleIds.length} ロール` : roleSetLabel(selectedRoles)}{' '}
-                として {storeSetLabel(storeSet.storeScopeType, storeSet.storeIds, storeCatalog)}{' '}
-                のデータにアクセスできます
+                {subject}は {roleSummary} として {storeSummary} のデータにアクセスできます
               </p>
               <div className="space-y-2">
                 <h3 className="font-medium text-foreground">
-                  付与される権限（{grantedPermissions.length} 件）
+                  付与される権限
+                  {!rolesUnavailable && `（${grantedPermissions.length} 件）`}
                 </h3>
-                {/* 目録が読めない・未着のときは「未選択」と区別する。保存は止めない */}
+                {/* 保存は止めない（取得失敗だけを理由に送信を止めない） */}
                 {rolesFailed ? (
                   <p className="text-muted-foreground">
                     ロール一覧を取得できないため、付与される権限を表示できません。
@@ -265,11 +274,17 @@ export function StaffForm({ editing, locked = false, onSubmit }: StaffFormProps)
                   対象店舗（
                   {storeSet.storeScopeType === 'ALL_STORES'
                     ? '全店舗'
-                    : `${selectedStores.length} 店舗`}
+                    : `${storesUnavailable ? storeSet.storeIds.length : selectedStores.length} 店舗`}
                   ）
                 </h3>
                 {storeSet.storeScopeType === 'ALL_STORES' ? (
                   <p className="text-muted-foreground">今後追加される店舗も含みます。</p>
+                ) : storesUnavailable && storesFailed ? (
+                  <p className="text-muted-foreground">
+                    店舗一覧を取得できないため、選択中の店舗を表示できません。
+                  </p>
+                ) : storesUnavailable ? (
+                  <p className="text-muted-foreground">読み込み中...</p>
                 ) : selectedStores.length === 0 ? (
                   <p className="text-muted-foreground">店舗が選ばれていません。</p>
                 ) : (
