@@ -89,9 +89,18 @@ databaseChangeLog:
             referencedTableName: t_users
             referencedColumnNames: id
             onDelete: CASCADE
+        # 再送の間隔と回数は利用者の発行の履歴（失効・消費した行を含む）を発行時刻で引く。利用者の削除の連鎖もこの索引で引く。
+        - createIndex:
+            indexName: idx_t_email_verification_tokens_user_issued
+            tableName: t_email_verification_tokens
+            columns:
+              - column:
+                  name: user_id
+              - column:
+                  name: issued_at
         # 「利用者ごとに生きたトークンは高々 1 本」を DB 側の最終防波堤として固定する。期限は索引で
         # 表せないので期限切れの未消費行も対象になり、再発行は期限切れの行も失効させる。
-        # 発火するのは並行した再送の敗者で、DbConstraint 経由で 429 に写す。
+        # 再送同士は助言ロックで直列化される。ロックの外から割り込んだ発行で発火すれば DbConstraint 経由で 429 に写す。
         - sql:
             sql: >-
               CREATE UNIQUE INDEX uq_t_email_verification_tokens_live_user
