@@ -143,6 +143,29 @@ describe('従業員の権限編集ページ', () => {
     );
   });
 
+  // 目録が読めないのは「未選択」ではない。保存は止めない（取得失敗だけを理由に送信を止めない）
+  it('ロール目録を取得できなければ、結果は権限を示せないと述べ、保存は現在のロールのまま送れる', async () => {
+    mockedStaffApi.grantableRoles.mockRejectedValue(new Error('network'));
+    render(<StaffEditPage />);
+
+    const result = await screen.findByRole('region', { name: 'この設定の結果' });
+    expect(
+      await within(result).findByText(
+        'ロール一覧を取得できないため、付与される権限を表示できません。'
+      )
+    ).toBeInTheDocument();
+    expect(within(result).queryByText('ロールが選ばれていません。')).not.toBeInTheDocument();
+    expect(result).toHaveTextContent('山田太郎さんは 選択中の 1 ロール として');
+
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+    await waitFor(() =>
+      expect(mockedStaffApi.update).toHaveBeenCalledWith(
+        42,
+        expect.objectContaining({ role_ids: [10] })
+      )
+    );
+  });
+
   it('見つからない従業員は一覧への導線だけを出す', async () => {
     mockedStaffApi.get.mockRejectedValue({ response: { status: 404 } });
     render(<StaffEditPage />);
