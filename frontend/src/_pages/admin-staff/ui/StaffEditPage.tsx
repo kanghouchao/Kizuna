@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { staffApi, type StaffResponse } from '@/entities/user';
 import { useResource, useVersionedWrite } from '@/shared/lib';
-import { Button, RegionError } from '@/shared/ui';
+import { Button, RegionError, Skeleton } from '@/shared/ui';
 import { PageHeader } from '@/widgets/page-header';
 import { StaffForm, type StaffFormValues, type StaffGrants } from './StaffForm';
 import { toGrantRequest } from './toGrantRequest';
@@ -32,7 +32,7 @@ export default function StaffEditPage() {
   const failure = id !== null ? detail.failure : 'notFound';
   const staff = detail.data;
 
-  if (failure !== null) {
+  if (id === null || failure !== null) {
     return (
       <div className="space-y-6">
         <PageHeader title="従業員の権限を編集" />
@@ -50,7 +50,17 @@ export default function StaffEditPage() {
   }
 
   if (detail.isLoading || staff === null) {
-    return <p className="text-muted-foreground">読み込み中...</p>;
+    // 形は既知（見出し・権限の節・結果の節）なので、同じ配置の骨組みで待つ
+    return (
+      <div className="space-y-6" aria-busy="true">
+        <span className="sr-only">読み込み中...</span>
+        <Skeleton className="h-8 w-64" />
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+          <Skeleton className="h-96" />
+          <Skeleton className="h-64" />
+        </div>
+      </div>
+    );
   }
 
   const title = `${staff.display_name ?? ''} の権限を編集`;
@@ -73,7 +83,7 @@ export default function StaffEditPage() {
 
   const submit = async (values: StaffFormValues) => {
     await writer.write(
-      () => staffApi.update(id ?? 0, { ...toGrantRequest(values), version: staff.version }),
+      () => staffApi.update(id, { ...toGrantRequest(values), version: staff.version }),
       {
         success: '権限を更新しました',
         failure: '権限の更新に失敗しました',
