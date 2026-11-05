@@ -57,7 +57,7 @@ export function RemunerationHistory({
         if (!open) onClose();
       }}
     >
-      <DialogFrame size="md" title="変更履歴">
+      <DialogFrame size="lg" title="変更履歴">
         {history.isLoading ? (
           <p role="status">読み込み中...</p>
         ) : history.failed ? (
