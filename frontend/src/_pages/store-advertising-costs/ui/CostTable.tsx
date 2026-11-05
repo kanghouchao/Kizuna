@@ -32,9 +32,15 @@ export function CostTable({
         {rows.map(c => (
           <TableRow key={c.id}>
             <TableCell>{categoryLabels[c.category]}</TableCell>
-            <TableCell className="max-w-48 break-words">{c.medium.name}</TableCell>
-            <TableCell className="max-w-48 break-words">{c.agency_name ?? '未設定'}</TableCell>
-            <TableCell className="max-w-48 break-words">{c.plan_name ?? '未設定'}</TableCell>
+            <TableCell className="max-w-48 whitespace-normal break-words">
+              {c.medium.name}
+            </TableCell>
+            <TableCell className="max-w-48 whitespace-normal break-words">
+              {c.agency_name ?? '未設定'}
+            </TableCell>
+            <TableCell className="max-w-48 whitespace-normal break-words">
+              {c.plan_name ?? '未設定'}
+            </TableCell>
             <TableCell>
               {c.inquiry_count === null ? '未計測' : c.inquiry_count.toLocaleString() + '人'}
             </TableCell>
