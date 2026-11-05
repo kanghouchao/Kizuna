@@ -3,6 +3,7 @@ package com.kizuna.member.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.kizuna.member.domain.EmailVerificationTokenRepository;
 import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.notification.transport.ContactTransport;
 import com.kizuna.shared.config.AppProperties;
@@ -394,10 +395,37 @@ class MemberEmailVerificationIntegrationTest {
         .hasMessageContaining("uq_t_email_verification_tokens_live_user");
   }
 
-  // 並行した 2 つ目の再送を再現する: 相手の取引が失効と挿入を済ませて未コミットの間、こちらの失効は同じ行のロックを待つ。
+  // 先行の再送が判定を終えて未コミットの間に後続が判定すると、後続は先行の発行を見ずに通り、先行のコミット後に失効させて
+  // 送ってしまう。判定から発行までを利用者ごとに直列化していれば、後続は先行のコミットを待ってから判定し、間隔で止まる。
+  @Test
+  void 先行の再送がコミットするまで後続の判定は待たされ_間隔で止まる() throws Exception {
+    long userId = registered(email(), Duration.ofSeconds(61));
+    jdbc.update(
+        "update t_email_verification_tokens set revoked_at = now() where user_id = ?", userId);
+    try (Connection rival = context.getBean(DataSource.class).getConnection()) {
+      rival.setAutoCommit(false);
+      try (PreparedStatement lock = rival.prepareStatement("select pg_advisory_xact_lock(?, ?)")) {
+        lock.setInt(1, EmailVerificationTokenRepository.ISSUANCE_LOCK_NAMESPACE);
+        lock.setInt(2, Long.hashCode(userId));
+        lock.execute();
+      }
+      // 先行の発行。後続の失効と一意索引のどちらにも当たらない形（失効済み）で置き、判定だけが先行を止められるようにする。
+      pastRevokedToken(rival, userId);
+      CompletableFuture<Void> resend =
+          CompletableFuture.runAsync(() -> verification.resend(userId));
+      awaitLockWaiters(1);
+      rival.commit();
+
+      assertThatThrownBy(() -> resend.get(10, TimeUnit.SECONDS))
+          .hasCauseInstanceOf(TooManyRequestsException.class);
+    }
+    assertThat(transport.deliveries).isEmpty();
+  }
+
+  // 再送のロックを取らずに割り込む発行を再現する: 相手が失効と挿入を済ませて未コミットの間、こちらの失効は同じ行のロックを待つ。
   // 相手のコミット後、こちらの失効は相手が挿入した行を写しに持たず生かしたままにし、続く挿入が一意索引に当たる。
   @Test
-  void 並行した再送が生きたトークンの一意索引に当たれば429へ写す() throws Exception {
+  void ロックの外から割り込んだ発行が生きたトークンの一意索引に当たれば429へ写す() throws Exception {
     long userId = registered(email(), Duration.ofSeconds(61));
     try (Connection rival = context.getBean(DataSource.class).getConnection()) {
       rival.setAutoCommit(false);
@@ -446,6 +474,18 @@ class MemberEmailVerificationIntegrationTest {
         userId);
   }
 
+  private static void pastRevokedToken(Connection connection, long userId) throws Exception {
+    try (PreparedStatement insert =
+        connection.prepareStatement(
+            "insert into t_email_verification_tokens"
+                + " (user_id, token_digest, email, issued_at, expires_at, revoked_at)"
+                + " values (?, ?, 'rival@example.test', now(), now() + interval '1 day', now())")) {
+      insert.setLong(1, userId);
+      insert.setString(2, UUID.randomUUID().toString());
+      insert.executeUpdate();
+    }
+  }
+
   private void pastRevokedToken(long userId, Duration ago) {
     pastToken(userId, ago, true);
   }
@@ -488,7 +528,7 @@ class MemberEmailVerificationIntegrationTest {
       if (blocked >= expected) return;
       Thread.sleep(20);
     }
-    throw new AssertionError("並行した取引がトークン行のロック待ちで止まっていません");
+    throw new AssertionError("並行した取引がロック待ちで止まっていません");
   }
 
   private Throwable attempt(String token) {
