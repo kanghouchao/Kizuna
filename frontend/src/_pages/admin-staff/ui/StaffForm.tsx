@@ -225,20 +225,28 @@ export function StaffForm({ editing, locked = false, onSubmit }: StaffFormProps)
                 この設定の結果
               </CardTitle>
               <CardDescription>
-                保存前に、付与されるロールと対象店舗を確かめてください。
+                保存前に、付与される権限と対象店舗を確かめてください。
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5 text-sm">
               <p className="text-foreground break-words">
-                {subject}は {roleSetLabel(selectedRoles)} として{' '}
-                {storeSetLabel(storeSet.storeScopeType, storeSet.storeIds, storeCatalog)}{' '}
+                {subject}は{' '}
+                {rolesFailed ? `選択中の ${roleIds.length} ロール` : roleSetLabel(selectedRoles)}{' '}
+                として {storeSetLabel(storeSet.storeScopeType, storeSet.storeIds, storeCatalog)}{' '}
                 のデータにアクセスできます
               </p>
               <div className="space-y-2">
                 <h3 className="font-medium text-foreground">
                   付与される権限（{grantedPermissions.length} 件）
                 </h3>
-                {grantedPermissions.length === 0 ? (
+                {/* 目録が読めない・未着のときは「未選択」と区別する。保存は止めない */}
+                {rolesFailed ? (
+                  <p className="text-muted-foreground">
+                    ロール一覧を取得できないため、付与される権限を表示できません。
+                  </p>
+                ) : rolesLoading ? (
+                  <p className="text-muted-foreground">読み込み中...</p>
+                ) : grantedPermissions.length === 0 ? (
                   <p className="text-muted-foreground">ロールが選ばれていません。</p>
                 ) : (
                   <ul className="flex flex-wrap gap-1.5">
