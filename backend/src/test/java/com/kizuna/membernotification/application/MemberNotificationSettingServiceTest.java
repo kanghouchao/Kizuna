@@ -6,12 +6,15 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.customer.domain.ContactPermissionStatus;
 import com.kizuna.customer.domain.ContactPurpose;
+import com.kizuna.member.application.MemberLoginAddress;
+import com.kizuna.member.application.MemberLoginAddress.Address;
 import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberLookupService.MemberLookup;
 import com.kizuna.membernotification.domain.MemberNotificationSetting;
@@ -31,6 +34,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class MemberNotificationSettingServiceTest {
 
   @Mock private MemberLookupService memberLookup;
+  @Mock private MemberLoginAddress addresses;
   @Mock private MemberNotificationSettingRepository settings;
   @Mock private BusinessAudit audit;
   @InjectMocks private MemberNotificationSettingService service;
@@ -38,6 +42,7 @@ class MemberNotificationSettingServiceTest {
   @Test
   void viewFillsMissingPurposesWithTheUnverifiedDefault() {
     when(memberLookup.findByUserId(10L)).thenReturn(Optional.of(new MemberLookup(3L, "C")));
+    when(addresses.of(3L)).thenReturn(Optional.of(new Address("m@example.test", false, false)));
     when(settings.findByMemberId(3L))
         .thenReturn(
             List.of(
@@ -51,8 +56,36 @@ class MemberNotificationSettingServiceTest {
   }
 
   @Test
+  void verifiedMemberWithoutChoiceIsAllowedBusinessButMarketingStaysUnknown() {
+    when(memberLookup.findByUserId(10L)).thenReturn(Optional.of(new MemberLookup(3L, "C")));
+    when(addresses.of(3L)).thenReturn(Optional.of(new Address("m@example.test", true, false)));
+    when(settings.findByMemberId(3L)).thenReturn(List.of());
+
+    assertThat(service.view(10L))
+        .isEqualTo(
+            new MemberNotificationSettings(
+                ContactPermissionStatus.ALLOWED, ContactPermissionStatus.UNKNOWN));
+  }
+
+  @Test
+  void verifiedMemberWhoDeniedBusinessIsNotAllowed() {
+    lenient()
+        .when(addresses.of(3L))
+        .thenReturn(Optional.of(new Address("m@example.test", true, false)));
+    when(settings.findByMemberIdAndPurpose(3L, ContactPurpose.BUSINESS))
+        .thenReturn(
+            Optional.of(
+                MemberNotificationSetting.chosen(
+                    3L, ContactPurpose.BUSINESS, ContactPermissionStatus.DENIED)));
+
+    assertThat(service.effective(3L, ContactPurpose.BUSINESS))
+        .isEqualTo(ContactPermissionStatus.DENIED);
+  }
+
+  @Test
   void firstChoiceLocksTheMemberBeforeInsertingAndAuditsFromTheDefault() {
     when(memberLookup.findByUserId(10L)).thenReturn(Optional.of(new MemberLookup(3L, "C")));
+    when(addresses.of(3L)).thenReturn(Optional.of(new Address("m@example.test", false, false)));
     when(settings.findByMemberIdAndPurpose(3L, ContactPurpose.BUSINESS))
         .thenReturn(Optional.empty());
 
@@ -81,6 +114,7 @@ class MemberNotificationSettingServiceTest {
         MemberNotificationSetting.chosen(
             3L, ContactPurpose.BUSINESS, ContactPermissionStatus.ALLOWED);
     when(memberLookup.findByUserId(10L)).thenReturn(Optional.of(new MemberLookup(3L, "C")));
+    when(addresses.of(3L)).thenReturn(Optional.of(new Address("m@example.test", false, false)));
     when(settings.findByMemberIdAndPurpose(3L, ContactPurpose.BUSINESS))
         .thenReturn(Optional.of(existing));
     when(settings.findByMemberId(3L)).thenReturn(List.of(existing));

@@ -7,6 +7,7 @@ import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.customer.domain.ContactPermissionStatus;
 import com.kizuna.customer.domain.ContactPurpose;
+import com.kizuna.member.application.MemberLoginAddress;
 import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.membernotification.domain.MemberNotificationSettingRepository;
@@ -75,6 +76,19 @@ class MemberNotificationSettingIntegrationTest {
         .isEqualTo(
             new MemberNotificationSettings(
                 ContactPermissionStatus.UNKNOWN, ContactPermissionStatus.UNKNOWN));
+  }
+
+  @Test
+  void verifiedMemberWithoutChoiceReadsAllowedBusinessAndUnknownMarketing() {
+    var member = member();
+    jdbc.update("update t_users set email_verified_at = now() where id = ?", member.userId());
+
+    assertThat(service.view(member.userId()))
+        .isEqualTo(
+            new MemberNotificationSettings(
+                ContactPermissionStatus.ALLOWED, ContactPermissionStatus.UNKNOWN));
+    assertThat(service.effective(member.memberId(), ContactPurpose.BUSINESS))
+        .isEqualTo(ContactPermissionStatus.ALLOWED);
   }
 
   @Test
@@ -266,6 +280,7 @@ class MemberNotificationSettingIntegrationTest {
   @Import({
     MemberNotificationSettingService.class,
     MemberLookupService.class,
+    MemberLoginAddress.class,
     BusinessAudit.class,
     AuditWriter.class
   })
