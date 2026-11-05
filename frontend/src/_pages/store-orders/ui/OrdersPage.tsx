@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon } from 'lucide-react';
 import {
@@ -115,7 +115,6 @@ export default function OrderListPage() {
   const canReport =
     hasPermission(me, 'OPERATIONAL_REPORT_VIEW') && hasPermission(me, 'ORDER_MANAGE');
 
-  const router = useRouter();
   const pathname = usePathname();
   // 参照ではなく文字列で畳む。参照が描画ごとに変わると、群が条件の変化と見て取り直し続ける
   const query = useSearchParams().toString();
@@ -185,26 +184,30 @@ export default function OrderListPage() {
     void queue.reload();
   };
 
-  // 条件の適用は履歴に積み（戻るで直前の条件へ戻れるように）、取得は URL の変化から起きる。
+  // 条件の適用は history.pushState で履歴に積み、取得は URL の変化から起きる。次の条件は描画済みの
+  // criteria ではなく今の URL から組む — 描画が URL に追いつく前の操作で、直前に送った条件を消さないため。
   // 同じ条件の検索は URL が変わらず取得も起きないので、履歴を積まずに作業キューだけを取り直す
-  const pushCriteria = (next: AppliedCriteria) => {
-    const nextQuery = toQuery(next);
-    if (nextQuery === toQuery(criteria)) {
-      void queue.search(criteria);
+  const pushCriteria = (update: (current: AppliedCriteria) => AppliedCriteria) => {
+    const current = parseCriteria(window.location.search);
+    const nextQuery = toQuery(update(current));
+    if (nextQuery === toQuery(current)) {
+      void queue.search(current);
       return;
     }
-    router.push(nextQuery ? `${pathname}?${nextQuery}` : pathname);
+    window.history.pushState(null, '', nextQuery ? `${pathname}?${nextQuery}` : pathname);
   };
 
   const apply = (next: SearchDraft) =>
-    pushCriteria({
-      ...criteria,
+    pushCriteria(current => ({
+      ...current,
       customer_name: next.customerName || undefined,
       business_date: next.businessDate || undefined,
-    });
+    }));
 
-  const applySort = (key: OrderSortKey, desc: boolean) =>
-    pushCriteria({ ...criteria, sort_key: key, desc });
+  const applySortKey = (key: OrderSortKey) =>
+    pushCriteria(current => ({ ...current, sort_key: key }));
+
+  const toggleDirection = () => pushCriteria(current => ({ ...current, desc: !current.desc }));
 
   // アーカイブへ移った受注を群ごとに数える。件数の控えはたたんだままでも出ているので、移った先を
   // 取り直さないと「アーカイブに入ったのか」が画面のどこからも読めない
@@ -278,7 +281,7 @@ export default function OrderListPage() {
               <div className="flex items-center gap-2">
                 <Select
                   value={sortKey}
-                  onValueChange={v => applySort(v as OrderSortKey, descending)}
+                  onValueChange={v => applySortKey(v as OrderSortKey)}
                   items={SORT_KEYS.map(k => ({ value: k, label: ORDER_SORT_KEY_LABELS[k] }))}
                 >
                   <SelectTrigger id="order-sort" className="w-full">
@@ -297,7 +300,7 @@ export default function OrderListPage() {
                   variant="outline"
                   size="icon-sm"
                   aria-label={descending ? '降順（押すと昇順）' : '昇順（押すと降順）'}
-                  onClick={() => applySort(sortKey, !descending)}
+                  onClick={toggleDirection}
                 >
                   {descending ? <ArrowDownIcon /> : <ArrowUpIcon />}
                 </Button>
