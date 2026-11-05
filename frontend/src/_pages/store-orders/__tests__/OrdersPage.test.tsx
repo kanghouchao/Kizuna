@@ -253,8 +253,8 @@ describe('作業キューの描画', () => {
     expect(screen.getByRole('button', { name: '謝絶' })).toBeInTheDocument();
     expect(screen.getByText('高橋美咲')).toBeInTheDocument();
     expect(screen.getByText(/会員コード: 000123456789/)).toBeInTheDocument();
-    // 確定済みの側は完了と取消を持つ
-    expect(screen.getByRole('button', { name: '完了' })).toBeInTheDocument();
+    // 確定済みの側は完了と取消を持つ。完了は画面への遷移なので link
+    expect(screen.getByRole('link', { name: '完了' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '取消' })).toBeInTheDocument();
   });
 
@@ -285,6 +285,27 @@ describe('作業キューの描画', () => {
         '/store/orders/applications/a1/confirm?desc=true'
       )
     );
+  });
+
+  it('完了は受注ごとの完了画面へのリンクで、一覧の検索条件と並び順を運ぶこと', async () => {
+    visit(`${ORDERS_PATH}?customer_name=${encodeURIComponent('花子')}&sort_key=PAX`);
+    stubQueue(confirmedOrder());
+    render(<OrderListPage />);
+
+    expect(await screen.findByRole('link', { name: '完了' })).toHaveAttribute(
+      'href',
+      `/store/orders/${confirmedOrder().id}/completion?customer_name=%E8%8A%B1%E5%AD%90&sort_key=PAX`
+    );
+  });
+
+  it('要対応の受注は完了画面へ進めないこと', async () => {
+    // 特殊サービスの要対応は編集で直すまで完了できない。押せるリンクにすると行き止まりの画面へ送る
+    stubQueue(confirmedOrder({ requires_attention: true, unresolved_special_service_count: 1 }));
+    render(<OrderListPage />);
+
+    expect(await screen.findByText(/特殊サービスの本人拒否・要対応/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: '完了' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '完了' })).not.toBeInTheDocument();
   });
 
   it('識別子の無い申請の謝絶は要求を組まず、理由を名乗ること', async () => {

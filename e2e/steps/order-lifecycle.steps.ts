@@ -155,14 +155,14 @@ Then('取消アーカイブに理由 {string} の行が現れる', async ({ page
   await expect(row).toBeVisible();
 });
 
-When('カードから完了モーダルを開き会計 {string} 円で完了する', async ({ page }, fee: string) => {
-  await ownCard(page).getByRole('button', { name: '完了', exact: true }).click();
-  const dialog = page.getByRole('dialog');
+When('カードから完了画面を開き会計 {string} 円で完了する', async ({ page }, fee: string) => {
+  await ownCard(page).getByRole('link', { name: '完了', exact: true }).click();
+  await expect(page).toHaveURL(/\/store\/orders\/[^/]+\/completion/);
   // 会計金額の欄は無く、合計は明細の総和としてサーバが導出する。1 行だけ入れて総額を作る
-  await dialog.getByRole('button', { name: 'クレジット加算を追加' }).click();
-  await dialog.getByLabel('明細1の名称', { exact: true }).fill('会計');
-  await dialog.getByLabel('明細1の金額', { exact: true }).fill(String(Number(fee) - adoptedPrice));
-  await dialog.getByRole('button', { name: '完了する', exact: true }).click();
+  await page.getByRole('button', { name: 'クレジット加算を追加' }).click();
+  await page.getByLabel('明細1の名称', { exact: true }).fill('会計');
+  await page.getByLabel('明細1の金額', { exact: true }).fill(String(Number(fee) - adoptedPrice));
+  await page.getByRole('button', { name: '完了する', exact: true }).click();
   await Promise.all([
     page.waitForResponse(
       resp => resp.url().endsWith('/completion') && resp.request().method() === 'POST',
@@ -170,11 +170,18 @@ When('カードから完了モーダルを開き会計 {string} 円で完了す�
     ),
     page.getByRole('button', { name: 'この内容を確認して保存', exact: true }).click(),
   ]);
+  // 電話受付の受注は会員へ帰属しないので、完了は画面の上に閉じない伝票 QR を出し、閉じるまで一覧へ戻らない
+  const receipt = page.getByRole('dialog', { name: '伝票QRコード', exact: true });
+  await expect(receipt.getByRole('img', { name: '伝票QR' })).toBeVisible({ timeout: 15000 });
+  await page.keyboard.press('Escape');
+  await expect(receipt).toBeVisible();
+  await expect(page).toHaveURL(/\/completion/);
+  await receipt.getByRole('button', { name: '閉じて一覧へ', exact: true }).click();
+  const listUrl = /\/store\/orders\/?(\?.*)?$/;
+  await expect(page).toHaveURL(listUrl);
 });
 
 Then('完了した受注が「対応が要る」群から消える', async ({ page }) => {
-  // 完了の応答は伝票 QR を出すことがあるので、モーダルを閉じてから群を見る
-  await page.getByRole('button', { name: /閉じる|キャンセル/ }).first().click({ trial: false }).catch(() => {});
   await expect(ownCard(page)).toHaveCount(0, { timeout: 15000 });
 });
 

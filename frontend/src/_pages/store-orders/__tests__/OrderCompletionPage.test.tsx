@@ -1,8 +1,8 @@
 import { confirmPreview, pointsPreview } from '../lib/orderTestSupport';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { notify } from '@/shared/notify';
-import { OrderCompletionModal } from '../ui/OrderCompletionModal';
-import { Order, OrderWorkQueueRow, orderApi } from '@/entities/order';
+import OrderCompletionPage from '../ui/OrderCompletionPage';
+import { Order, orderApi } from '@/entities/order';
 // 伝票 QR はアプリドメインの申領画面を指す。根 layout が渡す値をここで固定する
 jest.mock('@/shared/lib', () => ({
   ...jest.requireActual('@/shared/lib'),
@@ -43,9 +43,20 @@ jest.mock('qrcode.react', () => ({
   ),
 }));
 
+const mockReplace = jest.fn();
+let mockQuery = '';
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: jest.fn(), replace: mockReplace, back: jest.fn() }),
+  useParams: () => ({ id: 'o1' }),
+  useSearchParams: () => new URLSearchParams(mockQuery),
+}));
+
 const mockedGet = orderApi.get as jest.Mock;
 const mockedComplete = orderApi.complete as jest.Mock;
 const mockedPreview = orderApi.completionPreview as jest.Mock;
+
+const LIST_QUERY = 'customer_name=%E5%B1%B1%E7%94%B0&sort_key=PAX&desc=true';
+const LIST_HREF = `/store/orders?${LIST_QUERY}`;
 
 const confirmedOrder: Order = {
   business_contact_permissions: [],
@@ -78,20 +89,16 @@ const confirmedOrder: Order = {
   version: 3,
 };
 
-function queueRow(order: Order): OrderWorkQueueRow {
-  return { ...order, customer_name: order.customer_name ?? undefined };
-}
+const renderPage = () => render(<OrderCompletionPage />);
 
-const renderModal = (onCompleted = jest.fn(), onClose = jest.fn(), onSuperseded = jest.fn()) =>
-  render(
-    <OrderCompletionModal
-      open
-      order={queueRow(confirmedOrder)}
-      onClose={onClose}
-      onCompleted={onCompleted}
-      onSuperseded={onSuperseded}
-    />
-  );
+const conflict = {
+  response: {
+    status: 409,
+    data: {
+      error: 'この受注は別の操作者が更新しました。最新の内容を読み直してからやり直してください',
+    },
+  },
+};
 
 /** 会計の内訳を 1 行だけ入れて完了する（各テストの本題は入力側なので、送信までを 1 つにまとめる）。 */
 const completeWith = async (amount: string) => {
@@ -101,9 +108,15 @@ const completeWith = async (amount: string) => {
   await confirmPreview();
 };
 
-describe('OrderCompletionModal', () => {
+const unlinkedPreview = () =>
+  mockedPreview.mockResolvedValue(
+    pointsPreview({ use_points: 0, member_linked: false, usage_unit: 100, grant_points: 50 })
+  );
+
+describe('受注の完了画面', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockQuery = LIST_QUERY;
     mockedPreview.mockResolvedValue(
       pointsPreview({
         use_points: 0,
@@ -114,32 +127,22 @@ describe('OrderCompletionModal', () => {
       })
     );
     mockedComplete.mockResolvedValue(confirmedOrder);
-    // 完了モーダルは作業キューの行から開かれる。行は明細もコース名も持たないので、
-    // 播種は詳細の読み口から取り直す（既存の内訳を空で上書きしないため）。
     mockedGet.mockImplementation(async (id: string) => ({ ...confirmedOrder, id }));
   });
 
-  it('作業キューの行から開いても、既存の内訳を詳細の読み口から播き直す', async () => {
-    // 行は fee_lines も course_name も持たない。行だけで播くと、明細のある受注が空行で開き、
-    // そのまま完了すると既存の内訳を丸ごと上書きして失う
+  it('見出しに営業日と顧客を出し、戻るは一覧の検索条件を持って帰る', async () => {
+    renderPage();
+
+    expect(await screen.findByRole('heading', { level: 1, name: '受注の完了' })).toBeVisible();
+    expect(await screen.findByText('2026-08-10 / 山田太郎')).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: '戻る' })).toHaveAttribute('href', LIST_HREF);
+  });
+
+  it('既存の内訳を詳細の読み口から播く', async () => {
+    // 詳細から播かないと、明細のある受注が空行で開き、そのまま完了すると既存の内訳を上書きして失う
     mockedGet.mockResolvedValue({
       ...confirmedOrder,
-      total_duration_minutes: 60,
-      total_remuneration: 7000,
-      course: {
-        ...{
-          service_id: 'course-1',
-          revision_id: 'r1',
-          revision_number: 1,
-          name: '基本',
-          duration_minutes: 60,
-          price: 12000,
-          remuneration: 7000,
-          adoption_basis: 'CURRENT_SETTING' as const,
-          adopted_at: '2026-09-15T00:00:00Z',
-        },
-        name: '90 分コース',
-      },
+      course: { ...confirmedOrder.course, name: '90 分コース' },
       fee_lines: [
         {
           kind: 'BASE_COURSE',
@@ -164,37 +167,7 @@ describe('OrderCompletionModal', () => {
         },
       ],
     });
-    const queueRow: OrderWorkQueueRow = {
-      completion_invalidated: false,
-      accrued_remuneration: 0,
-      total_remuneration: 7000,
-      requires_attention: false,
-      unresolved_special_service_count: 0,
-      course: {
-        service_id: 'course-1',
-        revision_id: 'r1',
-        revision_number: 1,
-        name: '基本',
-        duration_minutes: 60,
-        price: 12000,
-        remuneration: 7000,
-        adoption_basis: 'CURRENT_SETTING' as const,
-        adopted_at: '2026-09-15T00:00:00Z',
-      },
-      id: 'o1',
-      status: 'CONFIRMED',
-      customer_name: '山田太郎',
-    };
-
-    render(
-      <OrderCompletionModal
-        open
-        order={queueRow}
-        onClose={jest.fn()}
-        onCompleted={jest.fn()}
-        onSuperseded={jest.fn()}
-      />
-    );
+    renderPage();
 
     expect(await screen.findByText(/基本コース.*90 分コース/)).toBeInTheDocument();
     expect(screen.queryByLabelText('コース名')).not.toBeInTheDocument();
@@ -205,7 +178,7 @@ describe('OrderCompletionModal', () => {
   });
 
   it('播いた内訳の総和で初回の見込みを取る', async () => {
-    // committed の初期値を 0 のままにすると、明細のある受注の付与予定が最初の 1 画面だけ 0 で出る
+    // 確定値の初期値を 0 のままにすると、明細のある受注の付与予定が最初の 1 画面だけ 0 で出る
     mockedGet.mockResolvedValue({
       ...confirmedOrder,
       fee_lines: [
@@ -218,8 +191,7 @@ describe('OrderCompletionModal', () => {
         },
       ],
     });
-
-    renderModal();
+    renderPage();
 
     await waitFor(() =>
       expect(mockedPreview).toHaveBeenCalledWith(
@@ -232,15 +204,12 @@ describe('OrderCompletionModal', () => {
     );
     expect(mockedPreview).not.toHaveBeenCalledWith(
       'o1',
-      expect.objectContaining({
-        expected_version: 3,
-        fee_lines: [expect.objectContaining({ amount: 0 })],
-      })
+      expect.objectContaining({ fee_lines: [expect.objectContaining({ amount: 0 })] })
     );
   });
 
   it('採用済みコースは完了画面で編集できない', async () => {
-    renderModal();
+    renderPage();
     await screen.findByLabelText('明細1の名称');
     expect(screen.queryByLabelText('コース名')).not.toBeInTheDocument();
     await completeWith('8000');
@@ -248,64 +217,9 @@ describe('OrderCompletionModal', () => {
     expect(mockedComplete.mock.calls[0][1]).not.toHaveProperty('course_id');
   });
 
-  it('開き直しは陳腐化した内訳で播かず、取り直した内容で播く', async () => {
-    // useResource は取り直しの間も前の値を持ったまま。その値で播いて印を立てると、後から着いた
-    // 新しい内容が捨てられ、他の操作者が直したばかりの明細を古い内訳で上書きして完了できてしまう
-    mockedGet
-      .mockResolvedValueOnce({
-        ...confirmedOrder,
-        fee_lines: [
-          {
-            kind: 'CREDIT_SURCHARGE',
-            name: '古い明細',
-            amount: 1000,
-            remuneration: 0,
-            system_owned: false,
-          },
-        ],
-      })
-      .mockResolvedValueOnce({
-        ...confirmedOrder,
-        fee_lines: [
-          {
-            kind: 'CREDIT_SURCHARGE',
-            name: '新しい明細',
-            amount: 5000,
-            remuneration: 0,
-            system_owned: false,
-          },
-        ],
-      });
-    const { rerender } = renderModal();
-    expect(await screen.findByDisplayValue('古い明細')).toBeInTheDocument();
-
-    rerender(
-      <OrderCompletionModal
-        open
-        order={null}
-        onClose={jest.fn()}
-        onCompleted={jest.fn()}
-        onSuperseded={jest.fn()}
-      />
-    );
-    rerender(
-      <OrderCompletionModal
-        open
-        order={queueRow(confirmedOrder)}
-        onClose={jest.fn()}
-        onCompleted={jest.fn()}
-        onSuperseded={jest.fn()}
-      />
-    );
-
-    expect(await screen.findByDisplayValue('新しい明細')).toBeInTheDocument();
-    expect(screen.queryByDisplayValue('古い明細')).not.toBeInTheDocument();
-  });
-
   it('受注を取得できなければ、その領域が失敗を名乗り再試行を出す', async () => {
-    // 失敗を捨てると「読み込み中」のまま固まり、閉じる以外に何も起こせない画面になる
     mockedGet.mockRejectedValueOnce(new Error('boom'));
-    renderModal();
+    renderPage();
 
     expect(await screen.findByText('受注を取得できませんでした。')).toBeInTheDocument();
     expect(screen.queryByLabelText('明細1の金額')).not.toBeInTheDocument();
@@ -327,43 +241,42 @@ describe('OrderCompletionModal', () => {
     expect(await screen.findByDisplayValue('再取得できた明細')).toBeInTheDocument();
   });
 
-  it('閉じている間は事前計算を取りに行かない', () => {
-    // 一覧に常時 mount されているので、開くまで取りに行くと 1 件も完了しない画面が毎回読む
-    render(
-      <OrderCompletionModal
-        open
-        order={null}
-        onClose={jest.fn()}
-        onCompleted={jest.fn()}
-        onSuperseded={jest.fn()}
-      />
-    );
+  it('受注が見つからなければ再試行を出さず、検索条件付きの一覧へ帰す', async () => {
+    mockedGet.mockRejectedValueOnce({ response: { status: 404, data: {} } });
+    renderPage();
 
+    expect(await screen.findByText('受注が見つかりません。')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '再試行' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'オーダー一覧へ' })).toHaveAttribute('href', LIST_HREF);
+  });
+
+  it('完了・取消済みの受注はフォームを出さず、一覧へ帰す', async () => {
+    // 終端の受注に完了は成立しない。フォームを出すと、送っても必ず撥ねられる入力を勧めることになる
+    mockedGet.mockResolvedValue({ ...confirmedOrder, status: 'COMPLETED' });
+    renderPage();
+
+    expect(
+      await screen.findByText('この受注は完了または取消済みのため、完了できません。')
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText('明細1の金額')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'オーダー一覧へ' })).toHaveAttribute('href', LIST_HREF);
     expect(mockedPreview).not.toHaveBeenCalled();
   });
 
   it('顧客未設定の受注は録入された連絡先で見出しに出す', async () => {
     // 会計の相手が誰か分からないまま完了させないため、台帳に着かなかった受注でも呼び名を出す
-    const unlinked: Order = {
+    mockedGet.mockResolvedValue({
       ...confirmedOrder,
       customer_name: undefined,
       contact_snapshot: { name: '重複照合の来客' },
-    };
-    render(
-      <OrderCompletionModal
-        open
-        order={queueRow(unlinked)}
-        onClose={jest.fn()}
-        onCompleted={jest.fn()}
-        onSuperseded={jest.fn()}
-      />
-    );
+    });
+    renderPage();
 
     expect(await screen.findByText(/重複照合の来客（顧客未設定）/)).toBeInTheDocument();
   });
 
   it('開いた時点の事前計算は保存済みの明細と版で取る', async () => {
-    renderModal();
+    renderPage();
 
     await waitFor(() =>
       expect(mockedPreview).toHaveBeenCalledWith(
@@ -378,122 +291,17 @@ describe('OrderCompletionModal', () => {
 
   it('会計金額を確定すると、その金額で見込みを取り直す', async () => {
     // 打鍵ごとに取りに行かないので、欄を離れるまでは前の金額の見込みのまま
-    renderModal();
-    await screen.findByLabelText('明細1の金額');
-
-    const input = screen.getByLabelText('明細1の金額');
-    fireEvent.change(input, { target: { value: '8000' } });
-    fireEvent.blur(input);
-
-    await waitFor(() =>
-      expect(mockedPreview).toHaveBeenLastCalledWith(
-        'o1',
-        expect.objectContaining({
-          expected_version: 3,
-          fee_lines: [expect.objectContaining({ amount: 8000 })],
-        })
-      )
-    );
-  });
-
-  it('別の受注へ切り替えたら、前の受注の見込みで欄の可否を決めない', async () => {
-    // 取得フックは取り直しの間も前の値を保つ。値だけを見ると、会員だった前の受注の規則で
-    // 次の受注の利用ポイントを受け付けてしまう
-    const otherOrder: Order = { ...confirmedOrder, id: 'o2', customer_name: '鈴木花子' };
-    const { rerender } = render(
-      <OrderCompletionModal
-        open
-        order={queueRow(confirmedOrder)}
-        onClose={jest.fn()}
-        onCompleted={jest.fn()}
-        onSuperseded={jest.fn()}
-      />
-    );
-    await screen.findByLabelText('利用ポイント');
-
-    rerender(
-      <OrderCompletionModal
-        open
-        order={null}
-        onClose={jest.fn()}
-        onCompleted={jest.fn()}
-        onSuperseded={jest.fn()}
-      />
-    );
-    mockedPreview.mockReturnValue(new Promise(() => {}));
-    rerender(
-      <OrderCompletionModal
-        open
-        order={queueRow(otherOrder)}
-        onClose={jest.fn()}
-        onCompleted={jest.fn()}
-        onSuperseded={jest.fn()}
-      />
-    );
-
-    expect(await screen.findByText('読み込み中...')).toBeInTheDocument();
-    // 見込みは播種の後に走る。播く前に引くと、内訳の入る前の総和で付与予定が嘘になる
-    await waitFor(() =>
-      expect(mockedPreview).toHaveBeenLastCalledWith(
-        'o2',
-        expect.objectContaining({
-          expected_version: 3,
-          fee_lines: [expect.objectContaining({ amount: 0 })],
-        })
-      )
-    );
-    expect(screen.queryByLabelText('利用ポイント')).not.toBeInTheDocument();
-  });
-
-  it('同じ受注を開き直したら、前回確定した会計金額で見込みを取り直さない', async () => {
-    // 欄は空に戻るので、確定値だけ残ると空欄のまま前回の金額の付与予定が出る
-    const { rerender } = render(
-      <OrderCompletionModal
-        open
-        order={queueRow(confirmedOrder)}
-        onClose={jest.fn()}
-        onCompleted={jest.fn()}
-        onSuperseded={jest.fn()}
-      />
-    );
+    renderPage();
     const input = await screen.findByLabelText('明細1の金額');
     fireEvent.change(input, { target: { value: '8000' } });
     fireEvent.blur(input);
+
     await waitFor(() =>
       expect(mockedPreview).toHaveBeenLastCalledWith(
         'o1',
         expect.objectContaining({
           expected_version: 3,
           fee_lines: [expect.objectContaining({ amount: 8000 })],
-        })
-      )
-    );
-
-    rerender(
-      <OrderCompletionModal
-        open
-        order={null}
-        onClose={jest.fn()}
-        onCompleted={jest.fn()}
-        onSuperseded={jest.fn()}
-      />
-    );
-    rerender(
-      <OrderCompletionModal
-        open
-        order={queueRow(confirmedOrder)}
-        onClose={jest.fn()}
-        onCompleted={jest.fn()}
-        onSuperseded={jest.fn()}
-      />
-    );
-
-    await waitFor(() =>
-      expect(mockedPreview).toHaveBeenLastCalledWith(
-        'o1',
-        expect.objectContaining({
-          expected_version: 3,
-          fee_lines: [expect.objectContaining({ amount: 0 })],
         })
       )
     );
@@ -501,31 +309,31 @@ describe('OrderCompletionModal', () => {
 
   it('未紐づけの受注では利用ポイント欄を出さず、未紐づけと名乗る', async () => {
     // 非会員に台帳は存在しない。欄を出すと、必ず失敗する入力を勧めることになる
-    mockedPreview.mockResolvedValue(
-      pointsPreview({ use_points: 0, member_linked: false, usage_unit: 100, grant_points: 50 })
-    );
-    renderModal();
+    unlinkedPreview();
+    renderPage();
 
-    expect(await screen.findByText('未紐づけ')).toBeInTheDocument();
+    const points = await screen.findByRole('region', { name: 'ポイント' });
+    expect(await within(points).findByText('未紐づけ')).toBeInTheDocument();
     expect(screen.queryByLabelText('利用ポイント')).not.toBeInTheDocument();
-    expect(screen.queryByText(/残高:/)).not.toBeInTheDocument();
+    expect(within(points).queryByText('残高')).not.toBeInTheDocument();
     // 非会員には付与もされない。予定だけ出すと、完了しても増えないポイントを約束することになる
-    expect(screen.queryByText(/付与予定:/)).not.toBeInTheDocument();
+    expect(within(points).queryByText('付与予定')).not.toBeInTheDocument();
   });
 
-  it('紐づけ済みの受注では残高と付与予定を出し、利用ポイントを受け付ける', async () => {
-    renderModal();
+  it('紐づけ済みの受注では残高・付与予定・利用単位を一つの節に出し、利用ポイントを受け付ける', async () => {
+    renderPage();
 
-    expect(await screen.findByText('会員紐づけ済み')).toBeInTheDocument();
-    expect(screen.getByText('残高: 500 ポイント')).toBeInTheDocument();
-    expect(screen.getByText('付与予定: 50 ポイント')).toBeInTheDocument();
-    expect(screen.getByText('利用は 100 ポイント単位で指定できます')).toBeInTheDocument();
-    expect(screen.getByLabelText('利用ポイント')).toBeInTheDocument();
+    const points = await screen.findByRole('region', { name: 'ポイント' });
+    expect(await within(points).findByText('紐づけ済み')).toBeInTheDocument();
+    expect(within(points).getByText('500 ポイント')).toBeInTheDocument();
+    expect(within(points).getByText('50 ポイント')).toBeInTheDocument();
+    expect(within(points).getByText('100 ポイント単位')).toBeInTheDocument();
+    expect(within(points).getByLabelText('利用ポイント')).toBeInTheDocument();
   });
 
   it('会計金額が空欄なら送信せず、無反応にもせず理由を出す', async () => {
     // 空欄は NaN であって null でも空文字でもないため、required だけでは素通りする
-    renderModal();
+    renderPage();
 
     fireEvent.change(await screen.findByLabelText('明細1の金額'), { target: { value: '' } });
     fireEvent.click(screen.getByRole('button', { name: '完了する' }));
@@ -537,7 +345,7 @@ describe('OrderCompletionModal', () => {
 
   it('会計金額が小数なら送信せず理由を出す', async () => {
     // noValidate は type="number" の暗黙の step=1 まで止める
-    renderModal();
+    renderPage();
 
     await completeWith('1500.5');
 
@@ -546,7 +354,7 @@ describe('OrderCompletionModal', () => {
   });
 
   it('利用ポイントが単位に合わなければ送信せず理由を出す', async () => {
-    renderModal();
+    renderPage();
 
     fireEvent.change(await screen.findByLabelText('利用ポイント'), { target: { value: '150' } });
     await completeWith('8000');
@@ -558,7 +366,7 @@ describe('OrderCompletionModal', () => {
   });
 
   it('利用ポイントが残高を超えたら送信せず理由を出す', async () => {
-    renderModal();
+    renderPage();
 
     fireEvent.change(await screen.findByLabelText('利用ポイント'), { target: { value: '600' } });
     await completeWith('8000');
@@ -578,7 +386,7 @@ describe('OrderCompletionModal', () => {
         grant_points: 10,
       })
     );
-    renderModal();
+    renderPage();
 
     fireEvent.change(await screen.findByLabelText('利用ポイント'), { target: { value: '14000' } });
     await completeWith('1000');
@@ -589,11 +397,9 @@ describe('OrderCompletionModal', () => {
     expect(mockedComplete).not.toHaveBeenCalled();
   });
 
-  it('利用ポイントが空欄なら、利用の項目ごと送らない', async () => {
+  it('利用ポイントが空欄なら利用の項目ごと送らず、完了後は履歴を置き換えて検索条件付きの一覧へ帰る', async () => {
     // サーバ側は @Min(1)。0 を送ると撥ねられるので、利用しない完了ではキーごと落とす
-    const onCompleted = jest.fn();
-    const onClose = jest.fn();
-    renderModal(onCompleted, onClose);
+    renderPage();
     await screen.findByLabelText('利用ポイント');
 
     await completeWith('8000');
@@ -605,8 +411,9 @@ describe('OrderCompletionModal', () => {
     ]);
     expect(mockedComplete.mock.calls[0][1].use_points).toBeUndefined();
     expect(notify.success).toHaveBeenCalledWith('オーダーを完了しました');
-    expect(onCompleted).toHaveBeenCalled();
-    expect(onClose).toHaveBeenCalled();
+    // 戻るで完了済みの受注の画面へ帰らないよう、push ではなく replace
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith(LIST_HREF));
+    expect(screen.queryByLabelText('伝票QR')).not.toBeInTheDocument();
   });
 
   it('顧客ロックの競合は入力とサーバの案内を保持し、再送できる', async () => {
@@ -614,13 +421,10 @@ describe('OrderCompletionModal', () => {
     mockedComplete.mockRejectedValueOnce({
       response: {
         status: 409,
-        data: {
-          error: message,
-          details: { customer_lock: '入力を保持して再試算してください' },
-        },
+        data: { error: message, details: { customer_lock: '入力を保持して再試算してください' } },
       },
     });
-    renderModal();
+    renderPage();
     fireEvent.change(await screen.findByLabelText('利用ポイント'), { target: { value: '200' } });
     await completeWith('8000');
     await waitFor(() => expect(notify.error).toHaveBeenCalledWith(message));
@@ -635,28 +439,26 @@ describe('OrderCompletionModal', () => {
   });
 
   it('試算中の顧客ロック競合は受注を読み直さず同じ入力で再試行できる', async () => {
-    renderModal();
+    renderPage();
     fireEvent.change(await screen.findByLabelText('利用ポイント'), { target: { value: '200' } });
     fireEvent.change(screen.getByLabelText('明細1の金額'), { target: { value: '8000' } });
     const message = '顧客情報が変更中です。しばらく待ってから再試算してください';
     mockedPreview.mockRejectedValue({
       response: {
         status: 409,
-        data: {
-          error: message,
-          details: { customer_lock: '入力を保持して再試算してください' },
-        },
+        data: { error: message, details: { customer_lock: '入力を保持して再試算してください' } },
       },
     });
     fireEvent.click(screen.getByRole('button', { name: '完了する' }));
-    expect(await screen.findByText(message)).toBeInTheDocument();
+    const dialog = await screen.findByRole('dialog', { name: '採用条件の確認' });
+    expect(await within(dialog).findByText(message)).toBeInTheDocument();
     expect(mockedGet).toHaveBeenCalledTimes(1);
     expect(mockedComplete).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: '最新の受注を読み直す' })).not.toBeInTheDocument();
     mockedPreview.mockResolvedValue(
       pointsPreview({ member_linked: true, use_points: 200, usage_unit: 100, grant_points: 50 })
     );
-    fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: '再試行' }));
     await confirmPreview();
     await waitFor(() => expect(mockedComplete).toHaveBeenCalledTimes(1));
     expect(mockedComplete.mock.calls[0][1]).toEqual(
@@ -678,7 +480,7 @@ describe('OrderCompletionModal', () => {
         },
       },
     });
-    renderModal();
+    renderPage();
     fireEvent.change(await screen.findByLabelText('利用ポイント'), { target: { value: '200' } });
     await completeWith('8000');
     await waitFor(() =>
@@ -689,10 +491,11 @@ describe('OrderCompletionModal', () => {
     expect(screen.getByLabelText('利用ポイント')).toHaveValue(200);
     expect(mockedComplete).toHaveBeenCalledTimes(1);
     expect(mockedGet).toHaveBeenCalledTimes(1);
+    expect(mockReplace).not.toHaveBeenCalled();
   });
 
   it('利用ポイントを入れたら、その値を添えて送る', async () => {
-    renderModal();
+    renderPage();
 
     fireEvent.change(await screen.findByLabelText('利用ポイント'), { target: { value: '200' } });
     await completeWith('8000');
@@ -707,12 +510,10 @@ describe('OrderCompletionModal', () => {
   });
 
   it('会員資格が変わったら利用入力を再試算し、資格エラーでは保存しない', async () => {
-    renderModal();
+    renderPage();
 
     fireEvent.change(await screen.findByLabelText('利用ポイント'), { target: { value: '200' } });
-    mockedPreview.mockResolvedValue(
-      pointsPreview({ use_points: 0, member_linked: false, usage_unit: 100, grant_points: 80 })
-    );
+    unlinkedPreview();
     fireEvent.change(screen.getByLabelText('明細1の名称'), { target: { value: '会計' } });
     const input = screen.getByLabelText('明細1の金額');
     fireEvent.change(input, { target: { value: '8000' } });
@@ -763,7 +564,7 @@ describe('OrderCompletionModal', () => {
         },
       ],
     });
-    renderModal();
+    renderPage();
 
     await screen.findByLabelText('明細1の名称');
     fireEvent.click(screen.getByRole('button', { name: '完了する' }));
@@ -802,16 +603,8 @@ describe('OrderCompletionModal', () => {
           },
         ],
       });
-    mockedComplete.mockRejectedValueOnce({
-      response: {
-        status: 409,
-        data: {
-          error: 'この受注は別の操作者が更新しました。最新の内容を読み直してからやり直してください',
-        },
-      },
-    });
-    const onCompleted = jest.fn();
-    renderModal(onCompleted);
+    mockedComplete.mockRejectedValueOnce(conflict);
+    renderPage();
 
     expect(await screen.findByLabelText('明細1の名称')).toHaveValue('古い明細');
     fireEvent.click(screen.getByRole('button', { name: '完了する' }));
@@ -822,8 +615,7 @@ describe('OrderCompletionModal', () => {
         '他の操作者が更新しました。入力を最新の内容に置き換えました'
       )
     );
-    expect(onCompleted).not.toHaveBeenCalled();
-    // 取り直した内容でフォームが組み直され、再送は新しい版を名指す
+    expect(notify.success).not.toHaveBeenCalled();
     await waitFor(() =>
       expect(screen.getByLabelText('明細1の名称')).toHaveValue('他の操作者が直した明細')
     );
@@ -833,9 +625,8 @@ describe('OrderCompletionModal', () => {
     expect(mockedComplete.mock.calls[1][1].expected_version).toBe(4);
   });
 
-  it('取り直した受注が終端なら、名乗って閉じ、行をアーカイブへ送り出す', async () => {
-    // 終端の受注を播き直すと、一致する版で再送できて今度は 400 の行き止まりに変わる。
-    // 完了はもう成立しないので、フォームへは戻さず一覧の行だけを送り出す
+  it('取り直した受注が終端なら、フォームを畳んで終端を名乗り、一覧へ帰す', async () => {
+    // 終端の受注を播き直すと、一致する版で再送できて今度は 400 の行き止まりに変わる
     mockedGet
       .mockResolvedValueOnce({
         ...confirmedOrder,
@@ -850,57 +641,43 @@ describe('OrderCompletionModal', () => {
         ],
       })
       .mockResolvedValueOnce({ ...confirmedOrder, status: 'COMPLETED', version: 4 });
-    mockedComplete.mockRejectedValueOnce({
-      response: {
-        status: 409,
-        data: {
-          error: 'この受注は別の操作者が更新しました。最新の内容を読み直してからやり直してください',
-        },
-      },
-    });
-    const onCompleted = jest.fn();
-    const onClose = jest.fn();
-    const onSuperseded = jest.fn();
-    renderModal(onCompleted, onClose, onSuperseded);
+    mockedComplete.mockRejectedValueOnce(conflict);
+    renderPage();
 
     expect(await screen.findByLabelText('明細1の名称')).toHaveValue('古い明細');
     fireEvent.click(screen.getByRole('button', { name: '完了する' }));
     await confirmPreview();
 
-    await waitFor(() =>
-      expect(notify.error).toHaveBeenCalledWith('この受注は別の操作者により完了または取消済みです')
-    );
-    // 文言は終端の名乗り 1 回だけ。競合の文言まで重ねると、従うべき指示が 2 つ同時に出る
-    expect(notify.error).toHaveBeenCalledTimes(1);
-    expect(onSuperseded).toHaveBeenCalledWith('COMPLETED');
-    expect(onClose).toHaveBeenCalled();
-    // 完了の成功ではない。成功の口で送り出すと「オーダーを完了しました」が嘘になる
-    expect(onCompleted).not.toHaveBeenCalled();
-    // 播き直しは起きない＝再送しても同じ版を名指すことは無い（送信そのものが 1 回で止まる）
+    expect(
+      await screen.findByText('この受注は完了または取消済みのため、完了できません。')
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText('明細1の名称')).not.toBeInTheDocument();
+    // 文言は領域の名乗りだけ。入力置換の警告まで重ねると、従うべき指示が 2 つ同時に出る
+    expect(notify.warning).not.toHaveBeenCalled();
+    // 完了の成功ではない。成功の通知を出すと「オーダーを完了しました」が嘘になる
+    expect(notify.success).not.toHaveBeenCalled();
     expect(mockedComplete).toHaveBeenCalledTimes(1);
   });
 
   it('完了に失敗したら、対処方法を含むサーバの文言をそのまま出す', async () => {
-    // 残高不足・単位違反は行動できる文言で返ってくる。汎用文言に潰さない
     mockedComplete.mockRejectedValue({
       response: { status: 400, data: { error: 'ポイント残高が不足しています（残高: 500）' } },
     });
-    const onCompleted = jest.fn();
-    renderModal(onCompleted);
+    renderPage();
 
     await completeWith('8000');
 
     await waitFor(() =>
       expect(notify.error).toHaveBeenCalledWith('ポイント残高が不足しています（残高: 500）')
     );
-    expect(onCompleted).not.toHaveBeenCalled();
+    expect(mockReplace).not.toHaveBeenCalled();
   });
 
   it('事前計算に失敗したら領域が自分で名乗り、通知には出さず、再試算できるまで保存しない', async () => {
     // 見込みが読めないことは入力の誤りではない。単位も残高もサーバ側が再検証するので、
     // ここで送信を塞ぐと読み込みの失敗が会計そのものを止めてしまう
     mockedPreview.mockRejectedValue(new Error('boom'));
-    renderModal();
+    renderPage();
 
     const region = await screen.findByRole('alert');
     expect(within(region).getByText('ポイントの見込みを取得できませんでした')).toBeInTheDocument();
@@ -918,153 +695,85 @@ describe('OrderCompletionModal', () => {
 
   it('見込みの再試行は同じ会計金額のまま取り直す', async () => {
     mockedPreview.mockRejectedValueOnce(new Error('boom'));
-    renderModal();
+    renderPage();
 
     const region = await screen.findByRole('alert');
     fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
 
-    expect(await screen.findByText('会員紐づけ済み')).toBeInTheDocument();
+    expect(await screen.findByText('紐づけ済み')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('伝票トークンが返ったら閉じずに QR を出す', async () => {
-    // 生値は完了応答にしか現れない。ここで閉じると、客が後から来店を取り戻す手段ごと消える
-    const onClose = jest.fn();
-    const onCompleted = jest.fn();
-    mockedPreview.mockResolvedValue(
-      pointsPreview({ use_points: 0, member_linked: false, usage_unit: 100, grant_points: 50 })
-    );
+  it('伝票トークンが返ったら画面の上に QR を出し、閉じるまで一覧へ遷移しない', async () => {
+    // 生値は完了応答にしか現れない。ここで遷移すると、客が後から来店を取り戻す手段ごと消える
+    unlinkedPreview();
     mockedComplete.mockResolvedValue({ ...confirmedOrder, receipt_token: 'raw-receipt-token' });
-    renderModal(onCompleted, onClose);
+    renderPage();
 
     await completeWith('8000');
 
-    expect(await screen.findByLabelText('伝票QR')).toBeInTheDocument();
+    const dialog = await screen.findByRole('dialog', { name: '伝票QRコード' });
     // 客が読み取って行き着くのは申領画面。トークンだけを載せると、読み取っても開く先が無い
-    expect(screen.getByTestId('qr')).toHaveAttribute(
+    expect(within(dialog).getByTestId('qr')).toHaveAttribute(
       'data-value',
       'http://kizuna.test/member/receipts#raw-receipt-token'
     );
-    expect(onCompleted).toHaveBeenCalled();
-    expect(onClose).not.toHaveBeenCalled();
-    // 会計の欄は役目を終えている。QR と入れ替える
-    expect(screen.queryByLabelText('明細1の金額')).not.toBeInTheDocument();
+    expect(within(dialog).getByText('2026-08-10 / 山田太郎')).toBeInTheDocument();
+    expect(notify.success).toHaveBeenCalledWith('オーダーを完了しました');
+    expect(mockReplace).not.toHaveBeenCalled();
+    // 閉じる手段は操作帯のボタンだけ
+    expect(within(dialog).queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
-    expect(onClose).toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole('button', { name: '閉じて一覧へ' }));
+    expect(mockReplace).toHaveBeenCalledWith(LIST_HREF);
   });
 
   it('QR を出している間は Escape で閉じない', async () => {
-    // 生値はこの応答にしか無い。誤って閉じると客が来店を取り戻す手段ごと消えるので、
-    // 閉じるのは明示のボタンだけにする
-    const onClose = jest.fn();
-    mockedPreview.mockResolvedValue(
-      pointsPreview({ use_points: 0, member_linked: false, usage_unit: 100, grant_points: 50 })
-    );
+    unlinkedPreview();
     mockedComplete.mockResolvedValue({ ...confirmedOrder, receipt_token: 'raw-receipt-token' });
-    renderModal(jest.fn(), onClose);
+    renderPage();
 
     await completeWith('8000');
     await screen.findByLabelText('伝票QR');
-    fireEvent.keyDown(document, { key: 'Escape' });
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
 
-    expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByLabelText('伝票QR')).toBeInTheDocument();
+    expect(mockReplace).not.toHaveBeenCalled();
   });
 
-  it('会計の入力中は Escape で閉じる', async () => {
-    // 閉じない扱いは QR を出している間だけ。入力中まで塞ぐと、開いただけのモーダルから出られない
-    const onClose = jest.fn();
-    renderModal(jest.fn(), onClose);
-    await screen.findByLabelText('明細1の金額');
-
-    fireEvent.keyDown(document, { key: 'Escape' });
-
-    expect(onClose).toHaveBeenCalled();
-  });
-
-  it('伝票トークンが返らない完了では QR を出さずに閉じる', async () => {
-    // 会員へ帰属した完了に事後帰属の余地は無い
-    const onClose = jest.fn();
-    renderModal(jest.fn(), onClose);
-
-    await completeWith('8000');
-
-    await waitFor(() => expect(onClose).toHaveBeenCalled());
-    expect(screen.queryByLabelText('伝票QR')).not.toBeInTheDocument();
-  });
-
-  it('別の受注へ切り替えたら、前の受注の QR を持ち越さない', async () => {
-    // 発行済みのトークンは受注 1 件に結びついている。持ち越すと、別の来店の QR を客に読ませる
-    const otherOrder: Order = { ...confirmedOrder, id: 'o2', customer_name: '鈴木花子' };
-
-    await reopenAfterIssuing(otherOrder);
-
-    expect(await screen.findByLabelText('明細1の金額')).toBeInTheDocument();
-    expect(screen.queryByLabelText('伝票QR')).not.toBeInTheDocument();
-  });
-
-  it('同じ受注を開き直しても、前に発行した QR は出さない', async () => {
-    // 生値は発行の応答にしか現れない。閉じた後に出し直せると、「今だけ」と書いた画面が嘘になる
-    await reopenAfterIssuing({ ...confirmedOrder });
-
-    expect(await screen.findByLabelText('明細1の金額')).toBeInTheDocument();
-    expect(screen.queryByLabelText('伝票QR')).not.toBeInTheDocument();
-  });
-
-  /** 受注 o1 を完了して QR を出し、いったん閉じてから指定の受注で開き直す。 */
-  const reopenAfterIssuing = async (reopened: Order) => {
-    mockedPreview.mockResolvedValue(
-      pointsPreview({ use_points: 0, member_linked: false, usage_unit: 100, grant_points: 50 })
-    );
+  it('QR を出した後に開き直しても（再読込）、前に発行した QR は出さない', async () => {
+    // 生値は発行の応答にしか現れない。出し直せると「今だけ」と書いた表示が嘘になる
+    unlinkedPreview();
     mockedComplete.mockResolvedValue({ ...confirmedOrder, receipt_token: 'raw-receipt-token' });
-    const { rerender } = render(
-      <OrderCompletionModal
-        open
-        order={queueRow(confirmedOrder)}
-        onClose={jest.fn()}
-        onCompleted={jest.fn()}
-        onSuperseded={jest.fn()}
-      />
-    );
+    const { unmount } = renderPage();
     await completeWith('8000');
     await screen.findByLabelText('伝票QR');
+    unmount();
 
-    rerender(
-      <OrderCompletionModal
-        open={false}
-        order={queueRow(confirmedOrder)}
-        onClose={jest.fn()}
-        onCompleted={jest.fn()}
-        onSuperseded={jest.fn()}
-      />
-    );
-    await waitFor(() => expect(screen.queryByLabelText('伝票QR')).not.toBeInTheDocument());
-    rerender(
-      <OrderCompletionModal
-        open
-        order={queueRow(reopened)}
-        onClose={jest.fn()}
-        onCompleted={jest.fn()}
-        onSuperseded={jest.fn()}
-      />
-    );
-  };
+    mockedGet.mockResolvedValue({ ...confirmedOrder, status: 'COMPLETED' });
+    renderPage();
 
-  it('送信中はキャンセルも完了もどちらも押せない', async () => {
-    // 台帳へ記帳されたか分からないまま閉じられると、一覧が古いまま残る
+    expect(
+      await screen.findByText('この受注は完了または取消済みのため、完了できません。')
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText('伝票QR')).not.toBeInTheDocument();
+  });
+
+  it('送信中は完了も戻るも押せない', async () => {
     let settle: (order: Order) => void = () => {};
     mockedComplete.mockReturnValueOnce(
       new Promise(resolve => {
         settle = resolve;
       })
     );
-    renderModal();
+    renderPage();
 
     await completeWith('8000');
 
     await waitFor(() => expect(screen.getByRole('button', { name: '処理中...' })).toBeDisabled());
-    expect(screen.getByRole('button', { name: 'キャンセル' })).toBeDisabled();
+    // 送信中に離れると、応答にしか現れない伝票トークンを受け取れずに失う
+    expect(screen.queryByRole('link', { name: '戻る' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '戻る' })).toBeDisabled();
 
     await act(async () => settle(confirmedOrder));
   });
