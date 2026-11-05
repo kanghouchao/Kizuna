@@ -1,7 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import StaffPage from '@/_pages/admin-staff/ui/StaffPage';
 import ServiceIdentitiesPage from '@/_pages/admin-service-identities/ui/ServiceIdentitiesPage';
-import { staffApi, serviceIdentityApi, authApi, useStoreContext } from '@/entities/user';
+import { serviceIdentityApi, authApi, useStoreContext } from '@/entities/user';
 import { notify } from '@/shared/notify';
 
 // 権限は持たない利用者として描く。MePending と同じく相対 import で useMe を読む箇所も覆うため、
@@ -18,12 +17,6 @@ jest.mock('@/entities/user/model/MeContext', () => ({
 }));
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
-  staffApi: {
-    list: jest.fn(),
-    get: jest.fn(),
-    update: jest.fn(),
-    grantableRoles: jest.fn(),
-  },
   serviceIdentityApi: {
     list: jest.fn(),
     get: jest.fn(),
@@ -57,10 +50,7 @@ const detail = {
   store_ids: [1],
   version: 2,
 };
-const cases = [
-  { name: '従業員', Page: StaffPage, api: staffApi },
-  { name: 'サービスID', Page: ServiceIdentitiesPage, api: serviceIdentityApi },
-];
+const cases = [{ name: 'サービスID', Page: ServiceIdentitiesPage, api: serviceIdentityApi }];
 
 describe.each(cases)('$name の詳細ライフサイクル', ({ Page, api }) => {
   const mocked = api as jest.Mocked<typeof api>;
@@ -73,11 +63,9 @@ describe.each(cases)('$name の詳細ライフサイクル', ({ Page, api }) => 
       loadFailed: false,
       reload: jest.fn(),
     });
-    for (const fetcher of [staffApi.grantableRoles, serviceIdentityApi.grantableRoles]) {
-      (fetcher as jest.Mock).mockResolvedValue([
-        { id: 3, name: '経理', system: false, permission_count: 1 },
-      ]);
-    }
+    (serviceIdentityApi.grantableRoles as jest.Mock).mockResolvedValue([
+      { id: 3, name: '経理', system: false, permission_count: 1 },
+    ]);
     mocked.list.mockResolvedValue({
       rows: [{ ...detail, display_name: '一覧の古い名前', roles: [] }],
       page: 0,

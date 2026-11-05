@@ -1,10 +1,11 @@
 'use client';
 
 import { PlusIcon } from 'lucide-react';
+import Link from 'next/link';
 import { useRef, useState } from 'react';
 import { StaffResponse, staffApi, useStoreContext, hasPermission, useMe } from '@/entities/user';
-import { StaffCreateModal, StaffEditModal, roleSetLabel } from '@/features/staff-management';
-import { getApiErrorMessage, useDeleteAction, useKeyedResource, useListPage } from '@/shared/lib';
+import { roleSetLabel } from '@/features/staff-management';
+import { getApiErrorMessage, useDeleteAction, useListPage } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { ListPage } from '@/widgets/list-page';
 import {
@@ -60,31 +61,11 @@ export default function StaffPage() {
   );
   const staff = list.rows;
 
-  // 担当店舗の選択肢は行使者自身の授権店舗。付与できる範囲と同じ集合なので、
-  // 選べたものはサーバの店舗部分集合検査も通る。
+  // 絞り込みの選択肢は行使者自身の授権店舗
   const { stores, loadFailed: storesFailed, reload: reloadStores } = useStoreContext();
-  const storePickerProps = {
-    stores: stores ?? [],
-    storesLoading: stores === null && !storesFailed,
-    storesFailed,
-    onReloadStores: reloadStores,
-  };
 
   // 停止・再開・パスワード再設定は一覧とは別の権限。強制はサーバ側で、ここは導線を出すかだけを決める。
   const canManageAccounts = hasPermission(useMe().me, 'STAFF_CREDENTIAL_MANAGE');
-
-  const [modal, setModal] = useState<
-    { kind: 'none' } | { kind: 'create' } | { kind: 'edit'; id: number }
-  >({ kind: 'none' });
-  const editingId = modal.kind === 'edit' ? modal.id : null;
-  const editing = useKeyedResource<StaffResponse>(
-    ['staffApi', editingId],
-    editingId === null ? null : () => staffApi.get(editingId)
-  );
-  const closeModal = () => {
-    if (editing.failure === 'notFound') void list.reload();
-    setModal({ kind: 'none' });
-  };
 
   // 停止は対象のセッションを即時に失効させるため確認を挟む。拒否の理由（自分自身・
   // 最後の管理権限保持者・委譲外）はサーバだけが持つので、文言は応答からそのまま出す。
@@ -157,7 +138,7 @@ export default function StaffPage() {
         title="従業員管理"
         description="従業員のロール・担当店舗・アカウント状態を管理します。"
         actions={
-          <Button onClick={() => setModal({ kind: 'create' })}>
+          <Button render={<Link href="/admin/staff/create" />}>
             <PlusIcon />
             従業員を追加
           </Button>
@@ -276,7 +257,7 @@ export default function StaffPage() {
                         variant="ghost"
                         size="sm"
                         className="text-primary-strong"
-                        onClick={() => setModal({ kind: 'edit', id: member.id ?? 0 })}
+                        render={<Link href={`/admin/staff/${member.id}/edit`} />}
                       >
                         編集
                       </Button>
@@ -325,24 +306,6 @@ export default function StaffPage() {
           </TableBody>
         </Table>
       </ListPage>
-
-      {/* モーダルは一覧の loading / empty に連動して消えないよう外殻の外に置く。
-          開くまで mount しないことで、可授ロールの取得を必要になった時点まで遅延させる */}
-      {modal.kind === 'create' && (
-        <StaffCreateModal
-          {...storePickerProps}
-          onClose={() => closeModal()}
-          onCreated={list.reload}
-        />
-      )}
-      {modal.kind === 'edit' && (
-        <StaffEditModal
-          resource={editing}
-          {...storePickerProps}
-          onClose={closeModal}
-          onUpdated={list.reload}
-        />
-      )}
 
       <ConfirmDialog
         open={suspension.open}

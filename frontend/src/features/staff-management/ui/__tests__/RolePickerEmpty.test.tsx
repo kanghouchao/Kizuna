@@ -1,14 +1,12 @@
 import { render, screen } from '@testing-library/react';
-import { staffApi, serviceIdentityApi, useMe } from '@/entities/user';
+import { serviceIdentityApi, useMe } from '@/entities/user';
 import type { PermissionCode, ServiceIdentityResponse } from '@/entities/user';
 import { useKeyedResource } from '@/shared/lib';
-import { StaffCreateModal } from '../StaffCreateModal';
 import { ServiceIdentityCreateModal } from '../ServiceIdentityCreateModal';
 import { ServiceIdentityEditModal } from '../ServiceIdentityEditModal';
 
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
-  staffApi: { grantableRoles: jest.fn(), create: jest.fn(), update: jest.fn() },
   serviceIdentityApi: { grantableRoles: jest.fn(), create: jest.fn(), update: jest.fn() },
 }));
 jest.mock('@/shared/notify', () => ({
@@ -65,7 +63,6 @@ function ServiceEditHarness() {
 beforeEach(() => {
   jest.clearAllMocks();
   jest.mocked(serviceIdentityApi.grantableRoles).mockResolvedValue([]);
-  jest.mocked(staffApi.grantableRoles).mockResolvedValue([]);
   grant();
 });
 
@@ -94,7 +91,7 @@ it('候補があれば案内を出さない', async () => {
     .mocked(serviceIdentityApi.grantableRoles)
     .mockResolvedValue([{ id: 3, name: '担当者', system: false, permission_count: 0 }]);
   render(<ServiceIdentityCreateModal {...props} />);
-  await screen.findByLabelText('担当者');
+  await screen.findByRole('checkbox', { name: '担当者' });
   expect(screen.queryByText(HINT)).not.toBeInTheDocument();
 });
 
@@ -102,13 +99,5 @@ it('候補の取得に失敗したら失敗を表示し、案内を出さない'
   jest.mocked(serviceIdentityApi.grantableRoles).mockRejectedValue(new Error('boom'));
   render(<ServiceIdentityCreateModal {...props} />);
   expect(await screen.findByText('ロール一覧の取得に失敗しました')).toBeInTheDocument();
-  expect(screen.queryByText(HINT)).not.toBeInTheDocument();
-});
-
-it('従業員追加には自作ロールの案内を出さない', async () => {
-  render(<StaffCreateModal {...props} />);
-  await screen.findByLabelText('氏名');
-  await screen.findByRole('group', { name: 'ロール' });
-  expect(screen.queryByText('読み込み中...')).not.toBeInTheDocument();
   expect(screen.queryByText(HINT)).not.toBeInTheDocument();
 });

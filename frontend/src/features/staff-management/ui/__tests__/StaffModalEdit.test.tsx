@@ -203,7 +203,7 @@ describe('共通授権編集モーダル', () => {
     expect(screen.queryByRole('button', { name: '保存する' })).not.toBeInTheDocument();
     resolve(staff({ store_scope_type: 'SPECIFIC_STORES', store_ids: [9] }));
     await screen.findByRole('button', { name: '保存する' });
-    expect(screen.getByLabelText('個別店舗')).toBeChecked();
+    expect(screen.getByRole('radio', { name: '個別店舗' })).toBeChecked();
   });
   it('応答の店舗範囲が欠落しても全店舗へ拡大しない', async () => {
     mockedStaffApi.get.mockResolvedValue(
@@ -211,7 +211,7 @@ describe('共通授権編集モーダル', () => {
     );
     renderModal();
     await screen.findByRole('button', { name: '保存する' });
-    expect(screen.getByLabelText('個別店舗')).toBeChecked();
+    expect(screen.getByRole('radio', { name: '個別店舗' })).toBeChecked();
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
     await screen.findByText('対象店舗を 1 つ以上選択してください');
     expect(mockedStaffApi.update).not.toHaveBeenCalled();
@@ -224,8 +224,8 @@ describe('共通授権編集モーダル', () => {
     renderModal();
     fireEvent.click(await screen.findByRole('button', { name: '保存する' }));
     await waitFor(() => expect(mockedNotify.warning).toHaveBeenCalled());
-    expect(await screen.findByLabelText('経理')).toBeChecked();
-    expect(screen.getByLabelText('店長')).not.toBeChecked();
+    expect(await screen.findByRole('checkbox', { name: '経理' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: '店長' })).not.toBeChecked();
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
     await waitFor(() =>
       expect(mockedStaffApi.update).toHaveBeenLastCalledWith(42, {
