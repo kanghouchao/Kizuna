@@ -520,6 +520,31 @@ describe('検索条件と並び順の URL', () => {
     expect(screen.getByLabelText('お客様名')).toHaveValue('山');
   });
 
+  it('条件を変えずに検索を押すと、履歴を積まずに作業キューを取り直すこと', async () => {
+    mockQuery = 'customer_name=%E5%B1%B1%E7%94%B0';
+    render(<OrderListPage />);
+    await waitFor(() => expect(mockedOrderApi.listWorkQueue).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: '検索' }));
+
+    await waitFor(() => expect(mockedOrderApi.listWorkQueue).toHaveBeenCalledTimes(2));
+    expect(mockedOrderApi.listWorkQueue).toHaveBeenLastCalledWith(
+      expect.objectContaining({ customer_name: '山田', page: 0 })
+    );
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('暦に無い日付は既定へ倒して取得すること', async () => {
+    mockQuery = 'business_date=2026-02-30';
+    render(<OrderListPage />);
+
+    await waitFor(() =>
+      expect(mockedOrderApi.listWorkQueue).toHaveBeenCalledWith(
+        expect.objectContaining({ business_date: undefined })
+      )
+    );
+  });
+
   it('URL の不正な並び・日付は既定へ倒して取得すること', async () => {
     mockQuery = 'sort_key=DROP&desc=yes&business_date=2026-13';
     render(<OrderListPage />);

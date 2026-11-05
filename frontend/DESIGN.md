@@ -159,6 +159,7 @@ ListPage（`@/widgets/list-page`）が見出し・検索 form・表枠・読み�
 
 - useListPage の PageResult は rows / page / pageCount / total（page は 0 始まり）。裸配列では pagination props を省略する。
 - 検索欄は入力中の値と適用済み条件を分ける。submit で ref へ確定して search() を呼び、fetcher は ref を読む。Enter は shell の form に任せる。
+- 離れて戻る作業キューの一覧（受注一覧）は適用済み条件を URL の query に持つ。submit は router.push で履歴に積み、search() は URL の変化から呼ぶ。既定値は query に書かず、不正な値は既定へ倒す。
 - offset sort は一意の副キーまで指定する（例 `displayOrder,id,asc`）。
 - ダイアログは ListPage の外に置く。children は読み込み中や空一覧で unmount される。
 - 通常の閉じる操作は `open=false` のみとし、退出中も本文を保つ。選択対象と開閉状態を分け、保存成功の通知・再取得を退出完了まで遅らせない。親によるアンマウントや一度きりの資格情報の破棄が必要な場合だけ `onOpenChangeComplete` を使う。

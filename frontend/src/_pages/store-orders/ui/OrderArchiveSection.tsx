@@ -9,6 +9,7 @@ import { OrderArchiveRow, OrderListCriteria, OrderStatus, orderApi } from '@/ent
 import { storePath, useListPage } from '@/shared/lib';
 import { formatDateTime } from '../lib/formatDateTime';
 import { UNLINKED_NOTE, customerLabel } from '../lib/customerLabel';
+import { useSearchOnCriteriaChange } from '../lib/useSearchOnCriteriaChange';
 import { Button, Pager, RegionError } from '@/shared/ui';
 
 /** アーカイブの 1 ページ。増えるだけの記録なので、位置をページ番号で指せる。 */
@@ -160,16 +161,7 @@ export function OrderArchiveSection({
   );
   const { search, reload } = list;
 
-  // 条件が変わったら取り直す。フックは適用済み条件を自分で持つので、渡し直すだけでは動かない。
-  // 初回はフック自身の取得と重なるため飛ばす（同じページを 2 回取りに行かないため）。
-  const appliedRef = useRef(criteria);
-  useEffect(() => {
-    if (appliedRef.current === criteria) {
-      return;
-    }
-    appliedRef.current = criteria;
-    void search(criteria);
-  }, [criteria, search]);
+  useSearchOnCriteriaChange(criteria, search);
 
   // 作業キューから受注が移ってきたら取り直す。たたんでいても件数の控えは出ているので、開閉は問わない。
   // 条件の取り直し（上）と違い今のページに留まるのは、増えた 1 件を見に行くために閲覧位置を
