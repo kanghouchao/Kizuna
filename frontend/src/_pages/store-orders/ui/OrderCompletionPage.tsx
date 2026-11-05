@@ -217,7 +217,7 @@ function Completion({ id }: { id: string }) {
               onBlur={() => setCommittedFee(chargeAmount)}
             >
               <OrderEditorSection
-                title="会計内訳"
+                title="会計"
                 description="合計は内訳の総和です。コースと特別サービスは受注の内容から採ります。"
               >
                 <OrderFeeLinesField systemLines={readOnlyFeeLines(detail?.fee_lines)} />
