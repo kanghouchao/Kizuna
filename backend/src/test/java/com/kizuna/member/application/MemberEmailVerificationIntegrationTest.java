@@ -422,6 +422,42 @@ class MemberEmailVerificationIntegrationTest {
     assertThat(transport.deliveries).isEmpty();
   }
 
+  // 再送が未検証を読んだ後に確認がコミットしても、検証済みの会員にトークンを残して送ってはならない。確認は生きたトークン行を
+  // 押さえて消費するので、再送の失効はそのコミットを待ち、消費済みの行を飛ばす。
+  @Test
+  void 再送の判定後に確認がコミットすれば400で_トークンを残さず送らない() throws Exception {
+    long userId = registered(email(), Duration.ofSeconds(61));
+    try (Connection rival = context.getBean(DataSource.class).getConnection()) {
+      rival.setAutoCommit(false);
+      try (PreparedStatement consume =
+              rival.prepareStatement(
+                  "update t_email_verification_tokens set consumed_at = now()"
+                      + " where user_id = ? and consumed_at is null and revoked_at is null");
+          PreparedStatement verify =
+              rival.prepareStatement("update t_users set email_verified_at = now() where id = ?")) {
+        consume.setLong(1, userId);
+        consume.executeUpdate();
+        verify.setLong(1, userId);
+        verify.executeUpdate();
+      }
+      CompletableFuture<Void> resend =
+          CompletableFuture.runAsync(() -> verification.resend(userId));
+      awaitLockWaiters(1);
+      rival.commit();
+
+      assertThatThrownBy(() -> resend.get(10, TimeUnit.SECONDS))
+          .hasCauseInstanceOf(ServiceException.class);
+    }
+    assertThat(transport.deliveries).isEmpty();
+    assertThat(
+            jdbc.queryForObject(
+                "select count(*) from t_email_verification_tokens"
+                    + " where user_id = ? and consumed_at is null and revoked_at is null",
+                Integer.class,
+                userId))
+        .isZero();
+  }
+
   // 再送のロックを取らずに割り込む発行を再現する: 相手が失効と挿入を済ませて未コミットの間、こちらの失効は同じ行のロックを待つ。
   // 相手のコミット後、こちらの失効は相手が挿入した行を写しに持たず生かしたままにし、続く挿入が一意索引に当たる。
   @Test

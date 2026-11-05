@@ -22,6 +22,10 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
   Optional<User> findByEmail(@Param("email") String email);
 
   /** 連携済み LINE ユーザー ID で身分を引く。LINE ログインが同一性の根拠にする唯一の経路。 */
+  /** 永続化文脈に読み込んだ行ではなく DB の今の値を返す（並行した確認のコミットを、待った後に読むため）。 */
+  @Query("select count(u) > 0 from User u where u.id = :id and u.emailVerifiedAt is not null")
+  boolean isAddressVerified(@Param("id") Long id);
+
   @Query("select u from User u where u.lineUserId = :lineUserId and u.withdrawnAt is null")
   Optional<User> findByLineUserId(@Param("lineUserId") String lineUserId);
 

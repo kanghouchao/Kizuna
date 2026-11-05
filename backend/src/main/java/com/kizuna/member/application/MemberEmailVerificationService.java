@@ -7,6 +7,7 @@ import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.exception.TooManyRequestsException;
+import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import java.time.Clock;
@@ -39,7 +40,7 @@ public class MemberEmailVerificationService {
             .findById(userId)
             .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
     if (user.isEmailVerified()) {
-      throw new ServiceException("メールアドレスは確認済みです。画面を再読み込みしてください");
+      throw alreadyVerified();
     }
     OffsetDateTime now = OffsetDateTime.now(clock);
     boolean tooSoon =
@@ -53,6 +54,11 @@ public class MemberEmailVerificationService {
             >= LIMIT_IN_WINDOW) {
       throw tooManyRequests();
     }
+    // 失効は確認が押さえた生きたトークン行のコミットを待つ。その後の読み直しで、判定の後に済んだ確認を拾う。
+    tokenRepository.revokeLive(userId, Timestamps.now());
+    if (userRepository.isAddressVerified(userId)) {
+      throw alreadyVerified();
+    }
     // 再送同士は上のロックで直列化される。一意索引はロックの外から割り込んだ発行に対する最後の防波堤で、当たれば同じく 429。
     IntegrityViolations.translateOnFailure(
         () -> {
@@ -62,6 +68,10 @@ public class MemberEmailVerificationService {
         Map.of(
             DbConstraint.UQ_T_EMAIL_VERIFICATION_TOKENS_LIVE_USER,
             MemberEmailVerificationService::tooManyRequests));
+  }
+
+  private static ServiceException alreadyVerified() {
+    return new ServiceException("メールアドレスは確認済みです。画面を再読み込みしてください");
   }
 
   private static TooManyRequestsException tooManyRequests() {
