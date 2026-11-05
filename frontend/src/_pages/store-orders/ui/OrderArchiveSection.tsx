@@ -26,8 +26,6 @@ interface OrderArchiveSectionProps {
    * 手元の件数を推算する誘惑が生まれる（他の操作者の処理が入るとその推算は必ず狂う）。
    */
   reloadToken: number;
-  /** 帰属の訂正モーダルを開く（完了した受注にだけ起こる）。 */
-  onCorrectAttribution: (order: OrderArchiveRow) => void;
   /** 完了後訂正の導線を出すか。ORDER_CORRECT の保持で決まる（強制はサーバ側）。 */
   canCorrect: boolean;
 }
@@ -56,15 +54,7 @@ function OutcomeLine({ order }: { order: OrderArchiveRow }) {
   );
 }
 
-function ArchiveRow({
-  order,
-  onCorrectAttribution,
-  canCorrect,
-}: {
-  order: OrderArchiveRow;
-  onCorrectAttribution: (order: OrderArchiveRow) => void;
-  canCorrect: boolean;
-}) {
+function ArchiveRow({ order, canCorrect }: { order: OrderArchiveRow; canCorrect: boolean }) {
   const label = customerLabel(order);
   return (
     <div className="flex items-start justify-between gap-4 border-b px-4 py-3 last:border-b-0">
@@ -124,10 +114,9 @@ function ArchiveRow({
             </Button>
           )}
           <Button
-            type="button"
             variant="ghost"
             size="sm"
-            onClick={() => onCorrectAttribution(order)}
+            render={<Link href={storePath(`/orders/${order.id}/attribution`)} />}
           >
             <UserRoundCogIcon aria-hidden="true" />
             会員帰属
@@ -150,7 +139,6 @@ export function OrderArchiveSection({
   status,
   criteria,
   reloadToken,
-  onCorrectAttribution,
   canCorrect,
 }: OrderArchiveSectionProps) {
   const [open, setOpen] = useState(false);
@@ -206,12 +194,7 @@ export function OrderArchiveSection({
             <p className="text-muted-foreground p-4 text-sm">条件に合う受注がありません</p>
           ) : (
             list.rows.map(order => (
-              <ArchiveRow
-                key={order.id}
-                order={order}
-                onCorrectAttribution={onCorrectAttribution}
-                canCorrect={canCorrect}
-              />
+              <ArchiveRow key={order.id} order={order} canCorrect={canCorrect} />
             ))
           )}
           <Pager

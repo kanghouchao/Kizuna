@@ -116,22 +116,22 @@ When('完了アーカイブから会員帰属を開いて無効化し付与分�
   await page.getByLabel('お客様名', { exact: true }).fill(customerName);
   await page.getByRole('button', { name: '検索', exact: true }).click();
   await page.getByRole('button', { name: /^完了 \d+ 件$/ }).click();
-  await page.getByRole('button', { name: '会員帰属', exact: true }).click();
+  await page.getByRole('link', { name: '会員帰属', exact: true }).click();
 
-  const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('heading', { name: '会員帰属の訂正' })).toBeVisible();
-  await dialog.getByLabel('無効化の理由', { exact: true }).fill('別の会員の来店として記録された');
-  await dialog.getByRole('button', { name: '無効化する', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/store/orders/${orderId}/attribution$`));
+  await expect(page.getByRole('heading', { level: 1, name: '会員帰属の訂正' })).toBeVisible();
+  await page.getByLabel('無効化の理由', { exact: true }).fill('別の会員の来店として記録された');
+  await page.getByRole('button', { name: '無効化する', exact: true }).click();
   await expect(page.getByText('帰属を無効化しました', { exact: true })).toBeVisible();
 
-  // 無効化の直後に差し引きの段へ送られ、差し引く額は付与の残り全額で埋まっている
-  await expect(dialog.getByRole('heading', { name: '誤付与の差し引き' })).toBeVisible();
-  await expect(dialog.getByLabel('差し引くポイント', { exact: true })).not.toHaveValue('');
-  await dialog.getByLabel('訂正の理由', { exact: true }).fill('誤帰属で付与された分の取り消し');
-  await dialog.getByRole('button', { name: '差し引く', exact: true }).click();
+  // 無効化の直後に差し引きの節へ送られ、差し引く額は付与の残り全額で埋まっている
+  await expect(page.getByRole('heading', { level: 2, name: '誤付与の差し引き' })).toBeVisible();
+  await expect(page.getByLabel('差し引くポイント', { exact: true })).not.toHaveValue('');
+  await page.getByLabel('訂正の理由', { exact: true }).fill('誤帰属で付与された分の取り消し');
+  await page.getByRole('button', { name: '差し引く', exact: true }).click();
   await expect(page.getByText('誤って付与されたポイントを差し引きました', { exact: true })).toBeVisible();
-  await expect(dialog.getByRole('heading', { name: '会員帰属の訂正' })).toBeVisible();
-  await expect(dialog.getByText('この来店は会員へ帰属していません。', { exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: '現在の帰属' })).toBeVisible();
+  await expect(page.getByText('この来店は会員へ帰属していません。', { exact: true })).toBeVisible();
 });
 
 Then('付与分がすべて差し引かれ顧客詳細の残高が 0 ポイントになる', async ({ page, request }) => {
