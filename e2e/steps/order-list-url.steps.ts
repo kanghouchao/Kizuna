@@ -72,7 +72,9 @@ Then('URL と入力欄は条件なしに戻る', async ({ page }) => {
 When('ブラウザで進む', async ({ page }) => {
   const query = await workQueueQueryAfter(page, () => page.goForward());
   expect(query.get('customer_name')).toBe(keyword);
+  expect(query.get('desc')).not.toBe('true');
   await expect(customerInput(page)).toHaveValue(keyword);
+  expect(new URL(page.url()).searchParams.get('desc')).toBeNull();
 });
 
 When('受注一覧を再読込する', async ({ page }) => {
