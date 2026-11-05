@@ -7,6 +7,7 @@ import { PermissionCode, PermissionGroupResponse, roleApi } from '@/entities/use
 import { useManagedList } from '@/shared/lib';
 import {
   Button,
+  Checkbox,
   Form,
   FormControl,
   FormDescription,
@@ -124,10 +125,9 @@ export function RoleForm({ initial, onSubmit }: RoleFormProps) {
                             if (code === undefined) return null;
                             return (
                               <Label key={code} className="font-normal">
-                                <input
-                                  type="checkbox"
+                                <Checkbox
                                   checked={field.value.includes(code)}
-                                  onChange={() => toggle(code)}
+                                  onCheckedChange={() => toggle(code)}
                                   ref={code === firstCode ? field.ref : undefined}
                                 />
                                 {entry.label}
