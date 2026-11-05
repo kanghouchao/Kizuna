@@ -3,13 +3,13 @@
 import { useOrderConfirmation } from './useOrderConfirmation';
 
 import { OrderForm, OrderFormData } from './OrderForm';
-import { acquisitionPayload } from '../lib/formValues';
+import { toOrderRequestBody } from '../lib/orderFormAssembly';
 import { RegionError } from '@/shared/ui';
 import { notify } from '@/shared/notify';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useStoreContext } from '@/entities/user';
 import { useState } from 'react';
-import { OrderCreateRequest, orderApi, toFeeLineInputs } from '@/entities/order';
+import { OrderCreateRequest, orderApi } from '@/entities/order';
 import { getApiErrorMessage, storePath, useResource } from '@/shared/lib';
 
 export default function CreateOrderPage() {
@@ -28,25 +28,12 @@ function CreateOrder({ replacement }: { replacement?: string }) {
   ]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = async ({ acquisition_source, medium_id, ...data }: OrderFormData) => {
+  const handleSubmit = async (data: OrderFormData) => {
     setIsSubmitting(true);
     try {
       const request: OrderCreateRequest = {
-        ...data,
-        ...acquisitionPayload(acquisition_source, medium_id),
+        ...toOrderRequestBody(data),
         replacement_for_order_id: replacement,
-        // 未選択は「自分」の意。項目ごと送らないことでサーバが実行者本人を受付担当に据える
-        // （JWT にも /me にも利用者 id が無いため、画面の側で自分を選択値にはできない）
-        receptionist_id: data.receptionist_id === '' ? undefined : Number(data.receptionist_id),
-        arrival_scheduled_start_time: data.arrival_scheduled_start_time
-          ? `${data.arrival_scheduled_start_time}:00`
-          : undefined,
-        arrival_scheduled_end_time: data.arrival_scheduled_end_time
-          ? `${data.arrival_scheduled_end_time}:00`
-          : undefined,
-        // 空欄は「未入力」として送らない — Number('') は 0 になり、サーバ側の @Min(1) に撥ねられる
-        pax: `${data.pax ?? ''}` === '' ? undefined : Number(data.pax),
-        fee_lines: toFeeLineInputs(data.fee_lines),
       };
 
       const token = await confirmation.confirm(() => orderApi.previewCreate(request));
