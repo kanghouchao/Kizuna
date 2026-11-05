@@ -10,6 +10,8 @@ import {
   Button,
   Dialog,
   DialogFrame,
+  KeyValueList,
+  KeyValueRow,
   Table,
   TableBody,
   TableCell,
@@ -170,44 +172,42 @@ function OrderList() {
           description="受注時の条件と現在の金額を確認できます。報酬は支払済み額ではありません。"
         >
           {details && (
-            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-4 text-sm [&_dd]:break-words [&_dd]:text-right">
-              <dt>受注ID</dt>
-              <dd>{details.id}</dd>
-              <dt>店舗</dt>
-              <dd>{details.store_id}</dd>
-              <dt>状態</dt>
-              <dd>
+            <KeyValueList>
+              <KeyValueRow label="受注ID">{details.id}</KeyValueRow>
+              <KeyValueRow label="店舗">{details.store_id}</KeyValueRow>
+              <KeyValueRow label="状態">
                 {details.completion_invalidated
                   ? '誤完了・無効化済み'
                   : ORDER_STATUS_LABELS[details.status]}
-              </dd>
-              <dt>営業日</dt>
-              <dd>{details.business_date ?? '未設定'}</dd>
-              <dt>コース</dt>
-              <dd>{details.course.name}</dd>
-              <dt>{details.completion_invalidated ? '原コース費用' : 'コース費用'}</dt>
-              <dd>¥{details.course.price.toLocaleString()}</dd>
-              <dt>請求総額</dt>
-              <dd className="font-semibold tabular-nums">¥{details.total_fee.toLocaleString()}</dd>
-              <dt>{details.status === 'COMPLETED' ? '発生済み報酬' : '予定報酬'}</dt>
-              <dd>
+              </KeyValueRow>
+              <KeyValueRow label="営業日">{details.business_date ?? '未設定'}</KeyValueRow>
+              <KeyValueRow label="コース">{details.course.name}</KeyValueRow>
+              <KeyValueRow
+                label={details.completion_invalidated ? '原コース費用' : 'コース費用'}
+                money
+              >
+                ¥{details.course.price.toLocaleString()}
+              </KeyValueRow>
+              <KeyValueRow label="請求総額" money>
+                <span className="font-semibold">¥{details.total_fee.toLocaleString()}</span>
+              </KeyValueRow>
+              <KeyValueRow
+                label={details.status === 'COMPLETED' ? '発生済み報酬' : '予定報酬'}
+                money
+              >
                 {details.status === 'CANCELLED'
                   ? '報酬発生なし'
                   : `¥${(details.status === 'COMPLETED' ? details.accrued_remuneration : details.total_remuneration).toLocaleString()}`}
-              </dd>
+              </KeyValueRow>
               {details.completed_at && (
-                <>
-                  <dt>原完了日時</dt>
-                  <dd>{new Date(details.completed_at).toLocaleString('ja-JP')}</dd>
-                </>
+                <KeyValueRow label="原完了日時">
+                  {new Date(details.completed_at).toLocaleString('ja-JP')}
+                </KeyValueRow>
               )}
               {details.replacement_for_order_id && (
-                <>
-                  <dt>再提供の元受注</dt>
-                  <dd>{details.replacement_for_order_id}</dd>
-                </>
+                <KeyValueRow label="再提供の元受注">{details.replacement_for_order_id}</KeyValueRow>
               )}
-            </dl>
+            </KeyValueList>
           )}
         </DialogFrame>
       </Dialog>

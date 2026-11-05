@@ -2,20 +2,44 @@
 import { remunerationApi, type Bonus, type Guarantee } from '../api';
 import { fromSpringPage } from '@/shared/api';
 import { useListPage } from '@/shared/lib';
-import { Dialog, DialogFrame, Pager, RegionError } from '@/shared/ui';
-const summary = (value: Bonus | Guarantee | undefined) => {
-  if (!value) return '記録なし';
-  if ('effective_from' in value)
-    return `${value.effective_from}〜 ${value.state === 'STOPPED' ? '停止' : `日額 ¥${value.daily_amount?.toLocaleString('ja-JP')}`} ${value.cancelled_at ? '取消済み' : ''}`;
-  return `${value.award_date} ¥${value.effective_amount.toLocaleString('ja-JP')} ${value.cancelled_at ? '取消済み' : ''}`;
+import {
+  ChangeEntry,
+  ChangeLog,
+  ChangeTable,
+  Dialog,
+  DialogFrame,
+  Pager,
+  RegionError,
+} from '@/shared/ui';
+
+type Kind = 'guarantee' | 'bonus';
+const yen = (value: number) => `¥${value.toLocaleString('ja-JP')}`;
+const fields: Record<Kind, [string, (value: Guarantee & Bonus) => string][]> = {
+  guarantee: [
+    ['適用開始日', value => value.effective_from],
+    ['状態', value => (value.state === 'STOPPED' ? '停止' : '保証')],
+    ['日額', value => (value.daily_amount === undefined ? '—' : yen(value.daily_amount))],
+    ['理由', value => value.reason],
+    ['取消', value => value.cancelled_at ?? 'なし'],
+  ],
+  bonus: [
+    ['支給日', value => value.award_date],
+    ['金額', value => yen(value.amount)],
+    ['有効額', value => yen(value.effective_amount)],
+    ['理由', value => value.reason],
+    ['取消', value => value.cancelled_at ?? 'なし'],
+  ],
 };
+const show = (value: Bonus | Guarantee | undefined, read: (value: Guarantee & Bonus) => string) =>
+  value ? read(value as Guarantee & Bonus) : '—';
+
 export function RemunerationHistory({
   kind,
   id,
   open,
   onClose,
 }: {
-  kind: 'guarantee' | 'bonus';
+  kind: Kind;
   id: string;
   open: boolean;
   onClose: () => void;
@@ -39,16 +63,28 @@ export function RemunerationHistory({
             onRetry={() => void history.reload()}
           />
         ) : (
-          history.rows.map(change => (
-            <article className="space-y-2 rounded-lg border p-4" key={change.id}>
-              <p>
-                {change.created_at} / 操作者 {change.actor_id}
-              </p>
-              <p>{change.reason}</p>
-              <p>変更前：{summary(change.before_value)}</p>
-              <p>変更後：{summary(change.after_value)}</p>
-            </article>
-          ))
+          <ChangeLog>
+            {history.rows.map(change => (
+              <ChangeEntry
+                key={change.id}
+                title={change.created_at}
+                meta={
+                  <>
+                    <p>操作者 {change.actor_id}</p>
+                    <p className="whitespace-pre-wrap">{change.reason}</p>
+                  </>
+                }
+              >
+                <ChangeTable
+                  rows={fields[kind].map(([label, read]) => ({
+                    label,
+                    before: show(change.before_value, read),
+                    after: show(change.after_value, read),
+                  }))}
+                />
+              </ChangeEntry>
+            ))}
+          </ChangeLog>
         )}
         {!history.failed && (
           <Pager

@@ -1,5 +1,6 @@
 import { expect, type APIRequestContext } from "@playwright/test";
 import { APP_URL } from "../base-url";
+import { expectChange } from "./change-table";
 import { createBdd } from "playwright-bdd";
 import {
   getSelfDailyRemunerations,
@@ -344,8 +345,8 @@ Then(
     await expect(page.getByRole("dialog")).toContainText(
       "原月の未提供受注を無効化",
     );
-    await expect(page.getByRole("dialog")).toContainText("¥7,000 → ¥9,000");
-    await expect(page.getByRole("dialog")).toContainText("¥9,000 → ¥0");
+    await expectChange(page.getByRole("dialog"), "発生済み報酬", "¥7,000", "¥9,000");
+    await expectChange(page.getByRole("dialog"), "発生済み報酬", "¥9,000", "¥0");
   },
 );
 

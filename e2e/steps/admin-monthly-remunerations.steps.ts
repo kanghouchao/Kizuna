@@ -1,6 +1,7 @@
 import { expect, type APIRequestContext } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
+import { expectChange } from './change-table';
 import {
   acceptCastInvitation, acceptExistingCastInvitation, cancelOrder,
   completeAgreedOrder, correctOrderExtension, createAgreedOrder, createCast, createCourse,
@@ -186,8 +187,8 @@ Then('横断照会で原月の最新合計と既存の訂正履歴を確認で�
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('原月の延長報酬を訂正');
   await expect(dialog).toContainText('未提供の原月受注を無効化');
-  await expect(dialog).toContainText('¥7,000 → ¥9,000');
-  await expect(dialog).toContainText('¥9,000 → ¥0');
+  await expectChange(dialog, '発生済み報酬', '¥7,000', '¥9,000');
+  await expectChange(dialog, '発生済み報酬', '¥9,000', '¥0');
 });
 
 Then('月次横断照会は異なる授権集合と直接HTTP要求を検証する', async ({ request }) => {

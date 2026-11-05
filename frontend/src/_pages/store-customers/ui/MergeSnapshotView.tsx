@@ -1,4 +1,5 @@
 import { MergeProfile, MergeSnapshot } from '@/entities/customer';
+import { KeyValueList, KeyValueRow } from '@/shared/ui';
 
 export const profileFields: [Exclude<keyof MergeProfile, 'has_pet'>, string, number | undefined][] =
   [
@@ -11,27 +12,32 @@ export const profileFields: [Exclude<keyof MergeProfile, 'has_pet'>, string, num
     ['ng_type', '注意区分', 50],
     ['ng_content', '注意事項', undefined],
   ];
+// 3 列に並ぶ細い枠で右寄せにすると折り返して読めない項目。
+const longFields = new Set<keyof MergeProfile>([
+  'address',
+  'landmark',
+  'usage_areas',
+  'ng_content',
+]);
 export function MergeSnapshotView({ title, snapshot }: { title: string; snapshot: MergeSnapshot }) {
   return (
     <section className="min-w-0 space-y-3 rounded-lg border p-4 break-words">
       <h3 className="font-medium">{title}</h3>
       <p className="text-xs">顧客 ID: {snapshot.id}</p>
-      <dl className="space-y-2">
+      <KeyValueList>
         {profileFields.map(([key, label]) => (
-          <div key={key}>
-            <dt className="text-sm text-muted-foreground">{label}</dt>
-            <dd className="whitespace-pre-wrap text-sm">{snapshot.profile[key] ?? '未設定'}</dd>
-          </div>
+          <KeyValueRow key={key} label={label} long={longFields.has(key)}>
+            {snapshot.profile[key] ?? '未設定'}
+          </KeyValueRow>
         ))}
-        <dt>ペットの有無</dt>
-        <dd>
+        <KeyValueRow label="ペットの有無">
           {snapshot.profile.has_pet === null
             ? '未確認'
             : snapshot.profile.has_pet
               ? 'あり'
               : 'なし'}
-        </dd>
-      </dl>
+        </KeyValueRow>
+      </KeyValueList>
       <h4 className="font-medium">連絡先</h4>
       {snapshot.contacts.length === 0 && <p>なし</p>}
       {snapshot.contacts.map(c => (
