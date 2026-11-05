@@ -51,6 +51,7 @@ function feeLine(line: FeeLine | undefined) {
 function specialService(item: SpecialService | undefined) {
   if (!item) return '—';
   return [
+    item.name,
     `条件版本 ${item.terms_version} / 在籍 ${item.enrollment_id}`,
     item.consent_event_id
       ? `受諾記録 ${item.consent_event_id}（版本 ${item.consent_version}）`
@@ -58,7 +59,10 @@ function specialService(item: SpecialService | undefined) {
   ].join('\n');
 }
 
-/** 前後の一方にしかない明細・特殊サービスも行に出す。明細は訂正を跨いで line_id が保たれる。 */
+/**
+ * 前後の一方にしかない明細・特殊サービスも行に出す。明細は訂正を跨いで line_id が保たれる。
+ * 同じ id でも版の採り直しで名称が変わるため、名称は見出しでなく前後それぞれのセルに出す。
+ */
 function pairs<T>(before: T[], after: T[], id: (item: T) => string | undefined) {
   const keyed = (items: T[], side: string) =>
     new Map(items.map((item, i) => [id(item) ?? `${side}:${i}`, item]));
@@ -93,7 +97,6 @@ function correctionRows(
       v => `${v.course.name} / 版本 ${v.course.revision_number} / ${v.course.duration_minutes} 分`
     ),
     ...pairs(before.fee_lines, after.fee_lines, line => line.line_id).map(pair => {
-      // 同じ line_id でも加算の採り直しで名称が変わるため、名称は前後それぞれのセルに出す。
       const kind = (pair.after ?? pair.before)!.kind;
       return {
         key: `line:${pair.key}`,
@@ -105,7 +108,7 @@ function correctionRows(
     ...pairs(before.special_services, after.special_services, item => item.service_id).map(
       pair => ({
         key: `special:${pair.key}`,
-        label: `特殊サービス：${(pair.after ?? pair.before)!.name}`,
+        label: '特殊サービス',
         before: specialService(pair.before),
         after: specialService(pair.after),
       })
