@@ -10,10 +10,7 @@ import {
   Button,
   Card,
   Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
+  DialogFrame,
   Form,
   FormControl,
   FormField,
@@ -493,11 +490,7 @@ export default function TaskExecutionsPage() {
         </div>
       </TableCard>
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>実行の詳細</DialogTitle>
-            <DialogDescription>履歴と現在の状態を確認します。</DialogDescription>
-          </DialogHeader>
+        <DialogFrame size="md" title="実行の詳細" description="履歴と現在の状態を確認します。">
           {selected !== null && (
             <ExecutionDetail
               key={selected}
@@ -508,7 +501,7 @@ export default function TaskExecutionsPage() {
               }}
             />
           )}
-        </DialogContent>
+        </DialogFrame>
       </Dialog>
     </div>
   );

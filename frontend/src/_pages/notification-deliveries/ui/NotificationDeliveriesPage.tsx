@@ -24,10 +24,8 @@ import {
   Badge,
   Button,
   Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
+  DialogFrame,
+  DialogFrameActions,
   Form,
   FormControl,
   FormField,
@@ -421,6 +419,7 @@ function Detail({
 
 type Draft = Omit<DeliveryInput, 'channel' | 'purpose'>;
 function Create({ onCreated }: { onCreated: (row: Delivery) => void }) {
+  const formId = useId();
   const operation = useOperation('notification-deliveries', {
     storeId: useStoreContext().currentStoreId,
     store: memoryOperationStore,
@@ -458,6 +457,7 @@ function Create({ onCreated }: { onCreated: (row: Delivery) => void }) {
   return (
     <Form {...form}>
       <form
+        id={formId}
         noValidate
         onSubmit={event => {
           if (pending) {
@@ -582,13 +582,16 @@ function Create({ onCreated }: { onCreated: (row: Delivery) => void }) {
             作成結果が確認できません。同じ内容・要求キーで再確認します。入力をやり直す場合は一覧で重複がないことを確認してください。
           </p>
         )}
+      </form>
+      <DialogFrameActions>
         <Button
           type="submit"
+          form={formId}
           disabled={pending?.phase === 'submitting' || form.formState.isSubmitting}
         >
           {uncertain ? '同じ要求で結果を確認' : '下書きを作成'}
         </Button>
-      </form>
+      </DialogFrameActions>
     </Form>
   );
 }
@@ -667,13 +670,11 @@ function Workspace({
         </Table>
       </ListPage>
       <Dialog open={creating} onOpenChange={setCreating}>
-        <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>業務通知を作成</DialogTitle>
-            <DialogDescription>
-              下書きの作成では送信されません。内容は作成後に変更できません。
-            </DialogDescription>
-          </DialogHeader>
+        <DialogFrame
+          size="sm"
+          title="業務通知を作成"
+          description="下書きの作成では送信されません。内容は作成後に変更できません。"
+        >
           <Create
             onCreated={row => {
               setCreating(false);
@@ -682,14 +683,14 @@ function Workspace({
               void list.reload();
             }}
           />
-        </DialogContent>
+        </DialogFrame>
       </Dialog>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>通知の内容・送信履歴</DialogTitle>
-            <DialogDescription>現在の連絡可否と送信状態を確認してください。</DialogDescription>
-          </DialogHeader>
+        <DialogFrame
+          size="md"
+          title="通知の内容・送信履歴"
+          description="現在の連絡可否と送信状態を確認してください。"
+        >
           {selected && (
             <Detail
               key={selected}
@@ -702,7 +703,7 @@ function Workspace({
               }}
             />
           )}
-        </DialogContent>
+        </DialogFrame>
       </Dialog>
     </>
   );

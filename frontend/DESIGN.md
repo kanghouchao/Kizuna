@@ -106,7 +106,7 @@ default / modern / classic は同一の `--storefront-*` 契約を各 theme.css 
 | ---------------- | --------------------------------------------------------------------------------------------------------------------- |
 | 主／副／破壊操作 | Button の default / outline / destructive。遷移は `render={<Link href="…" />}`、ボタン本文は Button の children       |
 | 入力             | Input / Textarea / Select / Checkbox / Switch / RadioGroup / Label                                                    |
-| モーダル         | 中央の Dialog。長いフォームは `max-h-[calc(100vh-2rem)] overflow-y-auto`。横スライド Drawer は追加しない              |
+| モーダル         | 中央の Dialog を DialogFrame で描く（下記）。横スライド Drawer は追加しない                                           |
 | 破壊確認         | ConfirmDialog。window.confirm や画面内での AlertDialog 再構築をしない                                                 |
 | 検索選択         | 共有 Combobox を公開入口から使う。サーバ検索は `filter={null}`。候補取得・検索語・選択の業務制御はページ slice に置く |
 | 表／タブ         | TableCard + Table / Tabs                                                                                              |
@@ -114,6 +114,9 @@ default / modern / classic は同一の `--storefront-*` 契約を各 theme.css 
 | 読み込み         | 形が既知なら Skeleton、未知または小領域は「読み込み中...」。手製 animate-pulse を作らない                             |
 | 進捗             | `bg-muted h-2 rounded-full` と `bg-primary-strong`                                                                    |
 
+- DialogFrame は題名帯（DialogTitle・DialogDescription）と操作帯（DialogFooter）を固定し、本文だけをスクロールする。主操作は操作帯の右端、副操作はその左。本文の部品が自前の form と操作を持つときは DialogFrameActions で操作帯へ置き、submit は `form={id}` で結び付ける。業務コードで DialogContent を直接使わない。
+- 幅は段の名前で選ぶ: `sm` 28rem（確認・1 列の小フォーム）/ `md` 42rem（キー値の詳細・2 列のフォーム）/ `lg` 56rem（本文が多列の表）。ほかの幅を足さない。
+- 最大高さは `calc(100dvh - 2rem)`。スマホでアドレスバーが出ている間も操作帯が画面内に残るよう `vh` ではなく `dvh`。角丸は primitive の `rounded-lg` のまま。
 - CardTitle が章見出しなら `role="heading" aria-level={N}` を渡す。h1 直下は 2、入れ子は 3 とし、飛ばさない。単なるラベルには付けない。
 - destructive の DropdownMenuItem は consumer で `text-destructive-strong focus:bg-destructive/10 focus:text-destructive-strong`。vendored の destructive variant は tint 上の文字対比が不足する。
 - 裸の操作要素は `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary`。この ring はカード／ページ面でのみ認証済み。overflow で切れる場合は ring-inset を検討し、背景も再検証する。
@@ -187,7 +190,7 @@ RegionError の `message` と、`onRetry` または `fallback: {href,label}` の
 
 vendored は combobox / alert-dialog / button / card / dialog / select / form / table / badge / popover / skeleton / tabs / dropdown-menu / checkbox / switch / radio-group / input / label / textarea。整形以外は生成状態を保つ。
 
-image-upload / auth-layout / theme-provider / confirm-dialog / table-card / toast / region-error / pager は自作で、用途に応じて編集する。分類の正本はこの一覧。data-slot や Base UI import だけでは区別できず、未知のファイルは git log で確認する。
+image-upload / auth-layout / theme-provider / confirm-dialog / dialog-frame / table-card / toast / region-error / pager は自作で、用途に応じて編集する。分類の正本はこの一覧。data-slot や Base UI import だけでは区別できず、未知のファイルは git log で確認する。
 
 - 管理画面の raw palette 検索は page だけでなく参照する entities と自作 shared/ui も対象にする。例外は storefront、AuthLayout 内、vendored のみ。生 hex も確認する。
 - setupTests.ts が ResizeObserver、scrollIntoView、PointerEvent を供給する。追加 shim は実際の失敗を確認してから同ファイルにまとめる。

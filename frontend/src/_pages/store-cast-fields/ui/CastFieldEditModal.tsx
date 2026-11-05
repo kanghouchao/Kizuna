@@ -12,8 +12,7 @@ import { getApiErrorMessage, integerRule } from '@/shared/lib';
 import {
   Button,
   Dialog,
-  DialogContent,
-  DialogTitle,
+  DialogFrame,
   Form,
   FormControl,
   FormField,
@@ -85,88 +84,85 @@ export function CastFieldEditModal({
         if (!next) onClose();
       }}
     >
-      <DialogContent
-        showCloseButton={false}
-        aria-describedby={undefined}
-        className="gap-0 rounded-[10px] p-0 sm:max-w-md"
-      >
-        <DialogTitle className="border-b px-6 py-4 text-lg font-semibold text-foreground">
-          フィールドを編集
-        </DialogTitle>
-        <Form {...form}>
-          {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
-              我々の文言は永久に描かれない。執行は各 rules が担う */}
-          <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5" noValidate>
-            <div>
-              <span className="mb-1 block text-sm font-medium text-foreground">key</span>
-              <p className="text-sm text-muted-foreground">{definition?.key}</p>
-            </div>
-            <FormField
-              control={control}
-              name="label"
-              rules={{ required: 'label を入力してください' }}
-              render={({ field }) => (
-                <FormItem className="gap-1">
-                  <FormLabel>label</FormLabel>
-                  <FormControl>
-                    <Input type="text" required {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={control}
-              name="display_order"
-              rules={{
-                required: DISPLAY_ORDER_REQUIRED,
-                validate: {
-                  // 空欄は NaN であって null でも空文字でもないため required は素通りする。
-                  // 実測で、required だけだと空欄のまま display_order: null が送信される。
-                  notEmpty: value => !Number.isNaN(value) || DISPLAY_ORDER_REQUIRED,
-                  // noValidate は type="number" の暗黙の step=1 も止める。これが無いと 1.5 が
-                  // Integer の displayOrder へ届く
-                  integer: integerRule('表示順'),
-                },
-              }}
-              render={({ field }) => (
-                <FormItem className="gap-1">
-                  <FormLabel>表示順</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      required
-                      {...field}
-                      // register の valueAsNumber と同じ写像。Number() は空欄を 0 にしてしまい、
-                      // 「未入力」を表す NaN が失われる。
-                      value={Number.isNaN(field.value) ? '' : field.value}
-                      onChange={event => field.onChange(event.target.valueAsNumber)}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <p className="text-sm text-muted-foreground">
-              公開区分: {definition?.is_public ? '公開' : '内部'}（作成後は変更できません）
-            </p>
-            <p className="text-sm text-muted-foreground">
-              公開区分を変えるには、一覧でこのフィールドを削除してから新しく作成してください。削除すると全キャストの現在の値も消え、再作成しても復元されません。
-            </p>
-            <Button type="button" variant="link" onClick={onClose}>
-              フィールド一覧へ戻る
-            </Button>
-            <div className="flex justify-end gap-3 border-t pt-4">
+      <Form {...form}>
+        <DialogFrame
+          size="sm"
+          title="フィールドを編集"
+          // noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
+          // 我々の文言は永久に描かれない。執行は各 rules が担う
+          form={{ onSubmit: handleSubmit(submit), noValidate: true }}
+          footer={
+            <>
               <Button type="button" variant="outline" onClick={onClose}>
                 キャンセル
               </Button>
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? '保存中...' : '保存する'}
               </Button>
-            </div>
-          </form>
-        </Form>
-      </DialogContent>
+            </>
+          }
+        >
+          <div>
+            <span className="mb-1 block text-sm font-medium text-foreground">key</span>
+            <p className="text-sm text-muted-foreground">{definition?.key}</p>
+          </div>
+          <FormField
+            control={control}
+            name="label"
+            rules={{ required: 'label を入力してください' }}
+            render={({ field }) => (
+              <FormItem className="gap-1">
+                <FormLabel>label</FormLabel>
+                <FormControl>
+                  <Input type="text" required {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={control}
+            name="display_order"
+            rules={{
+              required: DISPLAY_ORDER_REQUIRED,
+              validate: {
+                // 空欄は NaN であって null でも空文字でもないため required は素通りする。
+                // 実測で、required だけだと空欄のまま display_order: null が送信される。
+                notEmpty: value => !Number.isNaN(value) || DISPLAY_ORDER_REQUIRED,
+                // noValidate は type="number" の暗黙の step=1 も止める。これが無いと 1.5 が
+                // Integer の displayOrder へ届く
+                integer: integerRule('表示順'),
+              },
+            }}
+            render={({ field }) => (
+              <FormItem className="gap-1">
+                <FormLabel>表示順</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    required
+                    {...field}
+                    // register の valueAsNumber と同じ写像。Number() は空欄を 0 にしてしまい、
+                    // 「未入力」を表す NaN が失われる。
+                    value={Number.isNaN(field.value) ? '' : field.value}
+                    onChange={event => field.onChange(event.target.valueAsNumber)}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <p className="text-sm text-muted-foreground">
+            公開区分: {definition?.is_public ? '公開' : '内部'}（作成後は変更できません）
+          </p>
+          <p className="text-sm text-muted-foreground">
+            公開区分を変えるには、一覧でこのフィールドを削除してから新しく作成してください。削除すると全キャストの現在の値も消え、再作成しても復元されません。
+          </p>
+          <Button type="button" variant="link" onClick={onClose}>
+            フィールド一覧へ戻る
+          </Button>
+        </DialogFrame>
+      </Form>
     </Dialog>
   );
 }

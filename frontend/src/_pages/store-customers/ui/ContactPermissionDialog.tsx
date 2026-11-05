@@ -13,9 +13,7 @@ import { notify } from '@/shared/notify';
 import {
   Button,
   Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
+  DialogFrame,
   Form,
   FormControl,
   FormField,
@@ -78,21 +76,25 @@ export function ContactPermissionDialog({
         if (!next) close();
       }}
     >
-      <DialogContent
-        className="max-h-[calc(100vh-2rem)] overflow-y-auto"
-        aria-describedby={undefined}
-      >
-        <DialogHeader>
-          <DialogTitle>{CONTACT_PURPOSES[purpose]}の可否を変更</DialogTitle>
-        </DialogHeader>
-        {gone ? (
-          <div role="alert" className="space-y-4">
-            <p>この連絡先は見つかりませんでした。</p>
-            <Button onClick={close}>閉じる</Button>
-          </div>
-        ) : (
-          <Form {...form}>
-            <form onSubmit={save} noValidate className="space-y-6">
+      <Form {...form}>
+        <DialogFrame
+          size="sm"
+          title={`${CONTACT_PURPOSES[purpose]}の可否を変更`}
+          form={gone ? undefined : { onSubmit: save, noValidate: true }}
+          footer={
+            gone ? (
+              <Button onClick={close}>閉じる</Button>
+            ) : (
+              <Button type="submit" disabled={form.formState.isSubmitting}>
+                可否を保存
+              </Button>
+            )
+          }
+        >
+          {gone ? (
+            <p role="alert">この連絡先は見つかりませんでした。</p>
+          ) : (
+            <>
               <p className="break-all">{contact.value}</p>
               <p className="text-sm text-muted-foreground">
                 同じ連絡先の有効行がすべて許可になるまで、連絡はできません。変更の出所と根拠を記録してください。
@@ -165,13 +167,10 @@ export function ContactPermissionDialog({
                   </FormItem>
                 )}
               />
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                可否を保存
-              </Button>
-            </form>
-          </Form>
-        )}
-      </DialogContent>
+            </>
+          )}
+        </DialogFrame>
+      </Form>
     </Dialog>
   );
 }

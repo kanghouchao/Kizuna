@@ -7,10 +7,7 @@ import { useListPage, useResource } from '@/shared/lib';
 import {
   Button,
   Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
+  DialogFrame,
   Input,
   Form,
   FormField,
@@ -209,13 +206,9 @@ export default function AuditEventsPage() {
         </div>
       </TableCard>
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>監査の詳細</DialogTitle>
-            <DialogDescription>記録時点の主体と変更内容です。</DialogDescription>
-          </DialogHeader>
+        <DialogFrame size="md" title="監査の詳細" description="記録時点の主体と変更内容です。">
           {selected !== null && <AuditDetail key={selected} id={selected} />}
-        </DialogContent>
+        </DialogFrame>
       </Dialog>
     </div>
   );

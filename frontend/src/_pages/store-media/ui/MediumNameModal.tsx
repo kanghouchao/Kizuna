@@ -6,8 +6,7 @@ import { MEDIUM_NAME_MAX, type MediumSummary } from '@/entities/medium';
 import {
   Button,
   Dialog,
-  DialogContent,
-  DialogTitle,
+  DialogFrame,
   Form,
   FormControl,
   FormField,
@@ -63,25 +62,37 @@ export function MediumNameModal({
         if (!next) onClose();
       }}
     >
-      <DialogContent aria-describedby={undefined} className="sm:max-w-md">
-        <DialogTitle>{medium ? '媒体名を変更' : '媒体を登録'}</DialogTitle>
-        {gone ? (
-          <div className="space-y-6">
-            <p role="alert">この媒体は削除されています。</p>
-            <div className="flex justify-end">
+      <Form {...form}>
+        <DialogFrame
+          size="sm"
+          title={medium ? '媒体名を変更' : '媒体を登録'}
+          // noValidate: 文言付きの rules が required / maxLength の原生制約を置き換える
+          form={
+            gone
+              ? undefined
+              : { onSubmit: handleSubmit(({ name }) => onSubmit(name.trim())), noValidate: true }
+          }
+          footer={
+            gone ? (
               <Button type="button" variant="outline" onClick={onClose}>
                 閉じる
               </Button>
-            </div>
-          </div>
-        ) : (
-          <Form {...form}>
-            {/* noValidate: 文言付きの rules が required / maxLength の原生制約を置き換える */}
-            <form
-              onSubmit={handleSubmit(({ name }) => onSubmit(name.trim()))}
-              className="space-y-6"
-              noValidate
-            >
+            ) : (
+              <>
+                <Button type="button" variant="outline" onClick={onClose}>
+                  キャンセル
+                </Button>
+                <Button type="submit" disabled={busy || versionPending}>
+                  {busy ? '保存中...' : '保存する'}
+                </Button>
+              </>
+            )
+          }
+        >
+          {gone ? (
+            <p role="alert">この媒体は削除されています。</p>
+          ) : (
+            <>
               {listFailed && (
                 <RegionError message="媒体一覧の取得に失敗しました" onRetry={onRetryList} />
               )}
@@ -107,18 +118,10 @@ export function MediumNameModal({
                   </FormItem>
                 )}
               />
-              <div className="flex justify-end gap-3">
-                <Button type="button" variant="outline" onClick={onClose}>
-                  キャンセル
-                </Button>
-                <Button type="submit" disabled={busy || versionPending}>
-                  {busy ? '保存中...' : '保存する'}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        )}
-      </DialogContent>
+            </>
+          )}
+        </DialogFrame>
+      </Form>
     </Dialog>
   );
 }

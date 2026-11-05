@@ -18,8 +18,7 @@ import {
   Badge,
   Button,
   Dialog,
-  DialogContent,
-  DialogTitle,
+  DialogFrame,
   Form,
   FormControl,
   FormField,
@@ -198,6 +197,46 @@ export function OrderAttributionModal({
       : correctionTarget !== null
         ? '誤付与の差し引き'
         : '会員帰属の訂正';
+  // 差し引きの段は DialogFrameActions で自分の操作を置くので、footer と form は渡さない
+  const inChildStep = receiptToken !== null || correctionTarget !== null;
+  const showsNotFound = !inChildStep && !isLoading && failure === 'notFound';
+  const showsStatus =
+    !inChildStep && !isLoading && failure === null && initialized && attribution !== null;
+  const showsInvalidationForm = showsStatus && canAdjust && attribution.attributed;
+  const footer =
+    receiptToken !== null ? (
+      <Button type="button" onClick={onClose}>
+        閉じる
+      </Button>
+    ) : showsNotFound ? (
+      <Button type="button" variant="outline" onClick={onClose}>
+        閉じる
+      </Button>
+    ) : !showsStatus ? undefined : showsInvalidationForm ? (
+      <>
+        <Button type="button" variant="outline" onClick={onClose} disabled={isBusy}>
+          キャンセル
+        </Button>
+        <Button type="submit" disabled={isBusy}>
+          {isSubmitting ? '処理中...' : '無効化する'}
+        </Button>
+      </>
+    ) : attribution.attributed ? (
+      <Button type="button" variant="outline" onClick={onClose}>
+        閉じる
+      </Button>
+    ) : (
+      <>
+        <Button type="button" variant="outline" onClick={onClose} disabled={isBusy}>
+          閉じる
+        </Button>
+        {attribution.member_code && !order?.completion_invalidated && (
+          <Button type="button" onClick={() => void reissue()} disabled={isBusy}>
+            {isReissuing ? '発行中...' : '伝票QRを再発行'}
+          </Button>
+        )}
+      </>
+    );
 
   return (
     <Dialog
@@ -212,130 +251,121 @@ export function OrderAttributionModal({
         if (!next && !isBusy && receiptToken === null) onClose();
       }}
     >
-      <DialogContent
-        showCloseButton={false}
-        aria-describedby={undefined}
-        className="gap-0 rounded-[10px] p-0 sm:max-w-md"
-      >
-        <div className="border-b px-6 py-4">
-          <DialogTitle>{dialogTitle}</DialogTitle>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {order?.business_date ?? '-'} / {customerHeadingText(order)}
-          </p>
-        </div>
-        {receiptToken !== null ? (
-          <ReceiptTokenPanel
-            token={receiptToken}
-            claimNote="正しいお客様が読み取ると、この来店をご自身のポイントと履歴に取り込めます（再発行から 90 日以内）。"
-            onClose={onClose}
-          />
-        ) : correctionTarget !== null ? (
-          <AttributionCorrectionStep
-            orderId={correctionTarget.orderId}
-            attributionId={correctionTarget.attributionId}
-            memberCode={correctionTarget.memberCode}
-            onBusyChange={setIsCorrectingBusy}
-            onDone={() => {
-              setCorrecting(null);
-              // 差し引きが済むと残りの誤付与も変わる。取り直さないと、下の導線が済んだ訂正を
-              // 指し続ける。
-              void reload();
-            }}
-          />
-        ) : isLoading || (failure === null && !initialized) ? (
-          <p className="px-6 py-8 text-center text-sm text-muted-foreground">読み込み中...</p>
-        ) : failure === 'notFound' ? (
-          <div role="alert" className="space-y-3 px-6 py-5">
-            <p className="text-sm text-destructive-strong">この受注は見つかりませんでした。</p>
-            <Button type="button" variant="outline" onClick={onClose}>
-              閉じる
-            </Button>
-          </div>
-        ) : failure !== null ? (
-          // 読めなかった現況を「未帰属」で描くと、他人の来店が残っているのに再発行を勧めることになる
-          <RegionError
-            message="帰属の状況を取得できませんでした"
-            onRetry={() => void reload()}
-            className="justify-center px-6 py-8"
-          />
-        ) : (
-          attribution !== null && (
-            <div className="space-y-4 px-6 py-5">
-              <div className="space-y-1 text-sm text-foreground">
-                {attribution.attributed ? (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <Badge
-                        variant="outline"
-                        className="border-transparent bg-success/10 text-success-strong"
-                      >
-                        帰属済み
-                      </Badge>
-                      <span>{attribution.member_code}</span>
-                    </div>
-                    <p className="text-muted-foreground">
-                      {attribution.source ? SOURCE_LABELS[attribution.source] : '-'} /{' '}
-                      {formatDateTime(attribution.attributed_at)}
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-muted-foreground">この来店は会員へ帰属していません。</p>
-                    {attribution.member_code && (
+      <Form {...form}>
+        <DialogFrame
+          size="sm"
+          // QR は閉じると再表示できない。閉じる手段を操作帯の明示のボタンだけに絞る
+          showCloseButton={receiptToken === null}
+          title={dialogTitle}
+          description={`${order?.business_date ?? '-'} / ${customerHeadingText(order)}`}
+          // noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
+          // 我々の文言は永久に描かれない。required は下の規則が引き継ぐ
+          form={
+            showsInvalidationForm
+              ? { onSubmit: handleSubmit(invalidate), noValidate: true }
+              : undefined
+          }
+          footer={footer}
+        >
+          {receiptToken !== null ? (
+            <ReceiptTokenPanel
+              token={receiptToken}
+              claimNote="正しいお客様が読み取ると、この来店をご自身のポイントと履歴に取り込めます（再発行から 90 日以内）。"
+            />
+          ) : correctionTarget !== null ? (
+            <AttributionCorrectionStep
+              orderId={correctionTarget.orderId}
+              attributionId={correctionTarget.attributionId}
+              memberCode={correctionTarget.memberCode}
+              onBusyChange={setIsCorrectingBusy}
+              onDone={() => {
+                setCorrecting(null);
+                // 差し引きが済むと残りの誤付与も変わる。取り直さないと、下の導線が済んだ訂正を
+                // 指し続ける。
+                void reload();
+              }}
+            />
+          ) : isLoading || (failure === null && !initialized) ? (
+            <p className="py-4 text-center text-sm text-muted-foreground">読み込み中...</p>
+          ) : failure === 'notFound' ? (
+            <p role="alert" className="text-sm text-destructive-strong">
+              この受注は見つかりませんでした。
+            </p>
+          ) : failure !== null ? (
+            // 読めなかった現況を「未帰属」で描くと、他人の来店が残っているのに再発行を勧めることになる
+            <RegionError
+              message="帰属の状況を取得できませんでした"
+              onRetry={() => void reload()}
+              className="justify-center py-4"
+            />
+          ) : (
+            attribution !== null && (
+              <>
+                <div className="space-y-1 text-sm text-foreground">
+                  {attribution.attributed ? (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant="outline"
+                          className="border-transparent bg-success/10 text-success-strong"
+                        >
+                          帰属済み
+                        </Badge>
+                        <span>{attribution.member_code}</span>
+                      </div>
                       <p className="text-muted-foreground">
-                        {attribution.member_code} への帰属を
-                        {formatDateTime(attribution.invalidated_at)}に無効化（
-                        {attribution.invalidated_reason}）
+                        {attribution.source ? SOURCE_LABELS[attribution.source] : '-'} /{' '}
+                        {formatDateTime(attribution.attributed_at)}
                       </p>
-                    )}
-                  </>
-                )}
-              </div>
-
-              {/* 差し引きへ戻る口。無効化の直後に送る導線を閉じてしまうと、ここが唯一の入口になる。
-                  宛先はサーバが名指す古い記録なので、正しい本人が申領を済ませて現況が入れ替わった後でも
-                  同じ相手に届く（受注から導き直すと、その本人の来店を消す操作になってしまう） */}
-              {canAdjust && pendingCorrectionId !== undefined && (
-                <div className="space-y-3 rounded-md border p-3">
-                  <p className="text-sm text-foreground">
-                    {attribution.pending_correction_member_code ?? '無効化した会員'}
-                    に、誤って付与されたまま差し引かれていないポイントが残っています。
-                  </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={isBusy}
-                    onClick={() =>
-                      setCorrecting({
-                        orderId,
-                        attributionId: pendingCorrectionId,
-                        memberCode: attribution.pending_correction_member_code,
-                      })
-                    }
-                  >
-                    ポイントを差し引く
-                  </Button>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-muted-foreground">この来店は会員へ帰属していません。</p>
+                      {attribution.member_code && (
+                        <p className="text-muted-foreground">
+                          {attribution.member_code} への帰属を
+                          {formatDateTime(attribution.invalidated_at)}に無効化（
+                          {attribution.invalidated_reason}）
+                        </p>
+                      )}
+                    </>
+                  )}
                 </div>
-              )}
 
-              {!canAdjust && attribution.attributed ? (
-                // 無効化は POINT_ADJUST（店長）限定。押せない導線を描くと、理由を入力し終えてから
-                // 拒否されることになる
-                <>
+                {/* 差し引きへ戻る口。無効化の直後に送る導線を閉じてしまうと、ここが唯一の入口になる。
+                    宛先はサーバが名指す古い記録なので、正しい本人が申領を済ませて現況が入れ替わった後でも
+                    同じ相手に届く（受注から導き直すと、その本人の来店を消す操作になってしまう） */}
+                {canAdjust && pendingCorrectionId !== undefined && (
+                  <div className="space-y-3 rounded-md border p-3">
+                    <p className="text-sm text-foreground">
+                      {attribution.pending_correction_member_code ?? '無効化した会員'}
+                      に、誤って付与されたまま差し引かれていないポイントが残っています。
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={isBusy}
+                      onClick={() =>
+                        setCorrecting({
+                          orderId,
+                          attributionId: pendingCorrectionId,
+                          memberCode: attribution.pending_correction_member_code,
+                        })
+                      }
+                    >
+                      ポイントを差し引く
+                    </Button>
+                  </div>
+                )}
+
+                {!canAdjust && attribution.attributed ? (
+                  // 無効化は POINT_ADJUST（店長）限定。押せない導線を描くと、理由を入力し終えてから
+                  // 拒否されることになる
                   <p className="text-sm text-muted-foreground">
                     この帰属を訂正するには、ポイント調整の権限が必要です。店長にご依頼ください。
                   </p>
-                  <div className="flex justify-end border-t pt-4">
-                    <Button type="button" variant="outline" onClick={onClose}>
-                      閉じる
-                    </Button>
-                  </div>
-                </>
-              ) : attribution.attributed ? (
-                <Form {...form}>
-                  {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
-                      我々の文言は永久に描かれない。required は下の規則が引き継ぐ */}
-                  <form onSubmit={handleSubmit(invalidate)} className="space-y-4" noValidate>
+                ) : attribution.attributed ? (
+                  <>
                     <FormField
                       control={control}
                       name="reason"
@@ -359,50 +389,28 @@ export function OrderAttributionModal({
                     {/* 台帳へ波及しないことは操作の前に知らせる。事後に気づくと、誤付与が残ったまま
                         訂正が済んだと見なされる */}
                     <p className="text-sm text-muted-foreground">{CORRECTION_NOTE}</p>
-                    <div className="flex justify-end gap-3 border-t pt-4">
-                      <Button type="button" variant="outline" onClick={onClose} disabled={isBusy}>
-                        キャンセル
-                      </Button>
-                      <Button type="submit" disabled={isBusy}>
-                        {isSubmitting ? '処理中...' : '無効化する'}
-                      </Button>
-                    </div>
-                  </form>
-                </Form>
-              ) : (
-                <>
-                  {order?.completion_invalidated ? (
-                    <p className="text-sm text-muted-foreground">
-                      無効化した受注に伝票は発行できません。
-                    </p>
-                  ) : attribution.member_code ? (
-                    <p className="text-sm text-muted-foreground">
-                      伝票QRを再発行すると、正しいお客様が読み取ってこの来店を取り戻せます。
-                      {/* 2 度目の再発行は前の QR を殺す。押した後に気づいても渡した QR は戻せないので、
-                          取り消せない副作用として操作の手前で名乗る */}
-                      前に発行した伝票QRは使えなくなります。
-                    </p>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      この受注は会員へ帰属したことがないため、訂正の対象ではありません。
-                    </p>
-                  )}
-                  <div className="flex flex-wrap justify-end gap-3 border-t pt-4">
-                    <Button type="button" variant="outline" onClick={onClose} disabled={isBusy}>
-                      閉じる
-                    </Button>
-                    {attribution.member_code && !order?.completion_invalidated && (
-                      <Button type="button" onClick={() => void reissue()} disabled={isBusy}>
-                        {isReissuing ? '発行中...' : '伝票QRを再発行'}
-                      </Button>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          )
-        )}
-      </DialogContent>
+                  </>
+                ) : order?.completion_invalidated ? (
+                  <p className="text-sm text-muted-foreground">
+                    無効化した受注に伝票は発行できません。
+                  </p>
+                ) : attribution.member_code ? (
+                  <p className="text-sm text-muted-foreground">
+                    伝票QRを再発行すると、正しいお客様が読み取ってこの来店を取り戻せます。
+                    {/* 2 度目の再発行は前の QR を殺す。押した後に気づいても渡した QR は戻せないので、
+                        取り消せない副作用として操作の手前で名乗る */}
+                    前に発行した伝票QRは使えなくなります。
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    この受注は会員へ帰属したことがないため、訂正の対象ではありません。
+                  </p>
+                )}
+              </>
+            )
+          )}
+        </DialogFrame>
+      </Form>
     </Dialog>
   );
 }

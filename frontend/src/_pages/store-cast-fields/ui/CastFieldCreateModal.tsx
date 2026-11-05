@@ -8,8 +8,7 @@ import { getApiErrorMessage } from '@/shared/lib';
 import {
   Button,
   Dialog,
-  DialogContent,
-  DialogTitle,
+  DialogFrame,
   Form,
   FormControl,
   FormDescription,
@@ -73,77 +72,74 @@ export function CastFieldCreateModal({ open, onClose, onCreated }: CastFieldCrea
         if (!next) onClose();
       }}
     >
-      <DialogContent
-        showCloseButton={false}
-        aria-describedby={undefined}
-        className="gap-0 rounded-[10px] p-0 sm:max-w-md"
-      >
-        <DialogTitle className="border-b px-6 py-4 text-lg font-semibold text-foreground">
-          フィールドを追加
-        </DialogTitle>
-        <Form {...form}>
-          {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
-              我々の文言は永久に描かれない。執行は各 rules が担う */}
-          <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5" noValidate>
-            <FormField
-              control={control}
-              name="key"
-              rules={{
-                required: 'key を入力してください',
-                // バックエンドの @Pattern と同期。constructor・prototype は
-                // react-hook-form の register 内部予約名で、定義化するとキャスト
-                // 編集フォームの描画をクラッシュさせるため作成時に拒否する。
-                pattern: {
-                  value: /^(?!constructor$|prototype$)[a-z][a-z0-9_]*$/,
-                  message:
-                    'key は英小文字で始まり、英小文字・数字・アンダースコアのみ使用できます(constructor・prototype は使えません)',
-                },
-              }}
-              render={({ field }) => (
-                <FormItem className="gap-1">
-                  <FormLabel>key</FormLabel>
-                  <FormControl>
-                    <Input type="text" required {...field} />
-                  </FormControl>
-                  <FormDescription className="text-xs">
-                    英小文字で始まり、英小文字・数字・アンダースコアのみ使用できます(作成後は変更できません)
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={control}
-              name="label"
-              rules={{ required: 'label を入力してください' }}
-              render={({ field }) => (
-                <FormItem className="gap-1">
-                  <FormLabel>label</FormLabel>
-                  <FormControl>
-                    <Input type="text" required {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <Label className="font-normal">
-              <input type="checkbox" {...register('is_public')} />
-              公開する(公開詳細ページに表示)
-            </Label>
-            <p className="text-sm text-muted-foreground">
-              公開区分は作成後に変更できません。変更には削除と再作成が必要です。
-            </p>
-            <div className="flex justify-end gap-3 border-t pt-4">
+      <Form {...form}>
+        <DialogFrame
+          size="sm"
+          title="フィールドを追加"
+          // noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
+          // 我々の文言は永久に描かれない。執行は各 rules が担う
+          form={{ onSubmit: handleSubmit(submit), noValidate: true }}
+          footer={
+            <>
               <Button type="button" variant="outline" onClick={onClose}>
                 キャンセル
               </Button>
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? '追加中...' : '追加する'}
               </Button>
-            </div>
-          </form>
-        </Form>
-      </DialogContent>
+            </>
+          }
+        >
+          <FormField
+            control={control}
+            name="key"
+            rules={{
+              required: 'key を入力してください',
+              // バックエンドの @Pattern と同期。constructor・prototype は
+              // react-hook-form の register 内部予約名で、定義化するとキャスト
+              // 編集フォームの描画をクラッシュさせるため作成時に拒否する。
+              pattern: {
+                value: /^(?!constructor$|prototype$)[a-z][a-z0-9_]*$/,
+                message:
+                  'key は英小文字で始まり、英小文字・数字・アンダースコアのみ使用できます(constructor・prototype は使えません)',
+              },
+            }}
+            render={({ field }) => (
+              <FormItem className="gap-1">
+                <FormLabel>key</FormLabel>
+                <FormControl>
+                  <Input type="text" required {...field} />
+                </FormControl>
+                <FormDescription className="text-xs">
+                  英小文字で始まり、英小文字・数字・アンダースコアのみ使用できます(作成後は変更できません)
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={control}
+            name="label"
+            rules={{ required: 'label を入力してください' }}
+            render={({ field }) => (
+              <FormItem className="gap-1">
+                <FormLabel>label</FormLabel>
+                <FormControl>
+                  <Input type="text" required {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <Label className="font-normal">
+            <input type="checkbox" {...register('is_public')} />
+            公開する(公開詳細ページに表示)
+          </Label>
+          <p className="text-sm text-muted-foreground">
+            公開区分は作成後に変更できません。変更には削除と再作成が必要です。
+          </p>
+        </DialogFrame>
+      </Form>
     </Dialog>
   );
 }

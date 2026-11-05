@@ -2,15 +2,7 @@
 
 import { serviceApi, ServiceSummary, serviceKindLabels } from '@/entities/service';
 import { useListPage, isForbidden } from '@/shared/lib';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  Pager,
-  RegionError,
-} from '@/shared/ui';
+import { Dialog, DialogFrame, Pager, RegionError } from '@/shared/ui';
 
 function Conditions({ value }: { value?: ServiceSummary }) {
   if (!value) return <p>作成前の設定はありません</p>;
@@ -58,9 +50,13 @@ export function ServiceHistory({ id, open, onClose, onForbidden }: ServiceHistor
         if (!next) onClose();
       }}
     >
-      <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-3xl">
+      <DialogFrame
+        size="lg"
+        title="サービス変更履歴"
+        description="保存時の変更前後と操作者を、新しい版本から表示します。"
+      >
         <HistoryContent id={id} onForbidden={onForbidden} />
-      </DialogContent>
+      </DialogFrame>
     </Dialog>
   );
 }
@@ -74,54 +70,44 @@ function HistoryContent({ id, onForbidden }: Pick<ServiceHistoryProps, 'id' | 'o
       throw error;
     }
   });
-  return (
+  return history.failed ? (
+    <RegionError message="変更履歴の取得に失敗しました" onRetry={() => void history.reload()} />
+  ) : (
     <>
-      <DialogHeader>
-        <DialogTitle>サービス変更履歴</DialogTitle>
-        <DialogDescription>
-          保存時の変更前後と操作者を、新しい版本から表示します。
-        </DialogDescription>
-      </DialogHeader>
-      {history.failed ? (
-        <RegionError message="変更履歴の取得に失敗しました" onRetry={() => void history.reload()} />
-      ) : (
-        <>
-          {history.rows.map(row => (
-            <section key={row.id} className="space-y-3 rounded-lg border p-4">
-              <h2 className="font-semibold">
-                版本 {row.version} ·{' '}
-                {{ CREATED: '作成', UPDATED: '変更', DELETED: '削除' }[row.operation]}
-              </h2>
-              <p className="text-sm">
-                操作者 ID: {row.actor_id} · {new Date(row.occurred_at).toLocaleString('ja-JP')}
-              </p>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <h3 className="mb-2 font-medium">変更前</h3>
-                  <Conditions value={row.before} />
-                </div>
-                <div>
-                  <h3 className="mb-2 font-medium">変更後</h3>
-                  <Conditions value={row.after} />
-                </div>
-              </div>
-            </section>
-          ))}
-          {history.isLoading ? (
-            <p>読み込み中...</p>
-          ) : history.rows.length === 0 ? (
-            <p>変更履歴はありません</p>
-          ) : null}
-          <Pager
-            page={history.page}
-            pageCount={history.pageCount}
-            total={history.total}
-            rowCount={history.rows.length}
-            disabled={history.isLoading}
-            onPageChange={page => void history.onPageChange(page)}
-          />
-        </>
-      )}
+      {history.rows.map(row => (
+        <section key={row.id} className="space-y-3 rounded-lg border p-4">
+          <h2 className="font-semibold">
+            版本 {row.version} ·{' '}
+            {{ CREATED: '作成', UPDATED: '変更', DELETED: '削除' }[row.operation]}
+          </h2>
+          <p className="text-sm">
+            操作者 ID: {row.actor_id} · {new Date(row.occurred_at).toLocaleString('ja-JP')}
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <h3 className="mb-2 font-medium">変更前</h3>
+              <Conditions value={row.before} />
+            </div>
+            <div>
+              <h3 className="mb-2 font-medium">変更後</h3>
+              <Conditions value={row.after} />
+            </div>
+          </div>
+        </section>
+      ))}
+      {history.isLoading ? (
+        <p>読み込み中...</p>
+      ) : history.rows.length === 0 ? (
+        <p>変更履歴はありません</p>
+      ) : null}
+      <Pager
+        page={history.page}
+        pageCount={history.pageCount}
+        total={history.total}
+        rowCount={history.rows.length}
+        disabled={history.isLoading}
+        onPageChange={page => void history.onPageChange(page)}
+      />
     </>
   );
 }

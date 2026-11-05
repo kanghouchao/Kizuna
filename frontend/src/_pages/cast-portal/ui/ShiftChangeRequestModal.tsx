@@ -8,8 +8,7 @@ import { CastScheduleItem, ShiftChangeRequestCreateRequest, shiftApi } from '@/e
 import {
   Button,
   Dialog,
-  DialogContent,
-  DialogTitle,
+  DialogFrame,
   Form,
   FormControl,
   FormField,
@@ -84,91 +83,90 @@ export function ShiftChangeRequestModal({ open, item, onClose }: ShiftChangeRequ
         if (!next) onClose();
       }}
     >
-      <DialogContent
-        showCloseButton={false}
-        aria-describedby={undefined}
-        className="gap-0 rounded-[10px] p-0 sm:max-w-md"
-      >
-        <DialogTitle className="border-b px-6 py-4">シフトの変更申請</DialogTitle>
-        <Form {...form}>
-          {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
-              我々の文言は永久に描かれない。執行は各 rules が担う */}
-          <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5" noValidate>
-            <p className="text-xs text-muted-foreground">
-              現行: {item?.work_date} {formatTime(item?.start_time)}–{formatEndTime(item?.end_time)}
-              （{item?.store_name}）
-            </p>
-            <FormField
-              control={control}
-              name="work_date"
-              rules={{ required: '希望する日付を指定してください' }}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>日付</FormLabel>
-                  <FormControl>
-                    <Input type="date" required {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={control}
-                name="start_time"
-                rules={{ required: '開始時刻を入力してください' }}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>開始</FormLabel>
-                    <FormControl>
-                      <Input type="time" required {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={control}
-                name="end_time"
-                rules={{ required: '終了時刻を入力してください' }}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>終了</FormLabel>
-                    <FormControl>
-                      <Input type="time" required {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-            <FormField
-              control={control}
-              name="note"
-              rules={{
-                maxLength: { value: 500, message: '備考は500文字以内で入力してください' },
-              }}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>備考</FormLabel>
-                  <FormControl>
-                    <Textarea rows={3} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="flex justify-end gap-2 pt-1">
+      <Form {...form}>
+        <DialogFrame
+          size="sm"
+          title="シフトの変更申請"
+          // noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
+          // 我々の文言は永久に描かれない。執行は各 rules が担う
+          form={{ onSubmit: handleSubmit(submit), noValidate: true }}
+          footer={
+            <>
               <Button type="button" variant="outline" onClick={onClose}>
                 キャンセル
               </Button>
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? '提出中...' : '変更を申請する'}
               </Button>
-            </div>
-          </form>
-        </Form>
-      </DialogContent>
+            </>
+          }
+        >
+          <p className="text-xs text-muted-foreground">
+            現行: {item?.work_date} {formatTime(item?.start_time)}–{formatEndTime(item?.end_time)}（
+            {item?.store_name}）
+          </p>
+          <FormField
+            control={control}
+            name="work_date"
+            rules={{ required: '希望する日付を指定してください' }}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>日付</FormLabel>
+                <FormControl>
+                  <Input type="date" required {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={control}
+              name="start_time"
+              rules={{ required: '開始時刻を入力してください' }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>開始</FormLabel>
+                  <FormControl>
+                    <Input type="time" required {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={control}
+              name="end_time"
+              rules={{ required: '終了時刻を入力してください' }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>終了</FormLabel>
+                  <FormControl>
+                    <Input type="time" required {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+          <FormField
+            control={control}
+            name="note"
+            rules={{
+              maxLength: { value: 500, message: '備考は500文字以内で入力してください' },
+            }}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>備考</FormLabel>
+                <FormControl>
+                  <Textarea rows={3} {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </DialogFrame>
+      </Form>
     </Dialog>
   );
 }

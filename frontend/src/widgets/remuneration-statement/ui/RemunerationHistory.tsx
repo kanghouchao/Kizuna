@@ -2,7 +2,7 @@
 import { remunerationApi, type Bonus, type Guarantee } from '../api';
 import { fromSpringPage } from '@/shared/api';
 import { useListPage } from '@/shared/lib';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, Pager, RegionError } from '@/shared/ui';
+import { Dialog, DialogFrame, Pager, RegionError } from '@/shared/ui';
 const summary = (value: Bonus | Guarantee | undefined) => {
   if (!value) return '記録なし';
   if ('effective_from' in value)
@@ -30,10 +30,7 @@ export function RemunerationHistory({
         if (!open) onClose();
       }}
     >
-      <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>変更履歴</DialogTitle>
-        </DialogHeader>
+      <DialogFrame size="md" title="変更履歴">
         {history.isLoading ? (
           <p role="status">読み込み中...</p>
         ) : history.failed ? (
@@ -63,7 +60,7 @@ export function RemunerationHistory({
             onPageChange={page => void history.onPageChange(page)}
           />
         )}
-      </DialogContent>
+      </DialogFrame>
     </Dialog>
   );
 }

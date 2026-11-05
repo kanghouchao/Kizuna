@@ -2,7 +2,7 @@
 
 import { customerApi } from '@/entities/customer';
 import { useResource } from '@/shared/lib';
-import { Dialog, DialogContent, DialogTitle, RegionError } from '@/shared/ui';
+import { Dialog, DialogFrame, RegionError } from '@/shared/ui';
 import { MergeSnapshotView } from './MergeSnapshotView';
 
 export function MergeAuditDialog({
@@ -25,11 +25,7 @@ export function MergeAuditDialog({
         if (!open) onClose();
       }}
     >
-      <DialogContent
-        className="max-h-[calc(100vh-2rem)] overflow-y-auto sm:max-w-5xl"
-        aria-describedby={undefined}
-      >
-        <DialogTitle>統合の監査記録</DialogTitle>
+      <DialogFrame size="lg" title="統合の監査記録">
         {isLoading ? (
           <p>読み込み中...</p>
         ) : failure ? (
@@ -63,7 +59,7 @@ export function MergeAuditDialog({
             </div>
           )
         )}
-      </DialogContent>
+      </DialogFrame>
     </Dialog>
   );
 }

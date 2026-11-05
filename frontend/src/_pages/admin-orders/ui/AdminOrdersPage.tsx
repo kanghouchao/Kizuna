@@ -9,10 +9,7 @@ import {
   Badge,
   Button,
   Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
+  DialogFrame,
   Table,
   TableBody,
   TableCell,
@@ -167,13 +164,11 @@ function OrderList() {
         </Table>
       </ListPage>
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
-        <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>受注詳細</DialogTitle>
-            <DialogDescription>
-              受注時の条件と現在の金額を確認できます。報酬は支払済み額ではありません。
-            </DialogDescription>
-          </DialogHeader>
+        <DialogFrame
+          size="md"
+          title="受注詳細"
+          description="受注時の条件と現在の金額を確認できます。報酬は支払済み額ではありません。"
+        >
           {details && (
             <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-4 text-sm [&_dd]:break-words [&_dd]:text-right">
               <dt>受注ID</dt>
@@ -214,7 +209,7 @@ function OrderList() {
               )}
             </dl>
           )}
-        </DialogContent>
+        </DialogFrame>
       </Dialog>
       {selected && (
         <OrderCorrectionHistoryModal

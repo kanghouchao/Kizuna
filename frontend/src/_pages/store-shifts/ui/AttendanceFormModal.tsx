@@ -155,147 +155,147 @@ export function AttendanceFormModal({
   };
 
   return (
-    <ShiftDialogShell
-      open={open}
-      onClose={onClose}
-      title={correcting ? '当日実績を訂正' : '当日実績を記録'}
-    >
-      <Form {...form}>
-        {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
-              我々の文言は永久に描かれない。執行は各 rules が担う */}
-        <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5" noValidate>
-          {/* 記録済みの実績も、シフトから起こす記録も、キャストは動かせない。選ばせるのは
-                飛び込みを新しく起こすときだけ */}
-          {correcting || !walkIn ? (
-            <div>
-              <p className="text-sm font-medium text-foreground">キャスト</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                {castName(casts, attendance?.cast_id ?? shift?.cast_id)}
-              </p>
-            </div>
-          ) : (
-            <FormField
-              control={control}
-              name="cast_id"
-              rules={{ required: 'キャストを選択してください' }}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>キャスト</FormLabel>
-                  {/* 誰が出勤したかに既定値は置かない。シフトの追加と違い、実績は特定の人物に
-                        ついての法定保存の記録で、既定のまま保存された誤りは訂正履歴に残る */}
-                  <Select
-                    items={selectOptions}
-                    value={castValue(field.value, selectOptions)}
-                    onValueChange={v => field.onChange(v === SELECT_NONE ? '' : v)}
-                    required
-                  >
-                    <FormControl>
-                      {/* handleSubmit の焦点移動は登録された ref を叩く */}
-                      <SelectTrigger className="w-full" ref={field.ref}>
-                        <SelectValue placeholder="キャストを選択" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {selectOptions.map(o => (
-                        <SelectItem key={o.value} value={o.value}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
-
-          <div>
-            <p className="text-sm font-medium text-foreground">予定</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {shift
-                ? `${dateOfDateTime(shift.scheduled_start_at)} ${hhmmOfDateTime(
-                    shift.scheduled_start_at
-                  )}–${hhmmOfDateTime(shift.scheduled_end_at)}`
-                : '飛び込み（予定なし）'}
-            </p>
-          </div>
-
-          {/* 飛び込みの帰属営業日だけは訂正できる。日付変更時刻の変更は不遡及なので、変更前に
-                起きた飛び込みを後から補記したときの誤帰属はここでしか直せない。シフト紐づきは
-                勤務日の継承であって選択ではない */}
-          {correcting && walkIn && (
-            <FormField
-              control={control}
-              name="business_date"
-              rules={{ required: '帰属営業日を入力してください' }}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>帰属営業日</FormLabel>
-                  <FormControl>
-                    <Input type="date" required {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          )}
-
-          <FormField
-            control={control}
-            name="actual_start_at"
-            rules={{ required: '実際の開始を入力してください' }}
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>実際の開始</FormLabel>
-                <FormControl>
-                  <Input type="datetime-local" required {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={control}
-            name="actual_end_at"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>実際の終了</FormLabel>
-                <FormControl>
-                  <Input type="datetime-local" {...field} />
-                </FormControl>
-                <FormDescription className="text-xs">
-                  まだ退勤していないときは空のままにします。
-                </FormDescription>
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={control}
-            name="waiting_place"
-            rules={{
-              maxLength: { value: 200, message: '待機場所は 200 文字以内で入力してください' },
-            }}
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>待機場所</FormLabel>
-                <FormControl>
-                  <Input {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <div className="flex justify-end gap-3 border-t pt-4">
+    <Form {...form}>
+      <ShiftDialogShell
+        open={open}
+        onClose={onClose}
+        title={correcting ? '当日実績を訂正' : '当日実績を記録'}
+        // noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
+        // 我々の文言は永久に描かれない。執行は各 rules が担う
+        form={{ onSubmit: handleSubmit(submit), noValidate: true }}
+        footer={
+          <>
             <Button type="button" variant="outline" onClick={onClose}>
               キャンセル
             </Button>
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? '保存中...' : '保存する'}
             </Button>
+          </>
+        }
+      >
+        {/* 記録済みの実績も、シフトから起こす記録も、キャストは動かせない。選ばせるのは
+              飛び込みを新しく起こすときだけ */}
+        {correcting || !walkIn ? (
+          <div>
+            <p className="text-sm font-medium text-foreground">キャスト</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {castName(casts, attendance?.cast_id ?? shift?.cast_id)}
+            </p>
           </div>
-        </form>
-      </Form>
-    </ShiftDialogShell>
+        ) : (
+          <FormField
+            control={control}
+            name="cast_id"
+            rules={{ required: 'キャストを選択してください' }}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>キャスト</FormLabel>
+                {/* 誰が出勤したかに既定値は置かない。シフトの追加と違い、実績は特定の人物に
+                      ついての法定保存の記録で、既定のまま保存された誤りは訂正履歴に残る */}
+                <Select
+                  items={selectOptions}
+                  value={castValue(field.value, selectOptions)}
+                  onValueChange={v => field.onChange(v === SELECT_NONE ? '' : v)}
+                  required
+                >
+                  <FormControl>
+                    {/* handleSubmit の焦点移動は登録された ref を叩く */}
+                    <SelectTrigger className="w-full" ref={field.ref}>
+                      <SelectValue placeholder="キャストを選択" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {selectOptions.map(o => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
+        <div>
+          <p className="text-sm font-medium text-foreground">予定</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {shift
+              ? `${dateOfDateTime(shift.scheduled_start_at)} ${hhmmOfDateTime(
+                  shift.scheduled_start_at
+                )}–${hhmmOfDateTime(shift.scheduled_end_at)}`
+              : '飛び込み（予定なし）'}
+          </p>
+        </div>
+
+        {/* 飛び込みの帰属営業日だけは訂正できる。日付変更時刻の変更は不遡及なので、変更前に
+              起きた飛び込みを後から補記したときの誤帰属はここでしか直せない。シフト紐づきは
+              勤務日の継承であって選択ではない */}
+        {correcting && walkIn && (
+          <FormField
+            control={control}
+            name="business_date"
+            rules={{ required: '帰属営業日を入力してください' }}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>帰属営業日</FormLabel>
+                <FormControl>
+                  <Input type="date" required {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        )}
+
+        <FormField
+          control={control}
+          name="actual_start_at"
+          rules={{ required: '実際の開始を入力してください' }}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>実際の開始</FormLabel>
+              <FormControl>
+                <Input type="datetime-local" required {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={control}
+          name="actual_end_at"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>実際の終了</FormLabel>
+              <FormControl>
+                <Input type="datetime-local" {...field} />
+              </FormControl>
+              <FormDescription className="text-xs">
+                まだ退勤していないときは空のままにします。
+              </FormDescription>
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={control}
+          name="waiting_place"
+          rules={{
+            maxLength: { value: 200, message: '待機場所は 200 文字以内で入力してください' },
+          }}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>待機場所</FormLabel>
+              <FormControl>
+                <Input {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </ShiftDialogShell>
+    </Form>
   );
 }

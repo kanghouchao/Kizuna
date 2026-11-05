@@ -24,10 +24,7 @@ import {
   Card,
   CardContent,
   Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
+  DialogFrame,
   RegionError,
   Select,
   SelectTrigger,
@@ -213,23 +210,24 @@ function Conditions({ storeId }: { storeId: string }) {
           if (!open) setTargetOpen(false);
         }}
       >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {target?.decision === 'ACCEPTED' ? 'サービス条件を確認' : '特殊サービスを拒否'}
-            </DialogTitle>
-            <DialogDescription>
-              {target &&
-                `${target.item.name} · 顧客価格 ${target.item.price.toLocaleString()} 円 · 固定報酬 ${target.item.remuneration.toLocaleString()} 円`}
-            </DialogDescription>
-          </DialogHeader>
-          <Button onClick={() => void save()} disabled={saving}>
-            {target?.decision === 'ACCEPTED' ? '確認して受諾する' : '確認して拒否する'}
-          </Button>
-          <Button variant="outline" onClick={() => setTargetOpen(false)}>
-            キャンセル
-          </Button>
-        </DialogContent>
+        <DialogFrame
+          size="sm"
+          title={target?.decision === 'ACCEPTED' ? 'サービス条件を確認' : '特殊サービスを拒否'}
+          description={
+            target &&
+            `${target.item.name} · 顧客価格 ${target.item.price.toLocaleString()} 円 · 固定報酬 ${target.item.remuneration.toLocaleString()} 円`
+          }
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setTargetOpen(false)}>
+                キャンセル
+              </Button>
+              <Button onClick={() => void save()} disabled={saving}>
+                {target?.decision === 'ACCEPTED' ? '確認して受諾する' : '確認して拒否する'}
+              </Button>
+            </>
+          }
+        />
       </Dialog>
     </>
   );

@@ -7,11 +7,7 @@ import { notify } from '@/shared/notify';
 import {
   Button,
   Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+  DialogFrame,
   Form,
   FormControl,
   FormField,
@@ -90,57 +86,60 @@ export function StaffWithdrawalDialog({
         if (!next) reset();
       }}
     >
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>会員を退会させますか？</DialogTitle>
-          <DialogDescription>
-            {memberLabel}{' '}
-            のポイントはすべて消去され、店舗との紐づけは解除され、申請中の予約は取り下げられます。退会の取り消しや再入会はできません。
-          </DialogDescription>
-        </DialogHeader>
-        <Form {...form}>
-          {/* noValidate: 原生制約が生きている限りブラウザが submit の手前で止め、我々の文言が描かれない。執行は rules が担う */}
-          <form onSubmit={handleSubmit(submit)} noValidate className="space-y-6">
-            <FormField
-              control={control}
-              name="reason"
-              rules={{
-                required: '退会理由を入力してください',
-                maxLength: { value: 500, message: '退会理由は500文字以内で入力してください' },
-              }}
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>退会理由</FormLabel>
-                  <FormControl>
-                    <Textarea rows={3} required {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={control}
-              name="confirmation"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>確認のため「{CONFIRMATION_WORD}」と入力</FormLabel>
-                  <FormControl>
-                    <Input autoComplete="off" {...field} />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-            <DialogFooter>
+      <Form {...form}>
+        <DialogFrame
+          size="sm"
+          title="会員を退会させますか？"
+          description={
+            <>
+              {memberLabel}{' '}
+              のポイントはすべて消去され、店舗との紐づけは解除され、申請中の予約は取り下げられます。退会の取り消しや再入会はできません。
+            </>
+          }
+          // noValidate: 原生制約が生きている限りブラウザが submit の手前で止め、我々の文言が描かれない。執行は rules が担う
+          form={{ onSubmit: handleSubmit(submit), noValidate: true }}
+          footer={
+            <>
               <Button type="button" variant="outline" onClick={onClose}>
                 キャンセル
               </Button>
               <Button type="submit" variant="destructive" disabled={!confirmed || isSubmitting}>
                 {isSubmitting ? '手続き中...' : '退会させる'}
               </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
+            </>
+          }
+        >
+          <FormField
+            control={control}
+            name="reason"
+            rules={{
+              required: '退会理由を入力してください',
+              maxLength: { value: 500, message: '退会理由は500文字以内で入力してください' },
+            }}
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>退会理由</FormLabel>
+                <FormControl>
+                  <Textarea rows={3} required {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={control}
+            name="confirmation"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>確認のため「{CONFIRMATION_WORD}」と入力</FormLabel>
+                <FormControl>
+                  <Input autoComplete="off" {...field} />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+        </DialogFrame>
+      </Form>
     </Dialog>
   );
 }
