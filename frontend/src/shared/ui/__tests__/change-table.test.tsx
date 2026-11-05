@@ -30,4 +30,19 @@ describe('ChangeTable', () => {
       ['請求', '¥28,000', '¥22,000']
     );
   });
+
+  it('変更前は変わらない行だけ muted にし、bg-muted の変わった行には重ねないこと', () => {
+    render(
+      <ChangeTable
+        rows={[
+          { label: '価格', before: '1,000 円', after: '1,200 円' },
+          { label: '状態', before: '有効', after: '有効' },
+        ]}
+      />
+    );
+    const beforeOf = (label: string) => rowOf(label)!.querySelectorAll('td')[1];
+
+    expect(beforeOf('価格')).not.toHaveClass('text-muted-foreground');
+    expect(beforeOf('状態')).toHaveClass('text-muted-foreground');
+  });
 });
