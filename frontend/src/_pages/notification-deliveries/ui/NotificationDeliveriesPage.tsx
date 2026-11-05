@@ -310,12 +310,14 @@ function Detail({
   if (detail.isLoading) return <p>読み込み中...</p>;
   if (missing || detail.failure === 'notFound')
     return (
-      <div role="alert">
-        <p>通知が見つかりません</p>
-        <Button variant="outline" onClick={onMissing}>
-          一覧へ戻る
-        </Button>
-      </div>
+      <>
+        <p role="alert">通知が見つかりません</p>
+        <DialogFrameActions>
+          <Button variant="outline" onClick={onMissing}>
+            一覧へ戻る
+          </Button>
+        </DialogFrameActions>
+      </>
     );
   if (detail.failure !== null || !detail.data)
     return (

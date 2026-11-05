@@ -26,7 +26,7 @@ export type DialogFrameSize = keyof typeof SIZE_CLASS;
 const ActionsSlot = React.createContext<HTMLElement | null | undefined>(undefined);
 
 interface DialogFrameProps {
-  /** sm 28rem: 確認・1 列の小フォーム / md 42rem: キー値の詳細・2 列のフォーム / lg 56rem: 多列の表 */
+  /** 幅の段（sm 28rem / md 42rem / lg 56rem）。選び方は DESIGN.md の「モーダル」 */
   size: DialogFrameSize;
   title: React.ReactNode;
   description?: React.ReactNode;

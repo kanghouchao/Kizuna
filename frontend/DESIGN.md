@@ -114,7 +114,7 @@ default / modern / classic は同一の `--storefront-*` 契約を各 theme.css 
 | 読み込み         | 形が既知なら Skeleton、未知または小領域は「読み込み中...」。手製 animate-pulse を作らない                             |
 | 進捗             | `bg-muted h-2 rounded-full` と `bg-primary-strong`                                                                    |
 
-- DialogFrame は題名帯（DialogTitle・DialogDescription）と操作帯（DialogFooter）を固定し、本文だけをスクロールする。主操作は操作帯の右端、副操作はその左。本文の部品が自前の form と操作を持つときは DialogFrameActions で操作帯へ置き、submit は `form={id}` で結び付ける。業務コードで DialogContent を直接使わない。
+- DialogFrame は題名帯（DialogTitle・DialogDescription）と操作帯（DialogFooter）を固定し、本文だけをスクロールする。主操作は操作帯の右端、副操作はその左。本文の部品が自前の form と操作を持つときは DialogFrameActions で操作帯へ置き、submit は `form={id}` で結び付ける。
 - 幅は段の名前で選ぶ: `sm` 28rem（確認・1 列の小フォーム）/ `md` 42rem（キー値の詳細・2 列のフォーム）/ `lg` 56rem（本文が多列の表）。ほかの幅を足さない。
 - 最大高さは `calc(100dvh - 2rem)`。スマホでアドレスバーが出ている間も操作帯が画面内に残るよう `vh` ではなく `dvh`。角丸は primitive の `rounded-lg` のまま。
 - CardTitle が章見出しなら `role="heading" aria-level={N}` を渡す。h1 直下は 2、入れ子は 3 とし、飛ばさない。単なるラベルには付けない。
