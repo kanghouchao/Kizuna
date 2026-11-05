@@ -44,7 +44,7 @@ export default function ServiceIdentityCreatePage() {
               name="display_name"
               rules={{ required: '用途名を入力してください' }}
               render={({ field }) => (
-                <FormItem className="gap-2">
+                <FormItem className="gap-2 md:col-span-2">
                   <FormLabel>用途名</FormLabel>
                   <FormControl>
                     <Input
