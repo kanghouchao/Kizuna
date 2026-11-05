@@ -1,7 +1,7 @@
 'use client';
 
 import { notify } from '@/shared/notify';
-import { Button, Dialog, DialogContent, DialogTitle, Input, Label } from '@/shared/ui';
+import { Button, Dialog, DialogFrame, Input, Label } from '@/shared/ui';
 
 interface InvitationModalProps {
   open: boolean;
@@ -40,43 +40,33 @@ export function InvitationModal({
         if (!next) onClose();
       }}
     >
-      <DialogContent
-        showCloseButton={false}
-        aria-describedby={undefined}
-        className="gap-0 rounded-[10px] p-0 sm:max-w-md"
-      >
-        <DialogTitle className="border-b px-6 py-4 text-lg font-semibold text-foreground">
-          招待リンクを発行しました
-        </DialogTitle>
-        <div className="space-y-4 px-6 py-5">
-          <div className="grid gap-1">
-            <Label htmlFor="cast-invitation-link">招待リンク</Label>
-            <Input
-              id="cast-invitation-link"
-              type="text"
-              readOnly
-              value={link}
-              className="bg-muted"
-            />
-          </div>
-          {expiresAt && (
-            <p className="text-sm text-muted-foreground">
-              有効期限: {new Date(expiresAt).toLocaleString('ja-JP')}
-            </p>
-          )}
-          <p className="text-xs text-muted-foreground">
-            既に他店舗のキャストとして登録済みの場合、既存アカウントでログインして受諾すると本店舗の権限が追加されます。
-          </p>
-          <div className="flex justify-end gap-3 border-t pt-4">
+      <DialogFrame
+        size="sm"
+        title="招待リンクを発行しました"
+        footer={
+          <>
             <Button type="button" variant="outline" onClick={onClose}>
               閉じる
             </Button>
             <Button type="button" onClick={handleCopy}>
               コピー
             </Button>
-          </div>
+          </>
+        }
+      >
+        <div className="grid gap-1">
+          <Label htmlFor="cast-invitation-link">招待リンク</Label>
+          <Input id="cast-invitation-link" type="text" readOnly value={link} className="bg-muted" />
         </div>
-      </DialogContent>
+        {expiresAt && (
+          <p className="text-sm text-muted-foreground">
+            有効期限: {new Date(expiresAt).toLocaleString('ja-JP')}
+          </p>
+        )}
+        <p className="text-xs text-muted-foreground">
+          既に他店舗のキャストとして登録済みの場合、既存アカウントでログインして受諾すると本店舗の権限が追加されます。
+        </p>
+      </DialogFrame>
     </Dialog>
   );
 }

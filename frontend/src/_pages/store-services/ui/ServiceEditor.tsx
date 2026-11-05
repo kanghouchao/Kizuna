@@ -10,15 +10,7 @@ import {
   useResource,
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
-import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  RegionError,
-} from '@/shared/ui';
+import { Button, Dialog, DialogFrame, RegionError } from '@/shared/ui';
 import { ServiceForm } from './ServiceForm';
 
 export function ServiceEditor({
@@ -98,14 +90,12 @@ export function ServiceEditor({
         }
       }}
     >
-      <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{id ? 'サービス編集' : 'サービス作成'}</DialogTitle>
-          <DialogDescription>保存した条件は即時に適用されます。</DialogDescription>
-        </DialogHeader>
-        {unavailable ? (
-          <div role="alert">
-            サービスが存在しないか削除されています。
+      <DialogFrame
+        size="sm"
+        title={id ? 'サービス編集' : 'サービス作成'}
+        description="保存した条件は即時に適用されます。"
+        footer={
+          unavailable && (
             <Button
               variant="outline"
               onClick={() => {
@@ -115,7 +105,11 @@ export function ServiceEditor({
             >
               閉じる
             </Button>
-          </div>
+          )
+        }
+      >
+        {unavailable ? (
+          <div role="alert">サービスが存在しないか削除されています。</div>
         ) : resource.failure !== null ? (
           <RegionError
             message="サービスの取得に失敗しました"
@@ -147,7 +141,7 @@ export function ServiceEditor({
             />
           </>
         )}
-      </DialogContent>
+      </DialogFrame>
     </Dialog>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useStoreContext } from '@/entities/user';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
@@ -15,6 +15,7 @@ import {
 } from '@/shared/lib';
 import {
   Button,
+  DialogFrameActions,
   Form,
   FormControl,
   FormField,
@@ -63,14 +64,16 @@ export function AttributionCorrectionStep({
   const { data, success, isLoading, failure, reload } = resource;
 
   if (isLoading) {
-    return <p className="px-6 py-8 text-center text-sm text-muted-foreground">読み込み中...</p>;
+    return <p className="py-4 text-center text-sm text-muted-foreground">読み込み中...</p>;
   }
   if (failure === 'notFound') {
     return (
-      <div role="alert" className="space-y-3 px-6 py-5">
-        <p>この帰属記録は見つかりませんでした。</p>
-        <Button onClick={onDone}>閉じる</Button>
-      </div>
+      <>
+        <p role="alert">この帰属記録は見つかりませんでした。</p>
+        <DialogFrameActions>
+          <Button onClick={onDone}>閉じる</Button>
+        </DialogFrameActions>
+      </>
     );
   }
   if (failure !== null) {
@@ -78,7 +81,7 @@ export function AttributionCorrectionStep({
       <RegionError
         message="訂正の状況を取得できませんでした"
         onRetry={() => void reload()}
-        className="justify-center px-6 py-8"
+        className="justify-center py-4"
       />
     );
   }
@@ -143,6 +146,7 @@ function CorrectionForm({
   // この段を開いた 1 回の人間の操作としてキーを発行する。失敗後の再送信でも変えない —
   // サーバはこのキーで「commit 済みの初回への再送」を見分けて二重記帳を遮断する（ADR 0007）。
   const [idempotencyKey] = useState(() => createUuid());
+  const formId = useId();
 
   const submit = async (values: CorrectionFormValues) => {
     const operation = capture();
@@ -163,27 +167,27 @@ function CorrectionForm({
     }
   };
 
-  if (!initialized) return <p className="px-6 py-5">読み込み中...</p>;
+  if (!initialized) return <p>読み込み中...</p>;
 
   if (remaining <= 0) {
     return (
-      <div className="space-y-4 px-6 py-5">
+      <>
         <p className="text-sm text-muted-foreground">
           {status.granted_points === 0
             ? 'この来店ではポイントが付与されていないため、差し引く分はありません。'
             : '付与された分は差し引き済みです。'}
         </p>
-        <div className="flex justify-end border-t pt-4">
+        <DialogFrameActions>
           <Button type="button" onClick={onDone}>
             完了
           </Button>
-        </div>
-      </div>
+        </DialogFrameActions>
+      </>
     );
   }
 
   return (
-    <div className="space-y-4 px-6 py-5">
+    <>
       <p className="text-sm text-foreground">
         {memberCode
           ? `${memberCode} の台帳から差し引きます。`
@@ -196,7 +200,7 @@ function CorrectionForm({
       <Form {...form}>
         {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、我々の文言は
             永久に描かれない。required と下限は下の規則が引き継ぐ */}
-        <form onSubmit={handleSubmit(submit)} className="space-y-4" noValidate>
+        <form id={formId} onSubmit={handleSubmit(submit)} className="space-y-4" noValidate>
           <FormField
             control={control}
             name="points"
@@ -260,16 +264,16 @@ function CorrectionForm({
           <p className="text-sm text-muted-foreground">
             会員が既に使ってしまった分は差し引けません。残高が足りない場合は引ける額まで入れ直してください。
           </p>
-          <div className="flex justify-end gap-3 border-t pt-4">
-            <Button type="button" variant="outline" onClick={onDone} disabled={isSubmitting}>
-              後で行う
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? '処理中...' : '差し引く'}
-            </Button>
-          </div>
         </form>
       </Form>
-    </div>
+      <DialogFrameActions>
+        <Button type="button" variant="outline" onClick={onDone} disabled={isSubmitting}>
+          後で行う
+        </Button>
+        <Button type="submit" form={formId} disabled={isSubmitting}>
+          {isSubmitting ? '処理中...' : '差し引く'}
+        </Button>
+      </DialogFrameActions>
+    </>
   );
 }

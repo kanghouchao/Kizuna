@@ -1,4 +1,5 @@
 'use client';
+import { useId } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import {
   ChargeType,
@@ -8,6 +9,7 @@ import {
 } from '@/entities/service';
 import {
   Button,
+  DialogFrameActions,
   Form,
   FormField,
   FormItem,
@@ -44,9 +46,11 @@ export function ServiceForm({ initial, onSave, disabled }: Props) {
   const kind = useWatch({ control: form.control, name: 'kind' });
   const chargeType = useWatch({ control: form.control, name: 'charge_type' });
   const free = kind === 'SPECIAL_SERVICE' && chargeType === 'FREE';
+  const formId = useId();
   return (
     <Form {...form}>
       <form
+        id={formId}
         noValidate
         className="space-y-4"
         onSubmit={form.handleSubmit(async values => {
@@ -236,10 +240,12 @@ export function ServiceForm({ initial, onSave, disabled }: Props) {
             </FormItem>
           )}
         />
-        <Button type="submit" disabled={disabled || form.formState.isSubmitting}>
+      </form>
+      <DialogFrameActions>
+        <Button type="submit" form={formId} disabled={disabled || form.formState.isSubmitting}>
           保存する
         </Button>
-      </form>
+      </DialogFrameActions>
     </Form>
   );
 }

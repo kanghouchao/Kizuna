@@ -266,11 +266,17 @@ export function OrderCompletionModal({
             </p>
           </div>
           {receiptToken !== null ? (
-            <ReceiptTokenPanel
-              token={receiptToken}
-              claimNote="お客様が読み取ると、この来店をご自身のポイントと履歴に取り込めます（完了から 90 日以内）。"
-              onClose={onClose}
-            />
+            <div className="px-6 py-5">
+              <ReceiptTokenPanel
+                token={receiptToken}
+                claimNote="お客様が読み取ると、この来店をご自身のポイントと履歴に取り込めます（完了から 90 日以内）。"
+              />
+              <div className="mt-4 flex justify-end gap-3 border-t pt-4">
+                <Button type="button" onClick={onClose}>
+                  閉じる
+                </Button>
+              </div>
+            </div>
           ) : !seeded ? (
             // 播く前はフォームを出さない。空欄のフォームを 1 フレームでも見せると、そのまま送って
             // 既存の内訳を消せる。失敗は領域が自分で名乗る（畳むと「読み込み中」のまま固まる）。

@@ -1,8 +1,19 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { mediumApi } from '@/entities/medium';
 import { CostEditor } from './CostEditor';
+import { Dialog, DialogFrame } from '@/shared/ui';
 jest.mock('@/entities/medium', () => ({ mediumApi: { options: jest.fn() } }));
 const options = jest.mocked(mediumApi.options);
+// 保存ボタンは外枠の操作帯へ置かれるので、外枠の中で描く
+function InFrame({ children }: { children: React.ReactNode }) {
+  return (
+    <Dialog open>
+      <DialogFrame size="sm" title="広告費">
+        {children}
+      </DialogFrame>
+    </Dialog>
+  );
+}
 beforeEach(() => {
   jest.clearAllMocks();
   options.mockResolvedValue([
@@ -34,7 +45,7 @@ const values = {
 };
 it('必須金額の空欄をゼロにせず、問い合わせの未計測とゼロを区別する', async () => {
   const save = jest.fn().mockResolvedValue(undefined);
-  render(<CostEditor disabled={false} onSubmit={save} />);
+  render(<CostEditor disabled={false} onSubmit={save} />, { wrapper: InFrame });
   await pickMedium('求人媒体A');
   fireEvent.click(screen.getByRole('button', { name: '保存する' }));
   expect(await screen.findByText('金額を入力してください')).toBeVisible();
@@ -60,7 +71,9 @@ it('必須金額の空欄をゼロにせず、問い合わせの未計測とゼ�
 });
 it('変更と削除には理由が必要で版を維持する', async () => {
   const save = jest.fn().mockResolvedValue(undefined);
-  render(<CostEditor cost={values} remove disabled={false} onSubmit={save} />);
+  render(<CostEditor cost={values} remove disabled={false} onSubmit={save} />, {
+    wrapper: InFrame,
+  });
   fireEvent.click(screen.getByRole('button', { name: '削除内容を確認' }));
   expect(await screen.findByText('理由を入力してください')).toBeVisible();
   fireEvent.change(screen.getByLabelText('理由'), { target: { value: ' 誤入力 ' } });
@@ -72,7 +85,7 @@ it('変更と削除には理由が必要で版を維持する', async () => {
 });
 it('選んだ媒体を媒体 ID で送り、未選択なら送らない', async () => {
   const save = jest.fn().mockResolvedValue(undefined);
-  render(<CostEditor disabled={false} onSubmit={save} />);
+  render(<CostEditor disabled={false} onSubmit={save} />, { wrapper: InFrame });
   const submit = screen.getByRole('button', { name: '保存する' });
   expect(submit).toBeDisabled();
   await waitFor(() => expect(submit).toBeEnabled());
@@ -96,7 +109,8 @@ it('停止中の媒体を持つ行は停止中と示し、同じ媒体 ID のま
       cost={{ ...values, medium: { id: 'medium-stopped', name: '終了した媒体' } }}
       disabled={false}
       onSubmit={save}
-    />
+    />,
+    { wrapper: InFrame }
   );
   const trigger = screen.getByRole('combobox', { name: '媒体' });
   expect(await within(trigger).findByText('終了した媒体（停止中）')).toBeVisible();
@@ -114,7 +128,7 @@ it('停止中の媒体を持つ行は停止中と示し、同じ媒体 ID のま
 it('媒体の選択肢を取得できなければ再試行でき、媒体が無ければ媒体管理へ案内する', async () => {
   options.mockReset();
   options.mockRejectedValueOnce(new Error('切断')).mockResolvedValueOnce([]);
-  render(<CostEditor disabled={false} onSubmit={jest.fn()} />);
+  render(<CostEditor disabled={false} onSubmit={jest.fn()} />, { wrapper: InFrame });
   const alert = await screen.findByRole('alert');
   expect(alert).toHaveTextContent('媒体の選択肢を取得できませんでした。');
   fireEvent.click(within(alert).getByRole('button'));

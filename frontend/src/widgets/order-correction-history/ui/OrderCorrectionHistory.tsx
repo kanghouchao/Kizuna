@@ -3,16 +3,7 @@
 import { useState } from 'react';
 import { orderApi, OrderCorrectionSnapshot, ORDER_FEE_LINE_KIND_LABELS } from '@/entities/order';
 import { storePath, useListPage } from '@/shared/lib';
-import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  Pager,
-  RegionError,
-} from '@/shared/ui';
+import { Button, Dialog, DialogFrame, Pager, RegionError } from '@/shared/ui';
 
 interface Props {
   orderId: string;
@@ -175,13 +166,13 @@ export function OrderCorrectionHistoryModal({
 }: Props & { open: boolean; onOpenChange: (open: boolean) => void }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
-        <DialogHeader>
-          <DialogTitle>訂正履歴</DialogTitle>
-          <DialogDescription>受注 {props.orderId} の費用・報酬の変更記録</DialogDescription>
-        </DialogHeader>
+      <DialogFrame
+        size="lg"
+        title="訂正履歴"
+        description={`受注 ${props.orderId} の費用・報酬の変更記録`}
+      >
         <OrderCorrectionHistory key={`${props.storeId ?? 'current'}:${props.orderId}`} {...props} />
-      </DialogContent>
+      </DialogFrame>
     </Dialog>
   );
 }

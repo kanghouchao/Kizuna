@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import Link from 'next/link';
 import { mediumApi } from '@/entities/medium';
@@ -6,6 +6,7 @@ import { storePath, useResource } from '@/shared/lib';
 import { categoryLabels, type Category, type Cost, type Mutation } from '../api/advertising';
 import {
   Button,
+  DialogFrameActions,
   RegionError,
   Form,
   FormField,
@@ -52,6 +53,7 @@ export function CostEditor({
       value: current.id,
       label: options.data ? `${current.name}（停止中）` : current.name,
     });
+  const formId = useId();
   const form = useForm<Values>({
     defaultValues: {
       category: cost?.category ?? 'SALES',
@@ -89,7 +91,7 @@ export function CostEditor({
   });
   return (
     <Form {...form}>
-      <form onSubmit={submit} noValidate className="space-y-4">
+      <form id={formId} onSubmit={submit} noValidate className="space-y-4">
         {remove ? (
           <p>
             「{cost?.medium.name}
@@ -259,14 +261,17 @@ export function CostEditor({
             )}
           />
         )}
+      </form>
+      <DialogFrameActions>
         <Button
           type="submit"
+          form={formId}
           disabled={disabled || form.formState.isSubmitting || options.isLoading}
           variant={remove ? 'destructive' : 'default'}
         >
           {remove ? '削除内容を確認' : '保存する'}
         </Button>
-      </form>
+      </DialogFrameActions>
       <ConfirmDialog
         open={confirmation !== null}
         title="この広告費を削除しますか？"

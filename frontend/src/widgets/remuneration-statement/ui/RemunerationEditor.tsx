@@ -14,9 +14,7 @@ import {
   Checkbox,
   ConfirmDialog,
   Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
+  DialogFrame,
   Form,
   FormControl,
   FormField,
@@ -109,149 +107,19 @@ export function RemunerationEditor({
           if (!open && !sending) onClose();
         }}
       >
-        <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{title}</DialogTitle>
-          </DialogHeader>
-          {outstanding?.phase === 'unknown' && (
-            <div role="alert" className="space-y-2 rounded-lg border p-4">
-              <p>送信結果が未確認です。{personName} の元の内容を保持しています。</p>
-              <p>
-                重複を防ぐため編集と新しい登録を止めています。結果確認後に続けてください。ページの再読み込みや終了は避けてください。
-              </p>
-            </div>
-          )}
-          <Form {...form}>
-            <form
-              noValidate
-              onSubmit={event => {
+        <Form {...form}>
+          <DialogFrame
+            size="sm"
+            title={title}
+            form={{
+              noValidate: true,
+              onSubmit: event => {
                 event.stopPropagation();
                 void submit(event);
-              }}
-              className="space-y-6"
-            >
-              <fieldset disabled={locked} className="space-y-6">
-                {!target.cancel && (
-                  <>
-                    <FormField
-                      control={form.control}
-                      name="date"
-                      rules={{ required: '日付を入力してください' }}
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>
-                            {target.kind === 'guarantee' ? '適用開始日' : '帰属日'}
-                          </FormLabel>
-                          <FormControl>
-                            <Input type="date" required {...field} />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    {target.kind === 'guarantee' && (
-                      <FormField
-                        control={form.control}
-                        name="stopped"
-                        render={({ field }) => (
-                          <FormItem className="flex items-center gap-3">
-                            <FormControl>
-                              <Checkbox
-                                checked={field.value}
-                                onCheckedChange={field.onChange}
-                                ref={field.ref}
-                              />
-                            </FormControl>
-                            <FormLabel>この日から保証を停止する</FormLabel>
-                          </FormItem>
-                        )}
-                      />
-                    )}
-                    {!(target.kind === 'guarantee' && stopped) && (
-                      <FormField
-                        control={form.control}
-                        name="amount"
-                        rules={{
-                          validate: value =>
-                            (Number.isSafeInteger(value) &&
-                              value !== undefined &&
-                              value >= (target.kind === 'guarantee' ? 0 : 1)) ||
-                            '金額を整数の円で入力してください',
-                        }}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>
-                              {target.kind === 'guarantee' ? '日額（円）' : '付与額（円）'}
-                            </FormLabel>
-                            <FormControl>
-                              <Input
-                                type="number"
-                                min={target.kind === 'guarantee' ? 0 : 1}
-                                step="1"
-                                required
-                                {...field}
-                                value={field.value ?? ''}
-                                onChange={event =>
-                                  field.onChange(
-                                    Number.isNaN(event.target.valueAsNumber)
-                                      ? undefined
-                                      : event.target.valueAsNumber
-                                  )
-                                }
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    )}
-                  </>
-                )}
-                <FormField
-                  control={form.control}
-                  name="reason"
-                  rules={{
-                    required: '理由を入力してください',
-                    maxLength: { value: 500, message: '理由は500文字以内にしてください' },
-                    validate: value => !!value.trim() || '理由を入力してください',
-                  }}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{target.cancel ? '取消理由' : '理由・説明'}</FormLabel>
-                      <FormControl>
-                        <Input required maxLength={500} {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                {correcting && !target.cancel && (
-                  <FormField
-                    control={form.control}
-                    name="correction_reason"
-                    rules={{
-                      required: '訂正理由を入力してください',
-                      maxLength: { value: 500, message: '訂正理由は500文字以内にしてください' },
-                      validate: value => !!value.trim() || '訂正理由を入力してください',
-                    }}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>訂正理由（内部記録）</FormLabel>
-                        <FormControl>
-                          <Input required maxLength={500} {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
-                {target.kind === 'guarantee' && (
-                  <p className="text-sm text-muted-foreground">
-                    適用開始日から次の条件まで有効です。過去条件の訂正・取消は原月の明細にも反映されます。
-                  </p>
-                )}
-              </fieldset>
-              <div className="flex flex-wrap gap-3">
+              },
+            }}
+            footer={
+              <>
                 <Button type="button" variant="outline" disabled={sending} onClick={onClose}>
                   閉じる
                 </Button>
@@ -264,10 +132,140 @@ export function RemunerationEditor({
                     {target.cancel ? '取消内容を確認' : '保存する'}
                   </Button>
                 )}
+              </>
+            }
+          >
+            {outstanding?.phase === 'unknown' && (
+              <div role="alert" className="space-y-2 rounded-lg border p-4">
+                <p>送信結果が未確認です。{personName} の元の内容を保持しています。</p>
+                <p>
+                  重複を防ぐため編集と新しい登録を止めています。結果確認後に続けてください。ページの再読み込みや終了は避けてください。
+                </p>
               </div>
-            </form>
-          </Form>
-        </DialogContent>
+            )}
+            <fieldset disabled={locked} className="space-y-6">
+              {!target.cancel && (
+                <>
+                  <FormField
+                    control={form.control}
+                    name="date"
+                    rules={{ required: '日付を入力してください' }}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>
+                          {target.kind === 'guarantee' ? '適用開始日' : '帰属日'}
+                        </FormLabel>
+                        <FormControl>
+                          <Input type="date" required {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {target.kind === 'guarantee' && (
+                    <FormField
+                      control={form.control}
+                      name="stopped"
+                      render={({ field }) => (
+                        <FormItem className="flex items-center gap-3">
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              ref={field.ref}
+                            />
+                          </FormControl>
+                          <FormLabel>この日から保証を停止する</FormLabel>
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                  {!(target.kind === 'guarantee' && stopped) && (
+                    <FormField
+                      control={form.control}
+                      name="amount"
+                      rules={{
+                        validate: value =>
+                          (Number.isSafeInteger(value) &&
+                            value !== undefined &&
+                            value >= (target.kind === 'guarantee' ? 0 : 1)) ||
+                          '金額を整数の円で入力してください',
+                      }}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>
+                            {target.kind === 'guarantee' ? '日額（円）' : '付与額（円）'}
+                          </FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              min={target.kind === 'guarantee' ? 0 : 1}
+                              step="1"
+                              required
+                              {...field}
+                              value={field.value ?? ''}
+                              onChange={event =>
+                                field.onChange(
+                                  Number.isNaN(event.target.valueAsNumber)
+                                    ? undefined
+                                    : event.target.valueAsNumber
+                                )
+                              }
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </>
+              )}
+              <FormField
+                control={form.control}
+                name="reason"
+                rules={{
+                  required: '理由を入力してください',
+                  maxLength: { value: 500, message: '理由は500文字以内にしてください' },
+                  validate: value => !!value.trim() || '理由を入力してください',
+                }}
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{target.cancel ? '取消理由' : '理由・説明'}</FormLabel>
+                    <FormControl>
+                      <Input required maxLength={500} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {correcting && !target.cancel && (
+                <FormField
+                  control={form.control}
+                  name="correction_reason"
+                  rules={{
+                    required: '訂正理由を入力してください',
+                    maxLength: { value: 500, message: '訂正理由は500文字以内にしてください' },
+                    validate: value => !!value.trim() || '訂正理由を入力してください',
+                  }}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>訂正理由（内部記録）</FormLabel>
+                      <FormControl>
+                        <Input required maxLength={500} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              {target.kind === 'guarantee' && (
+                <p className="text-sm text-muted-foreground">
+                  適用開始日から次の条件まで有効です。過去条件の訂正・取消は原月の明細にも反映されます。
+                </p>
+              )}
+            </fieldset>
+          </DialogFrame>
+        </Form>
       </Dialog>
       <ConfirmDialog
         open={confirm}

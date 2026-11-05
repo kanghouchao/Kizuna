@@ -1,7 +1,7 @@
 'use client';
 
 import { notify } from '@/shared/notify';
-import { Button, Dialog, DialogContent, DialogTitle, Input, Label } from '@/shared/ui';
+import { Button, Dialog, DialogFrame, Input, Label } from '@/shared/ui';
 
 interface TemporaryPasswordModalProps {
   open: boolean;
@@ -47,43 +47,40 @@ export function TemporaryPasswordModal({
         if (next) return;
       }}
     >
-      <DialogContent
+      <DialogFrame
+        size="sm"
         showCloseButton={false}
-        aria-describedby={undefined}
-        className="gap-0 rounded-[10px] p-0 sm:max-w-md"
-      >
-        <DialogTitle className="border-b px-6 py-4 text-lg font-semibold text-foreground">
-          仮パスワードを発行しました
-        </DialogTitle>
-        <div className="space-y-4 px-6 py-5">
-          <div className="grid gap-1">
-            <Label htmlFor="temporary-password">
-              {displayName}（{email}）の仮パスワード
-            </Label>
-            <Input
-              id="temporary-password"
-              type="text"
-              readOnly
-              value={temporaryPassword}
-              className="bg-muted font-mono"
-            />
-          </div>
-          <p className="text-sm text-muted-foreground">
-            この画面を閉じると二度と表示できません。本人へ安全な手段で伝え、初回ログイン後に変更してもらってください。
-          </p>
-          <p className="text-xs text-muted-foreground">
-            対象の既存セッションは失効済みです。再設定前のログイン状態では操作を続けられません。
-          </p>
-          <div className="flex justify-end gap-3 border-t pt-4">
+        title="仮パスワードを発行しました"
+        footer={
+          <>
             <Button type="button" variant="outline" onClick={onClose}>
               閉じる
             </Button>
             <Button type="button" onClick={handleCopy}>
               コピー
             </Button>
-          </div>
+          </>
+        }
+      >
+        <div className="grid gap-1">
+          <Label htmlFor="temporary-password">
+            {displayName}（{email}）の仮パスワード
+          </Label>
+          <Input
+            id="temporary-password"
+            type="text"
+            readOnly
+            value={temporaryPassword}
+            className="bg-muted font-mono"
+          />
         </div>
-      </DialogContent>
+        <p className="text-sm text-muted-foreground">
+          この画面を閉じると二度と表示できません。本人へ安全な手段で伝え、初回ログイン後に変更してもらってください。
+        </p>
+        <p className="text-xs text-muted-foreground">
+          対象の既存セッションは失効済みです。再設定前のログイン状態では操作を続けられません。
+        </p>
+      </DialogFrame>
     </Dialog>
   );
 }

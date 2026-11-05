@@ -64,39 +64,44 @@ export function AttendanceCancelDialog({
   };
 
   return (
-    <ShiftDialogShell open={open} onClose={onClose} title="この実績を取り消しますか？">
-      <Form {...form}>
-        <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5" noValidate>
-          <p className="text-sm text-muted-foreground">
-            記録そのものは残り、集計と欠勤の導出から外れます。取り消したあとは記録し直せます。
-          </p>
-          <FormField
-            control={control}
-            name="reason"
-            rules={{
-              required: '取消の理由を入力してください',
-              maxLength: { value: 500, message: '取消の理由は 500 文字以内で入力してください' },
-            }}
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>取消の理由</FormLabel>
-                <FormControl>
-                  <Textarea rows={3} required {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <div className="flex justify-end gap-3 border-t pt-4">
+    <Form {...form}>
+      <ShiftDialogShell
+        open={open}
+        onClose={onClose}
+        title="この実績を取り消しますか？"
+        form={{ onSubmit: handleSubmit(submit), noValidate: true }}
+        footer={
+          <>
             <Button type="button" variant="outline" onClick={onClose}>
               キャンセル
             </Button>
             <Button type="submit" variant="destructive" disabled={isSubmitting}>
               {isSubmitting ? '取消中...' : '取り消す'}
             </Button>
-          </div>
-        </form>
-      </Form>
-    </ShiftDialogShell>
+          </>
+        }
+      >
+        <p className="text-sm text-muted-foreground">
+          記録そのものは残り、集計と欠勤の導出から外れます。取り消したあとは記録し直せます。
+        </p>
+        <FormField
+          control={control}
+          name="reason"
+          rules={{
+            required: '取消の理由を入力してください',
+            maxLength: { value: 500, message: '取消の理由は 500 文字以内で入力してください' },
+          }}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>取消の理由</FormLabel>
+              <FormControl>
+                <Textarea rows={3} required {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </ShiftDialogShell>
+    </Form>
   );
 }

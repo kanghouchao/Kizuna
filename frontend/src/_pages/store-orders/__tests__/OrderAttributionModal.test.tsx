@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { notify } from '@/shared/notify';
 import { AttributionCorrectionStep } from '../ui/AttributionCorrectionStep';
 import { OrderAttributionModal } from '../ui/OrderAttributionModal';
+import { Dialog, DialogFrame } from '@/shared/ui';
 import { OrderArchiveRow, OrderAttribution, orderApi } from '@/entities/order';
 import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
@@ -362,6 +363,8 @@ describe('OrderAttributionModal', () => {
     fireEvent.keyDown(document.body, { key: 'Escape' });
     // 生値はこの応答にしか無い。誤って閉じると客が来店を取り戻す手段ごと消える
     expect(onClose).not.toHaveBeenCalled();
+    // 押しても何も起きない右上の × は出さない
+    expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '閉じる' }));
     expect(onClose).toHaveBeenCalled();
@@ -480,9 +483,17 @@ test('帰属記録の複合キーが変わったら旧上限と理由を隠す',
       })
     );
   const props = { orderId: 'o1', attributionId: 1, onBusyChange: jest.fn(), onDone: jest.fn() };
-  const { rerender } = render(<AttributionCorrectionStep {...props} />);
+  // 差し引きの段は外枠の操作帯へ操作を置くので、外枠の中で描く
+  const inFrame = (attributionId: number) => (
+    <Dialog open>
+      <DialogFrame size="sm" title="誤付与の差し引き">
+        <AttributionCorrectionStep {...props} attributionId={attributionId} />
+      </DialogFrame>
+    </Dialog>
+  );
+  const { rerender } = render(inFrame(1));
   fireEvent.change(await screen.findByLabelText('訂正の理由'), { target: { value: '旧理由' } });
-  rerender(<AttributionCorrectionStep {...props} attributionId={2} />);
+  rerender(inFrame(2));
   expect(screen.queryByLabelText('訂正の理由')).not.toBeInTheDocument();
   await act(async () => resolve({ granted_points: 200, corrected_points: 50 }));
   expect(await screen.findByLabelText('差し引くポイント')).toHaveValue(150);

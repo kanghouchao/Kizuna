@@ -8,6 +8,7 @@ export * from './card';
 export * from './checkbox';
 export * from './confirm-dialog';
 export * from './dialog';
+export * from './dialog-frame';
 export * from './dropdown-menu';
 export * from './form';
 export * from './input';

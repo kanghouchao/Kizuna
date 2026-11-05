@@ -17,9 +17,7 @@ import {
   CardContent,
   ConfirmDialog,
   Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
+  DialogFrame,
   Form,
   FormField,
   FormItem,
@@ -272,28 +270,32 @@ export function CustomerContactsSection({ customerId }: { customerId: string }) 
           if (!next && gone) refresh();
         }}
       >
-        <DialogContent
-          className="max-h-[calc(100vh-2rem)] overflow-y-auto"
-          aria-describedby={undefined}
-        >
-          <DialogHeader>
-            <DialogTitle>{editing ? '連絡先を編集' : '連絡先を追加'}</DialogTitle>
-          </DialogHeader>
-          {gone ? (
-            <div role="alert" className="space-y-4">
-              <p>この連絡先は見つかりませんでした。</p>
-              <Button
-                onClick={() => {
-                  setOpen(false);
-                  refresh();
-                }}
-              >
-                閉じる
-              </Button>
-            </div>
-          ) : (
-            <Form {...form}>
-              <form onSubmit={save} noValidate className="space-y-6">
+        <Form {...form}>
+          <DialogFrame
+            size="sm"
+            title={editing ? '連絡先を編集' : '連絡先を追加'}
+            form={gone ? undefined : { onSubmit: save, noValidate: true }}
+            footer={
+              gone ? (
+                <Button
+                  onClick={() => {
+                    setOpen(false);
+                    refresh();
+                  }}
+                >
+                  閉じる
+                </Button>
+              ) : (
+                <Button type="submit" disabled={form.formState.isSubmitting}>
+                  保存する
+                </Button>
+              )
+            }
+          >
+            {gone ? (
+              <p role="alert">この連絡先は見つかりませんでした。</p>
+            ) : (
+              <>
                 <FormField
                   control={form.control}
                   name="type"
@@ -340,13 +342,10 @@ export function CustomerContactsSection({ customerId }: { customerId: string }) 
                     </FormItem>
                   )}
                 />
-                <Button type="submit" disabled={form.formState.isSubmitting}>
-                  保存する
-                </Button>
-              </form>
-            </Form>
-          )}
-        </DialogContent>
+              </>
+            )}
+          </DialogFrame>
+        </Form>
       </Dialog>
       {permission && (
         <ContactPermissionDialog

@@ -10,10 +10,7 @@ import {
   Button,
   Input,
   Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
+  DialogFrame,
   RegionError,
   Tabs,
   TabsList,
@@ -313,21 +310,24 @@ function MonthPage({
       {canExport && <CostExport store={store} month={month} />}
       {history && <CostHistory key={revision} month={month} />}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>
-              {target?.kind === 'copy'
-                ? '前月コピーの確認'
-                : target?.kind === 'delete'
-                  ? '広告費の削除'
-                  : target?.kind === 'replace'
-                    ? '広告費の編集'
-                    : '広告費の登録'}
-            </DialogTitle>
-            <DialogDescription>
-              {month}の広告費を操作します。変更内容は履歴に残ります。
-            </DialogDescription>
-          </DialogHeader>
+        <DialogFrame
+          size={target?.kind === 'copy' ? 'lg' : 'sm'}
+          title={
+            target?.kind === 'copy'
+              ? '前月コピーの確認'
+              : target?.kind === 'delete'
+                ? '広告費の削除'
+                : target?.kind === 'replace'
+                  ? '広告費の編集'
+                  : '広告費の登録'
+          }
+          description={`${month}の広告費を操作します。変更内容は履歴に残ります。`}
+          footer={
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              閉じる
+            </Button>
+          }
+        >
           {missing ? (
             <p role="alert">広告費が見つかりません。一覧を更新しました。閉じて確認してください。</p>
           ) : target?.kind === 'copy' ? (
@@ -343,10 +343,7 @@ function MonthPage({
               />
             )
           )}
-          <Button variant="outline" onClick={() => setOpen(false)}>
-            閉じる
-          </Button>
-        </DialogContent>
+        </DialogFrame>
       </Dialog>
     </div>
   );

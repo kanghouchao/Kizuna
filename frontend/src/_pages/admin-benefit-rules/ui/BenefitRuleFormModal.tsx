@@ -19,8 +19,7 @@ import { notify } from '@/shared/notify';
 import {
   Button,
   Dialog,
-  DialogContent,
-  DialogTitle,
+  DialogFrame,
   Form,
   FormControl,
   FormDescription,
@@ -176,6 +175,7 @@ export function BenefitRuleFormModal({
     editingId !== null && (detailLoading || editingRule === null || seededRule !== editingRule);
 
   const isReferral = type === 'REFERRAL';
+  const showForm = detailFailure === null && !editingLoading;
 
   const submit = async (values: BenefitRuleFormValues) => {
     const payload: Omit<BenefitRuleCreateRequest, 'type'> = {
@@ -226,35 +226,41 @@ export function BenefitRuleFormModal({
         if (!next && !isSubmitting) onClose();
       }}
     >
-      <DialogContent
-        showCloseButton={false}
-        aria-describedby={undefined}
-        className="max-h-[calc(100vh-2rem)] gap-0 overflow-y-auto rounded-[10px] p-0 sm:max-w-lg"
-      >
-        <DialogTitle className="border-b px-6 py-4 text-lg font-semibold text-foreground">
-          {editingId === null ? '特典規則を作成' : '特典規則を編集'}
-        </DialogTitle>
-        {detailFailure !== null ? (
-          <div className="space-y-4 px-6 py-5">
-            {ruleMissing ? (
+      <Form {...form}>
+        <DialogFrame
+          size="md"
+          title={editingId === null ? '特典規則を作成' : '特典規則を編集'}
+          form={showForm ? { onSubmit: handleSubmit(submit), noValidate: true } : undefined}
+          footer={
+            detailFailure !== null ? (
+              <Button type="button" variant="outline" onClick={onClose}>
+                閉じる
+              </Button>
+            ) : showForm ? (
+              <>
+                <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
+                  キャンセル
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? '保存中...' : '保存する'}
+                </Button>
+              </>
+            ) : undefined
+          }
+        >
+          {detailFailure !== null ? (
+            ruleMissing ? (
               <p className="text-sm text-muted-foreground">この特典規則は見つかりませんでした。</p>
             ) : (
               <RegionError
                 message="特典規則の取得に失敗しました"
                 onRetry={() => void reloadEditingRule()}
               />
-            )}
-            <div className="flex justify-end border-t pt-4">
-              <Button type="button" variant="outline" onClick={onClose}>
-                閉じる
-              </Button>
-            </div>
-          </div>
-        ) : editingLoading ? (
-          <p className="px-6 py-5 text-sm text-muted-foreground">読み込み中...</p>
-        ) : (
-          <Form {...form}>
-            <form onSubmit={handleSubmit(submit)} className="space-y-4 px-6 py-5" noValidate>
+            )
+          ) : editingLoading ? (
+            <p className="text-sm text-muted-foreground">読み込み中...</p>
+          ) : (
+            <>
               <FormField
                 control={control}
                 name="name"
@@ -475,18 +481,10 @@ export function BenefitRuleFormModal({
                   )}
                 />
               )}
-              <div className="flex justify-end gap-3 border-t pt-4">
-                <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
-                  キャンセル
-                </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? '保存中...' : '保存する'}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        )}
-      </DialogContent>
+            </>
+          )}
+        </DialogFrame>
+      </Form>
     </Dialog>
   );
 }

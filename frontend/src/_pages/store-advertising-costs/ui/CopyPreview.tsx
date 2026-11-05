@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { advertisingApi, previousMonth, type Mutation } from '../api/advertising';
 import { useResource } from '@/shared/lib';
 import {
   Button,
+  DialogFrameActions,
   RegionError,
   Form,
   FormField,
@@ -48,6 +49,7 @@ export function CopyPreview({
     [source, month, page]
   );
   const form = useForm<{ reason: string }>({ defaultValues: { reason: '' } });
+  const formId = useId();
   const data = preview.data;
   if (!source) return <p role="alert">この月には前月がありません。</p>;
   return (
@@ -99,6 +101,7 @@ export function CopyPreview({
             ) : (
               <Form {...form}>
                 <form
+                  id={formId}
                   noValidate
                   onSubmit={form.handleSubmit(async v => {
                     await onSubmit({
@@ -127,10 +130,16 @@ export function CopyPreview({
                       </FormItem>
                     )}
                   />
-                  <Button type="submit" disabled={disabled || form.formState.isSubmitting}>
+                </form>
+                <DialogFrameActions>
+                  <Button
+                    type="submit"
+                    form={formId}
+                    disabled={disabled || form.formState.isSubmitting}
+                  >
                     金額を確認してコピー
                   </Button>
-                </form>
+                </DialogFrameActions>
               </Form>
             )}
           </>
