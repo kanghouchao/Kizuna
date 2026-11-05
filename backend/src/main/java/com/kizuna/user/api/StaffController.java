@@ -3,7 +3,7 @@ package com.kizuna.user.api;
 import com.kizuna.user.api.dto.AdminStaffCreateRequest;
 import com.kizuna.user.api.dto.AdminStaffResponse;
 import com.kizuna.user.api.dto.AdminStaffUpdateRequest;
-import com.kizuna.user.api.dto.RoleSummaryResponse;
+import com.kizuna.user.api.dto.GrantableRoleResponse;
 import com.kizuna.user.api.dto.StaffAccountPasswordResetResponse;
 import com.kizuna.user.application.AdminStaffService;
 import jakarta.validation.Valid;
@@ -53,10 +53,10 @@ public class StaffController {
   /** 行使者が付与できるロールの目録。有界（ロール目録）なので裸の List で返す。 */
   @GetMapping("/grantable-roles")
   @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
-  public ResponseEntity<List<RoleSummaryResponse>> grantableRoles(Principal principal) {
+  public ResponseEntity<List<GrantableRoleResponse>> grantableRoles(Principal principal) {
     return ResponseEntity.ok(
         adminStaffService.grantableRoles(principal.getName()).stream()
-            .map(RoleSummaryResponse::of)
+            .map(GrantableRoleResponse::of)
             .toList());
   }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, type ReactNode, type Ref } from 'react';
-import { RoleSummaryResponse } from '@/entities/user';
+import type { RoleRef } from '@/entities/user';
 import {
   Checkbox,
   FormControl,
@@ -13,7 +13,7 @@ import {
 } from '@/shared/ui';
 
 interface RolePickerProps {
-  roles: RoleSummaryResponse[];
+  roles: RoleRef[];
   isLoading: boolean;
   /** 目録の取得に失敗した状態。選択肢が無いのが事実なのか読めなかったのかを区別する。 */
   failed: boolean;

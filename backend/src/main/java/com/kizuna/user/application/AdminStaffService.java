@@ -11,7 +11,9 @@ import com.kizuna.user.domain.DuplicateStaffEmailException;
 import com.kizuna.user.domain.HqPasswordResetNotAllowedException;
 import com.kizuna.user.domain.InvalidRoleGrantException;
 import com.kizuna.user.domain.InvalidStoreScopeException;
+import com.kizuna.user.domain.Permission;
 import com.kizuna.user.domain.PermissionCode;
+import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.SelfPasswordResetNotAllowedException;
@@ -71,6 +73,7 @@ public class AdminStaffService {
   private final BusinessAudit businessAudit;
   private final UserRepository repository;
   private final RoleRepository roleRepository;
+  private final PermissionRepository permissionRepository;
   private final RoleManageHolderGuard roleManageHolderGuard;
   private final PasswordEncoder passwordEncoder;
   private final CredentialOperations credentialOperations;
@@ -147,18 +150,28 @@ public class AdminStaffService {
 
   /** 行使者が付与できるロールの目録 — 権限集合が行使者の権限並集に収まるもの（ROLE_MANAGE 保持者は全ロール）。判定の単源をサーバに置く。 */
   @Transactional(readOnly = true)
-  public List<RoleViews.Summary> grantableRoles(String actorEmail) {
+  public List<RoleViews.Grantable> grantableRoles(String actorEmail) {
     Actor actor = actor(actorEmail);
-    return roleRepository.findAll().stream()
-        .filter(role -> actor.covers(role.getPermissionIds()))
-        .sorted(Comparator.comparing(Role::getName))
+    List<Role> roles =
+        roleRepository.findAll().stream()
+            .filter(role -> actor.covers(role.getPermissionIds()))
+            .sorted(Comparator.comparing(Role::getName))
+            .toList();
+    Map<Long, PermissionCode> codesById =
+        permissionRepository
+            .findAllById(roles.stream().flatMap(role -> role.getPermissionIds().stream()).toList())
+            .stream()
+            .collect(
+                Collectors.toMap(
+                    Permission::getId, permission -> PermissionCode.valueOf(permission.getCode())));
+    return roles.stream()
         .map(
             role ->
-                new RoleViews.Summary(
+                new RoleViews.Grantable(
                     role.getId(),
                     role.getName(),
                     Boolean.TRUE.equals(role.getSystemRole()),
-                    role.getPermissionIds().size()))
+                    role.getPermissionIds().stream().map(codesById::get).sorted().toList()))
         .toList();
   }
 

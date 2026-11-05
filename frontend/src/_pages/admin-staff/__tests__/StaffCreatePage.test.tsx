@@ -54,8 +54,21 @@ describe('従業員追加ページ', () => {
       { id: 2, name: '渋谷店' },
     ]);
     mockedStaffApi.grantableRoles.mockResolvedValue([
-      { id: 10, name: '店長', system: true, permission_count: 8 },
-      { id: 11, name: 'スタッフ', system: true, permission_count: 3 },
+      {
+        id: 10,
+        name: '店長',
+        system: true,
+        permissions: [
+          { code: 'ORDER_MANAGE', label: '受注の管理' },
+          { code: 'CUSTOMER_MANAGE', label: '顧客の管理' },
+        ],
+      },
+      {
+        id: 11,
+        name: 'スタッフ',
+        system: true,
+        permissions: [{ code: 'ORDER_MANAGE', label: '受注の管理' }],
+      },
     ]);
     mockedStaffApi.create.mockResolvedValue({} as never);
   });
@@ -128,7 +141,18 @@ describe('従業員追加ページ', () => {
     expect(result).toHaveTextContent(
       '新人 花子さんは 店長 として 新宿店 のデータにアクセスできます'
     );
-    expect(within(result).getByText('権限 8 件')).toBeInTheDocument();
+    expect(
+      within(result).getByRole('heading', { name: '付与される権限（2 件）' })
+    ).toBeInTheDocument();
+    expect(within(result).getByText('受注の管理')).toBeInTheDocument();
+    expect(within(result).getByText('顧客の管理')).toBeInTheDocument();
+
+    // 2 ロールが共有する権限は 1 件として数える
+    fireEvent.click(screen.getByRole('checkbox', { name: 'スタッフ' }));
+    expect(
+      within(result).getByRole('heading', { name: '付与される権限（2 件）' })
+    ).toBeInTheDocument();
+    expect(within(result).getAllByText('受注の管理')).toHaveLength(1);
 
     fireEvent.click(screen.getByRole('radio', { name: '全店舗' }));
     expect(result).toHaveTextContent('として 全店舗 のデータ');
@@ -152,6 +176,12 @@ describe('従業員追加ページ', () => {
     fireEvent.click(screen.getByRole('button', { name: '再試行' }));
     expect(screen.getByText('店舗一覧の取得に失敗しました')).toBeInTheDocument();
     expect(reload).toHaveBeenCalled();
+  });
+
+  // 管理者自身の保存済みパスワードが新しい従業員の初期パスワードへ自動入力されないようにする
+  it('初期パスワード欄は新しいパスワードとして自動入力を扱う', () => {
+    render(<StaffCreatePage />);
+    expect(screen.getByLabelText('初期パスワード')).toHaveAttribute('autocomplete', 'new-password');
   });
 
   it('キャンセルは一覧への link である', () => {

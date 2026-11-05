@@ -12,6 +12,7 @@ import {
 } from '@/features/staff-management';
 import { EMAIL_PATTERN, EMAIL_PATTERN_MESSAGE, useManagedList } from '@/shared/lib';
 import {
+  Badge,
   Button,
   Card,
   CardContent,
@@ -80,6 +81,12 @@ export function StaffForm({ editing, locked = false, onSubmit }: StaffFormProps)
   const storeCatalog = stores ?? [];
 
   const selectedRoles = roles.filter(role => role.id !== undefined && roleIds.includes(role.id));
+  // 複数のロールが同じ権限を持ちうるので、コードで 1 件にまとめる（初出の順）
+  const grantedPermissions = [
+    ...new Map(
+      selectedRoles.flatMap(role => role.permissions).map(entry => [entry.code, entry])
+    ).values(),
+  ];
   const selectedStores =
     storeSet.storeScopeType === 'ALL_STORES'
       ? []
@@ -145,7 +152,7 @@ export function StaffForm({ editing, locked = false, onSubmit }: StaffFormProps)
                       <FormItem className="gap-2">
                         <FormLabel>初期パスワード</FormLabel>
                         <FormControl>
-                          <Input required type="password" {...field} />
+                          <Input required type="password" autoComplete="new-password" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -228,17 +235,18 @@ export function StaffForm({ editing, locked = false, onSubmit }: StaffFormProps)
                 のデータにアクセスできます
               </p>
               <div className="space-y-2">
-                <h3 className="font-medium text-foreground">ロール（{selectedRoles.length} 件）</h3>
-                {selectedRoles.length === 0 ? (
+                <h3 className="font-medium text-foreground">
+                  付与される権限（{grantedPermissions.length} 件）
+                </h3>
+                {grantedPermissions.length === 0 ? (
                   <p className="text-muted-foreground">ロールが選ばれていません。</p>
                 ) : (
-                  <ul className="space-y-1">
-                    {selectedRoles.map(role => (
-                      <li key={role.id} className="flex justify-between gap-3">
-                        <span className="min-w-0 break-words text-foreground">{role.name}</span>
-                        <span className="shrink-0 text-muted-foreground tabular-nums">
-                          権限 {role.permission_count} 件
-                        </span>
+                  <ul className="flex flex-wrap gap-1.5">
+                    {grantedPermissions.map(entry => (
+                      <li key={entry.code}>
+                        <Badge variant="outline" className="whitespace-normal break-words">
+                          {entry.label ?? entry.code}
+                        </Badge>
                       </li>
                     ))}
                   </ul>

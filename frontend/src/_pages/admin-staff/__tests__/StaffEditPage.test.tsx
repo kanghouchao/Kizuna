@@ -53,8 +53,18 @@ describe('従業員の権限編集ページ', () => {
       switchStore: jest.fn(),
     } as unknown as ReturnType<typeof useStoreContext>);
     mockedStaffApi.grantableRoles.mockResolvedValue([
-      { id: 10, name: '店長', system: true, permission_count: 8 },
-      { id: 11, name: '経理', system: false, permission_count: 3 },
+      {
+        id: 10,
+        name: '店長',
+        system: true,
+        permissions: [{ code: 'ORDER_MANAGE', label: '受注の管理' }],
+      },
+      {
+        id: 11,
+        name: '経理',
+        system: false,
+        permissions: [{ code: 'ADVERTISING_COST_MANAGE', label: '広告費の登録・更新' }],
+      },
     ]);
     mockedStaffApi.get.mockResolvedValue(staff());
     mockedStaffApi.update.mockResolvedValue(staff({ version: 8 }));

@@ -4,13 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.AdminStaffService;
+import com.kizuna.user.application.RoleViews;
 import com.kizuna.user.application.StaffView;
 import com.kizuna.user.application.StoreScopeResolver;
+import com.kizuna.user.domain.PermissionCode;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -93,5 +96,31 @@ class StaffControllerTest {
   @WithMockUser(authorities = "PERM_STAFF_CREDENTIAL_MANAGE")
   void accountManageAloneCannotReadGrants() throws Exception {
     mockMvc.perform(get("/staff").principal(ACTOR)).andExpect(status().isForbidden());
+  }
+
+  @Test
+  @DisplayName("GET /staff/grantable-roles は各ロールの権限をコードと表示名で返し、件数は持たないこと")
+  @WithMockUser(authorities = "PERM_STAFF_MANAGE")
+  void grantableRolesCarryPermissionCodesAndLabels() throws Exception {
+    when(adminStaffService.grantableRoles(any()))
+        .thenReturn(
+            List.of(
+                new RoleViews.Grantable(
+                    2L,
+                    "店長",
+                    true,
+                    List.of(PermissionCode.ORDER_MANAGE, PermissionCode.ORDER_CORRECT))));
+
+    mockMvc
+        .perform(get("/staff/grantable-roles").principal(ACTOR))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].id").value(2))
+        .andExpect(jsonPath("$[0].name").value("店長"))
+        .andExpect(jsonPath("$[0].system").value(true))
+        .andExpect(jsonPath("$[0].permissions[0].code").value("ORDER_MANAGE"))
+        .andExpect(
+            jsonPath("$[0].permissions[0].label").value(PermissionCode.ORDER_MANAGE.getLabel()))
+        .andExpect(jsonPath("$[0].permissions[1].code").value("ORDER_CORRECT"))
+        .andExpect(jsonPath("$[0].permission_count").doesNotExist());
   }
 }
