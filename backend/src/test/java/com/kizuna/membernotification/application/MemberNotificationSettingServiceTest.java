@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -68,18 +67,33 @@ class MemberNotificationSettingServiceTest {
   }
 
   @Test
-  void verifiedMemberWhoDeniedBusinessIsNotAllowed() {
-    lenient()
-        .when(addresses.of(3L))
-        .thenReturn(Optional.of(new Address("m@example.test", true, false)));
+  void verifiedMembersFirstRefusalIsAuditedFromTheAllowedDefault() {
+    var refused =
+        MemberNotificationSetting.chosen(
+            3L, ContactPurpose.BUSINESS, ContactPermissionStatus.DENIED);
+    when(memberLookup.findByUserId(10L)).thenReturn(Optional.of(new MemberLookup(3L, "C")));
+    when(addresses.of(3L)).thenReturn(Optional.of(new Address("m@example.test", true, false)));
     when(settings.findByMemberIdAndPurpose(3L, ContactPurpose.BUSINESS))
-        .thenReturn(
-            Optional.of(
-                MemberNotificationSetting.chosen(
-                    3L, ContactPurpose.BUSINESS, ContactPermissionStatus.DENIED)));
+        .thenReturn(Optional.empty());
+    when(settings.findByMemberId(3L)).thenReturn(List.of(refused));
 
-    assertThat(service.effective(3L, ContactPurpose.BUSINESS))
-        .isEqualTo(ContactPermissionStatus.DENIED);
+    var result = service.choose(10L, ContactPurpose.BUSINESS, ContactPermissionStatus.DENIED);
+
+    assertThat(result)
+        .isEqualTo(
+            new MemberNotificationSettings(
+                ContactPermissionStatus.DENIED, ContactPermissionStatus.UNKNOWN));
+    verify(audit)
+        .recordById(
+            10L,
+            null,
+            "MEMBER_NOTIFICATION_SETTING_CHANGED",
+            "MEMBER",
+            "3",
+            null,
+            null,
+            Map.of("purpose", "BUSINESS", "status", "ALLOWED"),
+            Map.of("purpose", "BUSINESS", "status", "DENIED"));
   }
 
   @Test

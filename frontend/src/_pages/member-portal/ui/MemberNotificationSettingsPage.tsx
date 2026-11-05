@@ -44,7 +44,7 @@ const PURPOSES: {
 
 /**
  * 会員ポータルの通知設定。用途ごとに受け取る・受け取らないを選び、選んだ時点で保存する。
- * 未確認（まだ選んでいない）の用途にはどちらの選択も付けず、選ぶまで連絡しないことを本文で示す。
+ * 未確認の用途にはどちらの選択も付けない。選ぶまでの扱い（業務はメールアドレスの確認後に送る、販促は送らない）を本文で示す。
  * 保存の失敗では選択が保存済みの値へ戻り、押した選択が画面から消えるので warning で失敗を伝える。
  */
 export function MemberNotificationSettingsPage() {
@@ -69,7 +69,7 @@ export function MemberNotificationSettingsPage() {
     <div className="mx-auto w-full max-w-md p-4">
       <h1 className="mt-2 text-lg font-semibold text-foreground">通知の設定</h1>
       <p className="mt-2 text-sm text-muted-foreground">
-        ログインに使うメールアドレスへ届くお知らせを選べます。選ぶまではお送りしません。
+        ログインに使うメールアドレスへ届くお知らせを選べます。選ぶまでは、ご利用に関するお知らせはメールアドレスの確認が済んでからお送りし、キャンペーン・おすすめのご案内はお送りしません。
       </p>
       {isLoading ? (
         <p className="mt-4 text-sm text-muted-foreground">読み込み中...</p>

@@ -41,13 +41,13 @@ public class MemberNotificationSettingService {
       long userId, ContactPurpose purpose, ContactPermissionStatus status) {
     long memberId = memberIdOf(userId);
     memberLookup.lockForNotificationSettingWrite(memberId);
+    boolean emailVerified = emailVerified(memberId);
     Optional<MemberNotificationSetting> current =
         settings.findByMemberIdAndPurpose(memberId, purpose);
     ContactPermissionStatus before =
         current
             .map(MemberNotificationSetting::getStatus)
-            .orElseGet(
-                () -> MemberNotificationSetting.defaultFor(purpose, emailVerified(memberId)));
+            .orElse(MemberNotificationSetting.defaultFor(purpose, emailVerified));
     current.ifPresentOrElse(
         row -> row.choose(status),
         () -> settings.save(MemberNotificationSetting.chosen(memberId, purpose, status)));
@@ -63,7 +63,7 @@ public class MemberNotificationSettingService {
           Map.of("purpose", purpose.name(), "status", before.name()),
           Map.of("purpose", purpose.name(), "status", status.name()));
     }
-    return effective(settings.findByMemberId(memberId), emailVerified(memberId));
+    return effective(settings.findByMemberId(memberId), emailVerified);
   }
 
   /** 会員 ID で引く用途の実効値。会員宛の通知の送信直前の判定が読む。 */
