@@ -2,39 +2,35 @@
 
 import { serviceApi, ServiceSummary, serviceKindLabels } from '@/entities/service';
 import { useListPage, isForbidden } from '@/shared/lib';
-import { Dialog, DialogFrame, Pager, RegionError } from '@/shared/ui';
+import {
+  ChangeEntry,
+  ChangeLog,
+  ChangeTable,
+  Dialog,
+  DialogFrame,
+  Pager,
+  RegionError,
+} from '@/shared/ui';
 
-function Conditions({ value }: { value?: ServiceSummary }) {
-  if (!value) return <p>作成前の設定はありません</p>;
-  return (
-    <dl className="grid grid-cols-2 gap-2 text-sm">
-      <dt>名称</dt>
-      <dd className="break-all">{value.name}</dd>
-      <dt>種別</dt>
-      <dd>{serviceKindLabels[value.kind]}</dd>
-      {value.duration_minutes !== undefined && (
-        <>
-          <dt>所要時間</dt>
-          <dd>{value.duration_minutes} 分</dd>
-        </>
-      )}
-      {value.charge_type && (
-        <>
-          <dt>料金区分</dt>
-          <dd>{value.charge_type === 'FREE' ? '無料' : '有料'}</dd>
-        </>
-      )}
-      <dt>価格</dt>
-      <dd>{value.price.toLocaleString()} 円</dd>
-      <dt>固定報酬</dt>
-      <dd>{value.remuneration.toLocaleString()} 円</dd>
-      <dt>状態</dt>
-      <dd>{value.deleted ? '削除済み' : '有効'}</dd>
-      <dt>版本</dt>
-      <dd>{value.version}</dd>
-    </dl>
-  );
-}
+const fields: [string, (value: ServiceSummary) => string | undefined][] = [
+  ['名称', value => value.name],
+  ['種別', value => serviceKindLabels[value.kind]],
+  [
+    '所要時間',
+    value => (value.duration_minutes === undefined ? undefined : `${value.duration_minutes} 分`),
+  ],
+  ['料金区分', value => value.charge_type && (value.charge_type === 'FREE' ? '無料' : '有料')],
+  ['価格', value => `${value.price.toLocaleString()} 円`],
+  ['固定報酬', value => `${value.remuneration.toLocaleString()} 円`],
+  ['状態', value => (value.deleted ? '削除済み' : '有効')],
+  ['版本', value => String(value.version)],
+];
+const show = (
+  value: ServiceSummary | undefined,
+  read: (value: ServiceSummary) => string | undefined
+) => (value && read(value)) ?? '—';
+const operationLabels = { CREATED: '作成', UPDATED: '変更', DELETED: '削除' } as const;
+
 interface ServiceHistoryProps {
   id: string;
   open: boolean;
@@ -70,44 +66,52 @@ function HistoryContent({ id, onForbidden }: Pick<ServiceHistoryProps, 'id' | 'o
       throw error;
     }
   });
-  return history.failed ? (
-    <RegionError message="変更履歴の取得に失敗しました" onRetry={() => void history.reload()} />
-  ) : (
+  return (
     <>
-      {history.rows.map(row => (
-        <section key={row.id} className="space-y-3 rounded-lg border p-4">
-          <h2 className="font-semibold">
-            版本 {row.version} ·{' '}
-            {{ CREATED: '作成', UPDATED: '変更', DELETED: '削除' }[row.operation]}
-          </h2>
-          <p className="text-sm">
-            操作者 ID: {row.actor_id} · {new Date(row.occurred_at).toLocaleString('ja-JP')}
-          </p>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <h3 className="mb-2 font-medium">変更前</h3>
-              <Conditions value={row.before} />
-            </div>
-            <div>
-              <h3 className="mb-2 font-medium">変更後</h3>
-              <Conditions value={row.after} />
-            </div>
-          </div>
-        </section>
-      ))}
-      {history.isLoading ? (
-        <p>読み込み中...</p>
-      ) : history.rows.length === 0 ? (
-        <p>変更履歴はありません</p>
-      ) : null}
-      <Pager
-        page={history.page}
-        pageCount={history.pageCount}
-        total={history.total}
-        rowCount={history.rows.length}
-        disabled={history.isLoading}
-        onPageChange={page => void history.onPageChange(page)}
-      />
+      {history.failed ? (
+        <RegionError message="変更履歴の取得に失敗しました" onRetry={() => void history.reload()} />
+      ) : (
+        <>
+          <ChangeLog>
+            {history.rows.map(row => (
+              <ChangeEntry
+                key={row.id}
+                title={`版本 ${row.version} · ${operationLabels[row.operation]}`}
+                meta={
+                  <p>
+                    操作者 ID: {row.actor_id} · {new Date(row.occurred_at).toLocaleString('ja-JP')}
+                  </p>
+                }
+              >
+                <ChangeTable
+                  rows={fields
+                    .filter(([, read]) =>
+                      [row.before, row.after].some(v => v && read(v) !== undefined)
+                    )
+                    .map(([label, read]) => ({
+                      label,
+                      before: show(row.before, read),
+                      after: show(row.after, read),
+                    }))}
+                />
+              </ChangeEntry>
+            ))}
+          </ChangeLog>
+          {history.isLoading ? (
+            <p>読み込み中...</p>
+          ) : history.rows.length === 0 ? (
+            <p>変更履歴はありません</p>
+          ) : null}
+          <Pager
+            page={history.page}
+            pageCount={history.pageCount}
+            total={history.total}
+            rowCount={history.rows.length}
+            disabled={history.isLoading}
+            onPageChange={page => void history.onPageChange(page)}
+          />
+        </>
+      )}
     </>
   );
 }

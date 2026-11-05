@@ -125,6 +125,15 @@ default / modern / classic は同一の `--storefront-*` 契約を各 theme.css 
 - 選択 preview は label 内の sr-only radio、選択時 `border-primary ring-2 ring-primary bg-primary/10`。説明は未選択時だけ muted、hover／選択時は foreground。focus-visible を label に伝播する。
 - 本人ポータルの固定下部 tab は 24px icon + 12px label、content に `pb-16`。選択文字は primary-strong、非選択 hover は背景と文字を同時に変更する。
 
+### キー値と変更前後
+
+ダイアログ内の詳細と履歴は `@/shared/ui` の 2 部品で描き、`dl` や前後の表を画面ごとに手組みしない。ページ上の `dl`（会員詳細・ダッシュボード等）はこの規則の対象外。
+
+- キー値は KeyValueList + KeyValueRow の明細書型。行ごとに区切り線、ラベルは左に muted、値は右寄せ。金額は `money` で `tabular-nums`。理由・本文・備考など複数行になりうる値は `long` でラベルの下に左寄せで置く。値には Badge 等の要素も置ける。
+- 変更前後は ChangeTable。「項目・変更前・変更後」の 3 列に全項目を並べ、変わった行を `bg-muted` と太字で示す。値は表示文字列で渡し、その一致で変更を判定する。全列左寄せ・`tabular-nums`、存在しない側は「—」。変わらない行の変更前は muted、変わった行は `bg-muted` に muted を重ねない規則により変更前も foreground とする。
+- 変更の一覧は ChangeLog + ChangeEntry。日時・操作者・理由等の見出し（h3）の下に 1 件ずつ ChangeTable を置く。
+- ダイアログ本文の ChangeTable は TableCard で包まない。カードの内周がダイアログの余白と二重になるため。
+
 ### 一覧
 
 ListPage（`@/widgets/list-page`）が見出し・検索 form・表枠・読み込み／失敗／空・ページングを所有する。props の正本はコンポーネントの型。ページは表内容と固有操作を渡す。
@@ -190,7 +199,7 @@ RegionError の `message` と、`onRetry` または `fallback: {href,label}` の
 
 vendored は combobox / alert-dialog / button / card / dialog / select / form / table / badge / popover / skeleton / tabs / dropdown-menu / checkbox / switch / radio-group / input / label / textarea。整形以外は生成状態を保つ。
 
-image-upload / auth-layout / theme-provider / confirm-dialog / dialog-frame / table-card / toast / region-error / pager は自作で、用途に応じて編集する。分類の正本はこの一覧。data-slot や Base UI import だけでは区別できず、未知のファイルは git log で確認する。
+image-upload / auth-layout / theme-provider / confirm-dialog / dialog-frame / table-card / toast / region-error / pager / key-value / change-table は自作で、用途に応じて編集する。分類の正本はこの一覧。data-slot や Base UI import だけでは区別できず、未知のファイルは git log で確認する。
 
 - 管理画面の raw palette 検索は page だけでなく参照する entities と自作 shared/ui も対象にする。例外は storefront、AuthLayout 内、vendored のみ。生 hex も確認する。
 - setupTests.ts が ResizeObserver、scrollIntoView、PointerEvent を供給する。追加 shim は実際の失敗を確認してから同ファイルにまとめる。

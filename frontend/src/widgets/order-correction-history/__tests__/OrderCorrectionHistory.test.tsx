@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { orderApi, OrderCorrectionHistoryEntry } from '@/entities/order';
 import { OrderCorrectionHistory, OrderCorrectionHistoryModal } from '../ui/OrderCorrectionHistory';
 
@@ -52,6 +52,10 @@ const entry: OrderCorrectionHistoryEntry = {
   before: snapshot,
   after: { ...snapshot, total_fee: 11000 },
 };
+const cellsOf = (label: string) =>
+  within(screen.getByRole('cell', { name: label }).closest('tr')!)
+    .getAllByRole('cell')
+    .map(cell => cell.textContent);
 beforeEach(() => jest.clearAllMocks());
 it('前後の費用・報酬と理由を表示し、次ページの取得失敗では古い履歴を消して先頭から再試行する', async () => {
   fetchHistory
@@ -60,8 +64,8 @@ it('前後の費用・報酬と理由を表示し、次ページの取得失敗�
     .mockResolvedValueOnce({ rows: [entry], page: 0, pageCount: 1, total: 0 });
   render(<OrderCorrectionHistory orderId="o1" />);
   expect(await screen.findByText('提供コースの訂正')).toBeInTheDocument();
-  expect(screen.getByText('請求 ¥12,000 → ¥11,000')).toBeInTheDocument();
-  expect(screen.getByText('発生済み報酬 ¥7,000 → ¥7,000')).toBeInTheDocument();
+  expect(cellsOf('請求')).toEqual(['請求', '¥12,000', '¥11,000']);
+  expect(cellsOf('発生済み報酬')).toEqual(['発生済み報酬', '¥7,000', '¥7,000']);
   fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
   expect(await screen.findByRole('alert')).toHaveTextContent('履歴を取得できませんでした');
   expect(screen.queryByText('提供コースの訂正')).not.toBeInTheDocument();
@@ -137,4 +141,31 @@ it('閉じる要求を即時に反映しても退出中の本文を保ち、再�
   fireEvent.click(screen.getByText('再表示'));
   expect(await screen.findByText('提供コースの訂正')).toBeInTheDocument();
   expect(fetchHistory).toHaveBeenCalledTimes(2);
+});
+
+it('明細は line_id で前後を突き合わせ、追加された明細は変更前を空欄で出す', async () => {
+  const extension = {
+    line_id: 'l2',
+    kind: 'EXTENSION' as const,
+    name: '延長30分',
+    amount: 6000,
+    remuneration: 3000,
+    system_owned: false,
+  };
+  fetchHistory.mockResolvedValue({
+    rows: [{ ...entry, after: { ...snapshot, fee_lines: [...snapshot.fee_lines, extension] } }],
+    page: 0,
+    pageCount: 1,
+    total: 1,
+  });
+  render(<OrderCorrectionHistory orderId="o1" />);
+  await screen.findByText('提供コースの訂正');
+  expect(cellsOf('明細：延長30分（延長料金）')).toEqual([
+    '明細：延長30分（延長料金）',
+    '—',
+    '費用 ¥6,000 / 報酬 ¥3,000',
+  ]);
+  expect(cellsOf('明細：歴史コース（基本コース料金）')[1]).toBe(
+    cellsOf('明細：歴史コース（基本コース料金）')[2]
+  );
 });

@@ -6,6 +6,7 @@ import { auditEventApi } from '@/entities/audit-event';
 import { useListPage, useResource } from '@/shared/lib';
 import {
   Button,
+  ChangeTable,
   Dialog,
   DialogFrame,
   Input,
@@ -15,6 +16,8 @@ import {
   FormControl,
   FormLabel,
   FormMessage,
+  KeyValueList,
+  KeyValueRow,
   Pager,
   RegionError,
   Table,
@@ -41,53 +44,37 @@ function AuditDetail({ id }: { id: number }) {
   const fields = [...new Set([...Object.keys(before), ...Object.keys(after)])].sort();
   return (
     <div className="space-y-6">
-      <dl className="grid grid-cols-2 gap-3 text-sm">
-        <dt>操作主体</dt>
-        <dd className="wrap-anywhere">
+      <KeyValueList>
+        <KeyValueRow label="操作主体">
           {event.actor_name}（{event.actor_type} #{event.actor_id}）
-        </dd>
-        <dt>記録時刻</dt>
-        <dd>{new Date(event.occurred_at).toLocaleString('ja-JP')}</dd>
-        <dt>操作</dt>
-        <dd className="wrap-anywhere">{event.action}</dd>
-        <dt>結果</dt>
-        <dd>{event.result}</dd>
-        <dt>対象</dt>
-        <dd className="wrap-anywhere">
+        </KeyValueRow>
+        <KeyValueRow label="記録時刻">
+          {new Date(event.occurred_at).toLocaleString('ja-JP')}
+        </KeyValueRow>
+        <KeyValueRow label="操作">{event.action}</KeyValueRow>
+        <KeyValueRow label="結果">{event.result}</KeyValueRow>
+        <KeyValueRow label="対象">
           {event.target_type} #{event.target_id}
-        </dd>
-        <dt>店舗</dt>
-        <dd>{event.store_id ? `#${event.store_id}` : '全体'}</dd>
-        <dt>業務記録</dt>
-        <dd className="wrap-anywhere">
+        </KeyValueRow>
+        <KeyValueRow label="店舗">{event.store_id ? `#${event.store_id}` : '全体'}</KeyValueRow>
+        <KeyValueRow label="業務記録">
           {event.source_type ? `${event.source_type} #${event.source_id}` : '—'}
-        </dd>
-      </dl>
-      <TableCard>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>項目</TableHead>
-              <TableHead>変更前</TableHead>
-              <TableHead>変更後</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {fields.map(field => (
-              <TableRow key={field}>
-                <TableCell className="max-w-40 wrap-anywhere">{field}</TableCell>
-                <TableCell className="max-w-48 whitespace-pre-wrap wrap-anywhere">
-                  {before[field] ?? '—'}
-                </TableCell>
-                <TableCell className="max-w-48 whitespace-pre-wrap wrap-anywhere">
-                  {after[field] ?? '—'}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-        {fields.length === 0 && <p className="p-6 text-muted-foreground">変更摘要はありません</p>}
-      </TableCard>
+        </KeyValueRow>
+      </KeyValueList>
+      <section className="space-y-2">
+        <h3 className="font-medium">変更内容</h3>
+        {fields.length === 0 ? (
+          <p className="text-sm text-muted-foreground">変更摘要はありません</p>
+        ) : (
+          <ChangeTable
+            rows={fields.map(field => ({
+              label: field,
+              before: before[field] ?? '—',
+              after: after[field] ?? '—',
+            }))}
+          />
+        )}
+      </section>
     </div>
   );
 }

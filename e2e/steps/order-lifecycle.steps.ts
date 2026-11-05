@@ -1,6 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
+import { expectChange } from './change-table';
 import { adjustCustomerPoints, STORE_HEADERS, createCustomer, registerMember, linkMemberToCustomer, cancelOrder, createCast, createCourse, getOrder, loginAsStoreAdmin, loginViaUiAndEnterStore } from './store-api';
 
 const { Given, When, Then, After } = createBdd();
@@ -237,8 +238,8 @@ Then('店舗から同じ訂正の費用と報酬を照会できる', async ({ pa
   await page.getByRole('button', { name: '訂正履歴', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '訂正履歴', exact: true });
   await expect(dialog.getByText('実際に提供した60分コースへ訂正')).toBeVisible();
-  await expect(dialog.getByText('請求 ¥28,000 → ¥22,000', { exact: true })).toBeVisible();
-  await expect(dialog.getByText('発生済み報酬 ¥11,000 → ¥7,000', { exact: true })).toBeVisible();
+  await expectChange(dialog, '請求', '¥28,000', '¥22,000');
+  await expectChange(dialog, '発生済み報酬', '¥11,000', '¥7,000');
   await expect(dialog.getByText(/原営業日/)).toBeVisible();
   await expect(dialog.getByText(/訂正日時/)).toBeVisible();
   await page.emulateMedia({ colorScheme: 'light' });
@@ -264,8 +265,8 @@ Then('グループ級から同じ訂正の費用と報酬を照会できる', as
   await page.screenshot({ path: 'test-results/935-admin-list.png', animations: 'disabled' });
   await row.getByRole('button', { name: `訂正履歴 ：受注 ${createdOrderId}`, exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '訂正履歴', exact: true });
-  await expect(dialog.getByText('請求 ¥28,000 → ¥22,000', { exact: true })).toBeVisible();
-  await expect(dialog.getByText('発生済み報酬 ¥11,000 → ¥7,000', { exact: true })).toBeVisible();
+  await expectChange(dialog, '請求', '¥28,000', '¥22,000');
+  await expectChange(dialog, '発生済み報酬', '¥11,000', '¥7,000');
   await expect(dialog.getByRole('button', { name: '訂正する', exact: true })).toHaveCount(0);
   await page.screenshot({ path: 'test-results/935-admin-history.png', animations: 'disabled' });
 });

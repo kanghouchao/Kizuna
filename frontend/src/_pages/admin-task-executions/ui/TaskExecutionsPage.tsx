@@ -18,6 +18,8 @@ import {
   FormLabel,
   FormMessage,
   Input,
+  KeyValueList,
+  KeyValueRow,
   Label,
   Pager,
   RegionError,
@@ -90,44 +92,35 @@ function ExecutionDetail({ id, onChanged }: { id: number; onChanged: (id: number
   const row = data.execution;
   return (
     <div className="space-y-6">
-      <dl className="grid grid-cols-2 gap-3 text-sm">
-        <dt>状態</dt>
-        <dd>
+      <KeyValueList>
+        <KeyValueRow label="状態">
           <Status row={row} />
-        </dd>
-        <dt>処理</dt>
-        <dd className="wrap-anywhere">{row.task_name}</dd>
-        <dt>実行主体</dt>
-        <dd>{row.service_name}</dd>
-        <dt>対象期間</dt>
-        <dd>
+        </KeyValueRow>
+        <KeyValueRow label="処理">{row.task_name}</KeyValueRow>
+        <KeyValueRow label="実行主体">{row.service_name}</KeyValueRow>
+        <KeyValueRow label="対象期間">
           {row.period_start} ～ {row.period_end}
-        </dd>
-        <dt>試行</dt>
-        <dd>
+        </KeyValueRow>
+        <KeyValueRow label="試行">
           #{row.id}（{row.attempt_number} 回目）
-        </dd>
-        <dt>元の試行</dt>
-        <dd>{data.retry_of ? `#${data.retry_of}` : '—'}</dd>
-        <dt>開始 / 終了</dt>
-        <dd>
+        </KeyValueRow>
+        <KeyValueRow label="元の試行">{data.retry_of ? `#${data.retry_of}` : '—'}</KeyValueRow>
+        <KeyValueRow label="開始 / 終了">
           {time(row.started_at)} / {time(row.finished_at)}
-        </dd>
-        <dt>処理件数</dt>
-        <dd>{row.processed_count ?? '—'}</dd>
-        <dt>失敗区分</dt>
-        <dd>
+        </KeyValueRow>
+        <KeyValueRow label="処理件数">{row.processed_count ?? '—'}</KeyValueRow>
+        <KeyValueRow label="失敗区分">
           {row.failure_code === 'AUTHORIZATION_DENIED'
             ? '実行主体の権限不足'
             : row.failure_code
               ? '処理失敗'
               : '—'}
-        </dd>
-        <dt>実行キー</dt>
-        <dd className="wrap-anywhere">{data.logical_key}</dd>
-        <dt>理由</dt>
-        <dd className="whitespace-pre-wrap wrap-anywhere">{data.reason}</dd>
-      </dl>
+        </KeyValueRow>
+        <KeyValueRow label="実行キー">{data.logical_key}</KeyValueRow>
+        <KeyValueRow label="理由" long>
+          {data.reason}
+        </KeyValueRow>
+      </KeyValueList>
       <Button variant="outline" disabled={busy} onClick={() => void detail.reload()}>
         最新の状態を取得
       </Button>

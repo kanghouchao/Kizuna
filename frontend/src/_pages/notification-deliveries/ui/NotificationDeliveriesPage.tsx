@@ -33,6 +33,8 @@ import {
   FormLabel,
   FormMessage,
   Input,
+  KeyValueList,
+  KeyValueRow,
   Label,
   RadioGroup,
   RadioGroupItem,
@@ -326,24 +328,22 @@ function Detail({
   const row = detail.data;
   return (
     <div className="space-y-6">
-      <dl className="grid grid-cols-[auto_1fr] gap-3 text-sm">
-        <dt>状態</dt>
-        <dd>
+      <KeyValueList>
+        <KeyValueRow label="状態">
           <Status status={row.status} />
-        </dd>
-        <dt>起点</dt>
-        <dd className="wrap-anywhere">
+        </KeyValueRow>
+        <KeyValueRow label="起点">
           {sourceLabels[row.source_type]} #{row.source_id}
-        </dd>
-        <dt>送信予定</dt>
-        <dd>{time(row.scheduled_at)}</dd>
-        <dt>件名</dt>
-        <dd className="wrap-anywhere">{row.subject}</dd>
-        <dt>本文</dt>
-        <dd className="whitespace-pre-wrap wrap-anywhere">{row.body}</dd>
-        <dt>連絡可否</dt>
-        <dd>{contactLabels[row.contact_decision]}</dd>
-      </dl>
+        </KeyValueRow>
+        <KeyValueRow label="送信予定">{time(row.scheduled_at)}</KeyValueRow>
+        <KeyValueRow label="件名" long>
+          {row.subject}
+        </KeyValueRow>
+        <KeyValueRow label="本文" long>
+          {row.body}
+        </KeyValueRow>
+        <KeyValueRow label="連絡可否">{contactLabels[row.contact_decision]}</KeyValueRow>
+      </KeyValueList>
       <p className="text-sm text-muted-foreground">
         送信直前に連絡可否を再確認します。メール提供元受理は受信・閲覧を意味しません。
       </p>
