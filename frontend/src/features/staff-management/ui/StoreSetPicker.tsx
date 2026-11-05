@@ -50,8 +50,9 @@ export function StoreSetPicker({
       <span id={labelId} className="block text-sm font-medium text-foreground">
         {label}
       </span>
+      {/* 見出しは外側の組が名乗る。内側は範囲の選び方だけを名乗り、同じ名前を二度読ませない */}
       <RadioGroup
-        aria-labelledby={labelId}
+        aria-label="範囲"
         value={storeScopeType}
         onValueChange={value =>
           onChange(
