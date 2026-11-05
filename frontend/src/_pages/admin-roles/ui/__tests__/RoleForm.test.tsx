@@ -45,6 +45,15 @@ describe('ロールフォーム', () => {
     expect(within(group).queryByText('ORDER_MANAGE')).not.toBeInTheDocument();
   });
 
+  it('権限の項目は共有の Checkbox で描く', async () => {
+    render(<RoleForm onSubmit={jest.fn()} />);
+
+    await screen.findByRole('checkbox', { name: '受注の管理' });
+    const boxes = within(screen.getByRole('group', { name: '権限' })).getAllByRole('checkbox');
+    expect(boxes).toHaveLength(3);
+    boxes.forEach(box => expect(box).toHaveAttribute('data-slot', 'checkbox'));
+  });
+
   it('現在値を初期値にし、保存では名称と権限を渡す', async () => {
     const onSubmit = jest.fn().mockResolvedValue(undefined);
     render(
