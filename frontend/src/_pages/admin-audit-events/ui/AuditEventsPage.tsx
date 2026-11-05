@@ -193,7 +193,7 @@ export default function AuditEventsPage() {
         </div>
       </TableCard>
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogFrame size="md" title="監査の詳細" description="記録時点の主体と変更内容です。">
+        <DialogFrame size="lg" title="監査の詳細" description="記録時点の主体と変更内容です。">
           {selected !== null && <AuditDetail key={selected} id={selected} />}
         </DialogFrame>
       </Dialog>
