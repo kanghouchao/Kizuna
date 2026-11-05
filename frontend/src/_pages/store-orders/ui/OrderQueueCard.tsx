@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -33,8 +34,8 @@ interface OrderQueueCardProps {
   order: OrderWorkQueueRow;
   /** 取消のように、この受注が群から外れる処理が終わったとき。 */
   onProcessed: (id: string) => void;
-  /** 完了モーダルを開く。 */
-  onComplete: (order: OrderWorkQueueRow) => void;
+  /** 完了画面の URL（一覧の検索条件を持つ）。識別子の無い受注には無い。 */
+  completionHref?: string;
 }
 
 function CustomerName({ order }: { order: OrderWorkQueueRow }) {
@@ -63,11 +64,11 @@ function CardMeta({ order }: { order: OrderWorkQueueRow }) {
 }
 
 /**
- * 対応が要る受注 1 件のカード。完了・取消をその場で担い、編集は専用の頁へ送る（未処理の予約申請は受付箱のカードが受け持つ）。
+ * 対応が要る受注 1 件のカード。取消をその場で担い、完了と編集は専用の頁へ送る（未処理の予約申請は受付箱のカードが受け持つ）。
  *
  * <p>取消はモーダルを開かず、カードがその場で理由入力に変わる（二段）。一覧の中で完結させるのが この画面の主張なので、確認だけを外へ出さない。
  */
-export function OrderQueueCard({ order, onProcessed, onComplete }: OrderQueueCardProps) {
+export function OrderQueueCard({ order, onProcessed, completionHref }: OrderQueueCardProps) {
   const router = useRouter();
   const [processing, setProcessing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -139,16 +140,13 @@ export function OrderQueueCard({ order, onProcessed, onComplete }: OrderQueueCar
 
         {!cancelling && (
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={processing || order.requires_attention}
-              onClick={() => onComplete(order)}
-            >
-              <CircleCheckIcon aria-hidden="true" />
-              完了
-            </Button>
+            {/* 要対応の受注はサーバも完了を拒む。編集で直すまで完了画面へ送らない */}
+            {completionHref && !order.requires_attention && (
+              <Button variant="outline" size="sm" render={<Link href={completionHref} />}>
+                <CircleCheckIcon aria-hidden="true" />
+                完了
+              </Button>
+            )}
             <Button
               type="button"
               variant="ghost"

@@ -13,4 +13,9 @@ export function applicationConfirmHref(id: string, listQuery: string): string {
   return withQuery(storePath(`/orders/applications/${encodeURIComponent(id)}/confirm`), listQuery);
 }
 
+/** 受注の完了画面の URL。戻り先のために一覧の query を付けて渡す。 */
+export function orderCompletionHref(id: string, listQuery: string): string {
+  return withQuery(storePath(`/orders/${encodeURIComponent(id)}/completion`), listQuery);
+}
+
 const withQuery = (path: string, query: string) => (query ? `${path}?${query}` : path);

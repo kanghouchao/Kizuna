@@ -21,10 +21,9 @@ import { PageHeader } from '@/widgets/page-header';
 import { OrderApplicationCard } from './OrderApplicationCard';
 import { OrderArchiveSection } from './OrderArchiveSection';
 import { OrderAttributionModal } from './OrderAttributionModal';
-import { OrderCompletionModal } from './OrderCompletionModal';
 import { OrderQueueCard } from './OrderQueueCard';
 import { useSearchOnCriteriaChange } from '../lib/useSearchOnCriteriaChange';
-import { applicationConfirmHref } from '../lib/orderListHref';
+import { applicationConfirmHref, orderCompletionHref } from '../lib/orderListHref';
 import {
   Button,
   Card,
@@ -134,14 +133,6 @@ export default function OrderListPage() {
   }
 
   // 退出中は対象を保持し、再度開くときだけ key を変えて入力と取得結果を初期化する。
-  const [completingDialog, setCompletingDialog] = useState<{
-    target: OrderWorkQueueRow;
-    open: boolean;
-    key: number;
-  } | null>(null);
-  const completing = completingDialog?.target ?? null;
-  const setCompleting = (target: OrderWorkQueueRow) =>
-    setCompletingDialog(previous => ({ target, open: true, key: (previous?.key ?? 0) + 1 }));
   const [correctingDialog, setCorrectingDialog] = useState<{
     target: OrderArchiveRow;
     open: boolean;
@@ -201,10 +192,10 @@ export default function OrderListPage() {
     CANCELLED: 0,
   });
 
-  /** 処理し終えた受注の後始末。作業キューを取り直し、行った先のアーカイブを取り直させる。 */
-  const settleProcessed = (movedTo: ArchiveStatus) => {
+  /** 取消した受注の後始末。作業キューを取り直し、取消のアーカイブを取り直させる。 */
+  const settleCancelled = () => {
     void queue.reload();
-    setArchived(prev => ({ ...prev, [movedTo]: prev[movedTo] + 1 }));
+    setArchived(prev => ({ ...prev, CANCELLED: prev.CANCELLED + 1 }));
   };
 
   return (
@@ -364,8 +355,8 @@ export default function OrderListPage() {
               <OrderQueueCard
                 key={order.id}
                 order={order}
-                onProcessed={() => settleProcessed('CANCELLED')}
-                onComplete={setCompleting}
+                onProcessed={settleCancelled}
+                completionHref={order.id ? orderCompletionHref(order.id, query) : undefined}
               />
             ))}
           </ul>
@@ -399,19 +390,6 @@ export default function OrderListPage() {
         />
       </div>
 
-      <OrderCompletionModal
-        key={`completing-${completingDialog?.key}`}
-        open={completingDialog?.open ?? false}
-        order={completing}
-        onClose={missing => {
-          setCompletingDialog(previous => previous && { ...previous, open: false });
-          if (missing) void queue.reload();
-        }}
-        // 完了した受注は作業キューから外れて完了のアーカイブへ移る
-        onCompleted={() => settleProcessed('COMPLETED')}
-        // 別の操作者が先に終端化していた受注も、行はキューに残さず該当のアーカイブへ移す
-        onSuperseded={status => settleProcessed(status)}
-      />
       {/* 訂正は受注の状態も会計欄も変えないため、一覧の取り直しは要らない */}
       <OrderAttributionModal
         key={`correcting-${correctingDialog?.key}`}
