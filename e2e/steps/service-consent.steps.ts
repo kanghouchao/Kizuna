@@ -162,9 +162,13 @@ When(
     await managerPage
       .getByRole("button", { name: "登録する", exact: true })
       .click();
-    await expect(managerPage.getByRole("dialog")).toContainText(
-      "請求額: ¥14,000",
-    );
+    await expect(
+      managerPage
+        .getByRole("region", { name: "料金明細" })
+        .getByRole("row", { name: /^合計（請求額）/ })
+        .getByRole("cell")
+        .nth(2),
+    ).toHaveText("¥14,000");
     const [response] = await Promise.all([
       managerPage.waitForResponse(
         (resp) =>
@@ -191,7 +195,13 @@ Then("店長が一覧の要対応から特殊サービスを修復し開始す�
   ).toBeDisabled();
   await page.getByRole("checkbox", { name: new RegExp(serviceName) }).uncheck();
   await page.getByRole("button", { name: "保存", exact: true }).click();
-  await expect(page.getByRole("dialog")).toContainText("請求額: ¥12,000");
+  await expect(
+    page
+      .getByRole("region", { name: "料金明細" })
+      .getByRole("row", { name: /^合計（請求額）/ })
+      .getByRole("cell")
+      .nth(2),
+  ).toHaveText("¥12,000");
   const [updated] = await Promise.all([
     page.waitForResponse(
       (resp) =>
