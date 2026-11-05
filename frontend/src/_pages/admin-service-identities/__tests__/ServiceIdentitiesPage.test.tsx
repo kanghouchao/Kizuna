@@ -1,24 +1,16 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PageResult } from '@/shared/api';
-import {
-  ServiceIdentityResponse,
-  ServiceIdentitySummaryResponse,
-  authApi,
-  serviceIdentityApi,
-} from '@/entities/user';
+import { ServiceIdentitySummaryResponse, serviceIdentityApi } from '@/entities/user';
 import { notify } from '@/shared/notify';
 import ServiceIdentitiesPage from '../ui/ServiceIdentitiesPage';
 
 jest.mock('@/entities/user', () => ({
   serviceIdentityApi: {
     list: jest.fn(),
-    get: jest.fn(),
     suspend: jest.fn(),
     resume: jest.fn(),
   },
-  authApi: {
-    stores: jest.fn(),
-  },
+  useStoreContext: () => ({ stores: [{ id: 10, name: '本店' }] }),
 }));
 
 jest.mock('@/features/staff-management', () => ({
@@ -35,30 +27,6 @@ jest.mock('@/features/staff-management', () => ({
           .filter(store => store.id !== undefined && (storeIds ?? []).includes(store.id))
           .map(store => store.name)
           .join('・') || '未選択',
-  ServiceIdentityCreateModal: () => <div>作成モーダル</div>,
-  ServiceIdentityEditModal: ({
-    resource,
-    onClose,
-    onUpdated,
-  }: {
-    resource: import('@/shared/lib').KeyedResource<ServiceIdentityResponse>;
-    onClose: () => void;
-    onUpdated: () => void;
-  }) => (
-    <div>
-      <span>編集モーダル: {resource.data?.display_name}</span>
-      <span>版{resource.data?.version}</span>
-      <button
-        onClick={() => {
-          onUpdated();
-          void resource.reload();
-        }}
-      >
-        更新通知
-      </button>
-      <button onClick={onClose}>編集を閉じる</button>
-    </div>
-  ),
 }));
 
 jest.mock('@/shared/notify', () => ({
@@ -66,7 +34,6 @@ jest.mock('@/shared/notify', () => ({
 }));
 
 const mockedApi = serviceIdentityApi as jest.Mocked<typeof serviceIdentityApi>;
-const mockedAuthApi = authApi as jest.Mocked<typeof authApi>;
 
 const identity = (
   override: Partial<ServiceIdentitySummaryResponse>
@@ -77,12 +44,6 @@ const identity = (
   roles: [{ id: 3, name: 'バッチ実行' }],
   store_scope_type: 'SPECIFIC_STORES',
   store_ids: [10],
-  ...override,
-});
-
-const detail = (override: Partial<ServiceIdentityResponse>): ServiceIdentityResponse => ({
-  ...identity({}),
-  version: 0,
   ...override,
 });
 
@@ -100,7 +61,6 @@ describe('サービスID管理ページ', () => {
     jest.clearAllMocks();
     mockedApi.suspend.mockResolvedValue(undefined);
     mockedApi.resume.mockResolvedValue(undefined);
-    mockedAuthApi.stores.mockResolvedValue([{ id: 10, name: '本店' }]);
     mockedApi.list.mockResolvedValue(
       paginated([
         identity({ id: 1, display_name: '夜間バッチ', enabled: true }),
@@ -161,137 +121,16 @@ describe('サービスID管理ページ', () => {
     await waitFor(() => expect(mockedApi.list).toHaveBeenCalledTimes(2));
   });
 
-  it('追加ボタンで作成モーダルを開き、編集ボタンは詳細（version 持ち）を取り直してから編集モーダルを開くこと', async () => {
-    mockedApi.get.mockResolvedValue(detail({ id: 1, version: 3 }));
+  it('追加と編集は作成・編集画面への link であること', async () => {
     render(<ServiceIdentitiesPage />);
     await screen.findByText('夜間バッチ');
 
-    expect(screen.queryByText('作成モーダル')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'サービスIDを追加' }));
-    expect(screen.getByText('作成モーダル')).toBeInTheDocument();
-
-    fireEvent.click(screen.getAllByRole('button', { name: '編集' })[0]);
-    expect(await screen.findByText('編集モーダル: 夜間バッチ')).toBeInTheDocument();
-    expect(mockedApi.get).toHaveBeenCalledWith(1);
-  });
-
-  // 他管理者の店舗追加・削除に追随するため、目録はモーダルを開くたびに取り直す
-  it('モーダルを開くと店舗目録を取り直すこと', async () => {
-    render(<ServiceIdentitiesPage />);
-    await screen.findByText('夜間バッチ');
-    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(1));
-
-    fireEvent.click(screen.getByRole('button', { name: 'サービスIDを追加' }));
-
-    await waitFor(() => expect(mockedAuthApi.stores).toHaveBeenCalledTimes(2));
-  });
-
-  // 遅い応答が後から届いて選び直した対象を上書きすると、別のサービスIDの授権を編集してしまう
-  it('編集を続けて押したとき、遅れて届いた前の詳細応答で対象を上書きしないこと', async () => {
-    let resolveSlow: (value: ServiceIdentityResponse) => void = () => {};
-    const slow = new Promise<ServiceIdentityResponse>(resolve => {
-      resolveSlow = resolve;
-    });
-    mockedApi.get.mockImplementation(id =>
-      id === 1 ? slow : Promise.resolve(detail({ id: 2, display_name: '外部連携', version: 1 }))
+    expect(screen.getByRole('link', { name: 'サービスIDを追加' })).toHaveAttribute(
+      'href',
+      '/admin/service-identities/create'
     );
-    render(<ServiceIdentitiesPage />);
-    await screen.findByText('夜間バッチ');
-
-    const editButtons = screen.getAllByRole('button', { name: '編集' });
-    fireEvent.click(editButtons[0]);
-    fireEvent.click(editButtons[1]);
-    expect(await screen.findByText('編集モーダル: 外部連携')).toBeInTheDocument();
-
-    await act(async () => {
-      resolveSlow(detail({ id: 1, version: 9 }));
-    });
-
-    expect(screen.getByText('編集モーダル: 外部連携')).toBeInTheDocument();
-    expect(screen.queryByText('編集モーダル: 夜間バッチ')).not.toBeInTheDocument();
-  });
-
-  // 409 後の取り直しも世代守衛に属する。閉じて開き直した後に届く古い応答が新しい版を
-  // 戻すと、次の保存が避けられたはずの 409 になる
-  it('開き直した後に届いた競合時の古い取り直し応答で、新しい版を戻さないこと', async () => {
-    let resolveSlow: (value: ServiceIdentityResponse) => void = () => {};
-    const slow = new Promise<ServiceIdentityResponse>(resolve => {
-      resolveSlow = resolve;
-    });
-    mockedApi.get
-      .mockResolvedValueOnce(detail({ id: 1, version: 1 }))
-      .mockReturnValueOnce(slow)
-      .mockResolvedValueOnce(detail({ id: 1, version: 2 }));
-    render(<ServiceIdentitiesPage />);
-    await screen.findByText('夜間バッチ');
-
-    fireEvent.click(screen.getAllByRole('button', { name: '編集' })[0]);
-    expect(await screen.findByText('版1')).toBeInTheDocument();
-
-    // 更新通知（409 側の取り直し）が未着のまま、閉じて同じ対象を開き直す。
-    // 更新通知は一覧も取り直すため、行が描き直されるのを待ってから押す。
-    fireEvent.click(screen.getByRole('button', { name: '更新通知' }));
-    fireEvent.click(screen.getByRole('button', { name: '編集を閉じる' }));
-    fireEvent.click((await screen.findAllByRole('button', { name: '編集' }))[0]);
-    expect(await screen.findByText('版2')).toBeInTheDocument();
-
-    await act(async () => {
-      resolveSlow(detail({ id: 1, version: 1 }));
-    });
-
-    expect(screen.getByText('版2')).toBeInTheDocument();
-    expect(screen.queryByText('版1')).not.toBeInTheDocument();
-  });
-
-  // 取り直し同士も世代で区別する。読むだけの守衛だと連続する 409 の取り直しが同じ世代を
-  // 共有し、遅い方の古い応答が新しい版を戻す
-  it('競合時の取り直しが連続したとき、遅れて届いた古い方の応答で新しい版を戻さないこと', async () => {
-    let resolveSlow: (value: ServiceIdentityResponse) => void = () => {};
-    const slow = new Promise<ServiceIdentityResponse>(resolve => {
-      resolveSlow = resolve;
-    });
-    mockedApi.get
-      .mockResolvedValueOnce(detail({ id: 1, version: 1 }))
-      .mockReturnValueOnce(slow)
-      .mockResolvedValueOnce(detail({ id: 1, version: 2 }));
-    render(<ServiceIdentitiesPage />);
-    await screen.findByText('夜間バッチ');
-
-    fireEvent.click(screen.getAllByRole('button', { name: '編集' })[0]);
-    expect(await screen.findByText('版1')).toBeInTheDocument();
-
-    // 1 回目の取り直しが未着のまま 2 回目が走り、先に 2 回目（新しい版）が届く
-    fireEvent.click(screen.getByRole('button', { name: '更新通知' }));
-    fireEvent.click(screen.getByRole('button', { name: '更新通知' }));
-    expect(await screen.findByText('版2')).toBeInTheDocument();
-
-    await act(async () => {
-      resolveSlow(detail({ id: 1, version: 1 }));
-    });
-
-    expect(screen.getByText('版2')).toBeInTheDocument();
-    expect(screen.queryByText('版1')).not.toBeInTheDocument();
-  });
-
-  // 未着の編集詳細が後から届いて作成フローを乗っ取ると、作成のつもりの画面が別対象の編集に化ける
-  it('編集詳細が未着のまま作成を開くと、遅れて届いた応答を棄てて作成モーダルだけを表示すること', async () => {
-    let resolveSlow: (value: ServiceIdentityResponse) => void = () => {};
-    const slow = new Promise<ServiceIdentityResponse>(resolve => {
-      resolveSlow = resolve;
-    });
-    mockedApi.get.mockReturnValue(slow);
-    render(<ServiceIdentitiesPage />);
-    await screen.findByText('夜間バッチ');
-
-    fireEvent.click(screen.getAllByRole('button', { name: '編集' })[0]);
-    fireEvent.click(screen.getByRole('button', { name: 'サービスIDを追加' }));
-    expect(screen.getByText('作成モーダル')).toBeInTheDocument();
-
-    await act(async () => {
-      resolveSlow(detail({ id: 1, version: 9 }));
-    });
-
-    expect(screen.getByText('作成モーダル')).toBeInTheDocument();
-    expect(screen.queryByText('編集モーダル: 夜間バッチ')).not.toBeInTheDocument();
+    expect(
+      screen.getAllByRole('link', { name: '編集' }).map(link => link.getAttribute('href'))
+    ).toEqual(['/admin/service-identities/1/edit', '/admin/service-identities/2/edit']);
   });
 });

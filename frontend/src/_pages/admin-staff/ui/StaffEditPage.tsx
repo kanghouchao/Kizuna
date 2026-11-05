@@ -2,25 +2,19 @@
 
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { staffApi, type StaffResponse } from '@/entities/user';
+import { staffApi } from '@/entities/user';
+import {
+  GrantForm,
+  grantsOf,
+  toGrantRequest,
+  type GrantFormValues,
+} from '@/features/staff-management';
 import { useResource, useVersionedWrite } from '@/shared/lib';
 import { Button, RegionError, Skeleton } from '@/shared/ui';
 import { PageHeader } from '@/widgets/page-header';
-import { StaffForm, type StaffFormValues, type StaffGrants } from './StaffForm';
-import { toGrantRequest } from './toGrantRequest';
+import { LIST_HREF, STAFF_GRANT_FORM } from './staffForm';
 
-const LIST_LINK = { href: '/admin/staff', label: '従業員一覧へ' };
-
-function grantsOf(staff: StaffResponse): StaffGrants {
-  return {
-    role_ids: (staff.roles ?? []).flatMap(role => (role.id === undefined ? [] : [role.id])),
-    // 範囲の欠落を全店舗にすると保存だけで授与範囲が拡大するため、個別店舗へ倒す。
-    storeSet: {
-      storeScopeType: staff.store_scope_type ?? 'SPECIFIC_STORES',
-      storeIds: staff.store_ids ?? [],
-    },
-  };
-}
+const LIST_LINK = { href: LIST_HREF, label: '従業員一覧へ' };
 
 export default function StaffEditPage() {
   const rawId = useParams<{ id: string }>()?.id;
@@ -81,13 +75,13 @@ export default function StaffEditPage() {
     );
   }
 
-  const submit = async (values: StaffFormValues) => {
+  const submit = async (values: GrantFormValues) => {
     await writer.write(
       () => staffApi.update(id, { ...toGrantRequest(values), version: staff.version }),
       {
         success: '権限を更新しました',
         failure: '権限の更新に失敗しました',
-        onSuccess: () => router.push('/admin/staff'),
+        onSuccess: () => router.push(LIST_HREF),
       }
     );
   };
@@ -104,9 +98,12 @@ export default function StaffEditPage() {
         </div>
       )}
       {/* version が変わったら欄を取得した最新の値で描き直す */}
-      <StaffForm
+      <GrantForm
+        {...STAFF_GRANT_FORM}
         key={staff.version}
-        editing={{ displayName: staff.display_name ?? '', grants: grantsOf(staff) }}
+        defaultValues={{ display_name: '', ...grantsOf(staff) }}
+        editingName={staff.display_name ?? ''}
+        unnamedSubject="この従業員"
         locked={writer.busy || writer.conflict}
         onSubmit={submit}
       />

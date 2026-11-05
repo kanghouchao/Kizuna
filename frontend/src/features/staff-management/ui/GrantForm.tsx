@@ -1,16 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { useId } from 'react';
-import { useForm, useWatch } from 'react-hook-form';
-import { staffApi, useStoreContext, type StoreScopeType } from '@/entities/user';
+import { useId, type ReactNode } from 'react';
+import { useForm, useWatch, type Control, type DefaultValues } from 'react-hook-form';
 import {
-  RolePicker,
-  StoreSetPicker,
-  roleSetLabel,
-  storeSetLabel,
-} from '@/features/staff-management';
-import { EMAIL_PATTERN, EMAIL_PATTERN_MESSAGE, useManagedList } from '@/shared/lib';
+  useStoreContext,
+  type GrantableRoleResponse,
+  type RoleSummaryResponse,
+} from '@/entities/user';
+import { useManagedList } from '@/shared/lib';
 import {
   Badge,
   Button,
@@ -23,47 +21,65 @@ import {
   FormControl,
   FormField,
   FormItem,
-  FormLabel,
   FormMessage,
-  Input,
 } from '@/shared/ui';
+import type { Grants } from '../lib/grants';
+import { roleSetLabel } from '../lib/roleSetLabel';
+import { storeSetLabel } from '../lib/storeSetLabel';
+import { RolePicker } from './RolePicker';
+import { StoreSetPicker } from './StoreSetPicker';
 
-export interface StaffGrants {
-  role_ids: number[];
-  storeSet: { storeScopeType: StoreScopeType; storeIds: number[] };
-}
+type GrantableRole = GrantableRoleResponse | RoleSummaryResponse;
 
-export interface StaffFormValues extends StaffGrants {
-  email: string;
-  password: string;
+export interface GrantFormValues extends Grants {
   display_name: string;
 }
 
-interface StaffFormProps {
-  /** 編集対象の氏名と現在の授権。省略は新規作成で、本人の欄（メール・初期パスワード・氏名）を出す。 */
-  editing?: { displayName: string; grants: StaffGrants };
+interface GrantFormProps<T extends GrantFormValues> {
+  defaultValues: T;
+  /** 編集対象の名前。省略は新規作成で、profile の欄を出し、入力中の名前を結果の主語にする。 */
+  editingName?: string;
+  /** 新規作成で出す本人の欄。欄は control で T の名前を引く。 */
+  profile?: { title: string; fields: (control: Control<T>) => ReactNode };
+  /** 主語の敬称（人は「さん」、サービスIDは無し）と、名前未入力の間の主語。 */
+  honorific: string;
+  unnamedSubject: string;
+  /** 付与できるロールの目録。権限の列挙を持たない要約（サービスID）なら、結果はロールごとの件数で示す。 */
+  loadRoles: () => Promise<GrantableRole[]>;
+  rolesEmptyHint?: ReactNode;
+  /** 権限の節の説明。付与できる範囲の規則は主体の種類ごとに異なる。 */
+  grantDescription: string;
+  storeLabel?: string;
+  /** キャンセルの戻り先（一覧）。 */
+  listHref: string;
   /** 書き込み中・競合中など、保存を受け付けない間は true。 */
   locked?: boolean;
   /** 保存処理。失敗の通知は呼び出し側が行い、送信中の状態はこの関数の完了まで保たれる。 */
-  onSubmit: (values: StaffFormValues) => Promise<void>;
+  onSubmit: (values: T) => Promise<void>;
 }
 
-/** 従業員の作成・授権編集に共通のフォーム（本人の欄 + ロール + 担当店舗 + この設定の結果）。 */
-export function StaffForm({ editing, locked = false, onSubmit }: StaffFormProps) {
-  const form = useForm<StaffFormValues>({
-    defaultValues: {
-      email: '',
-      password: '',
-      display_name: '',
-      role_ids: editing?.grants.role_ids ?? [],
-      storeSet: editing?.grants.storeSet ?? { storeScopeType: 'SPECIFIC_STORES', storeIds: [] },
-    },
-  });
+/** 授権の作成・編集に共通のフォーム（本人の欄 + ロール + 店舗集合 + この設定の結果）。 */
+export function GrantForm<T extends GrantFormValues>({
+  defaultValues,
+  editingName,
+  profile,
+  honorific,
+  unnamedSubject,
+  loadRoles,
+  rolesEmptyHint,
+  grantDescription,
+  storeLabel,
+  listHref,
+  locked = false,
+  onSubmit,
+}: GrantFormProps<T>) {
+  const form = useForm<T>({ defaultValues: defaultValues as DefaultValues<T> });
   const {
-    control,
     handleSubmit,
     formState: { isSubmitting },
   } = form;
+  // 授権の欄は T の共通部分だけを引く。T を具体化した control は本人の欄へ渡す
+  const control = form.control as unknown as Control<GrantFormValues>;
   const resultId = useId();
   const displayName = useWatch({ control, name: 'display_name' });
   const roleIds = useWatch({ control, name: 'role_ids' });
@@ -74,18 +90,18 @@ export function StaffForm({ editing, locked = false, onSubmit }: StaffFormProps)
     isLoading: rolesLoading,
     failed: rolesFailed,
     refetch: refetchRoles,
-  } = useManagedList(staffApi.grantableRoles);
-  // 担当店舗の選択肢は行使者自身の授権店舗。付与できる範囲と同じ集合なので、
+  } = useManagedList(loadRoles);
+  // 店舗の選択肢は行使者自身の授権店舗。従業員への委譲で付与できる範囲と同じ集合なので、
   // 選べたものはサーバの店舗部分集合検査も通る。
   const { stores, loadFailed: storesFailed, reload: reloadStores } = useStoreContext();
   const storeCatalog = stores ?? [];
 
   const selectedRoles = roles.filter(role => role.id !== undefined && roleIds.includes(role.id));
+  const listed = selectedRoles.filter(role => 'permissions' in role);
+  const counted = selectedRoles.filter(role => 'permission_count' in role);
   // 複数のロールが同じ権限を持ちうるので、コードで 1 件にまとめる（初出の順）
   const grantedPermissions = [
-    ...new Map(
-      selectedRoles.flatMap(role => role.permissions).map(entry => [entry.code, entry])
-    ).values(),
+    ...new Map(listed.flatMap(role => role.permissions).map(entry => [entry.code, entry])).values(),
   ];
   const selectedStores =
     storeSet.storeScopeType === 'ALL_STORES'
@@ -104,11 +120,9 @@ export function StaffForm({ editing, locked = false, onSubmit }: StaffFormProps)
     storesUnavailable && storeSet.storeScopeType !== 'ALL_STORES' && storeSet.storeIds.length > 0
       ? `選択中の ${storeSet.storeIds.length} 店舗`
       : storeSetLabel(storeSet.storeScopeType, storeSet.storeIds, storeCatalog);
-  const subject = editing
-    ? `${editing.displayName}さん`
-    : displayName.trim()
-      ? `${displayName.trim()}さん`
-      : '新しい従業員';
+  const name = editingName ?? displayName.trim();
+  const subject = name ? `${name}${honorific}` : unnamedSubject;
+  const editing = editingName !== undefined;
 
   return (
     <Form {...form}>
@@ -116,59 +130,15 @@ export function StaffForm({ editing, locked = false, onSubmit }: StaffFormProps)
       <form onSubmit={event => void handleSubmit(onSubmit)(event)} noValidate className="space-y-6">
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="min-w-0 space-y-6">
-            {!editing && (
+            {!editing && profile && (
               <Card>
                 <CardHeader>
                   <CardTitle role="heading" aria-level={2}>
-                    従業員
+                    {profile.title}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="grid gap-6 md:grid-cols-2">
-                  <FormField
-                    control={control}
-                    name="display_name"
-                    rules={{ required: '氏名を入力してください' }}
-                    render={({ field }) => (
-                      <FormItem className="gap-2">
-                        <FormLabel>氏名</FormLabel>
-                        <FormControl>
-                          <Input type="text" required maxLength={150} {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={control}
-                    name="email"
-                    rules={{
-                      required: 'メールアドレスを入力してください',
-                      pattern: { value: EMAIL_PATTERN, message: EMAIL_PATTERN_MESSAGE },
-                    }}
-                    render={({ field }) => (
-                      <FormItem className="gap-2">
-                        <FormLabel>メールアドレス</FormLabel>
-                        <FormControl>
-                          <Input required type="email" maxLength={127} {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={control}
-                    name="password"
-                    rules={{ required: '初期パスワードを入力してください' }}
-                    render={({ field }) => (
-                      <FormItem className="gap-2">
-                        <FormLabel>初期パスワード</FormLabel>
-                        <FormControl>
-                          <Input required type="password" autoComplete="new-password" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  {profile.fields(form.control)}
                 </CardContent>
               </Card>
             )}
@@ -177,9 +147,7 @@ export function StaffForm({ editing, locked = false, onSubmit }: StaffFormProps)
                 <CardTitle role="heading" aria-level={2}>
                   権限
                 </CardTitle>
-                <CardDescription>
-                  委譲できるのは自分が持つロールと、自分の担当店舗の範囲だけです。
-                </CardDescription>
+                <CardDescription>{grantDescription}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <FormField
@@ -196,6 +164,7 @@ export function StaffForm({ editing, locked = false, onSubmit }: StaffFormProps)
                       onReload={() => void refetchRoles()}
                       roleIds={field.value}
                       onChange={field.onChange}
+                      emptyHint={rolesEmptyHint}
                       ref={field.ref}
                     />
                   )}
@@ -213,6 +182,7 @@ export function StaffForm({ editing, locked = false, onSubmit }: StaffFormProps)
                     <FormItem className="gap-1">
                       <FormControl>
                         <StoreSetPicker
+                          label={storeLabel}
                           stores={storeCatalog}
                           isLoading={stores === null && !storesFailed}
                           failed={storesFailed}
@@ -246,7 +216,9 @@ export function StaffForm({ editing, locked = false, onSubmit }: StaffFormProps)
               <div className="space-y-2">
                 <h3 className="font-medium text-foreground">
                   付与される権限
-                  {!rolesUnavailable && `（${grantedPermissions.length} 件）`}
+                  {!rolesUnavailable &&
+                    counted.length === 0 &&
+                    `（${grantedPermissions.length} 件）`}
                 </h3>
                 {/* 保存は止めない（取得失敗だけを理由に送信を止めない） */}
                 {rolesFailed ? (
@@ -255,8 +227,17 @@ export function StaffForm({ editing, locked = false, onSubmit }: StaffFormProps)
                   </p>
                 ) : rolesLoading ? (
                   <p className="text-muted-foreground">読み込み中...</p>
-                ) : grantedPermissions.length === 0 ? (
+                ) : selectedRoles.length === 0 ? (
                   <p className="text-muted-foreground">ロールが選ばれていません。</p>
+                ) : counted.length > 0 ? (
+                  // 要約の目録は権限の件数しか持たず、ロール間の重なりを除けないため合計は出さない
+                  <ul className="space-y-1">
+                    {counted.map(role => (
+                      <li key={role.id} className="break-words text-foreground">
+                        {role.name}（{role.permission_count} 件）
+                      </li>
+                    ))}
+                  </ul>
                 ) : (
                   <ul className="flex flex-wrap gap-1.5">
                     {grantedPermissions.map(entry => (
@@ -302,7 +283,7 @@ export function StaffForm({ editing, locked = false, onSubmit }: StaffFormProps)
         </div>
 
         <div className="flex justify-end gap-3 border-t pt-4">
-          <Button variant="outline" render={<Link href="/admin/staff" />}>
+          <Button variant="outline" render={<Link href={listHref} />}>
             キャンセル
           </Button>
           <Button type="submit" disabled={isSubmitting || locked}>

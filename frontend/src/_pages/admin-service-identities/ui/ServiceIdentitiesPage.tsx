@@ -1,27 +1,15 @@
 'use client';
 
 import { PlusIcon } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useState } from 'react';
 import {
-  AuthorizedStore,
-  ServiceIdentityResponse,
   ServiceIdentitySummaryResponse,
-  authApi,
   serviceIdentityApi,
+  useStoreContext,
 } from '@/entities/user';
-import {
-  ServiceIdentityCreateModal,
-  ServiceIdentityEditModal,
-  roleSetLabel,
-  storeSetLabel,
-} from '@/features/staff-management';
-import {
-  getApiErrorMessage,
-  useKeyedResource,
-  useDeleteAction,
-  useListPage,
-  useManagedList,
-} from '@/shared/lib';
+import { roleSetLabel, storeSetLabel } from '@/features/staff-management';
+import { getApiErrorMessage, useDeleteAction, useListPage } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { ListPage } from '@/widgets/list-page';
 import {
@@ -41,8 +29,8 @@ import {
 const PAGE_SIZE = 10;
 
 /**
- * サービスID管理ページ。対話ログインできない実行主体（バッチ・外部連携）の一覧と、
- * 一覧内モーダルでの新規作成・授権編集、停止・再開を行う。人のアカウント管理とは別の面。
+ * サービスID管理ページ。対話ログインできない実行主体（バッチ・外部連携）の一覧と停止・再開を行い、
+ * 作成・授権編集は別画面へ送る。人のアカウント管理とは別の面。
  */
 export default function ServiceIdentitiesPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -53,56 +41,8 @@ export default function ServiceIdentitiesPage() {
     ''
   );
   const identities = list.rows;
-  // 店舗目録はページで 1 回だけ取得し、一覧の対象範囲表示とモーダルの選択肢で共有する
-  const {
-    items: stores,
-    isLoading: storesLoading,
-    failed: storesFailed,
-    refetch: refetchStores,
-  } = useManagedList<AuthorizedStore>(() => authApi.stores());
-
-  const [modal, setModal] = useState<
-    { kind: 'none' } | { kind: 'create' } | { kind: 'edit'; id: number }
-  >({ kind: 'none' });
-  const editingId = modal.kind === 'edit' ? modal.id : null;
-  const editing = useKeyedResource<ServiceIdentityResponse>(
-    ['serviceIdentity', editingId],
-    editingId === null ? null : () => serviceIdentityApi.get(editingId)
-  );
-  const openCreate = () => setModal({ kind: 'create' });
-  const openEdit = (identity: ServiceIdentitySummaryResponse) =>
-    setModal({ kind: 'edit', id: identity.id ?? 0 });
-  const closeModal = () => {
-    if (editing.failure === 'notFound') void list.reload();
-    setModal({ kind: 'none' });
-  };
-
-  // モーダルを開くたびに店舗目録を取り直す（他管理者の店舗追加・削除への追随。現有目録は
-  // 表示したまま、届き次第差し替わる）。開いた瞬間がまだ読み込み中で、その後に失敗が
-  // 確定する時序では、settle 後の失敗を検知して 1 回だけ取り直す（失敗が続く環境で無限に
-  // 叩かない — それ以降の回復は StoreSetPicker の再試行導線が担う）。
-  const modalOpen = modal.kind !== 'none';
-  const prevModalOpenRef = useRef(false);
-  const storesRetriedRef = useRef(false);
-  useEffect(() => {
-    const justOpened = modalOpen && !prevModalOpenRef.current;
-    prevModalOpenRef.current = modalOpen;
-    if (justOpened) {
-      if (storesLoading) {
-        // まだ読み込み中: settle 後の失敗にそなえて自動再試行の権利を残す
-        storesRetriedRef.current = false;
-      } else {
-        // 開幕の取り直し自体を 1 回目と数え、直後に失敗で settle しても連打しない
-        storesRetriedRef.current = true;
-        void refetchStores();
-      }
-      return;
-    }
-    if (modalOpen && !storesLoading && storesFailed && !storesRetriedRef.current) {
-      storesRetriedRef.current = true;
-      void refetchStores();
-    }
-  }, [modalOpen, storesLoading, storesFailed, refetchStores]);
+  // 対象店舗の表示に使う店舗目録（行使者の授権店舗）
+  const stores = useStoreContext().stores ?? [];
 
   // 停止は実行中の定期処理を次回から止める操作なので確認を挟む
   const suspension = useDeleteAction<ServiceIdentitySummaryResponse>({
@@ -129,7 +69,7 @@ export default function ServiceIdentitiesPage() {
         title="サービスID管理"
         description="定期処理・外部連携が使うサービスIDのロール・対象店舗を管理します。"
         actions={
-          <Button onClick={openCreate}>
+          <Button render={<Link href="/admin/service-identities/create" />}>
             <PlusIcon />
             サービスIDを追加
           </Button>
@@ -218,7 +158,7 @@ export default function ServiceIdentitiesPage() {
                     variant="ghost"
                     size="sm"
                     className="text-primary-strong"
-                    onClick={() => void openEdit(identity)}
+                    render={<Link href={`/admin/service-identities/${identity.id}/edit`} />}
                   >
                     編集
                   </Button>
@@ -256,30 +196,6 @@ export default function ServiceIdentitiesPage() {
         onConfirm={() => void suspension.confirm()}
         onClose={suspension.cancel}
       />
-
-      {/* モーダルは一覧の loading / empty に連動して消えないよう外殻の外に置く。
-          開くまで mount しないことで、ロール目録の取得を必要になった時点まで遅延させる */}
-      {modal.kind === 'create' && (
-        <ServiceIdentityCreateModal
-          stores={stores}
-          storesLoading={storesLoading}
-          storesFailed={storesFailed}
-          onReloadStores={() => void refetchStores()}
-          onClose={closeModal}
-          onCreated={list.reload}
-        />
-      )}
-      {modal.kind === 'edit' && (
-        <ServiceIdentityEditModal
-          resource={editing}
-          stores={stores}
-          storesLoading={storesLoading}
-          storesFailed={storesFailed}
-          onReloadStores={() => void refetchStores()}
-          onClose={closeModal}
-          onUpdated={list.reload}
-        />
-      )}
     </>
   );
 }
