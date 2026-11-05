@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { CircleCheckIcon } from 'lucide-react';
@@ -25,8 +26,8 @@ interface OrderApplicationCardProps {
   application: OrderApplicationRow;
   /** 謝絶が終わったとき。この申請はもう受付箱の対象ではないので手元から取り除く。 */
   onDeclined: (id: string) => void;
-  /** 確定モーダルを開く。 */
-  onConfirm: (application: OrderApplicationRow) => void;
+  /** 確定画面の URL。一覧の検索条件を運び、確定画面からの戻り先にする。識別子の無い行では出さない。 */
+  confirmHref?: string;
 }
 
 /** カードの 2 行目。時刻・指名・人数を 1 本の注記行に畳む。 */
@@ -49,7 +50,7 @@ function CardMeta({ application }: { application: OrderApplicationRow }) {
 export function OrderApplicationCard({
   application,
   onDeclined,
-  onConfirm,
+  confirmHref,
 }: OrderApplicationCardProps) {
   const [processing, setProcessing] = useState(false);
   const [declining, setDeclining] = useState(false);
@@ -135,15 +136,12 @@ export function OrderApplicationCard({
             >
               謝絶
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              disabled={processing}
-              onClick={() => onConfirm(application)}
-            >
-              <CircleCheckIcon aria-hidden="true" />
-              確定
-            </Button>
+            {confirmHref && (
+              <Button size="sm" render={<Link href={confirmHref} />}>
+                <CircleCheckIcon aria-hidden="true" />
+                確定
+              </Button>
+            )}
           </div>
         )}
       </div>

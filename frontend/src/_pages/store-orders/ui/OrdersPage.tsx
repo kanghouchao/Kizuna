@@ -19,12 +19,12 @@ import { hasPermission, useMe } from '@/entities/user';
 import { storePath, useListPage } from '@/shared/lib';
 import { PageHeader } from '@/widgets/page-header';
 import { OrderApplicationCard } from './OrderApplicationCard';
-import { OrderApplicationConfirmModal } from './OrderApplicationConfirmModal';
 import { OrderArchiveSection } from './OrderArchiveSection';
 import { OrderAttributionModal } from './OrderAttributionModal';
 import { OrderCompletionModal } from './OrderCompletionModal';
 import { OrderQueueCard } from './OrderQueueCard';
 import { useSearchOnCriteriaChange } from '../lib/useSearchOnCriteriaChange';
+import { applicationConfirmHref } from '../lib/orderListHref';
 import {
   Button,
   Card,
@@ -134,14 +134,6 @@ export default function OrderListPage() {
   }
 
   // 退出中は対象を保持し、再度開くときだけ key を変えて入力と取得結果を初期化する。
-  const [confirmingDialog, setConfirmingDialog] = useState<{
-    target: OrderApplicationRow;
-    open: boolean;
-    key: number;
-  } | null>(null);
-  const confirming = confirmingDialog?.target ?? null;
-  const setConfirming = (target: OrderApplicationRow) =>
-    setConfirmingDialog(previous => ({ target, open: true, key: (previous?.key ?? 0) + 1 }));
   const [completingDialog, setCompletingDialog] = useState<{
     target: OrderWorkQueueRow;
     open: boolean;
@@ -176,13 +168,6 @@ export default function OrderListPage() {
   const inbox = useListPage<OrderApplicationRow>(page =>
     orderApplicationApi.list({ statuses: ['PENDING'], page, size: QUEUE_PAGE_SIZE })
   );
-
-  /** 確定し終えた申請の後始末。申請は受付箱から外れ、生まれた受注が作業キューへ現れる。 */
-  const settleConfirmed = () => {
-    void inbox.reload();
-    // 生まれた受注は検索・並びの条件次第でどこに入るか分からないため、行の差し込みではなく取り直す
-    void queue.reload();
-  };
 
   // 条件の適用は history.pushState で履歴に積み、取得は URL の変化から起きる。次の条件は描画済みの
   // criteria ではなく今の URL から組む — 描画が URL に追いつく前の操作で、直前に送った条件を消さないため。
@@ -344,7 +329,9 @@ export default function OrderListPage() {
                 key={application.id}
                 application={application}
                 onDeclined={() => void inbox.reload()}
-                onConfirm={setConfirming}
+                confirmHref={
+                  application.id ? applicationConfirmHref(application.id, query) : undefined
+                }
               />
             ))}
           </ul>
@@ -412,15 +399,6 @@ export default function OrderListPage() {
         />
       </div>
 
-      {/* 確定は申請内容を予填した受注の作成操作。申請原文はモーダルの外（受付箱の行）に残り続ける */}
-      <OrderApplicationConfirmModal
-        key={`confirming-${confirmingDialog?.key}`}
-        open={confirmingDialog?.open ?? false}
-        application={confirming}
-        onClose={() => setConfirmingDialog(previous => previous && { ...previous, open: false })}
-        onConfirmed={settleConfirmed}
-        onMissing={() => void inbox.reload()}
-      />
       <OrderCompletionModal
         key={`completing-${completingDialog?.key}`}
         open={completingDialog?.open ?? false}
