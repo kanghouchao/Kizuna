@@ -313,3 +313,40 @@ test('コースと明細を 1 枚の明細表に並べ、控除の行と合計�
   expect(total).toHaveTextContent('¥13,500');
   expect(total).toHaveTextContent('¥9,000');
 });
+
+test('差分の表は明細のコース行をコースの行と重ねて出さない', async () => {
+  const base = {
+    kind: 'BASE_COURSE' as const,
+    name: '基本',
+    amount: 12000,
+    remuneration: 7000,
+    duration_minutes: 60,
+    revision_number: 1,
+    system_owned: false,
+  };
+  const extension = {
+    kind: 'EXTENSION' as const,
+    name: '延長',
+    amount: 3000,
+    remuneration: 2000,
+    duration_minutes: 30,
+    system_owned: false,
+  };
+  const preview = jest
+    .fn()
+    .mockResolvedValueOnce({ ...first, fee_lines: [base, extension] })
+    .mockResolvedValueOnce({
+      ...first,
+      confirmation_token: 'second',
+      course: { ...first.course, price: 15000 },
+      fee_lines: [{ ...base, amount: 15000 }, extension],
+    });
+  const save = jest.fn();
+  render(<Screen preview={preview} save={save} />);
+  await confirmOnce(save);
+  expect(changeRow(/コース料金/)).toHaveAttribute('data-changed', 'true');
+  const line = changeRow(/^明細1/);
+  expect(line).toHaveTextContent('延長');
+  expect(line).toHaveAttribute('data-changed', 'false');
+  expect(within(changes()!).queryByRole('row', { name: /^明細2/ })).not.toBeInTheDocument();
+});

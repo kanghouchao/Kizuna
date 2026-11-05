@@ -108,12 +108,18 @@ interface FeeRow {
   name: string;
   minutes?: number;
   revision?: number;
-  amount: number;
+  amount: string;
   remuneration: number;
   deduction: boolean;
 }
 
 // 明細の BASE_COURSE 行はコースの写しなので、コースは preview.course から 1 行だけ出す。
+const extraLines = (preview: OrderPreview) =>
+  preview.fee_lines.filter(line => line.kind !== 'BASE_COURSE');
+const lineName = (line: OrderFeeLine) => line.name ?? ORDER_FEE_LINE_KIND_LABELS[line.kind];
+const lineAmount = (line: OrderFeeLine) =>
+  `${isDeduction(line.kind) ? '-' : ''}${yen(line.amount)}`;
+
 function feeRows(preview: OrderPreview): FeeRow[] {
   const { course } = preview;
   return [
@@ -122,21 +128,19 @@ function feeRows(preview: OrderPreview): FeeRow[] {
       name: course.name,
       minutes: course.duration_minutes,
       revision: course.revision_number,
-      amount: course.price,
+      amount: yen(course.price),
       remuneration: course.remuneration,
       deduction: false,
     },
-    ...preview.fee_lines
-      .filter(line => line.kind !== 'BASE_COURSE')
-      .map((line, i) => ({
-        key: `line:${i}`,
-        name: line.name ?? ORDER_FEE_LINE_KIND_LABELS[line.kind],
-        minutes: line.duration_minutes,
-        revision: line.revision_number,
-        amount: line.amount,
-        remuneration: line.remuneration,
-        deduction: isDeduction(line.kind),
-      })),
+    ...extraLines(preview).map((line, i) => ({
+      key: `line:${i}`,
+      name: lineName(line),
+      minutes: line.duration_minutes,
+      revision: line.revision_number,
+      amount: lineAmount(line),
+      remuneration: line.remuneration,
+      deduction: isDeduction(line.kind),
+    })),
   ];
 }
 
@@ -164,7 +168,7 @@ function FeeTable({ preview }: { preview: OrderPreview }) {
             </TableCell>
             <TableCell>{row.revision === undefined ? '—' : `版${row.revision}`}</TableCell>
             <TableCell className={cn(number, row.deduction && 'text-destructive-strong')}>
-              {row.deduction ? `-${yen(row.amount)}` : yen(row.amount)}
+              {row.amount}
             </TableCell>
             <TableCell className={number}>{yen(row.remuneration)}</TableCell>
           </TableRow>
@@ -186,10 +190,10 @@ function FeeTable({ preview }: { preview: OrderPreview }) {
 function feeLineText(line: OrderFeeLine | undefined) {
   if (!line) return '—';
   return [
-    line.name ?? ORDER_FEE_LINE_KIND_LABELS[line.kind],
+    lineName(line),
     line.duration_minutes !== undefined && `${line.duration_minutes}分`,
     line.revision_number !== undefined && `版${line.revision_number}`,
-    `料金 ${isDeduction(line.kind) ? '-' : ''}${yen(line.amount)}`,
+    `料金 ${lineAmount(line)}`,
     `固定報酬 ${yen(line.remuneration)}`,
   ]
     .filter(Boolean)
@@ -204,13 +208,17 @@ function specialServiceText(item: OrderSpecialService | undefined) {
   ].join('\n');
 }
 
+const memberText = (value: NonNullable<OrderPreview['points']>) =>
+  value.member_linked ? (value.member_code ?? '—') : '会員紐づけなし';
+
 function changeRows(before: OrderPreview, after: OrderPreview): ChangeRow[] {
   const plain = (label: string, read: (value: OrderPreview) => string) => ({
     label,
     before: read(before),
     after: read(after),
   });
-  const lineCount = Math.max(before.fee_lines.length, after.fee_lines.length);
+  const was = extraLines(before);
+  const now = extraLines(after);
   const services = new Map<string, string>();
   for (const item of [...before.special_services, ...after.special_services])
     services.set(item.service_id, item.name);
@@ -219,11 +227,11 @@ function changeRows(before: OrderPreview, after: OrderPreview): ChangeRow[] {
     plain('コース時間', v => `${v.course.duration_minutes}分`),
     plain('コース料金', v => yen(v.course.price)),
     plain('コースの固定報酬', v => yen(v.course.remuneration)),
-    ...Array.from({ length: lineCount }, (_, i) => ({
+    ...Array.from({ length: Math.max(was.length, now.length) }, (_, i) => ({
       key: `line:${i}`,
       label: `明細${i + 1}`,
-      before: feeLineText(before.fee_lines[i]),
-      after: feeLineText(after.fee_lines[i]),
+      before: feeLineText(was[i]),
+      after: feeLineText(now[i]),
     })),
     ...[...services].map(([id, name]) => ({
       key: `special:${id}`,
@@ -235,10 +243,12 @@ function changeRows(before: OrderPreview, after: OrderPreview): ChangeRow[] {
     plain('固定報酬合計', v => yen(v.total_remuneration)),
     plain('請求額', v => yen(v.total_fee)),
     plain('利用上限・通常付与基準', v => yen(v.point_basis_amount)),
-    plain('会員', v => v.points?.member_code ?? '非会員'),
-    plain('利用資格', v => (v.points?.redemption_eligible ? '利用可能' : '利用不可')),
-    plain('利用', v => points(v.points?.use_points ?? 0)),
-    plain('付与予定', v => points(v.points?.grant_points ?? 0)),
+    plain('会員', v => (v.points ? memberText(v.points) : '—')),
+    plain('利用資格', v =>
+      v.points ? (v.points.redemption_eligible ? '利用可能' : '利用不可') : '—'
+    ),
+    plain('利用', v => (v.points ? points(v.points.use_points) : '—')),
+    plain('付与予定', v => (v.points ? points(v.points.grant_points) : '—')),
   ];
 }
 
@@ -250,7 +260,7 @@ export function OrderPreviewDetails({
   preview: OrderPreview;
   previous: OrderPreview | null;
 }) {
-  const specials = preview.special_services ?? [];
+  const specials = preview.special_services;
   return (
     <div className="space-y-5">
       {preview.requires_attention && (
@@ -285,9 +295,7 @@ export function OrderPreviewDetails({
         <KeyValueList>
           {preview.points && (
             <>
-              <KeyValueRow label="会員">
-                {preview.points.member_linked ? preview.points.member_code : '会員紐づけなし'}
-              </KeyValueRow>
+              <KeyValueRow label="会員">{memberText(preview.points)}</KeyValueRow>
               <KeyValueRow label="利用資格">
                 {preview.points.redemption_eligible ? (
                   <Status tone="success">利用可能</Status>
