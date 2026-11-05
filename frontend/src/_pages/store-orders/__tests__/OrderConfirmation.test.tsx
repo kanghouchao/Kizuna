@@ -350,3 +350,18 @@ test('差分の表は明細のコース行をコースの行と重ねて出さ�
   expect(line).toHaveAttribute('data-changed', 'false');
   expect(within(changes()!).queryByRole('row', { name: /^明細2/ })).not.toBeInTheDocument();
 });
+
+test('採用根拠だけが変わった特殊サービスも差分の行で強調する', async () => {
+  const notAccepted = { ...special, current_consent_status: 'NOT_ACCEPTED' as const };
+  const preview = jest
+    .fn()
+    .mockResolvedValueOnce({ ...first, special_services: [notAccepted] })
+    .mockResolvedValueOnce({
+      ...first,
+      special_services: [{ ...notAccepted, adoption_basis: 'HISTORICAL_CORRECTION' }],
+    });
+  const save = jest.fn();
+  render(<Screen preview={preview} save={save} />);
+  await confirmOnce(save);
+  expect(changeRow(/^特殊/)).toHaveAttribute('data-changed', 'true');
+});

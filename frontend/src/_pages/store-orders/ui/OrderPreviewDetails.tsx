@@ -200,11 +200,16 @@ function feeLineText(line: OrderFeeLine | undefined) {
     .join(' / ');
 }
 
+const ADOPTION_LABELS = {
+  ACCEPTED_TERMS: '本人受諾条件',
+  HISTORICAL_CORRECTION: '歴史版本による訂正',
+} as const;
+
 function specialServiceText(item: OrderSpecialService | undefined) {
   if (!item) return '—';
   return [
     `版${item.revision_number} / 料金 ${yen(item.price)} / 固定報酬 ${yen(item.remuneration)} / 担当在籍 ${item.enrollment_id}`,
-    `受諾状態 ${consentStatus(item).label} / 受諾版 ${item.consent_version ?? 'なし'}`,
+    `受諾状態 ${consentStatus(item).label} / 受諾版 ${item.consent_version ?? 'なし'} / 採用根拠 ${ADOPTION_LABELS[item.adoption_basis]}`,
   ].join('\n');
 }
 
