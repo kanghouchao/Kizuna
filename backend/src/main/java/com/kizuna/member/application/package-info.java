@@ -6,7 +6,7 @@
  * 恒久的な書き込み口で、受け取るのは判定済みの指標だけ — 材料をこちらから引くと member → order の依存が生まれ、既にある order → member と環になる。 一方
  * {@code MemberRegistrationService} の公開は過渡措置: auth モジュールの LINE 登録が会員身分の作成（ユーザー +
  * 会員集約の単一トランザクション）を委ねているためで、 登録経路の受け口が整理された段階で狭める。{@code MemberLoginAddress}
- * は会員宛の通知の宛先を引く恒久的な読み口で、ログイン用メールアドレスと退会の有無だけを返す。 {@code MemberDisplayNames}
+ * は会員宛の通知の宛先を引く恒久的な読み口で、ログイン用メールアドレスとその検証の有無、退会の有無だけを返す。 {@code MemberDisplayNames}
  * は会員宛の通知の文案に入れる表示名だけを返す恒久的な読み口。
  */
 @org.springframework.modulith.NamedInterface("application")

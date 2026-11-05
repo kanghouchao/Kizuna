@@ -82,7 +82,7 @@ Then("会員ポータルを開き直すと未検証の案内が出ない", async
   await expect(page.getByText("メールアドレスの確認が済んでいません")).toHaveCount(0);
 });
 
-When("会員ポータルの通知の設定を開き直す", async ({ page }) => {
+When("会員ポータルの通知の設定を開く", async ({ page }) => {
   await page.goto(`${APP_URL}/member/notification-settings/`);
   await expect(page.getByRole("heading", { level: 1, name: /^通知の設定$/ })).toBeVisible({ timeout: 15000 });
 });

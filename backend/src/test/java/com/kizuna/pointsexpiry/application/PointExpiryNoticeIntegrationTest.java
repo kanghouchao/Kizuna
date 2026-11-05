@@ -365,7 +365,6 @@ class PointExpiryNoticeIntegrationTest {
     return member;
   }
 
-  // 会員登録の口から作り、confirm なら届いた検証メールのリンクのトークンで確認まで済ませる。
   private long registered(String name, boolean confirm) {
     String email = address(name);
     context
