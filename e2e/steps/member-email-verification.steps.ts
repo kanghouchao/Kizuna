@@ -82,6 +82,21 @@ Then("会員ポータルを開き直すと未検証の案内が出ない", async
   await expect(page.getByText("メールアドレスの確認が済んでいません")).toHaveCount(0);
 });
 
+When("会員ポータルの通知の設定を開き直す", async ({ page }) => {
+  await page.goto(`${APP_URL}/member/notification-settings/`);
+  await expect(page.getByRole("heading", { level: 1, name: /^通知の設定$/ })).toBeVisible({ timeout: 15000 });
+});
+
+// 本人は選んでいないので、業務の「受け取る」は検証済みから導かれた既定が画面に出たもの。
+Then("業務連絡は {string} が選ばれ、販促はまだ選択されていない", async ({ page }, label: string) => {
+  const business = page.getByRole("radiogroup", { name: "ご利用に関するお知らせ" });
+  await expect(business.getByRole("radio", { name: label })).toBeChecked({ timeout: 15000 });
+  const marketing = page.getByRole("radiogroup", { name: "キャンペーン・おすすめのご案内" });
+  await expect(marketing.getByRole("radio", { name: "受け取る" })).not.toBeChecked();
+  await expect(marketing.getByRole("radio", { name: "受け取らない" })).not.toBeChecked();
+  await expect(page.getByText("まだ選択されていません。")).toHaveCount(1);
+});
+
 When("壊れたトークンの確認リンクを開く", async ({ page }) => {
   await page.goto(`${APP_URL}/auth/verify-email#not-a-token`);
 });
