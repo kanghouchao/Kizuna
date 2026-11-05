@@ -160,12 +160,43 @@ it('明細は line_id で前後を突き合わせ、追加された明細は変�
   });
   render(<OrderCorrectionHistory orderId="o1" />);
   await screen.findByText('提供コースの訂正');
-  expect(cellsOf('明細：延長30分（延長料金）')).toEqual([
-    '明細：延長30分（延長料金）',
+  expect(cellsOf('明細：延長料金')).toEqual([
+    '明細：延長料金',
     '—',
-    '費用 ¥6,000 / 報酬 ¥3,000',
+    '延長30分\n費用 ¥6,000 / 報酬 ¥3,000',
   ]);
-  expect(cellsOf('明細：歴史コース（基本コース料金）')[1]).toBe(
-    cellsOf('明細：歴史コース（基本コース料金）')[2]
-  );
+  expect(cellsOf('明細：基本コース料金')[1]).toBe(cellsOf('明細：基本コース料金')[2]);
+});
+
+it('同じ明細の名称が訂正で変わっても、変更前のセルに訂正前の名称を残す', async () => {
+  const surcharge = {
+    line_id: 'l3',
+    kind: 'SURCHARGE' as const,
+    name: '深夜加算（旧版）',
+    amount: 2000,
+    remuneration: 1000,
+    system_owned: false,
+  };
+  fetchHistory.mockResolvedValue({
+    rows: [
+      {
+        ...entry,
+        before: { ...snapshot, fee_lines: [...snapshot.fee_lines, surcharge] },
+        after: {
+          ...snapshot,
+          fee_lines: [...snapshot.fee_lines, { ...surcharge, name: '深夜加算（新版）' }],
+        },
+      },
+    ],
+    page: 0,
+    pageCount: 1,
+    total: 1,
+  });
+  render(<OrderCorrectionHistory orderId="o1" />);
+  await screen.findByText('提供コースの訂正');
+  expect(cellsOf('明細：加算')).toEqual([
+    '明細：加算',
+    '深夜加算（旧版）\n費用 ¥2,000 / 報酬 ¥1,000',
+    '深夜加算（新版）\n費用 ¥2,000 / 報酬 ¥1,000',
+  ]);
 });
