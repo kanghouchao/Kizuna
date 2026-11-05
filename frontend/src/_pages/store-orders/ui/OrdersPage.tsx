@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { ArrowDownIcon, ArrowUpIcon, PlusIcon } from 'lucide-react';
 import {
   ORDER_SORT_KEY_LABELS,
@@ -24,6 +24,7 @@ import { OrderArchiveSection } from './OrderArchiveSection';
 import { OrderAttributionModal } from './OrderAttributionModal';
 import { OrderCompletionModal } from './OrderCompletionModal';
 import { OrderQueueCard } from './OrderQueueCard';
+import { useSearchOnCriteriaChange } from '../lib/useSearchOnCriteriaChange';
 import {
   Button,
   Card,
@@ -61,6 +62,10 @@ const DEFAULT_SORT_KEY: OrderSortKey = 'BUSINESS_DATE';
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
+/** 暦に有る日付か。Date は 2 月 30 日を 3 月 2 日へ繰り上げるので、書き戻して一致を見る。 */
+const isCalendarDate = (value: string) =>
+  ISO_DATE.test(value) && new Date(`${value}T00:00:00Z`).toISOString().startsWith(value);
+
 /** 画面が適用している条件。並びは常にどれかが選ばれている。 */
 type AppliedCriteria = OrderListCriteria & { sort_key: OrderSortKey; desc: boolean };
 
@@ -74,7 +79,7 @@ function parseCriteria(query: string): AppliedCriteria {
   const businessDate = params.get('business_date');
   return {
     customer_name: params.get('customer_name') || undefined,
-    business_date: businessDate && ISO_DATE.test(businessDate) ? businessDate : undefined,
+    business_date: businessDate && isCalendarDate(businessDate) ? businessDate : undefined,
     sort_key: SORT_KEYS.includes(sortKey as OrderSortKey)
       ? (sortKey as OrderSortKey)
       : DEFAULT_SORT_KEY,
@@ -159,17 +164,7 @@ export default function OrderListPage() {
       }),
     criteria
   );
-  const { search: searchQueue } = queue;
-
-  // 条件（URL）が変わったら取り直す。初回はフック自身の取得と重なるため飛ばす
-  const appliedRef = useRef(criteria);
-  useEffect(() => {
-    if (appliedRef.current === criteria) {
-      return;
-    }
-    appliedRef.current = criteria;
-    void searchQueue(criteria);
-  }, [criteria, searchQueue]);
+  useSearchOnCriteriaChange(criteria, queue.search);
 
   // 受付箱（未処理の予約申請）。検索・並びの条件は持たない — 希望日の早い順に処理するだけの箱で、
   // 条件を持たせると作業キューと 2 つの母集合を主張し合う。
@@ -184,21 +179,26 @@ export default function OrderListPage() {
     void queue.reload();
   };
 
-  // 条件の適用は履歴に積む（戻るで直前の条件へ戻れるように）。取得は URL の変化から起きる
-  const navigate = (next: AppliedCriteria) => {
+  // 条件の適用は履歴に積み（戻るで直前の条件へ戻れるように）、取得は URL の変化から起きる。
+  // 同じ条件の検索は URL が変わらず取得も起きないので、履歴を積まずに作業キューだけを取り直す
+  const pushCriteria = (next: AppliedCriteria) => {
     const nextQuery = toQuery(next);
+    if (nextQuery === toQuery(criteria)) {
+      void queue.search(criteria);
+      return;
+    }
     router.push(nextQuery ? `${pathname}?${nextQuery}` : pathname);
   };
 
   const apply = (next: SearchDraft) =>
-    navigate({
+    pushCriteria({
       ...criteria,
       customer_name: next.customerName || undefined,
       business_date: next.businessDate || undefined,
     });
 
   const applySort = (key: OrderSortKey, desc: boolean) =>
-    navigate({ ...criteria, sort_key: key, desc });
+    pushCriteria({ ...criteria, sort_key: key, desc });
 
   // アーカイブへ移った受注を群ごとに数える。件数の控えはたたんだままでも出ているので、移った先を
   // 取り直さないと「アーカイブに入ったのか」が画面のどこからも読めない
