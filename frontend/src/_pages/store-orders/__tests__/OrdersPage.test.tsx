@@ -534,16 +534,19 @@ describe('検索条件と並び順の URL', () => {
     expect(mockPush).not.toHaveBeenCalled();
   });
 
-  it('暦に無い日付は既定へ倒して取得すること', async () => {
-    mockQuery = 'business_date=2026-02-30';
-    render(<OrderListPage />);
+  it.each(['2026-02-30', '2026-13-01', '2026-01-32'])(
+    '暦に無い日付（%s）は既定へ倒して取得すること',
+    async businessDate => {
+      mockQuery = `business_date=${businessDate}`;
+      render(<OrderListPage />);
 
-    await waitFor(() =>
-      expect(mockedOrderApi.listWorkQueue).toHaveBeenCalledWith(
-        expect.objectContaining({ business_date: undefined })
-      )
-    );
-  });
+      await waitFor(() =>
+        expect(mockedOrderApi.listWorkQueue).toHaveBeenCalledWith(
+          expect.objectContaining({ business_date: undefined })
+        )
+      );
+    }
+  );
 
   it('URL の不正な並び・日付は既定へ倒して取得すること', async () => {
     mockQuery = 'sort_key=DROP&desc=yes&business_date=2026-13';

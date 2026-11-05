@@ -62,9 +62,15 @@ const DEFAULT_SORT_KEY: OrderSortKey = 'BUSINESS_DATE';
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** 暦に有る日付か。Date は 2 月 30 日を 3 月 2 日へ繰り上げるので、書き戻して一致を見る。 */
-const isCalendarDate = (value: string) =>
-  ISO_DATE.test(value) && new Date(`${value}T00:00:00Z`).toISOString().startsWith(value);
+/**
+ * 暦に有る日付か。Date は 2 月 30 日を 3 月 2 日へ繰り上げるので書き戻して一致を見る。13 月などは
+ * 無効な Date になり toISOString が投げる（描画中なので一覧ごと落ちる）ため、先に除く。
+ */
+const isCalendarDate = (value: string) => {
+  if (!ISO_DATE.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
+};
 
 /** 画面が適用している条件。並びは常にどれかが選ばれている。 */
 type AppliedCriteria = OrderListCriteria & { sort_key: OrderSortKey; desc: boolean };
