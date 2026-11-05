@@ -13,17 +13,24 @@ import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 import { notify } from '@/shared/notify';
 
-// 一覧の URL を持つ履歴の代役。push で query が変わり、購読中の useSearchParams が描き直される
+// URL の正本は jsdom の履歴。Next は history.pushState を取り込んで useSearchParams を後の描画で
+// 合わせるので、代役も通知を遅らせる（URL と描画済みの条件がずれる間の操作を再現するため）
 const ORDERS_PATH = '/store/orders';
-let mockQuery = '';
 const mockQueryListeners = new Set<() => void>();
-const mockNavigate = (href: string) => {
-  const [path, query = ''] = href.split('?');
-  if (path !== ORDERS_PATH) return;
-  mockQuery = query;
-  mockQueryListeners.forEach(listener => listener());
+const notifyQuery = () => mockQueryListeners.forEach(listener => listener());
+const originalPushState = window.history.pushState.bind(window.history);
+const pushState = jest.fn((...args: Parameters<History['pushState']>) => {
+  originalPushState(...args);
+  setTimeout(notifyQuery, 0);
+});
+window.history.pushState = pushState;
+/** 戻る・進む・再読込の代役。URL を差し替えて購読中の描画へ知らせる。 */
+const visit = (href: string) => {
+  window.history.replaceState(null, '', href);
+  notifyQuery();
 };
-const mockPush = jest.fn((href: string) => mockNavigate(href));
+const currentUrl = () => window.location.pathname + window.location.search;
+const mockPush = jest.fn();
 
 jest.mock('@/entities/order', () => ({
   // 種別表などの定数は実物を通す。丸ごと差し替えると明細の欄が選択肢を組めない
@@ -63,7 +70,7 @@ jest.mock('next/navigation', () => {
           mockQueryListeners.add(listener);
           return () => mockQueryListeners.delete(listener);
         },
-        () => mockQuery
+        () => window.location.search.slice(1)
       );
       return React.useMemo(() => new URLSearchParams(query), [query]);
     },
@@ -205,7 +212,7 @@ const meWith = (permissions: PermissionCode[]) =>
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockQuery = '';
+  window.history.replaceState(null, '', ORDERS_PATH);
   mockedOrderApi.listWorkQueue.mockResolvedValue({ rows: [], page: 0, pageCount: 1, total: 0 });
   mockedOrderApi.listArchive.mockResolvedValue(EMPTY_ARCHIVE);
   mockedApplicationApi.list.mockResolvedValue({ rows: [], page: 0, pageCount: 1, total: 0 });
@@ -437,7 +444,9 @@ describe('検索と並び替え', () => {
 
 describe('検索条件と並び順の URL', () => {
   it('URL の条件で最初から取得し、入力欄と並びにも出すこと（再読込で条件が保たれる）', async () => {
-    mockQuery = 'customer_name=%E5%B1%B1%E7%94%B0&business_date=2026-07-03&sort_key=PAX&desc=true';
+    visit(
+      `${ORDERS_PATH}?customer_name=%E5%B1%B1%E7%94%B0&business_date=2026-07-03&sort_key=PAX&desc=true`
+    );
     render(<OrderListPage />);
 
     const expected = {
@@ -465,23 +474,44 @@ describe('検索条件と並び順の URL', () => {
 
     fireEvent.change(screen.getByLabelText('お客様名'), { target: { value: '山田' } });
     fireEvent.click(screen.getByRole('button', { name: '検索' }));
-    expect(mockPush).toHaveBeenLastCalledWith(`${ORDERS_PATH}?customer_name=%E5%B1%B1%E7%94%B0`);
-
-    fireEvent.click(screen.getByRole('button', { name: /昇順/ }));
-    expect(mockPush).toHaveBeenLastCalledWith(
-      `${ORDERS_PATH}?customer_name=%E5%B1%B1%E7%94%B0&desc=true`
+    expect(currentUrl()).toBe(`${ORDERS_PATH}?customer_name=%E5%B1%B1%E7%94%B0`);
+    await waitFor(() =>
+      expect(mockedOrderApi.listWorkQueue).toHaveBeenLastCalledWith(
+        expect.objectContaining({ customer_name: '山田' })
+      )
     );
 
+    fireEvent.click(screen.getByRole('button', { name: /昇順/ }));
+    expect(currentUrl()).toBe(`${ORDERS_PATH}?customer_name=%E5%B1%B1%E7%94%B0&desc=true`);
+    await waitFor(() => expect(screen.getByRole('button', { name: /降順/ })).toBeInTheDocument());
+
     fireEvent.click(screen.getByRole('button', { name: 'クリア' }));
-    expect(mockPush).toHaveBeenLastCalledWith(`${ORDERS_PATH}?desc=true`);
+    expect(currentUrl()).toBe(`${ORDERS_PATH}?desc=true`);
+    expect(pushState).toHaveBeenCalledTimes(3);
+  });
+
+  it('検索の直後、描画が URL に追いつく前に並びを変えても、送った検索語を失わないこと', async () => {
+    render(<OrderListPage />);
+    await waitFor(() => expect(mockedOrderApi.listWorkQueue).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByLabelText('お客様名'), { target: { value: '山田' } });
+    fireEvent.click(screen.getByRole('button', { name: '検索' }));
+    fireEvent.click(screen.getByRole('button', { name: /昇順/ }));
+
+    expect(currentUrl()).toBe(`${ORDERS_PATH}?customer_name=%E5%B1%B1%E7%94%B0&desc=true`);
+    await waitFor(() =>
+      expect(mockedOrderApi.listWorkQueue).toHaveBeenLastCalledWith(
+        expect.objectContaining({ customer_name: '山田', desc: true })
+      )
+    );
   });
 
   it('戻る・進むで URL が変わると、その条件で取り直し入力欄も追従すること', async () => {
-    mockQuery = 'customer_name=%E5%B1%B1%E7%94%B0';
+    visit(`${ORDERS_PATH}?customer_name=%E5%B1%B1%E7%94%B0`);
     render(<OrderListPage />);
     await waitFor(() => expect(mockedOrderApi.listWorkQueue).toHaveBeenCalledTimes(1));
 
-    act(() => mockNavigate(`${ORDERS_PATH}?customer_name=%E4%BD%90%E8%97%A4&sort_key=PAX`));
+    act(() => visit(`${ORDERS_PATH}?customer_name=%E4%BD%90%E8%97%A4&sort_key=PAX`));
 
     await waitFor(() =>
       expect(mockedOrderApi.listWorkQueue).toHaveBeenLastCalledWith(
@@ -495,7 +525,7 @@ describe('検索条件と並び順の URL', () => {
     );
     expect(screen.getByLabelText('お客様名')).toHaveValue('佐藤');
 
-    act(() => mockNavigate(ORDERS_PATH));
+    act(() => visit(ORDERS_PATH));
 
     await waitFor(() =>
       expect(mockedOrderApi.listWorkQueue).toHaveBeenLastCalledWith(
@@ -521,7 +551,7 @@ describe('検索条件と並び順の URL', () => {
   });
 
   it('条件を変えずに検索を押すと、履歴を積まずに作業キューを取り直すこと', async () => {
-    mockQuery = 'customer_name=%E5%B1%B1%E7%94%B0';
+    visit(`${ORDERS_PATH}?customer_name=%E5%B1%B1%E7%94%B0`);
     render(<OrderListPage />);
     await waitFor(() => expect(mockedOrderApi.listWorkQueue).toHaveBeenCalledTimes(1));
 
@@ -531,13 +561,13 @@ describe('検索条件と並び順の URL', () => {
     expect(mockedOrderApi.listWorkQueue).toHaveBeenLastCalledWith(
       expect.objectContaining({ customer_name: '山田', page: 0 })
     );
-    expect(mockPush).not.toHaveBeenCalled();
+    expect(pushState).not.toHaveBeenCalled();
   });
 
   it.each(['2026-02-30', '2026-13-01', '2026-01-32'])(
     '暦に無い日付（%s）は既定へ倒して取得すること',
     async businessDate => {
-      mockQuery = `business_date=${businessDate}`;
+      visit(`${ORDERS_PATH}?business_date=${businessDate}`);
       render(<OrderListPage />);
 
       await waitFor(() =>
@@ -549,7 +579,7 @@ describe('検索条件と並び順の URL', () => {
   );
 
   it('URL の不正な並び・日付は既定へ倒して取得すること', async () => {
-    mockQuery = 'sort_key=DROP&desc=yes&business_date=2026-13';
+    visit(`${ORDERS_PATH}?sort_key=DROP&desc=yes&business_date=2026-13`);
     render(<OrderListPage />);
 
     await waitFor(() =>
