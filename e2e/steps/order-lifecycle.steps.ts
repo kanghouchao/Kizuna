@@ -198,7 +198,9 @@ When('設定コースを改定して受注へ適用する', async ({ page, reque
   await page.getByLabel('コースを検索').fill(courseName);
   await page.getByRole('option', { name: new RegExp(courseName) }).click();
   await page.getByRole('button', { name: '保存', exact: true }).click();
-  await expect(page.getByText(/固定報酬: ¥11,000/)).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: '料金明細' }).getByRole('row', { name: new RegExp(`${courseName}.*90分.*¥18,000.*¥11,000`) }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'この内容を確認して保存' }).click();
   await expect(page).toHaveURL(/\/store\/orders\/?$/);
   adoptedPrice = 18000;
@@ -217,7 +219,9 @@ When('設定を削除して過去のコースへ理由付きで訂正する', as
   await page.getByRole('option', { name: new RegExp(`${courseName}.*版1.*削除済み`) }).click();
   await page.getByLabel('理由', { exact: true }).fill('実際に提供した60分コースへ訂正');
   await page.getByRole('button', { name: '訂正する' }).click();
-  await expect(page.getByText(/固定報酬: ¥7,000/)).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: '料金明細' }).getByRole('row', { name: new RegExp(`${courseName}.*¥12,000.*¥7,000`) }),
+  ).toBeVisible();
   const [saved] = await Promise.all([
     page.waitForResponse(response => response.url().endsWith('/corrections') && response.request().method() === 'POST'),
     page.getByRole('button', { name: 'この内容を確認して保存' }).click(),
@@ -319,8 +323,10 @@ When('有料と無料の延長・設定加算・固定割引を追加する', as
   await page.getByLabel('明細4の金額', { exact: true }).fill('15000');
   await page.getByRole('button', { name: '保存', exact: true }).click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByText(/総時間: 105分/)).toBeVisible();
-  await expect(dialog.getByText('請求額: ¥1,000', { exact: true })).toBeVisible();
+  // 合計行のセルは 時間・版・料金・固定報酬 の順
+  const total = dialog.getByRole('region', { name: '料金明細' }).getByRole('row', { name: /^合計（請求額）/ });
+  await expect(total.getByRole('cell').nth(0)).toHaveText('105分');
+  await expect(total.getByRole('cell').nth(2)).toHaveText('¥1,000');
   await page.getByRole('button', { name: 'この内容を確認して保存', exact: true }).click();
   await expect(page).toHaveURL(/\/store\/orders\/?$/);
 });

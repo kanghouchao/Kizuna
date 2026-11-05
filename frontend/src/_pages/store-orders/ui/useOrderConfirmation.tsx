@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useStoreContext } from '@/entities/user';
-import { isDeduction, OrderPreview, OrderSpecialService } from '@/entities/order';
+import { OrderPreview } from '@/entities/order';
 import { getApiErrorMessage, isConflict, useKeyedResource } from '@/shared/lib';
-import { Button, Dialog, DialogContent, DialogTitle, RegionError } from '@/shared/ui';
+import { Button, Dialog, DialogFrame, RegionError } from '@/shared/ui';
+import { OrderPreviewDetails } from './OrderPreviewDetails';
 
 export function orderConflictField(error: unknown): string | undefined {
   if (!isConflict(error)) return undefined;
@@ -17,23 +18,6 @@ export function orderConflictField(error: unknown): string | undefined {
   if (details?.special_services) return 'special_services';
   if (details?.expected_version) return 'expected_version';
   return undefined;
-}
-
-function specialServiceComparison(item: OrderSpecialService) {
-  const status = item.requires_attention
-    ? '本人拒否・要対応'
-    : item.current_consent_status === 'ACCEPTED'
-      ? '受諾済み'
-      : item.current_consent_status === 'REJECTED'
-        ? '拒否'
-        : item.current_consent_status === 'RECONFIRMATION_REQUIRED'
-          ? '再受諾待ち'
-          : item.adoption_basis === 'HISTORICAL_CORRECTION'
-            ? '履歴訂正'
-            : item.current_consent_status == null && item.adoption_basis === 'ACCEPTED_TERMS'
-              ? '受諾時の約定'
-              : '未受諾';
-  return `${item.name} 版${item.revision_number} 料金¥${item.price} 報酬¥${item.remuneration} 担当在籍 ${item.enrollment_id} / 受諾状態 ${status} / 受諾版 ${item.consent_version ?? 'なし'}`;
 }
 
 export function useOrderConfirmation(target?: string) {
@@ -91,6 +75,7 @@ export function useOrderConfirmation(target?: string) {
       setOpen(true);
     });
   const preview = resource.data?.preview;
+  const failed = resource.failure || resource.data?.error;
   const dialog = (
     <Dialog
       open={open && job?.scope === scope}
@@ -98,187 +83,55 @@ export function useOrderConfirmation(target?: string) {
         if (!open) close(null);
       }}
     >
-      <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto">
-        <DialogTitle>採用条件の確認</DialogTitle>
+      <DialogFrame
+        size="md"
+        title="採用条件の確認"
+        description="保存する前に、料金・報酬・ポイントの採用内容を確認してください。"
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={() => close(null)}>
+              入力に戻る
+            </Button>
+            {failed
+              ? orderConflictField(resource.data?.cause) === 'expected_version' && (
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      reject.current?.(resource.data?.cause);
+                      resolve.current = null;
+                      reject.current = null;
+                      setOpen(false);
+                    }}
+                  >
+                    最新の受注を読み直す
+                  </Button>
+                )
+              : preview &&
+                !resource.isLoading && (
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setPrevious({ scope, preview });
+                      close(preview.confirmation_token);
+                    }}
+                  >
+                    この内容を確認して保存
+                  </Button>
+                )}
+          </>
+        }
+      >
         {resource.isLoading ? (
           <p>試算中...</p>
-        ) : resource.failure || resource.data?.error ? (
-          <>
-            <RegionError
-              message={resource.data?.error ?? '試算を取得できませんでした'}
-              onRetry={() => void resource.reload()}
-            />
-            {orderConflictField(resource.data?.cause) === 'expected_version' && (
-              <Button
-                type="button"
-                onClick={() => {
-                  reject.current?.(resource.data?.cause);
-                  resolve.current = null;
-                  reject.current = null;
-                  setOpen(false);
-                }}
-              >
-                最新の受注を読み直す
-              </Button>
-            )}
-          </>
+        ) : failed ? (
+          <RegionError
+            message={resource.data?.error ?? '試算を取得できませんでした'}
+            onRetry={() => void resource.reload()}
+          />
         ) : (
-          preview && (
-            <div className="space-y-3">
-              {preview.contact_imports && (
-                <section className="space-y-2 rounded-lg border p-4 text-sm break-words">
-                  <h3 className="font-semibold">連絡先の取り込み</h3>
-                  {preview.contact_imports.length === 0 ? (
-                    <p>台帳へ取り込まない</p>
-                  ) : (
-                    preview.contact_imports.map(item => (
-                      <p key={item.type}>
-                        {item.value}：
-                        {item.marketing_result === 'ALLOWED'
-                          ? '販促許可を記録（同値行の共同制約を適用）'
-                          : item.marketing_result === 'DENIED_PRESERVED'
-                            ? '既存の販促拒否を維持'
-                            : '販促状態を変更しない'}
-                      </p>
-                    ))
-                  )}
-                </section>
-              )}
-              <p>
-                {preview.course.name} / {preview.course.duration_minutes}分 / 版
-                {preview.course.revision_number}
-              </p>
-              <p>
-                コース料金: ¥{preview.course.price.toLocaleString()} / 固定報酬: ¥
-                {preview.course.remuneration.toLocaleString()}
-              </p>
-              {preview.fee_lines.map((line, i) => (
-                <p key={i}>
-                  {line.name}: {isDeduction(line.kind) ? '-' : ''}¥{line.amount.toLocaleString()}
-                  {line.duration_minutes !== undefined ? ` / ${line.duration_minutes}分` : ''}
-                  {line.revision_number !== undefined ? ` / 版${line.revision_number}` : ''}
-                  {line.remuneration !== undefined
-                    ? ` / 固定報酬 ¥${line.remuneration.toLocaleString()}`
-                    : ''}
-                </p>
-              ))}
-              <p>
-                総時間: {preview.total_duration_minutes}分 / 固定報酬合計: ¥
-                {preview.total_remuneration.toLocaleString()}
-              </p>
-              {preview.requires_attention && (
-                <p role="alert">拒否項目が残っています。保存後も開始・完了には修復が必要です。</p>
-              )}
-              {(preview.special_services ?? []).map(item => (
-                <p key={item.service_id}>
-                  {item.name} / 版{item.revision_number} /{' '}
-                  {item.requires_attention
-                    ? '本人拒否・要対応'
-                    : item.current_consent_status === 'RECONFIRMATION_REQUIRED'
-                      ? '再受諾待ち（旧約定を保持）'
-                      : item.current_consent_status === 'NOT_ACCEPTED'
-                        ? '現在の提供資格なし（旧約定を保持）'
-                        : '採用可能'}
-                </p>
-              ))}
-              <p>請求額: ¥{preview.total_fee.toLocaleString()}</p>
-              <p>利用上限・通常付与基準: ¥{preview.point_basis_amount.toLocaleString()}</p>
-              {preview.points && (
-                <p>
-                  利用資格: {preview.points.redemption_eligible ? '利用可能' : '利用不可'} /
-                  現在残高: {preview.points.point_balance?.toLocaleString() ?? '—'} / 利用単位:{' '}
-                  {preview.points.usage_unit}
-                </p>
-              )}
-              {preview.points && (
-                <p>
-                  {preview.points.member_linked
-                    ? `会員 ${preview.points.member_code} / 利用 ${preview.points.use_points} / 付与 ${preview.points.grant_points} ポイント`
-                    : '会員紐づけなし'}
-                </p>
-              )}
-              {previousPreview &&
-                (previousPreview.confirmation_token !== preview.confirmation_token ||
-                  JSON.stringify(previousPreview.special_services.map(specialServiceComparison)) !==
-                    JSON.stringify(preview.special_services.map(specialServiceComparison))) && (
-                  <div role="status" className="rounded-lg border p-3">
-                    <p>前回の確認内容から変更があります。以下を確認してください。</p>
-                    <p>
-                      コース: {previousPreview.course.name} → {preview.course.name} / 時間:{' '}
-                      {previousPreview.course.duration_minutes} → {preview.course.duration_minutes}
-                      分
-                    </p>
-                    <p>
-                      料金: ¥{previousPreview.course.price} → ¥{preview.course.price} / 報酬: ¥
-                      {previousPreview.course.remuneration} → ¥{preview.course.remuneration}
-                    </p>
-                    <p>
-                      総時間: {previousPreview.total_duration_minutes} →{' '}
-                      {preview.total_duration_minutes}分 / 固定報酬合計: ¥
-                      {previousPreview.total_remuneration} → ¥{preview.total_remuneration}
-                    </p>
-                    {previousPreview.fee_lines.map((before, index) => {
-                      const after = preview.fee_lines[index];
-                      return (
-                        <p key={index}>
-                          明細{index + 1}: {before.name} / 版{before.revision_number ?? '—'} / 料金
-                          ¥{before.amount} / 報酬 ¥{before.remuneration}
-                          {' → '}
-                          {after
-                            ? `${after.name} / 版${after.revision_number ?? '—'} / 料金 ¥${after.amount} / 報酬 ¥${after.remuneration}`
-                            : '除去'}
-                        </p>
-                      );
-                    })}
-                    {preview.fee_lines
-                      .slice(previousPreview.fee_lines.length)
-                      .map((line, index) => (
-                        <p key={index}>
-                          追加: {line.name} / 版{line.revision_number ?? '—'} / 料金 ¥{line.amount}{' '}
-                          / 報酬 ¥{line.remuneration}
-                        </p>
-                      ))}
-                    <p>
-                      特殊サービス（前回）:{' '}
-                      {(previousPreview.special_services ?? [])
-                        .map(specialServiceComparison)
-                        .join('、') || 'なし'}
-                    </p>
-                    <p>
-                      特殊サービス（今回）:{' '}
-                      {(preview.special_services ?? []).map(specialServiceComparison).join('、') ||
-                        'なし'}
-                    </p>
-                    <p>
-                      請求: ¥{previousPreview.total_fee} → ¥{preview.total_fee}
-                    </p>
-                    <p>
-                      会員: {previousPreview.points?.member_code ?? '非会員'} →{' '}
-                      {preview.points?.member_code ?? '非会員'} / 利用資格:{' '}
-                      {previousPreview.points?.redemption_eligible ? '利用可能' : '利用不可'} →{' '}
-                      {preview.points?.redemption_eligible ? '利用可能' : '利用不可'} / 利用:{' '}
-                      {previousPreview.points?.use_points ?? 0} → {preview.points?.use_points ?? 0}{' '}
-                      / 付与: {previousPreview.points?.grant_points ?? 0} →{' '}
-                      {preview.points?.grant_points ?? 0}
-                    </p>
-                  </div>
-                )}
-              <Button
-                type="button"
-                onClick={() => {
-                  setPrevious({ scope, preview });
-                  close(preview.confirmation_token);
-                }}
-              >
-                この内容を確認して保存
-              </Button>
-            </div>
-          )
+          preview && <OrderPreviewDetails preview={preview} previous={previousPreview} />
         )}
-        <Button type="button" variant="outline" onClick={() => close(null)}>
-          入力に戻る
-        </Button>
-      </DialogContent>
+      </DialogFrame>
     </Dialog>
   );
   return { confirm, dialog };
