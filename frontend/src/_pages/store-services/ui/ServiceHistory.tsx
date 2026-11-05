@@ -76,10 +76,10 @@ function HistoryContent({ id, onForbidden }: Pick<ServiceHistoryProps, 'id' | 'o
             {history.rows.map(row => (
               <ChangeEntry
                 key={row.id}
-                title={`版本 ${row.version} · ${operationLabels[row.operation]}`}
+                title={`${new Date(row.occurred_at).toLocaleString('ja-JP')} · 操作者 ID: ${row.actor_id}`}
                 meta={
                   <p>
-                    操作者 ID: {row.actor_id} · {new Date(row.occurred_at).toLocaleString('ja-JP')}
+                    版本 {row.version} · {operationLabels[row.operation]}
                   </p>
                 }
               >

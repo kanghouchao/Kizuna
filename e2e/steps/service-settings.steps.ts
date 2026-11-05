@@ -42,9 +42,9 @@ Then('削除済み一覧から変更前後と削除の履歴が読める', async
   await page.getByRole('button', { name: '絞り込む', exact: true }).click();
   await page.getByRole('row').filter({ hasText: serviceName }).getByRole('button', { name: '履歴', exact: true }).click();
   const history = page.getByRole('dialog', { name: 'サービス変更履歴', exact: true });
-  await expect(history.getByRole('heading', { name: '版本 3 · 削除' })).toBeVisible();
-  await expect(history.getByRole('heading', { name: '版本 2 · 変更' })).toBeVisible();
-  await expect(history.getByRole('heading', { name: '版本 1 · 作成' })).toBeVisible();
+  await expect(history.getByText('版本 3 · 削除', { exact: true })).toBeVisible();
+  await expect(history.getByText('版本 2 · 変更', { exact: true })).toBeVisible();
+  await expect(history.getByText('版本 1 · 作成', { exact: true })).toBeVisible();
   await expect(history).toContainText('12,000 円');
   await expect(history).toContainText('15,000 円');
   await expect(history).toContainText('操作者 ID:');

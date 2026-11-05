@@ -11,10 +11,7 @@ export interface ChangeRow {
   after: string;
 }
 
-/**
- * 変更前後の対照表（DESIGN.md「キー値と変更前後」）。全項目を並べ、変わった行を bg-muted と太字で示す。
- * bg-muted の上に text-muted-foreground を重ねない規則のため、変わった行の変更前は foreground で描く。
- */
+/** 変更前後の対照表。色と強調の規則は DESIGN.md「キー値と変更前後」。 */
 export function ChangeTable({ rows }: { rows: ChangeRow[] }) {
   return (
     <Table className="table-fixed tabular-nums">
@@ -33,7 +30,8 @@ export function ChangeTable({ rows }: { rows: ChangeRow[] }) {
             <TableRow
               key={row.key ?? row.label}
               data-changed={changed}
-              className={cn(changed && 'bg-muted hover:bg-muted')}
+              // 行の hover 背景は muted の文字と重なるため止める。
+              className={changed ? 'bg-muted hover:bg-muted' : 'hover:bg-transparent'}
             >
               <TableCell className={cn(cell, changed && 'font-semibold')}>{row.label}</TableCell>
               <TableCell className={cn(cell, !changed && 'text-muted-foreground')}>

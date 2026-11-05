@@ -148,17 +148,14 @@ export function OrderCorrectionHistory({ orderId, storeId }: Props) {
         {history.rows.map(entry => (
           <ChangeEntry
             key={entry.correction_id}
-            title={entry.reason}
+            title={`${
+              entry.change_type === 'COMPLETION_INVALIDATION' ? '誤完了の無効化日時' : '訂正日時'
+            } ${dateTime(entry.corrected_at)} / 操作者 ${entry.corrected_by ?? '削除済み利用者'}`}
             meta={
               <>
+                <p className="whitespace-pre-wrap text-foreground">{entry.reason}</p>
                 <p>
                   原営業日 {entry.business_date} / 原完了日時 {dateTime(entry.completed_at)}
-                </p>
-                <p>
-                  {entry.change_type === 'COMPLETION_INVALIDATION'
-                    ? '誤完了の無効化日時'
-                    : '訂正日時'}{' '}
-                  {dateTime(entry.corrected_at)} / 操作者 {entry.corrected_by ?? '削除済み利用者'}
                 </p>
                 <p>
                   訂正 ID {entry.correction_id} / 受注版 {entry.before_version} →{' '}
