@@ -103,7 +103,7 @@ export function CastMonthlyRemunerationsPage() {
     <div className="space-y-4">
       {orderId ? (
         <>
-          <h1 className="text-2xl font-bold">報酬明細</h1>
+          <h2 className="text-lg font-semibold">報酬明細</h2>
           <RemunerationDetail key={orderId} id={orderId} onBack={() => setOrderId(null)} />
         </>
       ) : (

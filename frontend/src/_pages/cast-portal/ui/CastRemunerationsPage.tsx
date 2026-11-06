@@ -13,7 +13,7 @@ export function CastRemunerationsPage() {
   const [orderId, setOrderId] = useState<string | null>(null);
   return (
     <div className="space-y-4">
-      {orderId && <h1 className="text-2xl font-bold">報酬明細</h1>}
+      {orderId && <h2 className="text-lg font-semibold">報酬明細</h2>}
       <p className="text-sm text-muted-foreground">
         予定・発生済みの固定報酬を確認できます。支払済み額ではありません。
       </p>
@@ -80,7 +80,7 @@ function RemunerationList({ onOpen }: { onOpen: (id: string) => void }) {
       <section aria-label="報酬一覧" className="space-y-3">
         {denied ? (
           <>
-            <h1 className="text-2xl font-bold">報酬明細</h1>
+            <h2 className="text-lg font-semibold">報酬明細</h2>
             <Failure error={list.error} onRetry={() => void list.reload()} />
           </>
         ) : (
