@@ -460,7 +460,9 @@ function MergeEditor({ initial, survivingId, mergedId }: Target & { initial: Mer
           <>
             <KeyValueList>
               <KeyValueRow label="移る受注">{data.moved_order_count} 件</KeyValueRow>
-              <KeyValueRow label="うち未完了の受注">{data.unfinished_order_count} 件</KeyValueRow>
+              <KeyValueRow label="影響する未完了受注（両顧客）">
+                {data.unfinished_order_count} 件
+              </KeyValueRow>
               <KeyValueRow label="移る連絡先">{data.moved_contact_count} 件</KeyValueRow>
               <KeyValueRow label="移る会員関連">{data.moved_link_count} 件</KeyValueRow>
               <KeyValueRow label="最終的な関連会員">

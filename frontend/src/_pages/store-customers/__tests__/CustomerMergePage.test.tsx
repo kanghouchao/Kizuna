@@ -186,7 +186,9 @@ it('確定ボタンの直前に、移る受注・連絡先・関連とポイン�
   )!;
 
   expect(within(impact).getByText('移る受注').parentElement).toHaveTextContent('1 件');
-  expect(within(impact).getByText('うち未完了の受注').parentElement).toHaveTextContent('2 件');
+  expect(within(impact).getByText('影響する未完了受注（両顧客）').parentElement).toHaveTextContent(
+    '2 件'
+  );
   expect(within(impact).getByText('移る連絡先')).toBeInTheDocument();
   expect(within(impact).getByText('移る会員関連')).toBeInTheDocument();
   expect(within(impact).getByText('ポイント残高（全体）')).toBeInTheDocument();
