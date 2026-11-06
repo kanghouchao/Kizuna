@@ -24,8 +24,7 @@ let email = "",
   revisionId = "",
   answerId = "";
 const headers = () => ({ ...STORE_HEADERS, Authorization: `Bearer ${token}` });
-const revisionPath = () =>
-  `/api/surveys/${surveyId}/revisions/${revisionId}`;
+const revisionPath = () => `/api/surveys/${surveyId}/revisions/${revisionId}`;
 async function confirm(page: Page) {
   const dialog = page.getByRole("alertdialog");
   await expect(dialog).toBeVisible();
@@ -43,11 +42,7 @@ Given(
   "既定権限を持たないアンケート担当者を用意する",
   async ({ page, request }) => {
     await loginViaUiAndEnterStore(page);
-    const owner = await loginUser(
-      request,
-      "admin@kizuna.test",
-      ADMIN_PASSWORD,
-    );
+    const owner = await loginUser(request, "admin@kizuna.test", ADMIN_PASSWORD);
     expect(
       (
         await request.get("/api/surveys", {
@@ -62,20 +57,12 @@ Given(
       request,
       owner,
       `アンケート担当-${suffix}`,
-      [
-        "SURVEY_VIEW",
-        "SURVEY_MANAGE",
-        "SURVEY_RECORD",
-
-
-      ],
+      ["SURVEY_VIEW", "SURVEY_MANAGE", "SURVEY_RECORD"],
     );
     await createStaffFixture(request, owner, email, secret, [role]);
     token = await loginUser(request, email, secret);
     expect(
-      (
-        await request.get("/api/surveys", { headers: STORE_HEADERS })
-      ).status(),
+      (await request.get("/api/surveys", { headers: STORE_HEADERS })).status(),
     ).toBe(401);
     expect(
       (
@@ -198,66 +185,99 @@ When(
     ).toBeVisible();
   },
 );
-When("回答を人工受付し設問版を終了する", async ({ page, request }) => {
-  await page.getByRole("button", { name: "回答を受付", exact: true }).click();
-  const intake = page.getByRole("dialog", { name: "回答を受付", exact: true });
-  await intake
-    .getByLabel(`${questionPrompt}（必須）`, { exact: true })
-    .fill("  紙面に書かれた原回答\n二行目を保持する  ");
-  await intake.getByLabel("任意の選択式記録（任意）", { exact: true }).click();
-  await page.getByRole("option", { name: firstChoice, exact: true }).click();
-  await intake.getByLabel("受領日時", { exact: true }).fill("2026-01-01T09:00");
-  const [created] = await Promise.all([
-    page.waitForResponse(
-      (r) =>
-        r.url().endsWith(`/${revisionId}/responses`) &&
-        r.request().method() === "POST",
-    ),
-    intake.getByRole("button", { name: "回答を記録", exact: true }).click(),
-  ]);
-  expect(created.status()).toBe(201);
-  const row = (await created.json()).answer;
-  answerId = row.id;
-  expect(row.intake_source).toBe("STAFF_RECORDED");
-  expect(row).not.toHaveProperty("customer_id");
-  expect(row).not.toHaveProperty("anonymous");
-  await expect(page).toHaveURL(
-    `${APP_URL}/store/surveys/responses/${answerId}`,
-  );
-  await page.reload();
-  await expect(
-    page.getByText(/スタッフによる記録。回答者の本人確認は行っていません/),
-  ).toBeVisible();
-  await page.getByRole("link", { name: "設問版へ戻る", exact: true }).click();
-  await expect(page).toHaveURL(
-    `${APP_URL}/store/surveys/${surveyId}/revisions/${revisionId}`,
-  );
-  await page.getByRole("button", { name: "受付を終了", exact: true }).click();
-  await confirmWithReason(page, "受付を終了", "今回の受付を終了");
-  await expect(
-    page.getByRole("button", { name: "回答を受付", exact: true }),
-  ).toHaveCount(0);
-  const denied = await request.post(`${revisionPath()}/responses`, {
-    headers: headers(),
-    data: {
-      revision_version: 2,
-      received_via: "PAPER",
-      received_at: "2026-01-01T00:00:00Z",
-      answers: row.answers,
-      dedupe_key: "after-closed",
-    },
-  });
-  expect(denied.status()).toBe(409);
-});
+When(
+  "回答を人工受付し設問版を終了する",
+  async ({ page, request, $testInfo }) => {
+    await page.getByRole("button", { name: "回答を受付", exact: true }).click();
+    const intake = page.getByRole("dialog", {
+      name: "回答を受付",
+      exact: true,
+    });
+    await intake
+      .getByLabel(`${questionPrompt}（必須）`, { exact: true })
+      .fill("  紙面に書かれた原回答\n二行目を保持する  ");
+    await intake
+      .getByLabel("任意の選択式記録（任意）", { exact: true })
+      .click();
+    await page.getByRole("option", { name: firstChoice, exact: true }).click();
+    await intake
+      .getByLabel("受領日時", { exact: true })
+      .fill("2026-01-01T09:00");
+    const [created] = await Promise.all([
+      page.waitForResponse(
+        (r) =>
+          r.url().endsWith(`/${revisionId}/responses`) &&
+          r.request().method() === "POST",
+      ),
+      intake.getByRole("button", { name: "回答を記録", exact: true }).click(),
+    ]);
+    expect(created.status()).toBe(201);
+    const row = (await created.json()).answer;
+    answerId = row.id;
+    expect(row.intake_source).toBe("STAFF_RECORDED");
+    expect(row).not.toHaveProperty("customer_id");
+    expect(row).not.toHaveProperty("anonymous");
+    await expect(page).toHaveURL(
+      `${APP_URL}/store/surveys/responses/${answerId}`,
+    );
+    // 回答の詳細は画面の状態ではなく URL で着けることを、開き直して確かめる
+    await page.reload();
+    await expect(
+      page.getByText(/スタッフによる記録。回答者の本人確認は行っていません/),
+    ).toBeVisible();
+    await page.getByRole("link", { name: "設問版へ戻る", exact: true }).click();
+    await expect(page).toHaveURL(
+      `${APP_URL}/store/surveys/${surveyId}/revisions/${revisionId}`,
+    );
+    await page.getByRole("button", { name: "受付を終了", exact: true }).click();
+    await confirmWithReason(page, "受付を終了", "今回の受付を終了");
+    await expect(
+      page.getByRole("button", { name: "回答を受付", exact: true }),
+    ).toHaveCount(0);
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(
+      await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth,
+      ),
+    ).toBeTruthy();
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.mouse.move(0, 899);
+    await expect(page.locator('[data-slot="toast"]')).toHaveCount(0);
+    for (const theme of ["light", "dark"]) {
+      await page.evaluate(
+        (dark) => document.documentElement.classList.toggle("dark", dark),
+        theme === "dark",
+      );
+      await page.screenshot({
+        path: $testInfo.outputPath(`survey-revision-${theme}-desktop.png`),
+        fullPage: true,
+        animations: "disabled",
+      });
+    }
+    await page.evaluate(() =>
+      document.documentElement.classList.remove("dark"),
+    );
+    const denied = await request.post(`${revisionPath()}/responses`, {
+      headers: headers(),
+      data: {
+        revision_version: 2,
+        received_via: "PAPER",
+        received_at: "2026-01-01T00:00:00Z",
+        answers: row.answers,
+        dedupe_key: "after-closed",
+      },
+    });
+    expect(denied.status()).toBe(409);
+  },
+);
 Then(
   "終了した版の回答を訂正して原文と記録件数を確認できる",
   async ({ page, request, $testInfo }) => {
-    await page.goto(`${APP_URL}/store/surveys`);
-    await page
-      .getByRole("row", { name: /担当者が作成した問票/ })
-      .first()
-      .getByRole("link", { name: "版と回答", exact: true })
-      .click();
+    await page.goto(
+      `${APP_URL}/store/surveys/${surveyId}/revisions/${revisionId}`,
+    );
     await page.getByRole("link", { name: "回答・履歴", exact: true }).click();
     await expect(page).toHaveURL(
       `${APP_URL}/store/surveys/responses/${answerId}`,

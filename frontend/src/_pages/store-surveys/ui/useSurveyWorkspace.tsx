@@ -142,7 +142,7 @@ export function useSurveyWorkspace(here: string) {
         setOpen(false);
         setMissing(false);
         setConflict(false);
-        router.push(surveyListHref);
+        router.replace(surveyListHref);
       } else
         setRefreshError(
           getApiErrorMessage(error, '最新状態を確認できません。入力は保持しています')

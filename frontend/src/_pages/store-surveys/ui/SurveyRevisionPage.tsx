@@ -15,10 +15,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/ui';
-import { ListPage } from '@/widgets/list-page';
 import { answerHref, revisionHref, surveyListHref } from '../lib/surveyHref';
 import { SurveyCapabilities, SurveyDenied, SurveyGate } from './SurveyGate';
 import { SurveyHistory } from './SurveyHistory';
+import { SurveyTableSection } from './SurveyTableSection';
 import { Choice, answerLabels, revisionLabels, time, useGuardedRead, viaLabels } from './surveyUi';
 import { SurveyTask, useSurveyWorkspace } from './useSurveyWorkspace';
 
@@ -122,12 +122,8 @@ function RevisionDetail({ sid, rid, ...props }: DetailProps) {
           回答者数や回答率ではありません。訂正前の記録も全記録に含みます。保持期限は未設定です。
         </p>
       </section>
-      <section>
-        <AnswerList revision={revision} sid={sid} rid={rid} {...props} />
-      </section>
-      <section>
-        <RevisionList sid={sid} rid={rid} deny={props.deny} />
-      </section>
+      <AnswerList revision={revision} sid={sid} rid={rid} {...props} />
+      <RevisionList sid={sid} rid={rid} deny={props.deny} />
       <SurveyHistory target={{ sid, rid }} denied={props.deny} />
     </div>
   );
@@ -190,8 +186,7 @@ function AnswerList({ revision, sid, rid, ...props }: DetailProps & { revision: 
     {}
   );
   return (
-    <ListPage
-      level={2}
+    <SurveyTableSection
       title="回答記録"
       description="スタッフによる記録。回答者の本人確認は行っていません。"
       actions={
@@ -238,7 +233,6 @@ function AnswerList({ revision, sid, rid, ...props }: DetailProps & { revision: 
       }}
       emptyMessage="回答記録はありません"
       errorMessage="回答一覧を取得できませんでした"
-      onRetry={() => void list.reload()}
     >
       <Table>
         <TableHeader>
@@ -266,7 +260,7 @@ function AnswerList({ revision, sid, rid, ...props }: DetailProps & { revision: 
           ))}
         </TableBody>
       </Table>
-    </ListPage>
+    </SurveyTableSection>
   );
 }
 
@@ -282,14 +276,12 @@ function RevisionList({
   const guard = useGuardedRead(deny);
   const list = useListPage(page => guard(() => surveyApi.revisions(sid, page)));
   return (
-    <ListPage
-      level={2}
+    <SurveyTableSection
       title="設問版"
       description="設問の文面は開始後に固定されます。受付中の旧版を終了してから、新版を開始してください。"
       state={list}
       emptyMessage="設問版はありません"
       errorMessage="設問版を取得できませんでした"
-      onRetry={() => void list.reload()}
     >
       <Table>
         <TableHeader>
@@ -319,6 +311,6 @@ function RevisionList({
           ))}
         </TableBody>
       </Table>
-    </ListPage>
+    </SurveyTableSection>
   );
 }
