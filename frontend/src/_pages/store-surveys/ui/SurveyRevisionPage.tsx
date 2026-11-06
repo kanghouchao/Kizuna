@@ -15,7 +15,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/ui';
-import { answerHref, revisionHref, surveyListHref } from '../lib/surveyHref';
+import {
+  answerHref,
+  reviseHref,
+  revisionEditHref,
+  revisionHref,
+  surveyListHref,
+} from '../lib/surveyHref';
 import { SurveyCapabilities, SurveyDenied, SurveyGate } from './SurveyGate';
 import { SurveyHistory } from './SurveyHistory';
 import { SurveyTableSection } from './SurveyTableSection';
@@ -132,6 +138,8 @@ function RevisionDetail({ sid, rid, ...props }: DetailProps) {
 function RevisionActions({
   revision,
   series,
+  sid,
+  rid,
   canManage,
   edit,
   disabled,
@@ -141,11 +149,7 @@ function RevisionActions({
     <div className="flex flex-wrap gap-3">
       {revision.status === 'DRAFT' && (
         <>
-          <Button
-            variant="outline"
-            disabled={disabled}
-            onClick={() => edit({ kind: 'REPLACE', revision })}
-          >
+          <Button variant="outline" render={<Link href={revisionEditHref(sid, rid)} />}>
             下書きを編集
           </Button>
           <Button
@@ -166,11 +170,7 @@ function RevisionActions({
         </Button>
       )}
       {revision.id === series.latest_revision_id && !series.draft_revision_id && (
-        <Button
-          variant="outline"
-          disabled={disabled}
-          onClick={() => edit({ kind: 'REVISE', revision })}
-        >
+        <Button variant="outline" render={<Link href={reviseHref(sid, rid)} />}>
           新しい版を作成
         </Button>
       )}

@@ -1,8 +1,7 @@
 import { useForm } from 'react-hook-form';
 import { Answer, Revision, SurveyCommand } from '@/entities/survey';
 import { Button, Dialog, DialogFrame, Form } from '@/shared/ui';
-import { clean } from './SurveyEditor';
-import { SurveyTextField } from './SurveyFields';
+import { SurveyTextField, clean } from './SurveyFields';
 
 export type ReasonTask =
   { kind: 'OPEN' | 'CLOSE'; revision: Revision } | { kind: 'WITHDRAW'; answer: Answer };
