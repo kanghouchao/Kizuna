@@ -1,66 +1,27 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
-import {
-  Review,
-  ReviewCommand,
-  ReviewSearch,
-  ReviewWriteResponse,
-  reviewApi,
-} from '@/entities/content/review';
-import {
-  useListPage,
-  getApiErrorMessage,
-  isConflict,
-  isNotFound,
-  memoryOperationStore,
-  useOperation,
-} from '@/shared/lib';
-import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/shared/ui';
+import { ReviewSearch, reviewApi } from '@/entities/content/review';
+import { storePath, useListPage } from '@/shared/lib';
+import { Button, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui';
 import { ListPage } from '@/widgets/list-page';
+import { useReviewWrite } from '../lib/useReviewWrite';
 import { statuses, permissions, time } from './labels';
 import { ReviewFilters } from './ReviewFilters';
-import { ReviewDetail } from './ReviewDetail';
-import { Editor, ReviewEditor, editorTitle } from './ReviewEditor';
+import { ReviewWriteFeedback } from './ReviewWriteFeedback';
 import { accessError } from './reviewErrors';
-import { notify } from '@/shared/notify';
 export function ReviewsPage() {
   const { me } = useMe();
   const storeId = useStoreContext().currentStoreId;
   if (me === null) return <MePending />;
   if (me.user_type !== 'STAFF' || !hasPermission(me, 'REVIEW_VIEW'))
     return <div role="alert">口コミの閲覧権限がありません</div>;
-  return (
-    <Reviews
-      key={storeId}
-      canModerate={hasPermission(me, 'REVIEW_MODERATE')}
-      canManage={hasPermission(me, 'REVIEW_MANAGE')}
-      canOrder={hasPermission(me, 'ORDER_MANAGE')}
-    />
-  );
+  return <Reviews key={storeId} canManage={hasPermission(me, 'REVIEW_MANAGE')} />;
 }
-function Reviews({
-  canModerate,
-  canManage,
-  canOrder,
-}: {
-  canModerate: boolean;
-  canManage: boolean;
-  canOrder: boolean;
-}) {
+function Reviews({ canManage }: { canManage: boolean }) {
+  const router = useRouter();
   const [filters, setFilters] = useState<ReviewSearch>({});
   const [filterError, setFilterError] = useState<string | null>(null);
   const list = useListPage((page, criteria: ReviewSearch) => reviewApi.list(page, criteria), {});
@@ -79,144 +40,16 @@ function Reviews({
       review_id: filters.review_id || undefined,
     });
   };
-  const [selected, setSelected] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
-  const [editor, setEditor] = useState<Editor | null>(null);
-  const [editOpen, setEditOpen] = useState(false);
-  const [latest, setLatest] = useState<Review | undefined>();
-  const storeId = useStoreContext().currentStoreId;
-  const operation = useOperation('reviews', {
-    storeId,
-    store: memoryOperationStore,
-    send: reviewApi.write,
-  });
-  const pending = operation.pending;
-  const uncertain = pending?.phase === 'unknown';
-  const [denied, setDenied] = useState<string | null>(null);
-  const [conflict, setConflict] = useState(false);
-  const [revision, setRevision] = useState(0);
-  const [missing, setMissing] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const lock = useRef(false);
-  const active = useRef(true);
-  useEffect(() => {
-    active.current = true;
-    return () => {
-      active.current = false;
-    };
-  }, []);
-  const run = async (
-    command: ReviewCommand,
-    send: () => Promise<{ value: ReviewWriteResponse } | null>
-  ) => {
-    if (lock.current) return;
-    lock.current = true;
-    setBusy(true);
-    // 業務拒否で操作が確定したとき、入力を失わずに直して送り直せるよう下書きを残す
-    if (command.kind === 'CREATE' || command.kind === 'CORRECT')
-      setEditor(current => (current ? { ...current, draft: command.input } : current));
-    try {
-      const done = await send();
-      if (!done || !active.current) return;
-      const result = done.value;
-      setDenied(null);
-      setConflict(false);
-      setMissing(false);
-      setLatest(result.review);
-      setSelected(result.review.id);
-      setOpen(true);
-      setEditOpen(false);
-      void list.reload();
-      notify.success('口コミの操作を記録しました');
-    } catch (error) {
-      if (!active.current) return;
-      if (isConflict(error)) {
-        setConflict(true);
-        setEditOpen(false);
-        setLatest(undefined);
-      }
-      let deniedReason = accessError(error);
-      if (isNotFound(error)) {
-        let reviewMissing = command.kind !== 'CREATE';
-        if (command.kind === 'CORRECT') {
-          try {
-            await reviewApi.get(command.id);
-            reviewMissing = false;
-          } catch (lookupError) {
-            reviewMissing = isNotFound(lookupError);
-            deniedReason = accessError(lookupError);
-          }
-          if (!active.current) return;
-        }
-        if (reviewMissing) {
-          setMissing(true);
-          setEditOpen(false);
-          void list.reload();
-        } else setEditOpen(true);
-      }
-      if (deniedReason !== null) {
-        setDenied(deniedReason);
-        setOpen(false);
-        void list.reload();
-        setEditOpen(false);
-      }
-      notify.error(getApiErrorMessage(error, '口コミの操作結果が確認できません'));
-    } finally {
-      lock.current = false;
-      if (active.current) setBusy(false);
-    }
-  };
-  const submit = (command: ReviewCommand) => run(command, () => operation.start(command));
-  const replay = () => pending && run(pending.payload, operation.replay);
-  const editorKey = editor
-    ? `${editor.action}-${editor.row?.id ?? 'new'}-${editor.row?.version ?? 0}`
-    : 'none';
-  const feedback = (
-    <>
-      {uncertain && (
-        <div role="alert" className="rounded-lg border p-4 space-y-3">
-          <p>結果が確認できません。同じ要求で結果を確認するまで、新しい操作はできません。</p>
-          <Button variant="outline" disabled={busy} onClick={() => void replay()}>
-            同じ要求で結果を確認
-          </Button>
-        </div>
-      )}
-      {denied && <div role="alert">{denied}。権限とログイン状態を確認してください。</div>}
-      {conflict && (
-        <div role="alert" className="rounded-lg border p-4 space-y-3">
-          <p>口コミが更新されています。最新状態を確認してから、改めて操作を選んでください。</p>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setLatest(undefined);
-              setConflict(false);
-              setRevision(value => value + 1);
-              void list.reload();
-            }}
-          >
-            最新状態を確認して戻る
-          </Button>
-        </div>
-      )}
-    </>
-  );
+  const write = useReviewWrite(review => router.push(storePath(`/reviews/${review.id}`)));
   return (
     <>
-      {!open && !editOpen && feedback}
+      <ReviewWriteFeedback write={write} />
       <ListPage
         title="口コミ管理"
         description="スタッフが受け付けた口コミを審査し、公開許可を別途記録します。"
         actions={
           canManage && (
-            <Button
-              disabled={busy || pending !== null || denied !== null}
-              onClick={() => {
-                setEditor({ action: 'CREATE' });
-                setEditOpen(true);
-              }}
-            >
-              口コミを受付
-            </Button>
+            <Button render={<Link href={storePath('/reviews/create')} />}>口コミを受付</Button>
           )
         }
         search={{
@@ -252,16 +85,7 @@ function Reviews({
                 <TableCell>{permissions[r.permission_status]}</TableCell>
                 <TableCell>{r.displayed ? '掲出対象' : '—'}</TableCell>
                 <TableCell>
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setLatest(undefined);
-                      setSelected(r.id);
-                      setMissing(false);
-                      setConflict(false);
-                      setOpen(true);
-                    }}
-                  >
+                  <Button variant="outline" render={<Link href={storePath(`/reviews/${r.id}`)} />}>
                     内容・履歴
                   </Button>
                 </TableCell>
@@ -270,71 +94,6 @@ function Reviews({
           </TableBody>
         </Table>
       </ListPage>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>口コミの内容・履歴</DialogTitle>
-            <DialogDescription>受付本文と判断、公開許可の記録を確認します。</DialogDescription>
-          </DialogHeader>
-          {!editOpen && feedback}
-          {missing ? (
-            <div role="alert">
-              <p>口コミが見つかりません</p>
-              <Button
-                onClick={() => {
-                  setOpen(false);
-                  setMissing(false);
-                }}
-              >
-                一覧へ戻る
-              </Button>
-            </div>
-          ) : (
-            selected && (
-              <ReviewDetail
-                key={`${selected}-${revision}`}
-                id={selected}
-                initial={latest?.id === selected ? latest : undefined}
-                canModerate={canModerate && !denied && !conflict}
-                canManage={canManage && !denied && !conflict}
-                busy={busy || pending !== null}
-                onEdit={value => {
-                  setEditor(value);
-                  setEditOpen(true);
-                }}
-                onMissing={() => {
-                  setOpen(false);
-                  void list.reload();
-                }}
-              />
-            )
-          )}
-        </DialogContent>
-      </Dialog>
-      {/* 操作ごとにダイアログを作り直す。閉じるアニメーションの途中で開き直すと元のポータル位置に留まり、
-          その間に開いた詳細の下に隠れて支援技術からも外れるため、新しい操作は詳細より後ろに置く。 */}
-      <Dialog key={editorKey} open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-h-[calc(100vh-2rem)] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editor ? editorTitle(editor) : '口コミの操作'}</DialogTitle>
-            <DialogDescription>理由と対象を確認して記録してください。</DialogDescription>
-          </DialogHeader>
-          {uncertain ? (
-            <p role="alert">
-              結果が確認できません。閉じて「同じ要求で結果を確認」から再確認できます。
-            </p>
-          ) : (
-            editor && (
-              <ReviewEditor
-                editor={editor}
-                canOrder={canOrder}
-                busy={busy || pending !== null}
-                onSubmit={submit}
-              />
-            )
-          )}
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
