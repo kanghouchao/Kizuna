@@ -120,8 +120,15 @@ export default [
   // 実体に触れてよいのは語義層と、それを描くプリミティブだけ。ディレクトリではなくファイルで
   // 挙げる——語義層は「生成はこの一箇所だけ」を不変条件に持つので、白名単もそう言う必要がある。
   // テストも例外にしない。例外が一つ増えるたびに、段を書かずに通知を出せる場所が一つ増える。
+  // 語義層は shared/ui の外なので、外枠の制限は残す。
   {
-    files: ['src/shared/notify/index.ts', 'src/shared/ui/toast.tsx'],
+    files: ['src/shared/notify/index.ts'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: [DIALOG_CONTENT_PATTERN] }],
+    },
+  },
+  {
+    files: ['src/shared/ui/toast.tsx'],
     rules: {
       'no-restricted-imports': 'off',
     },
