@@ -1,12 +1,16 @@
+import Link from 'next/link';
 import { useRef, useState } from 'react';
 import { Review, reviewApi } from '@/entities/content/review';
-import { useResource } from '@/shared/lib';
+import { storePath, useResource } from '@/shared/lib';
 import { Badge, Button, RegionError } from '@/shared/ui';
 import { publicationSummary } from '@/features/publication-form';
 import { statuses, permissions, viaLabels, basisLabels, time } from './labels';
 import { ReviewHistory } from './ReviewHistory';
 import { accessError } from './reviewErrors';
 import { Editor } from './ReviewEditor';
+
+/** 詳細画面の節で入力する操作。受付は受付画面、訂正再受付は訂正画面で行う。 */
+export type DetailEditor = Exclude<Editor, { action: 'CREATE' | 'CORRECT' }>;
 export function ReviewDetail({
   id,
   initial,
@@ -14,15 +18,13 @@ export function ReviewDetail({
   canManage,
   busy,
   onEdit,
-  onMissing,
 }: {
   id: string;
   initial?: Review;
   canModerate: boolean;
   canManage: boolean;
   busy: boolean;
-  onEdit: (editor: Editor) => void;
-  onMissing: () => void;
+  onEdit: (editor: DetailEditor) => void;
 }) {
   const [access, setAccess] = useState<string | null>(null);
   const consumed = useRef<Review | undefined>(undefined);
@@ -38,15 +40,7 @@ export function ReviewDetail({
     });
   }, [id, initial]);
   if (detail.isLoading) return <p>読み込み中...</p>;
-  if (detail.failure === 'notFound')
-    return (
-      <div role="alert">
-        <p>口コミが見つかりません</p>
-        <Button variant="outline" onClick={onMissing}>
-          一覧へ戻る
-        </Button>
-      </div>
-    );
+  if (detail.failure === 'notFound') return <ReviewMissing />;
   if (detail.failure !== null)
     return (
       <RegionError
@@ -170,11 +164,7 @@ export function ReviewDetail({
             </Button>
           )}
           {!row.superseded_by_id && (
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => onEdit({ action: 'CORRECT', row })}
-            >
+            <Button variant="outline" render={<Link href={storePath(`/reviews/${id}/edit`)} />}>
               訂正再受付
             </Button>
           )}
@@ -194,5 +184,14 @@ export function ReviewDetail({
       </Button>
       <ReviewHistory key={row.version} id={id} />
     </div>
+  );
+}
+
+export function ReviewMissing() {
+  return (
+    <RegionError
+      message="口コミが見つかりません"
+      fallback={{ href: storePath('/reviews'), label: '一覧へ戻る' }}
+    />
   );
 }

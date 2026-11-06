@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { Review, ReviewCommand, ReviewInput, ReceivedVia, Basis } from '@/entities/content/review';
+import { Review, ReviewCommand, ReceivedVia, Basis } from '@/entities/content/review';
 import {
   Button,
   ConfirmDialog,
@@ -23,13 +23,12 @@ import {
   fromPublicationFormValues,
   toPublicationFormValues,
 } from '@/features/publication-form';
-export type Editor = (
+export type Editor =
   | { action: 'CREATE'; row?: undefined }
   | {
       action: 'APPROVE' | 'REJECT' | 'GRANT' | 'REVOKE' | 'WITHDRAW' | 'CORRECT' | 'PUBLISH';
       row: Review;
-    }
-) & { draft?: ReviewInput & { reason?: string } };
+    };
 export function editorTitle(editor: Editor) {
   return {
     CREATE: '口コミを受付',
@@ -59,17 +58,19 @@ export function ReviewEditor({
   busy,
   canOrder,
   onSubmit,
+  onCancel,
 }: {
   editor: Editor;
   busy: boolean;
   canOrder: boolean;
   onSubmit: (command: ReviewCommand) => Promise<void>;
+  onCancel?: () => void;
 }) {
-  const seed = editor.draft ?? (editor.action === 'CORRECT' ? editor.row : undefined);
+  const seed = editor.action === 'CORRECT' ? editor.row : undefined;
   const publication = editor.action === 'PUBLISH' ? editor.row.publication : undefined;
   const form = useForm({
     defaultValues: {
-      reason: editor.draft?.reason ?? '',
+      reason: '',
       body: seed?.body ?? '',
       display_name: seed?.display_name ?? '',
       received_via: seed?.received_via ?? ('PAPER' as ReceivedVia),
@@ -366,9 +367,16 @@ export function ReviewEditor({
               )}
             />
           )}
-          <Button type="submit" disabled={busy}>
-            {create ? '受付を記録' : '確認へ'}
-          </Button>
+          <div className="flex flex-wrap gap-3">
+            <Button type="submit" disabled={busy}>
+              {create ? '受付を記録' : '確認へ'}
+            </Button>
+            {onCancel && (
+              <Button type="button" variant="outline" disabled={busy} onClick={onCancel}>
+                キャンセル
+              </Button>
+            )}
+          </div>
         </form>
       </Form>
       <ConfirmDialog

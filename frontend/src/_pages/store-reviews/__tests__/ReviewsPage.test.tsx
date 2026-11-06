@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ReviewsPage } from '../ui/ReviewsPage';
+import { ReviewCreatePage } from '../ui/ReviewCreatePage';
 import { reviewApi, Review } from '@/entities/content/review';
-import { notify } from '@/shared/notify';
 import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 import { storeSessionToken } from '@/shared/api';
@@ -27,6 +27,12 @@ jest.mock('@/entities/user/model/MeContext', () => ({
 }));
 jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
+}));
+const mockPush = jest.fn();
+const mockReplace = jest.fn();
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mockPush, replace: mockReplace, back: jest.fn() }),
+  useParams: () => ({}),
 }));
 const api = jest.mocked(reviewApi);
 const row: Review = {
@@ -71,206 +77,64 @@ const permission = (...permissions: PermissionCode[]) =>
 beforeEach(() => {
   jest.resetAllMocks();
   mockStoreId = '1';
-  // 結果不明の操作は、このタブの本人と現在店舗の作用域でだけ起こせる
   storeSessionToken({ token: 't', expires_at: 1, user_id: 7, refresh_expires_at: 2 });
   setCurrentStore('1');
   permission('REVIEW_VIEW');
   api.list.mockResolvedValue({ rows: [row], page: 0, pageCount: 1, total: 1 });
-  api.get.mockResolvedValue(row);
-  api.history.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
 });
-test('閲覧権限がなければ取得せず、閲覧のみは手動記録と未設定を確認できる', async () => {
+test('閲覧権限がなければ取得せず、閲覧のみは詳細へのリンクだけを出す', async () => {
   permission('REVIEW_MANAGE');
   const view = render(<ReviewsPage />);
   expect(screen.getByRole('alert')).toHaveTextContent('閲覧権限がありません');
   expect(api.list).not.toHaveBeenCalled();
   permission('REVIEW_VIEW');
   view.rerender(<ReviewsPage />);
-  fireEvent.click(await screen.findByRole('button', { name: '内容・履歴' }));
-  const detail = await screen.findByRole('dialog');
-  expect(await within(detail).findByText('保護された本文')).toBeVisible();
-  expect(within(detail).getByText('スタッフによる記録')).toBeVisible();
-  expect(within(detail).getByText('公開連携は未設定')).toBeVisible();
-  expect(screen.queryByRole('button', { name: '口コミを受付' })).not.toBeInTheDocument();
-  expect(within(detail).queryByRole('button', { name: '内部承認' })).not.toBeInTheDocument();
+  expect(await screen.findByRole('link', { name: '内容・履歴' })).toHaveAttribute(
+    'href',
+    '/store/reviews/10'
+  );
+  expect(screen.queryByRole('link', { name: '口コミを受付' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
-
-test('審査権限だけで内部承認し、理由付き確認を経て許可未取得のまま反映する', async () => {
-  permission('REVIEW_VIEW', 'REVIEW_MODERATE');
-  api.write.mockResolvedValue({
-    review: { ...row, status: 'APPROVED', version: 1, publication_blockers: ['NO_PERMISSION'] },
-    operation: {
-      id: '20',
-      type: 'APPROVED',
-      review_id: row.id,
-      committed_version: 1,
-      replayed: false,
-    },
-  });
+test('管理権限があれば受付画面へのリンクを出す', async () => {
+  permission('REVIEW_VIEW', 'REVIEW_MANAGE');
   render(<ReviewsPage />);
-  fireEvent.click(await screen.findByRole('button', { name: '内容・履歴' }));
-  fireEvent.click(await screen.findByRole('button', { name: '内部承認' }));
-  const editor = await screen.findByRole('dialog', { name: '内部承認' });
-  expect(within(editor).getByText(/内部承認のみ/)).toBeVisible();
-  fireEvent.change(within(editor).getByLabelText('判断・変更の理由'), {
-    target: { value: '内容確認済み' },
-  });
-  fireEvent.click(within(editor).getByRole('button', { name: '確認へ' }));
-  const confirmation = await screen.findByRole('alertdialog');
-  fireEvent.click(within(confirmation).getByRole('button', { name: '確定する' }));
-  await waitFor(() => expect(api.write).toHaveBeenCalledTimes(1));
-  expect(api.write.mock.calls[0][0]).toMatchObject({
-    kind: 'DECIDE',
-    id: '10',
-    input: { version: 0, decision: 'APPROVE', reason: '内容確認済み' },
-  });
-  expect(
-    await screen.findByText('内部承認済み', { selector: '[data-slot="badge"]' })
-  ).toBeVisible();
-  expect(screen.queryByRole('button', { name: '公開許可を記録' })).not.toBeInTheDocument();
+  expect(await screen.findByRole('link', { name: '口コミを受付' })).toHaveAttribute(
+    'href',
+    '/store/reviews/create'
+  );
 });
-
-test('受付の結果が不明なら入力を閉じても案内を残し、新しい操作を止めて再確認へ導く', async () => {
+test('受付画面で結果不明になった操作は一覧でも案内し、再確認の結果の詳細へ移る', async () => {
   permission('REVIEW_VIEW', 'REVIEW_MANAGE');
   api.write.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce({
-    review: row,
+    review: { ...row, id: '12' },
     operation: {
       id: '20',
       type: 'RECEIVED',
-      review_id: row.id,
+      review_id: '12',
       committed_version: 0,
       replayed: true,
     },
   });
-  render(<ReviewsPage />);
-  fireEvent.click(await screen.findByRole('button', { name: '口コミを受付' }));
-  const editor = await screen.findByRole('dialog', { name: '口コミを受付' });
-  fireEvent.change(within(editor).getByLabelText('口コミ本文'), {
-    target: { value: '  原文の空白を保持  ' },
-  });
-  fireEvent.change(within(editor).getByLabelText('受け取った日時（この端末の時刻）'), {
+  const intake = render(<ReviewCreatePage />);
+  fireEvent.change(screen.getByLabelText('口コミ本文'), { target: { value: '本文' } });
+  fireEvent.change(screen.getByLabelText('受け取った日時（この端末の時刻）'), {
     target: { value: '2026-01-01T09:00' },
   });
-  fireEvent.click(within(editor).getByRole('button', { name: '受付を記録' }));
-  await within(editor).findByText(/結果が確認できません/);
-  fireEvent.keyDown(editor, { key: 'Escape', code: 'Escape' });
-  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  expect(screen.getByRole('button', { name: '口コミを受付' })).toBeDisabled();
-  expect(api.write.mock.calls[0][0]).toMatchObject({
-    kind: 'CREATE',
-    input: { body: '  原文の空白を保持  ', origin_order_id: null },
-  });
-  expect(api.write.mock.calls[0][2]).toEqual({ headers: { 'X-Store-ID': '1' } });
-  fireEvent.click(screen.getByRole('button', { name: '同じ要求で結果を確認' }));
-  await screen.findByRole('dialog', { name: '口コミの内容・履歴' });
-  expect(notify.success).toHaveBeenCalledWith('口コミの操作を記録しました');
-  expect(screen.queryByText(/結果が確認できません/)).not.toBeInTheDocument();
-});
-test('公開許可を独立して記録し、取り下げ後も許可の撤回操作を残す', async () => {
-  permission('REVIEW_VIEW', 'REVIEW_MANAGE');
-  const granted: Review = {
-    ...row,
-    status: 'APPROVED',
-    permission_status: 'GRANTED',
-    version: 2,
-    publication_eligible: true,
-    publication_blockers: [],
-    permission: {
-      id: '30',
-      scope: 'OWN_STORE_WEBSITE',
-      basis_type: 'WRITTEN',
-      granted_at: '2026-01-01T00:00:00Z',
-      evidence_note: '書面の記録',
-      recorded_by: row.recorded_by,
-      recorded_at: row.created_at,
-      revocation: null,
-    },
-  };
-  api.get.mockResolvedValue({ ...row, status: 'APPROVED', version: 1 });
-  api.write.mockResolvedValueOnce({
-    review: granted,
-    operation: {
-      id: '20',
-      type: 'PERMISSION_GRANTED',
-      review_id: row.id,
-      committed_version: 2,
-      replayed: false,
-    },
-  });
+  fireEvent.click(screen.getByRole('button', { name: '受付を記録' }));
+  await screen.findByText(/結果が確認できません/);
+  intake.unmount();
   render(<ReviewsPage />);
-  fireEvent.click(await screen.findByRole('button', { name: '内容・履歴' }));
-  fireEvent.click(await screen.findByRole('button', { name: '公開許可を記録' }));
-  const editor = await screen.findByRole('dialog', { name: '公開許可を記録' });
-  expect(within(editor).getByText(/自店舗ウェブサイト/)).toBeVisible();
-  fireEvent.change(within(editor).getByLabelText('許可を受けた日時（この端末の時刻）'), {
-    target: { value: '2026-01-01T09:00' },
-  });
-  fireEvent.change(within(editor).getByLabelText('許可を確認した根拠'), {
-    target: { value: '書面の記録' },
-  });
-  fireEvent.click(within(editor).getByRole('button', { name: '確認へ' }));
-  fireEvent.click(
-    within(await screen.findByRole('alertdialog')).getByRole('button', { name: '確定する' })
-  );
-  await waitFor(() => expect(api.write).toHaveBeenCalledTimes(1));
-  expect(api.write.mock.calls[0][0]).toMatchObject({
-    kind: 'GRANT',
-    input: { version: 1, evidence_note: '書面の記録', basis_type: 'WRITTEN' },
-  });
-  api.get.mockResolvedValue({
-    ...granted,
-    status: 'WITHDRAWN',
-    version: 3,
-    publication_eligible: false,
-    publication_blockers: ['WITHDRAWN'],
-  });
-  fireEvent.click(await screen.findByRole('button', { name: '最新状態を確認' }));
-  expect(await screen.findByRole('button', { name: '公開許可を撤回' })).toBeEnabled();
-  await waitFor(() =>
-    expect(screen.queryByRole('button', { name: '口コミを取り下げ' })).not.toBeInTheDocument()
-  );
-  fireEvent.click(screen.getByRole('button', { name: '公開許可を撤回' }));
-  const revocation = await screen.findByRole('dialog', { name: '公開許可を撤回' });
-  expect(within(revocation).getByLabelText('撤回を受けた日時（この端末の時刻）')).toBeVisible();
-  expect(within(revocation).getByLabelText('判断・変更の理由')).toBeVisible();
-});
-test('訂正は本文を明示して新規受付し、公開許可を引き継がない説明を確認する', async () => {
-  permission('REVIEW_VIEW', 'REVIEW_MANAGE');
-  api.write.mockResolvedValue({
-    review: { ...row, id: '11', supersedes_id: '10', body: '訂正本文' },
-    operation: {
-      id: '21',
-      type: 'CORRECTION_RECEIVED',
-      review_id: '11',
-      committed_version: 0,
-      replayed: false,
-    },
-  });
-  render(<ReviewsPage />);
-  fireEvent.click(await screen.findByRole('button', { name: '内容・履歴' }));
-  fireEvent.click(await screen.findByRole('button', { name: '訂正再受付' }));
-  const editor = await screen.findByRole('dialog', { name: '訂正再受付' });
-  expect(within(editor).getByLabelText('口コミ本文')).toHaveValue('保護された本文');
-  expect(within(editor).getByText(/公開許可は引き継ぎません/)).toBeVisible();
-  fireEvent.change(within(editor).getByLabelText('口コミ本文'), { target: { value: '訂正本文' } });
-  fireEvent.change(within(editor).getByLabelText('判断・変更の理由'), {
-    target: { value: '誤記修正' },
-  });
-  fireEvent.click(within(editor).getByRole('button', { name: '確認へ' }));
-  const confirmation = await screen.findByRole('alertdialog');
-  expect(confirmation).toHaveTextContent('旧記録を取り下げ');
-  fireEvent.click(within(confirmation).getByRole('button', { name: '確定する' }));
-  await waitFor(() => expect(api.write).toHaveBeenCalledTimes(1));
-  expect(api.write.mock.calls[0][0]).toMatchObject({
-    kind: 'CORRECT',
-    id: '10',
-    input: { version: 0, reason: '誤記修正', body: '訂正本文', origin_order_id: null },
-  });
-  expect(await screen.findByText('訂正本文', { selector: 'dd' })).toBeVisible();
+  const notice = await screen.findByRole('alert');
+  expect(notice).toHaveTextContent('結果が確認できません');
+  fireEvent.click(within(notice).getByRole('button', { name: '同じ要求で結果を確認' }));
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/reviews/12'));
+  expect(api.write).toHaveBeenCalledTimes(2);
+  expect(api.write.mock.calls[1][1]).toBe(api.write.mock.calls[0][1]);
 });
 test('表示名検索は適用した条件だけを送信し、取得失敗を空表示と区別する', async () => {
   render(<ReviewsPage />);
-  await screen.findByRole('button', { name: '内容・履歴' });
+  await screen.findByRole('link', { name: '内容・履歴' });
   fireEvent.change(screen.getByLabelText('表示名で検索'), { target: { value: 'A%_名' } });
   expect(api.list).toHaveBeenCalledTimes(1);
   api.list.mockRejectedValueOnce(new Error('network'));
@@ -284,7 +148,7 @@ test('表示名検索は適用した条件だけを送信し、取得失敗を�
   await screen.findByText('口コミはありません');
   expect(api.list).toHaveBeenLastCalledWith(0, expect.objectContaining({ q: 'A%_名' }));
 });
-test('店舗変更後の旧一覧・書込み応答を表示しない', async () => {
+test('店舗変更後の旧一覧を表示しない', async () => {
   let resolveList!: (value: {
     rows: Review[];
     page: number;
@@ -303,179 +167,5 @@ test('店舗変更後の旧一覧・書込み応答を表示しない', async ()
   view.rerender(<ReviewsPage />);
   await screen.findByText('口コミはありません');
   await act(async () => resolveList({ rows: [row], page: 0, pageCount: 1, total: 1 }));
-  expect(screen.queryByRole('button', { name: '内容・履歴' })).not.toBeInTheDocument();
-});
-test('404の詳細は操作を表示せず一覧に戻れる', async () => {
-  permission('REVIEW_VIEW', 'REVIEW_MANAGE', 'REVIEW_MODERATE');
-  api.get.mockRejectedValueOnce({ response: { status: 404 } });
-  render(<ReviewsPage />);
-  fireEvent.click(await screen.findByRole('button', { name: '内容・履歴' }));
-  const dialog = await screen.findByRole('dialog');
-  fireEvent.click(await within(dialog).findByRole('button', { name: '一覧へ戻る' }));
-  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  expect(api.write).not.toHaveBeenCalled();
-});
-async function approvalEditor() {
-  fireEvent.click(await screen.findByRole('button', { name: '内容・履歴' }));
-  fireEvent.click(await screen.findByRole('button', { name: '内部承認' }));
-  const editor = await screen.findByRole('dialog', { name: '内部承認' });
-  fireEvent.change(within(editor).getByLabelText('判断・変更の理由'), {
-    target: { value: '確認済み' },
-  });
-  fireEvent.click(within(editor).getByRole('button', { name: '確認へ' }));
-  const confirm = await screen.findByRole('alertdialog');
-  await act(async () => {
-    fireEvent.click(within(confirm).getByRole('button', { name: '確定する' }));
-  });
-}
-test('409は再送せず最新状態を確認して操作を選び直す', async () => {
-  permission('REVIEW_VIEW', 'REVIEW_MODERATE');
-  api.write.mockRejectedValueOnce({ response: { status: 409 } });
-  render(<ReviewsPage />);
-  await approvalEditor();
-  await screen.findByText(
-    '口コミが更新されています。最新状態を確認してから、改めて操作を選んでください。'
-  );
-  await waitFor(() =>
-    expect(screen.queryByRole('dialog', { name: '内部承認' })).not.toBeInTheDocument()
-  );
-  expect(screen.queryByRole('button', { name: '内部承認' })).not.toBeInTheDocument();
-  expect(api.write).toHaveBeenCalledTimes(1);
-  api.get.mockResolvedValue({ ...row, status: 'WITHDRAWN', version: 1 });
-  fireEvent.click(screen.getByRole('button', { name: '最新状態を確認して戻る' }));
-  await screen.findByText('取り下げ済み', { selector: '[data-slot="badge"]' });
-  expect(api.write).toHaveBeenCalledTimes(1);
-});
-test.each([401, 403])('詳細の認証・権限エラー %s を通信失敗と区別する', async status => {
-  permission('REVIEW_VIEW', 'REVIEW_MANAGE');
-  api.get.mockRejectedValueOnce({ response: { status } });
-  render(<ReviewsPage />);
-  fireEvent.click(await screen.findByRole('button', { name: '内容・履歴' }));
-  const dialog = await screen.findByRole('dialog');
-  const alert = await within(dialog).findByRole('alert');
-  expect(alert).toHaveTextContent(
-    status === 401 ? 'ログイン状態を確認してください' : '現在の閲覧権限がありません'
-  );
-  expect(within(dialog).queryByRole('button', { name: '訂正再受付' })).not.toBeInTheDocument();
-});
-test('操作404の詳細を閉じた後、別の有効な口コミを表示できる', async () => {
-  permission('REVIEW_VIEW', 'REVIEW_MODERATE');
-  api.write.mockRejectedValueOnce({ response: { status: 404 } });
-  const other = { ...row, id: '11', body: '別の口コミ本文' };
-  api.list.mockResolvedValue({ rows: [row, other], page: 0, pageCount: 1, total: 2 });
-  render(<ReviewsPage />);
-  fireEvent.click((await screen.findAllByRole('button', { name: '内容・履歴' }))[0]);
-  fireEvent.click(await screen.findByRole('button', { name: '内部承認' }));
-  const editor = await screen.findByRole('dialog', { name: '内部承認' });
-  fireEvent.change(within(editor).getByLabelText('判断・変更の理由'), {
-    target: { value: '確認済み' },
-  });
-  fireEvent.click(within(editor).getByRole('button', { name: '確認へ' }));
-  fireEvent.click(
-    within(await screen.findByRole('alertdialog')).getByRole('button', { name: '確定する' })
-  );
-  await screen.findByText('口コミが見つかりません');
-  fireEvent.keyDown(await screen.findByRole('dialog'), { key: 'Escape', code: 'Escape' });
-  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  api.get.mockResolvedValue(other);
-  fireEvent.click(screen.getAllByRole('button', { name: '内容・履歴' })[1]);
-  expect(await screen.findByText('別の口コミ本文')).toBeVisible();
-  expect(await screen.findByRole('button', { name: '内部承認' })).toBeEnabled();
-});
-
-async function receiptEditor(kind: 'CREATE' | 'CORRECT') {
-  if (kind === 'CREATE')
-    fireEvent.click(await screen.findByRole('button', { name: '口コミを受付' }));
-  else {
-    fireEvent.click(await screen.findByRole('button', { name: '内容・履歴' }));
-    fireEvent.click(await screen.findByRole('button', { name: '訂正再受付' }));
-  }
-  const editor = await screen.findByRole('dialog', {
-    name: kind === 'CREATE' ? '口コミを受付' : '訂正再受付',
-  });
-  fireEvent.change(within(editor).getByLabelText('口コミ本文'), {
-    target: { value: '失ってはいけない入力本文' },
-  });
-  fireEvent.change(within(editor).getByLabelText('受け取った日時（この端末の時刻）'), {
-    target: { value: '2026-01-01T09:00' },
-  });
-  fireEvent.change(within(editor).getByLabelText('関連受注ID（任意）'), {
-    target: { value: '999' },
-  });
-  if (kind === 'CORRECT')
-    fireEvent.change(within(editor).getByLabelText('判断・変更の理由'), {
-      target: { value: '保持する訂正理由' },
-    });
-  return editor;
-}
-async function submitReceipt(editor: HTMLElement, kind: 'CREATE' | 'CORRECT') {
-  fireEvent.click(
-    within(editor).getByRole('button', { name: kind === 'CREATE' ? '受付を記録' : '確認へ' })
-  );
-  if (kind === 'CORRECT')
-    fireEvent.click(
-      within(await screen.findByRole('alertdialog')).getByRole('button', { name: '確定する' })
-    );
-}
-
-test('訂正404で元口コミの照会も404なら入力を閉じ、失効を表示する', async () => {
-  permission('REVIEW_VIEW', 'REVIEW_MANAGE', 'ORDER_MANAGE');
-  api.get.mockResolvedValueOnce(row).mockRejectedValueOnce({ response: { status: 404 } });
-  api.write.mockRejectedValueOnce({ response: { status: 404 } });
-  render(<ReviewsPage />);
-  await submitReceipt(await receiptEditor('CORRECT'), 'CORRECT');
-  expect(await screen.findByText('口コミが見つかりません')).toBeVisible();
-  expect(screen.queryByRole('dialog', { name: '訂正再受付' })).not.toBeInTheDocument();
-});
-
-test('公開設定は店舗の現地時刻で入出力し、空欄の表示順を null として版付きで送る', async () => {
-  permission('REVIEW_VIEW', 'REVIEW_MODERATE');
-  api.get.mockResolvedValue({
-    ...row,
-    version: 4,
-    publication: {
-      published: false,
-      publish_from: '2026-03-01T11:00:00Z',
-      publish_until: null,
-      display_order: 2,
-    },
-  });
-  api.write.mockResolvedValue({
-    review: { ...row, version: 5 },
-    operation: {
-      id: '30',
-      type: 'PUBLICATION_CHANGED',
-      review_id: row.id,
-      committed_version: 5,
-      replayed: false,
-    },
-  });
-  render(<ReviewsPage />);
-  fireEvent.click(await screen.findByRole('button', { name: '内容・履歴' }));
-  fireEvent.click(await screen.findByRole('button', { name: '公開設定を変更' }));
-  const editor = await screen.findByRole('dialog', { name: '公開設定を変更' });
-  const from = within(editor).getByLabelText(/公開開始/);
-  expect(from).toHaveValue('2026-03-01T20:00');
-  const until = within(editor).getByLabelText(/公開終了/);
-  fireEvent.change(until, { target: { value: '2026-03-01T20:00' } });
-  fireEvent.click(within(editor).getByRole('button', { name: '確認へ' }));
-  expect(await within(editor).findByText('公開終了は公開開始より後にしてください')).toBeVisible();
-  fireEvent.change(until, { target: { value: '2026-03-02T09:30' } });
-  fireEvent.change(within(editor).getByLabelText(/表示順/), { target: { value: '' } });
-  fireEvent.click(within(editor).getByRole('switch', { name: '公式サイトで公開する' }));
-  fireEvent.click(within(editor).getByRole('button', { name: '確認へ' }));
-  const confirmation = await screen.findByRole('alertdialog');
-  fireEvent.click(within(confirmation).getByRole('button', { name: '確定する' }));
-  await waitFor(() => expect(api.write).toHaveBeenCalledTimes(1));
-  expect(api.write.mock.calls[0][0]).toEqual({
-    kind: 'PUBLISH',
-    id: row.id,
-    input: {
-      version: 4,
-      published: true,
-      publish_from: '2026-03-01T11:00:00.000Z',
-      publish_until: '2026-03-02T00:30:00.000Z',
-      display_order: null,
-    },
-  });
+  expect(screen.queryByRole('link', { name: '内容・履歴' })).not.toBeInTheDocument();
 });

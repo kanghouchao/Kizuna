@@ -39,8 +39,9 @@ When('担当者が口コミを受付し公開許可なしで内部承認する',
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/dashboard/, { timeout: 15000 });
   await page.goto(`${APP_URL}/store/reviews`);
-  await page.getByRole('button', { name: '口コミを受付', exact: true }).click();
-  const intake = page.getByRole('dialog', { name: '口コミを受付', exact: true });
+  await page.getByRole('link', { name: '口コミを受付', exact: true }).click();
+  await expect(page).toHaveURL(/\/store\/reviews\/create$/);
+  const intake = page.getByRole('main');
   await intake.getByLabel('口コミ本文').fill('  受付時の原文をそのまま保存します。\n二行目の長い本文です。  ');
   await intake.getByLabel('表示名（空欄は匿名）').fill('表示名');
   await intake.getByLabel('受け取った日時（この端末の時刻）').fill('2026-01-01T09:00');
@@ -50,7 +51,7 @@ When('担当者が口コミを受付し公開許可なしで内部承認する',
     intake.getByRole('button', { name: '受付を記録', exact: true }).click(),
   ]);
   expect(missingOrigin.status()).toBe(404);
-  await expect(intake).toBeVisible();
+  await expect(page).toHaveURL(/\/store\/reviews\/create$/);
   await expect(intake.getByLabel('口コミ本文')).toHaveValue('  受付時の原文をそのまま保存します。\n二行目の長い本文です。  ');
   await intake.getByLabel('関連受注ID（任意）').fill('');
   const [created] = await Promise.all([
@@ -65,12 +66,14 @@ When('担当者が口コミを受付し公開許可なしで内部承認する',
   expect(result.review.permission_status).toBe('NOT_GRANTED');
   expect(result.review).not.toHaveProperty('verified_customer');
   expect(result.review.publication_connection).toBe('NOT_CONFIGURED');
-  const detail = page.getByRole('dialog', { name: '口コミの内容・履歴', exact: true });
+  await expect(page).toHaveURL(new RegExp(`/store/reviews/${reviewId}$`));
+  const detail = page.getByRole('main');
+  await expect(detail.getByRole('heading', { level: 1, name: '口コミの内容・履歴' })).toBeVisible();
   await expect(detail.getByText('スタッフによる記録', { exact: true })).toBeVisible();
-  // 受付のダイアログが閉じるアニメーションの途中（応答から 200ms 以内）に操作を選んでも、操作のダイアログは詳細の上に開く。
-  // 通常の click は詳細の開くアニメーションが止まるまで待ち、この時間帯を外すため、force で応答直後に押す。
-  await detail.getByRole('button', { name: '内部承認', exact: true }).click({ force: true });
-  const decision = page.getByRole('dialog', { name: '内部承認', exact: true });
+  await detail.getByRole('button', { name: '内部承認', exact: true }).click();
+  const decision = detail.getByRole('region', { name: '内部承認', exact: true });
+  // 通知（toast）も role=dialog を持つので、モーダルの本体だけを数える
+  await expect(page.locator('[data-slot="dialog-content"]')).toHaveCount(0);
   await expect(decision.getByText('内部承認のみ。公開には別途許可と公開設定が必要です。')).toBeVisible();
   await decision.getByLabel('判断・変更の理由').fill('掲載判断とは別に内容を確認');
   await decision.getByLabel('判断・変更の理由').press('Tab');
@@ -80,6 +83,8 @@ When('担当者が口コミを受付し公開許可なしで内部承認する',
   await expect(detail.getByText('内部承認済み', { exact: true })).toBeVisible();
   await expect(detail.getByText('公開許可未取得', { exact: true })).toBeVisible();
   await expect(detail.getByText('公開連携は未設定', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(detail.getByText('内部承認済み', { exact: true })).toBeVisible();
   const current = await request.get(`/api/reviews/${reviewId}`, { headers: headers() });
   expect(current.status()).toBe(200);
   expect((await current.json()).publication_eligible).toBe(false);
@@ -94,9 +99,9 @@ When('担当者が口コミを受付し公開許可なしで内部承認する',
 });
 
 When('口コミの公開許可を記録して撤回する', async ({ page, request }) => {
-  const detail = page.getByRole('dialog', { name: '口コミの内容・履歴', exact: true });
+  const detail = page.getByRole('main');
   await detail.getByRole('button', { name: '公開許可を記録', exact: true }).click();
-  const grant = page.getByRole('dialog', { name: '公開許可を記録', exact: true });
+  const grant = detail.getByRole('region', { name: '公開許可を記録', exact: true });
   await grant.getByLabel('許可を受けた日時（この端末の時刻）').fill('2026-01-02T09:00');
   await grant.getByLabel('許可を確認した根拠').fill('書面で対象文面と表示名の自店舗サイト掲載を確認');
   await grant.getByRole('button', { name: '確認へ', exact: true }).click();
@@ -105,7 +110,7 @@ When('口コミの公開許可を記録して撤回する', async ({ page, reque
   const allowed = await request.get(`/api/reviews/${reviewId}`, { headers: headers() });
   expect((await allowed.json()).publication_eligible).toBe(true);
   await detail.getByRole('button', { name: '公開許可を撤回', exact: true }).click();
-  const revoke = page.getByRole('dialog', { name: '公開許可を撤回', exact: true });
+  const revoke = detail.getByRole('region', { name: '公開許可を撤回', exact: true });
   await revoke.getByLabel('撤回を受けた日時（この端末の時刻）').fill('2026-01-03T09:00');
   await revoke.getByLabel('判断・変更の理由').fill('公開許可の撤回を受け付けた');
   await revoke.getByRole('button', { name: '確認へ', exact: true }).click();
@@ -121,9 +126,9 @@ When('口コミの公開許可を記録して撤回する', async ({ page, reque
 });
 
 Then('訂正先は審査待ちと許可未取得になり旧記録の履歴が残る', async ({ page, request, $testInfo }) => {
-  const detail = page.getByRole('dialog', { name: '口コミの内容・履歴', exact: true });
-  await detail.getByRole('button', { name: '訂正再受付', exact: true }).click();
-  const correction = page.getByRole('dialog', { name: '訂正再受付', exact: true });
+  await page.getByRole('main').getByRole('link', { name: '訂正再受付', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/store/reviews/${reviewId}/edit$`));
+  const correction = page.getByRole('main');
   await expect(correction.getByText(/公開許可は引き継ぎません/)).toBeVisible();
   await correction.getByLabel('口コミ本文').fill('訂正後の新しい文面');
   await correction.getByLabel('判断・変更の理由').fill('原文の誤記を訂正');
@@ -134,13 +139,21 @@ Then('訂正先は審査待ちと許可未取得になり旧記録の履歴が�
     confirm(page),
   ]);
   expect(missingOrigin.status()).toBe(404);
-  await expect(correction).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/store/reviews/${reviewId}/edit$`));
   await expect(correction.getByLabel('口コミ本文')).toHaveValue('訂正後の新しい文面');
   await expect(correction.getByLabel('判断・変更の理由')).toHaveValue('原文の誤記を訂正');
   await expect(page.getByText('口コミが見つかりません', { exact: true })).toHaveCount(0);
   await correction.getByLabel('関連受注ID（任意）').fill('');
   await correction.getByRole('button', { name: '確認へ', exact: true }).click();
-  await confirm(page);
+  const [corrected] = await Promise.all([
+    page.waitForResponse(response => response.url().endsWith(`/${reviewId}/corrections`) && response.request().method() === 'POST'),
+    confirm(page),
+  ]);
+  expect(corrected.ok()).toBeTruthy();
+  const successor = (await corrected.json()).review.id;
+  expect(successor).not.toBe(reviewId);
+  await expect(page).toHaveURL(new RegExp(`/store/reviews/${successor}$`));
+  const detail = page.getByRole('main');
   await expect(detail.getByText('訂正後の新しい文面', { exact: true })).toBeVisible();
   await expect(detail.getByText('審査待ち', { exact: true })).toBeVisible();
   await expect(detail.getByText('公開許可未取得', { exact: true })).toBeVisible();
