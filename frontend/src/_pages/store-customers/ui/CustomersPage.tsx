@@ -5,16 +5,11 @@ import { contactLabels } from '../lib/contactLabels';
 import Link from 'next/link';
 import { CopyIcon, PlusIcon, SearchIcon, SquarePenIcon, Trash2Icon } from 'lucide-react';
 import { useState } from 'react';
-import {
-  CustomerMergeComparisonResponse,
-  CustomerSummaryResponse,
-  customerApi,
-} from '@/entities/customer';
+import { CustomerSummaryResponse, customerApi } from '@/entities/customer';
 import { hasPermission, useMe } from '@/entities/user';
 import { storePath, useDeleteAction, useListPage } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import { CustomerMergePanel } from './CustomerMergePanel';
-import { CustomerMergeConfirmDialog } from './CustomerMergeConfirmDialog';
 import {
   Badge,
   Button,
@@ -88,23 +83,8 @@ export default function CustomersPage() {
   // 統合する 2 行の選択。行そのものではなく ID だけを持つので、ページ送りや検索で
   // 一覧が入れ替わっても選択は残る（統合したい 2 行が同じページに並ぶとは限らない）
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  // 統合の実行中は選択を変えさせない。変えると見比べる区画ごと消え、取り返しのつかない操作の
-  // 確認が在途のまま画面から失せる
   const pair =
     selectedIds.length === PAIR_SIZE ? ([selectedIds[0], selectedIds[1]] as const) : null;
-
-  const [mergeTarget, setMergeTarget] = useState<{
-    surviving: CustomerMergeComparisonResponse;
-    merged: CustomerMergeComparisonResponse;
-  } | null>(null);
-  const [mergeOpen, setMergeOpen] = useState(false);
-  const isMerging = mergeOpen;
-
-  const closeMergeAndReload = () => {
-    setMergeOpen(false);
-    setSelectedIds([]);
-    list.reload();
-  };
 
   const toggleSelected = (customerId: string) =>
     setSelectedIds(current =>
@@ -219,9 +199,8 @@ export default function CustomersPage() {
                         checked={selectedIds.includes(customer.id ?? '')}
                         // 3 行目以降は組み合わせが決まらないので、2 行選んだ時点で塞ぐ
                         disabled={
-                          isMerging ||
-                          (!selectedIds.includes(customer.id ?? '') &&
-                            selectedIds.length >= PAIR_SIZE)
+                          !selectedIds.includes(customer.id ?? '') &&
+                          selectedIds.length >= PAIR_SIZE
                         }
                         onCheckedChange={() => toggleSelected(customer.id ?? '')}
                       />
@@ -315,39 +294,19 @@ export default function CustomersPage() {
               {selectedIds.length} 件を選択中
               {pair === null && '（統合するにはもう 1 行選んでください）'}
             </p>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={isMerging}
-              onClick={() => setSelectedIds([])}
-            >
+            <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedIds([])}>
               選択を解除
             </Button>
           </div>
           {pair && (
             <CustomerMergePanel
               customerIds={[pair[0], pair[1]]}
-              onMerge={(surviving, merged) => {
-                setMergeTarget({ surviving, merged });
-                setMergeOpen(true);
-              }}
               onClear={() => setSelectedIds([])}
-              isSubmitting={isMerging}
             />
           )}
         </div>
       )}
 
-      {/* ダイアログは一覧の loading / empty に連動して消えないよう外殻の外に置く */}
-      <CustomerMergeConfirmDialog
-        open={mergeOpen}
-        survivingId={mergeTarget?.surviving.id ?? ''}
-        mergedId={mergeTarget?.merged.id ?? ''}
-        onMerged={closeMergeAndReload}
-        onClose={() => setMergeOpen(false)}
-        onMissingClose={closeMergeAndReload}
-      />
       <ConfirmDialog
         open={deletion.open}
         title={deletion.target ? `「${deletion.target.name}」を削除しますか？` : ''}

@@ -9,7 +9,6 @@ import { ContactType, CustomerMergeComparisonResponse, customerApi } from '@/ent
 import { MePending, hasPermission, useMe } from '@/entities/user';
 import { storePath, useListPage } from '@/shared/lib';
 import { CustomerMergeComparison } from './CustomerMergeComparison';
-import { CustomerMergeConfirmDialog } from './CustomerMergeConfirmDialog';
 import {
   Input,
   Label,
@@ -73,15 +72,6 @@ function CustomerDuplicatesContent() {
   );
   const [selection, setSelection] = useState<Selection | null>(null);
   const [survivingId, setSurvivingId] = useState<string | null>(null);
-  const [confirmation, setConfirmation] = useState<{
-    survivingId: string;
-    mergedId: string;
-    survivingName: string;
-    mergedName: string;
-    movedOrderCount: number;
-  } | null>(null);
-  const [isConfirming, setIsConfirming] = useState(false);
-  const isSubmitting = isConfirming;
 
   const toggle = (groupKey: string, row: CustomerMergeComparisonResponse) => {
     const customerId = row.id ?? '';
@@ -119,13 +109,6 @@ function CustomerDuplicatesContent() {
     return selected.length === PAIR_SIZE ? [selected[0], selected[1]] : null;
   };
 
-  const closeMergeAndReload = () => {
-    setIsConfirming(false);
-    setSelection(null);
-    setSurvivingId(null);
-    void reload();
-  };
-
   const renderRows = (groupKey: string, rows: CustomerMergeComparisonResponse[]) => {
     const pair = selection?.groupKey === groupKey ? selectedPair(rows) : null;
     return (
@@ -156,10 +139,9 @@ function CustomerDuplicatesContent() {
                       checked={isSelected(groupKey, row.id ?? '')}
                       // 3 行目以降は組み合わせが決まらないので、2 行選んだ時点で塞ぐ
                       disabled={
-                        isSubmitting ||
-                        (!isSelected(groupKey, row.id ?? '') &&
-                          selection?.groupKey === groupKey &&
-                          selection.rows.length >= PAIR_SIZE)
+                        !isSelected(groupKey, row.id ?? '') &&
+                        selection?.groupKey === groupKey &&
+                        selection.rows.length >= PAIR_SIZE
                       }
                       onCheckedChange={() => toggle(groupKey, row)}
                     />
@@ -202,20 +184,6 @@ function CustomerDuplicatesContent() {
             rows={pair}
             survivingId={survivingId}
             onSurvivingChange={setSurvivingId}
-            onMerge={() => {
-              const surviving = pair.find(row => row.id === survivingId);
-              const merged = pair.find(row => row.id !== survivingId);
-              if (!surviving?.id || !merged?.id) return;
-              setConfirmation({
-                survivingId: surviving.id,
-                mergedId: merged.id,
-                survivingName: surviving.name ?? '',
-                mergedName: merged.name ?? '',
-                movedOrderCount: merged.order_count ?? 0,
-              });
-              setIsConfirming(true);
-            }}
-            disabled={isSubmitting}
           />
         )}
       </>
@@ -243,7 +211,6 @@ function CustomerDuplicatesContent() {
           event.preventDefault();
           setSelection(null);
           setSurvivingId(null);
-          setIsConfirming(false);
           void search({
             search: searchTerm.trim() || undefined,
             type: type === 'ALL' ? undefined : type,
@@ -330,16 +297,6 @@ function CustomerDuplicatesContent() {
           />
         </div>
       </TableCard>
-
-      {/* 確認は候補の取り直しで消えないよう外殻の外に置く */}
-      <CustomerMergeConfirmDialog
-        open={isConfirming}
-        survivingId={confirmation?.survivingId ?? ''}
-        mergedId={confirmation?.mergedId ?? ''}
-        onMerged={closeMergeAndReload}
-        onClose={() => setIsConfirming(false)}
-        onMissingClose={closeMergeAndReload}
-      />
     </div>
   );
 }
