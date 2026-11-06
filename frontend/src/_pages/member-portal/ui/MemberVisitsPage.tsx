@@ -1,9 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import { MemberVisit, memberVisitApi } from '@/entities/order';
 import { useListPage } from '@/shared/lib';
-import { Button, Card, CardContent, CardHeader, CardTitle, Pager, RegionError } from '@/shared/ui';
+import { Card, CardContent, CardHeader, CardTitle, Pager, RegionError } from '@/shared/ui';
 
 /** 来店 1 件。人数と担当は記録の無い来店があるため、無い場合はその項目だけ落として行は残す。 */
 function VisitRow({ visit }: { visit: MemberVisit }) {
@@ -35,9 +34,8 @@ export function MemberVisitsPage() {
   const { rows: visits, isLoading, failed } = list;
 
   return (
-    <div className="mx-auto w-full max-w-md p-4">
-      <h1 className="mt-2 text-lg font-semibold text-foreground">来店履歴</h1>
-      <Card className="mt-4">
+    <div>
+      <Card>
         <CardHeader>
           <CardTitle role="heading" aria-level={2}>
             これまでの来店
@@ -74,9 +72,6 @@ export function MemberVisitsPage() {
           </div>
         </CardContent>
       </Card>
-      <Button render={<Link href="/member/" />} variant="outline" className="mt-6 w-full">
-        ホームへ戻る
-      </Button>
     </div>
   );
 }

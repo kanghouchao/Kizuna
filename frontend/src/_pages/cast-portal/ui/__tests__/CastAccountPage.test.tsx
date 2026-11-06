@@ -35,6 +35,17 @@ describe('CastAccountPage', () => {
     expect(await screen.findByText('田中一郎')).toBeInTheDocument();
   });
 
+  it('サービス条件へ入れる', async () => {
+    mockedMe.mockResolvedValue({ display_name: '田中一郎' });
+
+    render(<CastAccountPage />, { wrapper: OnAppHost });
+
+    expect(await screen.findByRole('link', { name: 'サービス条件' })).toHaveAttribute(
+      'href',
+      '/cast/service-conditions'
+    );
+  });
+
   it('ログアウトボタンは useAuth().logout を呼ぶ', async () => {
     mockedMe.mockResolvedValue({ display_name: '田中一郎' });
 

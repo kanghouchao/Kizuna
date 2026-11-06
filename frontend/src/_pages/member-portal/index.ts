@@ -1,4 +1,5 @@
-export { MemberPortalShell } from './ui/MemberPortalShell';
+export { MemberPortalLayout } from './ui/MemberPortalLayout';
+export { MemberAccountPage } from './ui/MemberAccountPage';
 export { MemberHomePage } from './ui/MemberHomePage';
 export { MemberReservationsPage } from './ui/MemberReservationsPage';
 export { MemberPointsPage } from './ui/MemberPointsPage';

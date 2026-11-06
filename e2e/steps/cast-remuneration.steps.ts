@@ -36,7 +36,7 @@ When('退店した本人がログインして報酬明細を開く', async ({ pa
   await page.getByLabel('パスワード', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();
   await expect(page).toHaveURL(/\/cast\/schedule/);
-  await page.getByRole('link', { name: '報酬明細', exact: true }).click();
+  await page.getByRole('navigation', { name: 'メニュー' }).getByRole('link', { name: '報酬', exact: true }).click();
 });
 
 Then('本人の報酬明細から原条件と無効化履歴を確認できる', async ({ page }) => {

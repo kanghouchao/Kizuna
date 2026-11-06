@@ -53,10 +53,7 @@ export function CastServiceConditionsPage() {
   const [selectedStore, setSelectedStore] = useState<string | null>(null);
   const storeId = selectedStore ?? stores.data?.[0]?.store_id?.toString();
   return (
-    <div className="space-y-4 p-4">
-      {(stores.isLoading || stores.failure || storesDenied || !stores.data?.length) && (
-        <h1 className="text-2xl font-bold">サービス条件</h1>
-      )}
+    <div className="space-y-4">
       {stores.isLoading ? (
         <p>読み込み中...</p>
       ) : storesDenied ? (

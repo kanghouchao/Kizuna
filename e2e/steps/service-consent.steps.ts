@@ -46,6 +46,10 @@ When("本人がサービス条件を開く", async ({ page }) => {
   await page.getByLabel("メールアドレス", { exact: true }).fill(email);
   await page.getByLabel("パスワード", { exact: true }).fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "メニュー" })
+    .getByRole("link", { name: "アカウント", exact: true })
+    .click();
   await page.getByRole("link", { name: "サービス条件", exact: true }).click();
   await pageToService(page);
 });

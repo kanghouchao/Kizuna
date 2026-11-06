@@ -33,7 +33,7 @@ export function EmailVerificationBanner() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-md px-4 pt-4">
+    <div className="px-4 pt-4">
       <div role="status" className="rounded-lg bg-warning/10 p-3 text-sm text-warning-strong">
         <div className="flex gap-2">
           <MailIcon className="size-5 shrink-0" aria-hidden="true" />

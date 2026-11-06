@@ -1,17 +1,19 @@
 'use client';
 
+import Link from 'next/link';
+import { ChevronRightIcon } from 'lucide-react';
 import { authApi, useAuth } from '@/entities/user';
 import { LineLinkSection } from '@/features/line-auth';
 import { useResource } from '@/shared/lib';
 import { Button, Card, CardContent, RegionError } from '@/shared/ui';
 
-/** アカウントタブ。表示名とログアウトのみの最小画面。 */
+/** アカウントタブ。表示名・ログアウト・サービス条件の入口・LINE 連携。 */
 export function CastAccountPage() {
   const { logout } = useAuth();
   const { data: me, isLoading, failure, reload } = useResource(() => authApi.me());
 
   return (
-    <div className="space-y-4 p-4">
+    <div className="space-y-4">
       <Card>
         <CardContent>
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
@@ -34,6 +36,17 @@ export function CastAccountPage() {
             ログアウト
           </Button>
         </CardContent>
+      </Card>
+      <Card className="py-0">
+        <nav aria-label="設定">
+          <Link
+            href="/cast/service-conditions"
+            className="flex min-h-11 items-center justify-between rounded-xl px-4 hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
+          >
+            サービス条件
+            <ChevronRightIcon className="size-5 text-muted-foreground" aria-hidden="true" />
+          </Link>
+        </nav>
       </Card>
       <LineLinkSection />
     </div>

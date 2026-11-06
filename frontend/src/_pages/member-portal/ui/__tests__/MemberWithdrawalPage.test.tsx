@@ -94,10 +94,4 @@ describe('MemberWithdrawalPage', () => {
     expect(screen.getByLabelText('退会理由')).toHaveValue('やめる');
     expect(submitButton()).toBeEnabled();
   });
-
-  it('ホームへ戻る導線を張る', () => {
-    render(<MemberWithdrawalPage />);
-
-    expect(screen.getByRole('link', { name: 'ホームへ戻る' })).toHaveAttribute('href', '/member');
-  });
 });

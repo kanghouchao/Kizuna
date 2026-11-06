@@ -53,7 +53,7 @@ export function CastSchedulePage() {
   };
 
   return (
-    <div className="p-4">
+    <div>
       <div className="mb-4 flex items-center justify-between">
         <Button type="button" variant="outline" size="sm" onClick={() => shiftWeek(-7)}>
           前週
