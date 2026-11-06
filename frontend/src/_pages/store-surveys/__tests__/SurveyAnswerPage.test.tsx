@@ -117,45 +117,18 @@ test('回答の404は再試行を出さず一覧へのリンクを出す', async
   );
 });
 
-test.each([false, true])(
-  '同じ版の訂正は日時変更=%sに従って受領日時を保持し、訂正後の回答へ移る',
-  async changeReceivedAt => {
-    fixtures();
-    const originalReceivedAt = '2026-01-01T12:34:56.123456Z';
-    api.answer.mockResolvedValue({ ...answer, received_at: originalReceivedAt });
-    permission('SURVEY_VIEW', 'SURVEY_RECORD');
-    api.write.mockResolvedValue(
-      written('CORRECTION_RECEIVED', { answer: { ...answer, id: '31', supersedes_id: '30' } })
-    );
-    render(<SurveyAnswerPage />);
-    await shown();
-    fireEvent.click(screen.getByRole('button', { name: '回答を訂正' }));
-    fireEvent.change(await screen.findByLabelText('担当者が入力した質問（必須）'), {
-      target: { value: '訂正後の回答' },
-    });
-    if (changeReceivedAt) {
-      fireEvent.change(screen.getByLabelText('受領日時'), {
-        target: { value: '2026-01-02T10:15' },
-      });
-    }
-    fireEvent.change(screen.getByLabelText('操作理由'), { target: { value: '転記の修正' } });
-    fireEvent.click(screen.getByRole('button', { name: '確認へ' }));
-    const confirm = await screen.findByRole('alertdialog');
-    expect(within(confirm).getByText(/同じ版へ訂正/)).toBeVisible();
-    fireEvent.click(within(confirm).getByRole('button', { name: '確定する' }));
-    await waitFor(() => expect(api.write).toHaveBeenCalledTimes(1));
-    expect(api.write.mock.calls[0][0]).toMatchObject({
-      kind: 'CORRECT',
-      aid: '30',
-      input: {
-        version: 0,
-        reason: '転記の修正',
-        received_at: changeReceivedAt
-          ? new Date('2026-01-02T10:15').toISOString()
-          : originalReceivedAt,
-        answers: [{ question_key: 'q1', text: '訂正後の回答' }],
-      },
-    });
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/surveys/responses/31'));
-  }
-);
+test('訂正は訂正画面へのリンクで移り、訂正済みの回答には出さない', async () => {
+  fixtures();
+  permission('SURVEY_VIEW', 'SURVEY_RECORD');
+  const { unmount } = render(<SurveyAnswerPage />);
+  await shown();
+  expect(screen.getByRole('link', { name: '回答を訂正' })).toHaveAttribute(
+    'href',
+    '/store/surveys/responses/30/correct'
+  );
+  unmount();
+  api.answer.mockResolvedValue({ ...answer, superseded_by_id: '31' });
+  render(<SurveyAnswerPage />);
+  await shown();
+  expect(screen.queryByRole('link', { name: '回答を訂正' })).not.toBeInTheDocument();
+});

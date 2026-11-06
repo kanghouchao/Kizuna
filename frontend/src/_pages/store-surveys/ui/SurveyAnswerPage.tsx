@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation';
 import { surveyApi } from '@/entities/survey';
 import { useResource } from '@/shared/lib';
 import { Button, RegionError } from '@/shared/ui';
-import { answerHref, revisionHref, surveyListHref } from '../lib/surveyHref';
+import { answerHref, correctHref, revisionHref, surveyListHref } from '../lib/surveyHref';
 import { SurveyCapabilities, SurveyDenied, SurveyGate } from './SurveyGate';
 import { SurveyHistory } from './SurveyHistory';
 import { answerLabels, time, useGuardedRead, viaLabels } from './surveyUi';
@@ -99,11 +99,7 @@ function AnswerDetail({
               </Button>
             )}
             {!answer.superseded_by_id && (
-              <Button
-                variant="outline"
-                disabled={disabled}
-                onClick={() => edit({ kind: 'CORRECT', answer, revision })}
-              >
+              <Button variant="outline" render={<Link href={correctHref(answer.id)} />}>
                 回答を訂正
               </Button>
             )}

@@ -10,11 +10,14 @@ export interface SurveyCapabilities {
 export function SurveyGate({
   target,
   manage = false,
+  record = false,
   children,
 }: {
   target: string;
   /** 定義を編集する画面。管理権限が無ければ入口を閉じる。 */
   manage?: boolean;
+  /** 回答を受付・訂正する画面。記録権限が無ければ入口を閉じる。 */
+  record?: boolean;
   children: (capabilities: SurveyCapabilities) => ReactNode;
 }) {
   const { me } = useMe();
@@ -24,6 +27,8 @@ export function SurveyGate({
     return <div role="alert">アンケートの閲覧権限がありません</div>;
   if (manage && !hasPermission(me, 'SURVEY_MANAGE'))
     return <div role="alert">アンケートの管理権限がありません</div>;
+  if (record && !hasPermission(me, 'SURVEY_RECORD'))
+    return <div role="alert">アンケートの回答の記録権限がありません</div>;
   return (
     <Fragment key={`${storeId}:${target}`}>
       {children({
