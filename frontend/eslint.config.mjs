@@ -5,6 +5,23 @@ import hooksPlugin from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
 import globals from 'globals';
 
+// 通知は語義層を通す。toast マネージャへ直接届くと、呼び出し側が段・色・duration を自分で
+// 書けてしまい、段の体系を黙って抜けられる。塞ぐのは `toast` サブパスだけ——`@base-ui/react`
+// の他のプリミティブは shared/ui が使い続ける。
+const TOAST_PATTERN = {
+  group: ['@base-ui/react/toast'],
+  message: '通知は @/shared/notify の notify.* を通す。段の一覧は DESIGN.md。',
+};
+
+// ダイアログの外枠は DialogFrame だけが持つ。DialogContent を直接使うと幅の段と題名帯・操作帯の
+// 固定を抜けられる。AlertDialog 系（ConfirmDialog）は別部品なので対象外。
+const DIALOG_CONTENT_PATTERN = {
+  group: ['@/shared/ui', '@/shared/ui/dialog'],
+  importNames: ['DialogContent'],
+  message:
+    'ダイアログの外枠は @/shared/ui の DialogFrame を使う。幅の段の選び方は DESIGN.md の「モーダル」。',
+};
+
 export default [
   {
     ignores: ['.next/**', 'node_modules/**', 'dist/**', 'build/**'],
@@ -85,24 +102,19 @@ export default [
       'no-undef': 'off', // Last resort if globals fail
     },
   },
-  // 通知は語義層を通す。toast マネージャへ直接届くと、呼び出し側が段・色・duration を自分で
-  // 書けてしまい、段の体系を黙って抜けられる。塞ぐのは `toast` サブパスだけ——`@base-ui/react`
-  // の他のプリミティブは shared/ui が使い続ける。
   // この規則が見るのは静的な `import` と `export … from` だけ。動的 `import()` や `require()`、
   // `jest.mock` の文字列は素通りするので、そこは規約とレビューで見る。
   {
     rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            {
-              group: ['@base-ui/react/toast'],
-              message: '通知は @/shared/notify の notify.* を通す。段の一覧は DESIGN.md。',
-            },
-          ],
-        },
-      ],
+      'no-restricted-imports': ['error', { patterns: [TOAST_PATTERN, DIALOG_CONTENT_PATTERN] }],
+    },
+  },
+  // flat config は後の設定が規則の選択肢を丸ごと置き換えるので、shared/ui には toast の制限だけを
+  // 改めて渡す。外枠部品自身が DialogContent を使うのはここ。
+  {
+    files: ['src/shared/ui/**'],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: [TOAST_PATTERN] }],
     },
   },
   // 実体に触れてよいのは語義層と、それを描くプリミティブだけ。ディレクトリではなくファイルで

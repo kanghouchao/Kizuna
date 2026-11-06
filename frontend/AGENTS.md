@@ -38,6 +38,7 @@ Store paths are assembled only in `shared/lib/store-route` (`storePath(subPath)`
 - Shared sections live in `templates/_sections/`, never as a template key. Template directories contain themes and layouts. `entities/store-profile/getTemplateMeta` owns text-slot metadata used by site and settings.
 - Import shadcn primitives through `@/shared/ui`. For any shared/ui change, consult DESIGN.md's vendored/authored classification; generated primitives stay frozen.
 - Toast call sites use `@/shared/notify`. Direct Base UI toast imports are limited to that module and `shared/ui/toast.tsx`; this also applies to dynamic imports and test mocks not caught by ESLint.
+- Dialogs outside `shared/ui` draw their frame with `DialogFrame`; ESLint rejects importing `DialogContent` there (including `import * as` from `@/shared/ui`). The AlertDialog family (`ConfirmDialog`) is separate and unrestricted.
 
 ## Code and checks
 
