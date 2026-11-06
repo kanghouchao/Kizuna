@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>月次明細プロトタイプ</title>
+<!--
+  PROTOTYPE — 捨てるコード。#1353 Q15「月次明細をスマートフォンでどう見せるか」を決めるためだけのもの。
+  3 案を #a / #b / #c で切り替える。データは架空・メモリ内のみ。色は globals.css の token を写したもの。
+-->
+<style>
+:root{
+  --radius:.5rem;
+  --background:oklch(0.982 0.005 84);--foreground:oklch(0.235 0.03 268);
+  --card:oklch(1 0 0);--primary:oklch(0.43 0.14 268);--primary-foreground:oklch(0.985 0.004 84);
+  --primary-strong:oklch(0.43 0.14 268);--muted:oklch(0.955 0.007 84);--muted-foreground:oklch(0.505 0.02 268);
+  --accent:oklch(0.952 0.012 268);--destructive:oklch(0.52 0.17 28);--destructive-strong:oklch(0.43 0.14 27);
+  --success:oklch(0.62 0.11 158);--success-strong:oklch(0.42 0.08 158);
+  --warning:oklch(0.64 0.13 68);--warning-strong:oklch(0.45 0.09 62);
+  --border:oklch(0.905 0.01 84);--outside:oklch(0.93 0.008 84);
+}
+:root[data-theme=dark]{
+  --background:oklch(0.18 0.02 268);--foreground:oklch(0.96 0.006 84);
+  --card:oklch(0.225 0.024 268);--primary:oklch(0.52 0.15 268);--primary-foreground:oklch(0.985 0.004 84);
+  --primary-strong:oklch(0.76 0.1 262);--muted:oklch(0.28 0.022 268);--muted-foreground:oklch(0.74 0.02 268);
+  --accent:oklch(0.3 0.03 268);--destructive:oklch(0.68 0.17 25);--destructive-strong:oklch(0.74 0.14 25);
+  --success:oklch(0.74 0.13 158);--success-strong:oklch(0.78 0.12 158);
+  --warning:oklch(0.8 0.13 75);--warning-strong:oklch(0.82 0.12 75);
+  --border:oklch(1 0 0 / 10%);--outside:oklch(0.14 0.015 268);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--outside);color:var(--foreground);font-family:"Hiragino Sans","Noto Sans JP",system-ui,sans-serif;font-size:16px;line-height:1.55;padding-bottom:96px}
+button{font:inherit;color:inherit;cursor:pointer}
+.phone{margin:16px auto;background:var(--background);min-height:780px;border-radius:28px;overflow:hidden;position:relative;box-shadow:0 0 0 1px var(--border)}
+.topbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px;height:52px;padding:0 8px;background:var(--background);border-bottom:1px solid var(--border)}
+.topbar .back{width:44px;height:44px;border:0;background:none;font-size:22px}
+.topbar h1{font-size:17px;font-weight:700;margin:0;flex:1;text-align:center;padding-right:52px}
+.content{padding:16px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px}
+.muted{color:var(--muted-foreground)}
+.small{font-size:13px}
+.row{display:flex;align-items:center;gap:8px}
+.between{justify-content:space-between}
+.stack>*+*{margin-top:12px}
+.badge{display:inline-flex;align-items:center;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.b-wait{background:color-mix(in oklch,var(--warning) 18%,transparent);color:var(--warning-strong)}
+.b-done{background:color-mix(in oklch,var(--success) 18%,transparent);color:var(--success-strong)}
+.b-redo{background:color-mix(in oklch,var(--destructive) 15%,transparent);color:var(--destructive-strong)}
+.b-none{background:var(--muted);color:var(--muted-foreground)}
+.btn{display:flex;align-items:center;justify-content:center;min-height:44px;padding:0 16px;border-radius:12px;border:1px solid var(--border);background:var(--card);font-weight:600}
+.btn.primary{background:var(--primary);color:var(--primary-foreground);border-color:transparent}
+.btn.full{width:100%}
+.monthnav{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.monthnav button{width:44px;height:44px;border-radius:12px;border:1px solid var(--border);background:var(--card);font-size:18px}
+.monthnav .label{font-weight:700;font-size:18px;border:0;background:none;width:auto}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;margin-bottom:12px}
+.chip{flex:none;min-height:36px;padding:0 14px;border-radius:999px;border:1px solid var(--border);background:var(--card);font-size:14px;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip[aria-pressed=true]{background:var(--foreground);color:var(--background);border-color:transparent}
+.total{font-size:30px;font-weight:800;letter-spacing:.01em}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:6px 0}
+.kv+.kv{border-top:1px dashed var(--border)}
+.money{font-variant-numeric:tabular-nums;white-space:nowrap}
+.progress{height:6px;border-radius:999px;background:var(--muted);overflow:hidden}
+.progress>i{display:block;height:100%;background:var(--success)}
+.seg{display:flex;background:var(--muted);border-radius:12px;padding:3px;margin-bottom:12px}
+.seg button{flex:1;min-height:38px;border:0;background:none;border-radius:10px;font-size:14px;font-weight:600;color:var(--muted-foreground)}
+.seg button[aria-pressed=true]{background:var(--card);color:var(--foreground);box-shadow:0 1px 2px rgb(0 0 0/.08)}
+/* A */
+.day{background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+.day+.day{margin-top:8px}
+.dayhead{width:100%;display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:center;text-align:left;border:0;background:none;padding:12px 14px;min-height:56px}
+.dayhead .d{font-weight:700}
+.dayhead .s{grid-column:1;font-size:13px}
+.dayhead .a{grid-row:1;grid-column:2;font-weight:700}
+.dayhead .st{grid-row:2;grid-column:2;justify-self:end}
+.daybody{padding:0 14px 14px;border-top:1px solid var(--border)}
+.line{display:flex;justify-content:space-between;gap:12px;padding:8px 0;font-size:15px}
+.line+.line{border-top:1px solid var(--border)}
+.line .name{min-width:0;overflow-wrap:anywhere}
+.sub{font-size:12px;font-weight:700;color:var(--muted-foreground);margin:12px 0 2px;letter-spacing:.04em}
+.diff{font-size:13px;padding:8px 10px;border-radius:10px;background:color-mix(in oklch,var(--destructive) 8%,transparent);margin-top:10px}
+/* B */
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.cell{min-width:0}
+.cal .wd{text-align:center;font-size:12px;color:var(--muted-foreground);padding:4px 0}
+.cell{aspect-ratio:1/1.15;border-radius:10px;border:1px solid var(--border);background:var(--card);padding:4px 2px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;font-size:13px}
+.cell.off{background:transparent;border-style:dashed;color:var(--muted-foreground)}
+.cell.blank{visibility:hidden}
+.cell .amt{font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums}
+.cell .dot{width:8px;height:8px;border-radius:999px}
+.cell.today{outline:2px solid var(--primary);outline-offset:-2px}
+.dot.wait{background:var(--warning)}.dot.done{background:var(--success)}.dot.redo{background:var(--destructive)}.dot.none{background:var(--border)}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;margin-top:10px}
+.legend span{display:inline-flex;align-items:center;gap:4px}
+.sheet-bg{position:absolute;inset:0;background:rgb(0 0 0/.35);z-index:20}
+.sheet{position:absolute;left:0;right:0;bottom:0;z-index:21;background:var(--card);border-radius:20px 20px 0 0;max-height:78%;overflow:auto;padding:8px 16px 24px}
+.grab{width:40px;height:5px;border-radius:999px;background:var(--border);margin:4px auto 12px}
+/* C */
+.todo{border:2px solid color-mix(in oklch,var(--warning) 60%,transparent)}
+.weekhead{display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:var(--muted-foreground);margin:16px 4px 6px}
+.compact{width:100%;display:flex;align-items:center;gap:10px;border:0;background:none;text-align:left;padding:10px 4px;min-height:48px;border-bottom:1px solid var(--border)}
+.compact .d{width:76px;flex:none;font-weight:600}
+.compact .mid{flex:1;min-width:0;font-size:13px;color:var(--muted-foreground);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* chrome */
+.switcher{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:99;display:flex;align-items:center;gap:6px;background:#111;color:#fff;border-radius:999px;padding:6px;box-shadow:0 6px 24px rgb(0 0 0/.35);font-size:13px;font-family:system-ui,sans-serif}
+.switcher button{border:0;background:#333;color:#fff;border-radius:999px;min-width:34px;height:34px;padding:0 10px}
+.switcher .lab{padding:0 8px;min-width:190px;text-align:center}
+.switcher .sep{width:1px;height:20px;background:#444}
+.state{max-width:430px;margin:0 auto 12px;font:12px/1.4 ui-monospace,monospace;color:var(--muted-foreground);padding:0 16px}
+</style>
+</head>
+<body>
+<div class="state" id="state"></div>
+<div class="phone" id="phone"></div>
+<div class="switcher">
+  <button id="prev" aria-label="前の案">←</button>
+  <span class="lab" id="lab"></span>
+  <button id="next" aria-label="次の案">→</button>
+  <span class="sep"></span>
+  <button id="width">375px</button>
+  <button id="theme">ダーク</button>
+</div>
+<script>
+const VARIANTS=[
+  {key:'a',name:'A 日ごとの折り畳み'},
+  {key:'b',name:'B カレンダー＋下部シート'},
+  {key:'c',name:'C 承諾待ち優先＋週まとめ'},
+];
+const WD='日月火水木金土';
+const yen=n=>(n<0?'−¥':'¥')+Math.abs(n).toLocaleString('ja-JP');
+const kyen=n=>n>=10000?(n/10000).toFixed(n%10000?1:0)+'万':(n/1000).toFixed(0)+'千';
+const md=d=>`${d.getMonth()+1}/${d.getDate()}（${WD[d.getDay()]}）`;
+const dur=m=>m<60?`${m}分`:(m%60?`${Math.floor(m/60)}時間${m%60}分`:`${m/60}時間`);
+
+// ---- 架空データ（2026年11月、今日=11/20、31 日の月に近い密度を出すため 30 日＋多数の受注）----
+const COURSES=[['スタンダード 60分',60,8000],['スタンダード 90分',90,12000],['ロングコース 120分＋延長30分（指名・オプション込み）',150,21000],['ショート 45分',45,6000],['プレミアム 180分',180,26000]];
+let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+const TODAY=20;
+const days=[];
+for(let i=1;i<=30;i++){
+  const date=new Date(2026,10,i);
+  const work=[1,2,4,5,6,8,9,11,12,13,15,16,18,19,20,22,23,25,26,27,29,30].includes(i);
+  const orders=[];
+  if(work&&i<=TODAY){const n=1+Math.floor(rnd()*5);for(let k=0;k<n;k++){const c=COURSES[Math.floor(rnd()*COURSES.length)];orders.push({name:c[0],min:c[1],amount:c[2]})}}
+  const orderAmt=orders.reduce((s,o)=>s+o.amount,0);
+  const guaranteeDaily=work?15000:0;
+  const shortfall=work&&i<=TODAY?Math.max(0,guaranteeDaily-orderAmt):0;
+  const bonus=[6,13,19].includes(i)?[{reason:i===13?'月間指名数達成ボーナス（第2週）':'イベント出勤ボーナス',amount:i===13?10000:3000}]:[];
+  const bonusAmt=bonus.reduce((s,b)=>s+b.amount,0);
+  let state='none';
+  if(work&&i<TODAY){state=[16,18,19].includes(i)?'wait':i===12?'redo':'done'}
+  if(work&&i>=TODAY)state='notyet';
+  days.push({i,date,work,orders,orderAmt,shortfall,bonus,bonusAmt,
+    attend:work&&i<=TODAY?(i===TODAY?null:240+Math.floor(rnd()*4)*30):null,
+    total:orderAmt+shortfall+bonusAmt,state,
+    prev:i===12?{total:orderAmt+shortfall+bonusAmt-3000}:null});
+}
+const STORE_OPTIONS=['銀座本店ラウンジ・プレミアムクラブ','新宿東口店'];
+const ui={variant:'a',width:375,theme:'light',store:0,open:new Set(days.filter(d=>d.state==='wait'||d.state==='redo').map(d=>d.i)),sheet:null,filter:'all',todoIdx:0};
+
+const STATE_LABEL={wait:['承諾待ち','b-wait'],done:['承諾済み','b-done'],redo:['再承諾が必要','b-redo'],notyet:['営業日の終了後','b-none'],none:['','']};
+const badge=s=>STATE_LABEL[s][0]?`<span class="badge ${STATE_LABEL[s][1]}">${STATE_LABEL[s][0]}</span>`:'';
+const totals=()=>{const o=days.reduce((s,d)=>s+d.orderAmt,0),g=days.reduce((s,d)=>s+d.shortfall,0),b=days.reduce((s,d)=>s+d.bonusAmt,0);
+  const acceptable=days.filter(d=>['wait','done','redo'].includes(d.state)).length,accepted=days.filter(d=>d.state==='done').length;
+  return{o,g,b,t:o+g+b,acceptable,accepted}};
+
+function header(){return `<div class="topbar"><button class="back" aria-label="戻る">‹</button><h1>月次の報酬</h1></div>`}
+function storeChips(){return `<div class="chips" role="group" aria-label="店舗">${STORE_OPTIONS.map((s,k)=>`<button class="chip" data-store="${k}" aria-pressed="${ui.store===k}">${s}</button>`).join('')}</div>`}
+function monthNav(){return `<div class="monthnav"><button aria-label="前の月">‹</button><button class="label">2026年11月 ▾</button><button aria-label="次の月">›</button></div>`}
+function summary(compact){const t=totals();return `<div class="card">
+  <div class="row between"><span class="muted small">11月の合計（確定前）</span><button class="btn" style="min-height:36px;padding:0 12px;font-size:14px">PDF</button></div>
+  <div class="total money">${yen(t.t)}</div>
+  ${compact?'':`<div class="kv"><span>受注報酬</span><span class="money">${yen(t.o)}</span></div>
+  <div class="kv"><span>日額保証の不足分</span><span class="money">${yen(t.g)}</span></div>
+  <div class="kv"><span>ボーナス</span><span class="money">${yen(t.b)}</span></div>`}
+  <div class="row between small" style="margin-top:8px"><span>承諾 ${t.accepted} / ${t.acceptable} 日</span><span class="muted">11/20 時点</span></div>
+  <div class="progress" style="margin-top:4px"><i style="width:${t.acceptable?t.accepted/t.acceptable*100:0}%"></i></div>
+</div>`}
+function dayDetail(d){
+  if(!d.work)return `<p class="muted">出勤のない日です。</p>`;
+  if(d.state==='notyet'&&!d.orders.length)return `<p class="muted">営業日が終わると明細が出ます。</p>`;
+  return `
+  ${d.attend?`<div class="line"><span>出勤</span><span>${dur(d.attend)}</span></div>`:''}
+  <div class="sub">受注 ${d.orders.length}件</div>
+  ${d.orders.map(o=>`<div class="line"><span class="name">${o.name}</span><span class="money">${yen(o.amount)}</span></div>`).join('')||'<p class="muted small">受注はありません。</p>'}
+  ${d.shortfall?`<div class="sub">日額保証</div><div class="line"><span class="name">保証 ${yen(15000)} に対する不足分</span><span class="money">${yen(d.shortfall)}</span></div>`:''}
+  ${d.bonus.length?`<div class="sub">ボーナス</div>${d.bonus.map(b=>`<div class="line"><span class="name">${b.reason}</span><span class="money">${yen(b.amount)}</span></div>`).join('')}`:''}
+  <div class="line" style="font-weight:700"><span>この日の合計</span><span class="money">${yen(d.total)}</span></div>
+  ${d.state==='redo'?`<div class="diff">承諾後に変わりました：合計 ${yen(d.prev.total)} → ${yen(d.total)}</div>`:''}
+  ${d.state==='wait'||d.state==='redo'?`<button class="btn primary full" data-accept="${d.i}" style="margin-top:12px">${md(d.date)} を${d.state==='redo'?'再':''}承諾する</button>`:''}
+  ${d.state==='done'?`<p class="muted small" style="margin:10px 0 0">${md(new Date(2026,10,d.i+1))} 10:12 に承諾しました</p>`:''}
+  ${d.state==='notyet'?`<p class="muted small" style="margin:10px 0 0">営業日の終了後に承諾できます。</p>`:''}`;
+}
+function summaryLine(d){
+  if(!d.work)return '休み';
+  const parts=[];if(d.attend)parts.push(dur(d.attend));parts.push(`受注${d.orders.length}件`);if(d.bonus.length)parts.push('ボーナスあり');return parts.join(' · ');
+}
+
+// ---- A ----
+function VariantA(){
+  const order=s=>({wait:0,redo:0,done:1,notyet:2,none:3})[s];
+  let list=days.filter(d=>d.work);
+  if(ui.filter==='todo')list=list.filter(d=>d.state==='wait'||d.state==='redo');
+  list=[...list].sort((x,y)=>order(x.state)-order(y.state)||x.i-y.i);
+  const todo=days.filter(d=>d.state==='wait'||d.state==='redo').length;
+  return `${header()}<div class="content">${storeChips()}${monthNav()}<div class="stack">${summary(false)}
+  <div class="seg" role="group"><button data-filter="all" aria-pressed="${ui.filter==='all'}">出勤日すべて</button><button data-filter="todo" aria-pressed="${ui.filter==='todo'}">承諾待ち ${todo}</button></div>
+  <div>${list.map(d=>`<div class="day"><button class="dayhead" data-toggle="${d.i}" aria-expanded="${ui.open.has(d.i)}">
+      <span class="d">${md(d.date)}</span><span class="a money">${d.state==='notyet'&&!d.orders.length?'—':yen(d.total)}</span>
+      <span class="s muted">${summaryLine(d)}</span><span class="st">${badge(d.state)}</span></button>
+      ${ui.open.has(d.i)?`<div class="daybody">${dayDetail(d)}</div>`:''}</div>`).join('')}</div>
+  <p class="muted small" style="text-align:center">出勤のない日は表示していません</p></div></div>`;
+}
+// ---- B ----
+function VariantB(){
+  const first=new Date(2026,10,1).getDay();
+  const cells=[];for(let k=0;k<first;k++)cells.push('<div class="cell blank"></div>');
+  for(const d of days){
+    const dotc={wait:'wait',done:'done',redo:'redo',notyet:'none',none:''}[d.state];
+    cells.push(`<button class="cell ${d.work?'':'off'} ${d.i===TODAY?'today':''}" data-sheet="${d.i}" aria-label="${md(d.date)}">
+      <span>${d.i}</span><span class="amt">${d.total?kyen(d.total):''}</span>${dotc?`<span class="dot ${dotc}"></span>`:'<span></span>'}</button>`);
+  }
+  const s=ui.sheet&&days.find(d=>d.i===ui.sheet);
+  return `${header()}<div class="content">${storeChips()}${monthNav()}<div class="stack">${summary(true)}
+  <div class="card" style="padding:10px"><div class="cal">${[...WD].map(w=>`<div class="wd">${w}</div>`).join('')}${cells.join('')}</div>
+  <div class="legend"><span><i class="dot wait" style="display:inline-block;width:8px;height:8px;border-radius:9px"></i>承諾待ち</span><span><i class="dot done" style="display:inline-block;width:8px;height:8px;border-radius:9px"></i>承諾済み</span><span><i class="dot redo" style="display:inline-block;width:8px;height:8px;border-radius:9px"></i>再承諾が必要</span></div></div>
+  <div class="card"><div class="kv"><span>受注報酬</span><span class="money">${yen(totals().o)}</span></div><div class="kv"><span>日額保証の不足分</span><span class="money">${yen(totals().g)}</span></div><div class="kv"><span>ボーナス</span><span class="money">${yen(totals().b)}</span></div></div>
+  </div></div>
+  ${s?`<div class="sheet-bg" data-close></div><div class="sheet" role="dialog" aria-label="${md(s.date)}の明細"><div class="grab"></div>
+    <div class="row between" style="margin-bottom:4px"><strong style="font-size:18px">${md(s.date)}</strong>${badge(s.state)}</div>${dayDetail(s)}</div>`:''}`;
+}
+// ---- C ----
+function VariantC(){
+  const todo=days.filter(d=>d.state==='wait'||d.state==='redo');
+  const idx=Math.min(ui.todoIdx,Math.max(0,todo.length-1));
+  const cur=todo[idx];
+  const weeks=[];days.filter(d=>d.work).forEach(d=>{const w=Math.floor((d.i+new Date(2026,10,1).getDay()-1)/7);(weeks[w]=weeks[w]||[]).push(d)});
+  return `${header()}<div class="content">${storeChips()}${monthNav()}<div class="stack">${summary(true)}
+  ${cur?`<div class="card todo"><div class="row between"><strong>承諾待ち ${todo.length}日</strong><span class="muted small">${idx+1} / ${todo.length}</span></div>
+     <div class="row between" style="margin:10px 0 2px"><strong style="font-size:18px">${md(cur.date)}</strong>${badge(cur.state)}</div>${dayDetail(cur)}
+     ${todo.length>1?`<div class="row" style="margin-top:8px"><button class="btn" style="flex:1" data-todo="-1">‹ 前の日</button><button class="btn" style="flex:1" data-todo="1">次の日 ›</button></div>`:''}</div>`
+   :`<div class="card"><strong>承諾待ちの日はありません</strong><p class="muted small" style="margin:4px 0 0">新しい営業日が終わると、ここに出ます。</p></div>`}
+  <div>${weeks.filter(Boolean).map(w=>`<div class="weekhead"><span>${md(w[0].date)}〜${md(w[w.length-1].date)}</span><span class="money">${yen(w.reduce((s,d)=>s+d.total,0))}</span></div>
+    ${w.map(d=>`<button class="compact" data-toggle="${d.i}"><span class="d">${md(d.date)}</span><span class="mid">${summaryLine(d)}</span>${badge(d.state)}<span class="money" style="font-weight:700;min-width:72px;text-align:right">${d.state==='notyet'&&!d.orders.length?'—':yen(d.total)}</span></button>
+      ${ui.open.has(d.i)&&d.state!=='wait'&&d.state!=='redo'?`<div style="padding:0 4px 8px">${dayDetail(d)}</div>`:''}`).join('')}`).join('')}</div>
+  </div></div>`;
+}
+
+function render(){
+  document.documentElement.dataset.theme=ui.theme;
+  const v=VARIANTS.find(x=>x.key===ui.variant);
+  const phone=document.getElementById('phone');phone.style.width=ui.width+'px';
+  phone.innerHTML={a:VariantA,b:VariantB,c:VariantC}[ui.variant]();
+  document.getElementById('lab').textContent=v.name;
+  document.getElementById('width').textContent=ui.width+'px';
+  document.getElementById('theme').textContent=ui.theme==='light'?'ダーク':'ライト';
+  const t=totals();
+  document.getElementById('state').textContent=`state: variant=${ui.variant} width=${ui.width} store=${STORE_OPTIONS[ui.store]} 承諾=${t.accepted}/${t.acceptable} open=[${[...ui.open].join(',')}] sheet=${ui.sheet??'-'}`;
+}
+function setVariant(k){ui.variant=k;ui.sheet=null;history.replaceState(null,'','#'+k);render()}
+function cycle(n){const i=VARIANTS.findIndex(x=>x.key===ui.variant);setVariant(VARIANTS[(i+n+VARIANTS.length)%VARIANTS.length].key)}
+document.getElementById('prev').onclick=()=>cycle(-1);
+document.getElementById('next').onclick=()=>cycle(1);
+document.getElementById('width').onclick=()=>{ui.width=ui.width===375?430:375;render()};
+document.getElementById('theme').onclick=()=>{ui.theme=ui.theme==='light'?'dark':'light';render()};
+document.addEventListener('keydown',e=>{if(e.target.closest('input,textarea,[contenteditable]'))return;if(e.key==='ArrowLeft')cycle(-1);if(e.key==='ArrowRight')cycle(1)});
+document.getElementById('phone').addEventListener('click',e=>{
+  const el=e.target.closest('[data-toggle],[data-accept],[data-sheet],[data-close],[data-filter],[data-store],[data-todo]');if(!el)return;
+  const ds=el.dataset;
+  if(ds.toggle){const i=+ds.toggle;ui.open.has(i)?ui.open.delete(i):ui.open.add(i)}
+  if(ds.accept){const d=days.find(x=>x.i===+ds.accept);d.state='done';d.prev=null;ui.open.delete(d.i)}
+  if(ds.sheet)ui.sheet=+ds.sheet;
+  if('close' in ds)ui.sheet=null;
+  if(ds.filter)ui.filter=ds.filter;
+  if(ds.store)ui.store=+ds.store;
+  if(ds.todo)ui.todoIdx=Math.max(0,ui.todoIdx+ +ds.todo);
+  render();
+});
+function fromHash(){const k=location.hash.slice(1);if(VARIANTS.some(x=>x.key===k))ui.variant=k;render()}
+window.addEventListener('hashchange',fromHash);fromHash();
+</script>
+</body>
+</html>
