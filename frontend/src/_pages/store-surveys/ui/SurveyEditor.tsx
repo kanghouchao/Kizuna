@@ -1,22 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useForm, useFieldArray, Control, useWatch, useFormContext } from 'react-hook-form';
-import {
-  Answer,
-  Revision,
-  DefinitionInput,
-  Question,
-  SurveyCommand,
-  ReceivedVia,
-} from '@/entities/survey';
+import { useForm } from 'react-hook-form';
+import { Answer, Revision, SurveyCommand, ReceivedVia } from '@/entities/survey';
 import {
   Button,
   Form,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormControl,
-  FormMessage,
-  Checkbox,
   ConfirmDialog,
   Dialog,
   DialogContent,
@@ -24,19 +11,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/shared/ui';
-import { createUuid } from '@/shared/lib';
 import { viaLabels } from './surveyUi';
-import { SurveyTextField, SurveyChoiceField } from './SurveyFields';
+import { SurveyTextField, SurveyChoiceField, clean } from './SurveyFields';
 export type Editor =
-  | { kind: 'CREATE' }
-  | { [K in 'REVISE' | 'REPLACE' | 'RECEIVE']: { kind: K; revision: Revision } }[
-      'REVISE' | 'REPLACE' | 'RECEIVE']
-  | { kind: 'CORRECT'; answer: Answer; revision: Revision };
+  { kind: 'RECEIVE'; revision: Revision } | { kind: 'CORRECT'; answer: Answer; revision: Revision };
 const editorTitle = (editor: Editor) =>
   ({
-    CREATE: 'アンケートを作成',
-    REVISE: '新しい版を作成',
-    REPLACE: '下書きを編集',
     RECEIVE: '回答を受付',
     CORRECT: '回答を訂正',
   })[editor.kind];
@@ -46,21 +26,8 @@ interface AnswerFormValues {
   received_via: ReceivedVia;
   values: { value: string }[];
 }
-export const clean = (value: string, max: number, trim = true) => {
-  const text = value.replace(/\r\n?/g, '\n');
-  return (
-    text.trim().length > 0 && (trim ? text.trim() : text).length <= max && !text.includes('\0')
-  );
-};
 const validReceivedTime = (value: number) =>
   Number.isFinite(value) && value >= Date.parse('2000-01-01T00:00:00Z') && value <= Date.now();
-const blankQuestion = (): Question => ({
-  question_key: `q${createUuid()}`,
-  type: 'TEXT',
-  prompt: '',
-  required: true,
-  options: [],
-});
 export function SurveyEditor({
   editor,
   open,
@@ -76,7 +43,6 @@ export function SurveyEditor({
   onSubmit: (command: SurveyCommand) => Promise<void>;
   feedback: React.ReactNode;
 }) {
-  const [definitionDraft, setDefinitionDraft] = useState<DefinitionInput>();
   const [answerDraft, setAnswerDraft] = useState<AnswerFormValues>();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -88,252 +54,15 @@ export function SurveyEditor({
           </DialogDescription>
         </DialogHeader>
         {feedback}
-        {editor.kind === 'CREATE' || editor.kind === 'REVISE' || editor.kind === 'REPLACE' ? (
-          <DefinitionEditor
-            editor={editor}
-            draft={definitionDraft}
-            onDraft={setDefinitionDraft}
-            disabled={disabled}
-            onSubmit={onSubmit}
-          />
-        ) : (
-          <AnswerEditor
-            editor={editor}
-            draft={answerDraft}
-            onDraft={setAnswerDraft}
-            disabled={disabled}
-            onSubmit={onSubmit}
-          />
-        )}
+        <AnswerEditor
+          editor={editor}
+          draft={answerDraft}
+          onDraft={setAnswerDraft}
+          disabled={disabled}
+          onSubmit={onSubmit}
+        />
       </DialogContent>
     </Dialog>
-  );
-}
-function DefinitionEditor({
-  editor,
-  draft,
-  onDraft,
-  disabled,
-  onSubmit,
-}: {
-  editor: Extract<Editor, { kind: 'CREATE' | 'REVISE' | 'REPLACE' }>;
-  draft?: DefinitionInput;
-  onDraft: (value: DefinitionInput) => void;
-  disabled: boolean;
-  onSubmit: (command: SurveyCommand) => Promise<void>;
-}) {
-  const form = useForm<DefinitionInput>({
-    defaultValues:
-      draft ??
-      (editor.kind === 'CREATE'
-        ? { title: '', questions: [blankQuestion()] }
-        : { title: editor.revision.title, questions: editor.revision.questions }),
-  });
-  useEffect(() => {
-    return form.subscribe({
-      formState: { values: true },
-      callback: ({ values }) => onDraft(values),
-    });
-  }, [form, onDraft]);
-  const questions = useFieldArray({ control: form.control, name: 'questions' });
-  const submit = form.handleSubmit(values => {
-    const input = values;
-    if (editor.kind === 'CREATE') void onSubmit({ kind: 'CREATE', input });
-    else if (editor.kind === 'REVISE')
-      void onSubmit({
-        kind: 'REVISE',
-        sid: editor.revision.survey_id,
-        input: { ...input, based_on_revision_id: editor.revision.id },
-      });
-    else
-      void onSubmit({
-        kind: 'REPLACE',
-        sid: editor.revision.survey_id,
-        rid: editor.revision.id,
-        input: { ...input, version: editor.revision.version },
-      });
-  });
-  return (
-    <Form {...form}>
-      <form onSubmit={submit} noValidate className="space-y-6">
-        <fieldset disabled={disabled} className="space-y-6">
-          <SurveyTextField
-            control={form.control}
-            name="title"
-            label="題名"
-            required
-            maxLength={120}
-            validate={v => clean(v, 120) || '題名を1〜120文字で入力してください'}
-          />
-          {questions.fields.map((q, index) => (
-            <section key={q.id} className="rounded-lg border p-4 space-y-3">
-              <h2 className="text-lg font-semibold">設問 {index + 1}</h2>
-              <QuestionEditor index={index} control={form.control} disabled={disabled} />
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={disabled || index === 0}
-                  onClick={() => questions.move(index, index - 1)}
-                >
-                  設問を上へ
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={disabled || index === questions.fields.length - 1}
-                  onClick={() => questions.move(index, index + 1)}
-                >
-                  設問を下へ
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={disabled || questions.fields.length === 1}
-                  onClick={() => questions.remove(index)}
-                >
-                  設問を除去
-                </Button>
-              </div>
-            </section>
-          ))}
-          <Button
-            type="button"
-            variant="outline"
-            disabled={disabled || questions.fields.length >= 20}
-            onClick={() => questions.append(blankQuestion())}
-          >
-            設問を追加
-          </Button>
-          {form.formState.errors.root && (
-            <p role="alert" className="text-destructive-strong">
-              {form.formState.errors.root.message}
-            </p>
-          )}
-          <p>開始後は設問を変更できません。変更は新しい版として作成します。</p>
-          <Button type="submit" disabled={disabled}>
-            下書きを保存
-          </Button>
-        </fieldset>
-      </form>
-    </Form>
-  );
-}
-function QuestionEditor({
-  index,
-  control,
-  disabled,
-}: {
-  index: number;
-  control: Control<DefinitionInput>;
-  disabled: boolean;
-}) {
-  const { getValues } = useFormContext<DefinitionInput>();
-  const row = useWatch({ control, name: `questions.${index}` });
-  const options = useFieldArray({ control, name: `questions.${index}.options` });
-  return (
-    <>
-      <SurveyTextField
-        control={control}
-        name={`questions.${index}.prompt`}
-        label="設問文"
-        required
-        multiline
-        maxLength={500}
-        validate={v => clean(v, 500) || '設問文を1〜500文字で入力してください'}
-      />
-      <SurveyChoiceField
-        control={control}
-        name={`questions.${index}.type`}
-        label="回答形式"
-        required
-        items={[
-          { value: 'TEXT', label: 'テキスト' },
-          { value: 'SINGLE_CHOICE', label: '単一選択' },
-        ]}
-        disabled={disabled}
-        validate={v => ['TEXT', 'SINGLE_CHOICE'].includes(v) || '回答形式を選択してください'}
-        onChange={v =>
-          options.replace(
-            v === 'TEXT'
-              ? []
-              : [
-                  { option_key: `o${createUuid()}`, label: '' },
-                  { option_key: `o${createUuid()}`, label: '' },
-                ]
-          )
-        }
-      />
-      <FormField
-        control={control}
-        name={`questions.${index}.required`}
-        render={({ field }) => (
-          <FormItem className="flex gap-2 items-center">
-            <FormControl>
-              <Checkbox
-                checked={field.value}
-                ref={field.ref}
-                onBlur={field.onBlur}
-                disabled={disabled}
-                onCheckedChange={v => field.onChange(v === true)}
-              />
-            </FormControl>
-            <FormLabel>回答必須</FormLabel>
-            <FormMessage />
-          </FormItem>
-        )}
-      />
-      {row.type === 'SINGLE_CHOICE' && (
-        <div className="space-y-3">
-          {options.fields.map((o, i) => (
-            <div key={o.id} className="space-y-2">
-              <SurveyTextField
-                control={control}
-                name={`questions.${index}.options.${i}.label`}
-                label={`選択肢 ${i + 1}`}
-                required
-                maxLength={120}
-                validate={v =>
-                  !clean(v, 120)
-                    ? '選択肢を1〜120文字で入力してください'
-                    : getValues(`questions.${index}.options`).some(
-                          (other, n) => n !== i && other.label.trim() === v.trim()
-                        )
-                      ? '同じ文面の選択肢を重複させないでください'
-                      : true
-                }
-              />
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={disabled || i === 0}
-                  onClick={() => options.move(i, i - 1)}
-                >
-                  選択肢を上へ
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={disabled || options.fields.length <= 2}
-                  onClick={() => options.remove(i)}
-                >
-                  選択肢を除去
-                </Button>
-              </div>
-            </div>
-          ))}
-          <Button
-            type="button"
-            variant="outline"
-            disabled={disabled || options.fields.length >= 10}
-            onClick={() => options.append({ option_key: `o${createUuid()}`, label: '' })}
-          >
-            選択肢を追加
-          </Button>
-        </div>
-      )}
-    </>
   );
 }
 function AnswerEditor({
@@ -343,7 +72,7 @@ function AnswerEditor({
   disabled,
   onSubmit,
 }: {
-  editor: Extract<Editor, { kind: 'RECEIVE' | 'CORRECT' }>;
+  editor: Editor;
   draft?: AnswerFormValues;
   onDraft: (value: AnswerFormValues) => void;
   disabled: boolean;

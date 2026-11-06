@@ -84,12 +84,13 @@ When(
     await expect(page).toHaveURL(/\/admin\/dashboard/, { timeout: 15000 });
     await page.goto(`${APP_URL}/store/surveys`);
     await page
-      .getByRole("button", { name: "アンケートを作成", exact: true })
+      .getByRole("link", { name: "アンケートを作成", exact: true })
       .click();
-    const editor = page.getByRole("dialog", {
-      name: "アンケートを作成",
-      exact: true,
-    });
+    await expect(page).toHaveURL(`${APP_URL}/store/surveys/create`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "アンケートを作成" }),
+    ).toBeVisible();
+    const editor = page.getByRole("main").locator("form");
     await editor
       .getByLabel("題名", { exact: true })
       .fill("担当者が作成した問票");
@@ -137,22 +138,20 @@ When(
       .getByRole("button", { name: "下書きを保存", exact: true })
       .click();
     await expect(
-      editor.getByText(/結果が確認できません。同じ要求/),
+      page.getByText(/結果が確認できません。同じ要求/),
     ).toBeVisible();
-    await editor.getByRole("button", { name: "Close", exact: true }).click();
-    await expect(editor).toBeHidden();
-    await page
-      .getByRole("button", { name: "入力画面へ戻る", exact: true })
-      .click();
     await expect(editor.getByLabel("題名", { exact: true })).toHaveValue(
       "担当者が作成した問票",
     );
+    await expect(
+      editor.getByRole("button", { name: "下書きを保存", exact: true }),
+    ).toBeDisabled();
     const [replayed] = await Promise.all([
       page.waitForResponse(
         (r) =>
           r.url().endsWith("/api/surveys") && r.request().method() === "POST",
       ),
-      editor
+      page
         .getByRole("button", { name: "同じ要求で結果を確認", exact: true })
         .click(),
     ]);
@@ -163,7 +162,6 @@ When(
     surveyId = result.revision.survey_id;
     revisionId = result.revision.id;
     await page.unroute("**/api/surveys");
-    await expect(editor).toBeHidden();
     await expect(page).toHaveURL(
       `${APP_URL}/store/surveys/${surveyId}/revisions/${revisionId}`,
     );

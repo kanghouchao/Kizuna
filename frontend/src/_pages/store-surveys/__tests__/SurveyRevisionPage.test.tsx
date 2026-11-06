@@ -252,69 +252,21 @@ test('受付409で入力を保持し、終了した版へ新しい要求を自�
   expect(api.write).toHaveBeenCalledTimes(1);
 });
 
-test('改版元404でも親アンケートが存在すればフォームを保持する', async () => {
+test('下書きの版は差替画面へ、最新版は改訂画面へリンクする', async () => {
   fixtures();
   permission('SURVEY_VIEW', 'SURVEY_MANAGE');
-  api.write.mockRejectedValue({ response: { status: 404 } });
+  api.revision.mockResolvedValue({ ...revision, status: 'DRAFT', version: 0 });
+  api.survey.mockResolvedValue({ ...survey, open_revision_id: undefined });
   render(<SurveyRevisionPage />);
   await shown();
-  fireEvent.click(screen.getByRole('button', { name: '新しい版を作成' }));
-  fireEvent.change(await screen.findByLabelText('題名'), { target: { value: '保持する改版案' } });
-  fireEvent.click(screen.getByRole('button', { name: '下書きを保存' }));
-  await screen.findByText(/対象が見つかりません。入力は保持/);
-  api.revision.mockRejectedValue({ response: { status: 404 } });
-  fireEvent.click(screen.getByRole('button', { name: '最新状態を確認' }));
-  await waitFor(() => expect(api.survey).toHaveBeenCalledWith('10'));
-  expect(screen.getByLabelText('題名')).toHaveValue('保持する改版案');
-  expect(screen.getByRole('button', { name: '下書きを保存' })).toBeDisabled();
-});
-
-test('改版競合では最新系列を確認し入力を保って明示的に新基準を選び、新しい版へ移る', async () => {
-  fixtures();
-  permission('SURVEY_VIEW', 'SURVEY_MANAGE');
-  api.write.mockRejectedValueOnce({ response: { status: 409 } });
-  render(<SurveyRevisionPage />);
-  await shown();
-  fireEvent.click(screen.getByRole('button', { name: '新しい版を作成' }));
-  fireEvent.change(await screen.findByLabelText('題名'), { target: { value: '自分の改版案' } });
-  fireEvent.click(screen.getByRole('button', { name: '下書きを保存' }));
-  await screen.findByText(/状態が更新されています/);
-  api.survey.mockResolvedValue({ ...survey, latest_revision_id: '21', latest_revision_number: 2 });
-  api.revision.mockImplementation(async (_sid, rid) => ({
-    ...revision,
-    id: rid,
-    revision_number: rid === '21' ? 2 : 1,
-  }));
-  fireEvent.click(screen.getByRole('button', { name: '最新状態を確認' }));
-  expect(await screen.findByText(/最新版は版 2/)).toBeVisible();
-  expect(screen.getByLabelText('題名')).toHaveValue('自分の改版案');
-  expect(screen.getByRole('button', { name: '下書きを保存' })).toBeDisabled();
-  fireEvent.click(screen.getByRole('button', { name: 'この最新版を改版元にする' }));
-  api.write.mockResolvedValueOnce(
-    written('DRAFT_CREATED', { revision: { ...revision, id: '22', status: 'DRAFT' } })
+  expect(screen.getByRole('link', { name: '下書きを編集' })).toHaveAttribute(
+    'href',
+    '/store/surveys/10/revisions/20/edit'
   );
-  fireEvent.click(screen.getByRole('button', { name: '下書きを保存' }));
-  await waitFor(() => expect(api.write).toHaveBeenCalledTimes(2));
-  expect(api.write.mock.calls[1][0]).toMatchObject({
-    input: { based_on_revision_id: '21', title: '自分の改版案' },
-  });
-  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/surveys/10/revisions/22'));
-});
-
-test('改版元が不在でも系列確認の通信障害で入力を消さない', async () => {
-  fixtures();
-  permission('SURVEY_VIEW', 'SURVEY_MANAGE');
-  api.write.mockRejectedValue({ response: { status: 404 } });
-  render(<SurveyRevisionPage />);
-  await shown();
-  fireEvent.click(screen.getByRole('button', { name: '新しい版を作成' }));
-  fireEvent.change(await screen.findByLabelText('題名'), { target: { value: '消さない改版案' } });
-  fireEvent.click(screen.getByRole('button', { name: '下書きを保存' }));
-  await screen.findByText(/対象が見つかりません。入力は保持/);
-  api.survey.mockRejectedValue(new Error('network'));
-  fireEvent.click(screen.getByRole('button', { name: '最新状態を確認' }));
-  expect(await screen.findByText(/最新状態を確認できません。入力は保持しています/)).toBeVisible();
-  expect(screen.getByLabelText('題名')).toHaveValue('消さない改版案');
+  expect(screen.getByRole('link', { name: '新しい版を作成' })).toHaveAttribute(
+    'href',
+    '/store/surveys/10/revisions/new?from=20'
+  );
 });
 
 test('版の404は再試行を出さず一覧へのリンクを出す', async () => {

@@ -131,3 +131,11 @@ export function SurveyChoiceField<T extends FieldValues>({
     />
   );
 }
+
+/** 改行を正規化し、空白だけ・上限超過・NUL を含む入力を拒む。 */
+export const clean = (value: string, max: number, trim = true) => {
+  const text = value.replace(/\r\n?/g, '\n');
+  return (
+    text.trim().length > 0 && (trim ? text.trim() : text).length <= max && !text.includes('\0')
+  );
+};

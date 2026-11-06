@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { SurveySearch, surveyApi } from '@/entities/survey';
 import { useListPage } from '@/shared/lib';
 import {
@@ -15,39 +16,34 @@ import {
   TableRow,
 } from '@/shared/ui';
 import { ListPage } from '@/widgets/list-page';
-import { revisionHref, surveyListHref } from '../lib/surveyHref';
+import { revisionHref, surveyCreateHref, writtenHref } from '../lib/surveyHref';
+import { useSurveyWrite } from '../lib/useSurveyWrite';
 import { SurveyCapabilities, SurveyDenied, SurveyGate } from './SurveyGate';
 import { Choice, revisionLabels, useGuardedRead } from './surveyUi';
-import { useSurveyWorkspace } from './useSurveyWorkspace';
+import { SurveyWriteFeedback } from './SurveyWriteFeedback';
 
 export function SurveysPage() {
   return <SurveyGate target="catalogue">{caps => <Catalogue {...caps} />}</SurveyGate>;
 }
 
 function Catalogue({ canManage }: SurveyCapabilities) {
-  const workspace = useSurveyWorkspace(surveyListHref);
-  const guard = useGuardedRead(workspace.deny);
+  const router = useRouter();
+  const write = useSurveyWrite(result => router.push(writtenHref(result)));
+  const guard = useGuardedRead(write.deny);
   const [search, setSearch] = useState<SurveySearch>({});
   const list = useListPage(
     (page, criteria: SurveySearch) => guard(() => surveyApi.list(page, criteria)),
     {}
   );
-  if (workspace.denied) return <SurveyDenied message={workspace.denied} />;
+  if (write.denied) return <SurveyDenied message={write.denied} />;
   return (
     <div className="space-y-6">
-      {workspace.status}
+      <SurveyWriteFeedback write={write} busy={write.busy} onRefresh={write.settle} />
       <ListPage
         title="アンケート管理"
         description="設問を版管理し、スタッフが既に受け取った回答を記録します。保持期限は未設定です。"
         actions={
-          canManage && (
-            <Button
-              disabled={workspace.disabled}
-              onClick={() => workspace.edit({ kind: 'CREATE' })}
-            >
-              アンケートを作成
-            </Button>
-          )
+          canManage && <Button render={<Link href={surveyCreateHref} />}>アンケートを作成</Button>
         }
         state={list}
         search={{
@@ -124,7 +120,6 @@ function Catalogue({ canManage }: SurveyCapabilities) {
           </TableBody>
         </Table>
       </ListPage>
-      {workspace.dialog}
     </div>
   );
 }
