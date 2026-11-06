@@ -1,7 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { SurveyRevisionPage } from '../ui/SurveyRevisionPage';
 import {
-  answer,
   api,
   fixtures,
   permission,
@@ -79,7 +78,7 @@ test('URL の版を直接表示し、一覧・ほかの版・回答の詳細へ�
     '/store/surveys/responses/30'
   );
   expect(screen.getByText(/回答者数や回答率ではありません/)).toBeVisible();
-  expect(screen.queryByRole('button', { name: '回答を受付' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: '回答を受付' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '受付を終了' })).not.toBeInTheDocument();
 });
 
@@ -149,7 +148,7 @@ test('受付の開始は理由だけを入力する短いダイアログで確�
   api.write.mockResolvedValue(written('OPENED', { revision }));
   render(<SurveyRevisionPage />);
   await shown();
-  expect(screen.queryByRole('button', { name: '回答を受付' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: '回答を受付' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '受付を開始' }));
   const dialog = await screen.findByRole('dialog', { name: '受付を開始' });
   fireEvent.click(within(dialog).getByRole('button', { name: '確定する' }));
@@ -195,61 +194,16 @@ test('受付の終了も理由を付けて確定する', async () => {
   });
 });
 
-test('受付権限は設問管理を含まず、回答を記録したらその回答の詳細へ移る', async () => {
+test('受付権限は設問管理を含まず、回答の受付は受付画面へのリンクで移る', async () => {
   fixtures();
   permission('SURVEY_VIEW', 'SURVEY_RECORD');
-  api.revision.mockResolvedValue({
-    ...revision,
-    questions: [
-      ...revision.questions,
-      {
-        question_key: 'optional',
-        type: 'TEXT',
-        prompt: '任意の設問',
-        required: false,
-        options: [],
-      },
-    ],
-  });
-  api.write.mockResolvedValue(written('RECEIVED', { answer }));
   render(<SurveyRevisionPage />);
   await shown();
   expect(screen.queryByRole('button', { name: '受付を終了' })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '回答を受付' }));
-  fireEvent.change(await screen.findByLabelText('担当者が入力した質問（必須）'), {
-    target: { value: '  入力した原文  ' },
-  });
-  fireEvent.change(screen.getByLabelText('受領日時'), { target: { value: '2026-01-01T09:00' } });
-  fireEvent.click(screen.getByRole('button', { name: '回答を記録' }));
-  await waitFor(() => expect(api.write).toHaveBeenCalledTimes(1));
-  expect(api.write.mock.calls[0][0]).toMatchObject({
-    kind: 'RECEIVE',
-    sid: '10',
-    rid: '20',
-    input: { revision_version: 1, answers: [{ question_key: 'q1', text: '  入力した原文  ' }] },
-  });
-  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/surveys/responses/30'));
-});
-
-test('受付409で入力を保持し、終了した版へ新しい要求を自動送信しない', async () => {
-  fixtures();
-  permission('SURVEY_VIEW', 'SURVEY_RECORD');
-  api.write.mockRejectedValue({ response: { status: 409 } });
-  render(<SurveyRevisionPage />);
-  await shown();
-  fireEvent.click(screen.getByRole('button', { name: '回答を受付' }));
-  fireEvent.change(await screen.findByLabelText('担当者が入力した質問（必須）'), {
-    target: { value: '保持する回答' },
-  });
-  fireEvent.change(screen.getByLabelText('受領日時'), { target: { value: '2026-01-01T09:00' } });
-  fireEvent.click(screen.getByRole('button', { name: '回答を記録' }));
-  await screen.findByText(/状態が更新されています/);
-  api.revision.mockResolvedValue({ ...revision, status: 'CLOSED', version: 2 });
-  fireEvent.click(screen.getByRole('button', { name: '最新状態を確認' }));
-  await screen.findByText(/現在の状態ではこの操作を実行できません/);
-  expect(screen.getByLabelText('担当者が入力した質問（必須）')).toHaveValue('保持する回答');
-  expect(screen.getByRole('button', { name: '回答を記録' })).toBeDisabled();
-  expect(api.write).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole('link', { name: '回答を受付' })).toHaveAttribute(
+    'href',
+    '/store/surveys/10/revisions/20/responses/new'
+  );
 });
 
 test('下書きの版は差替画面へ、最新版は改訂画面へリンクする', async () => {
@@ -279,53 +233,4 @@ test('版の404は再試行を出さず一覧へのリンクを出す', async ()
     'href',
     '/store/surveys'
   );
-});
-
-test('契約で許可された設問キーをフォーム内部のプロパティと混同しない', async () => {
-  fixtures();
-  permission('SURVEY_VIEW', 'SURVEY_RECORD');
-  api.revision.mockResolvedValue({
-    ...revision,
-    questions: [{ ...revision.questions[0], question_key: '__proto__' }],
-  });
-  // 送信内容だけを確かめる。業務拒否で操作を確定させ、後の用例へ結果不明を残さない。
-  api.write.mockRejectedValue({ response: { status: 422 } });
-  render(<SurveyRevisionPage />);
-  await shown();
-  fireEvent.click(screen.getByRole('button', { name: '回答を受付' }));
-  fireEvent.change(await screen.findByLabelText('担当者が入力した質問（必須）'), {
-    target: { value: '記録する回答' },
-  });
-  fireEvent.change(screen.getByLabelText('受領日時'), { target: { value: '2026-01-01T09:00' } });
-  fireEvent.click(screen.getByRole('button', { name: '回答を記録' }));
-  await waitFor(() => expect(api.write).toHaveBeenCalledTimes(1));
-  expect(api.write.mock.calls[0][0]).toMatchObject({
-    input: { answers: [{ question_key: '__proto__', text: '記録する回答' }] },
-  });
-});
-
-test('数字の選択肢キーでも設問版に記録した順序で表示する', async () => {
-  fixtures();
-  permission('SURVEY_VIEW', 'SURVEY_RECORD');
-  api.revision.mockResolvedValue({
-    ...revision,
-    questions: [
-      {
-        question_key: 'choice',
-        type: 'SINGLE_CHOICE',
-        prompt: '順序付き選択',
-        required: true,
-        options: [
-          { option_key: '2', label: '先に表示' },
-          { option_key: '1', label: '後に表示' },
-        ],
-      },
-    ],
-  });
-  render(<SurveyRevisionPage />);
-  await shown();
-  fireEvent.click(screen.getByRole('button', { name: '回答を受付' }));
-  fireEvent.click(await screen.findByLabelText('順序付き選択（必須）'));
-  const options = await screen.findAllByRole('option');
-  expect(options.map(option => option.textContent)).toEqual(['先に表示', '後に表示']);
 });

@@ -17,6 +17,7 @@ import {
 } from '@/shared/ui';
 import {
   answerHref,
+  receiveHref,
   reviseHref,
   revisionEditHref,
   revisionHref,
@@ -192,12 +193,7 @@ function AnswerList({ revision, sid, rid, ...props }: DetailProps & { revision: 
       actions={
         props.canRecord &&
         revision.status === 'OPEN' && (
-          <Button
-            disabled={props.disabled}
-            onClick={() => props.edit({ kind: 'RECEIVE', revision })}
-          >
-            回答を受付
-          </Button>
+          <Button render={<Link href={receiveHref(sid, rid)} />}>回答を受付</Button>
         )
       }
       state={list}

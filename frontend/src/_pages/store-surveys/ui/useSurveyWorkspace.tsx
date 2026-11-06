@@ -5,14 +5,10 @@ import { Button } from '@/shared/ui';
 import { surveyListHref, writtenHref } from '../lib/surveyHref';
 import { useSurveyRefresh } from '../lib/useSurveyRefresh';
 import { useSurveyWrite } from '../lib/useSurveyWrite';
-import { SurveyEditor, Editor } from './SurveyEditor';
 import { ReasonTask, SurveyReasonDialog } from './SurveyReasonDialog';
 import { SurveyWriteFeedback } from './SurveyWriteFeedback';
 
-export type SurveyTask = Editor | ReasonTask;
-
-const isReasonTask = (task: SurveyTask): task is ReasonTask =>
-  task.kind === 'OPEN' || task.kind === 'CLOSE' || task.kind === 'WITHDRAW';
+export type SurveyTask = ReasonTask;
 
 /**
  * 一覧・版・回答の画面からダイアログで行う書き込みの置き場。成功したら結果の版・回答の画面へ移り、
@@ -42,15 +38,7 @@ export function useSurveyWorkspace(here: string) {
     refresher.refresh(async () => {
       let updated: SurveyTask;
       if ('answer' in current) {
-        const answer = await surveyApi.answer(current.answer.id);
-        updated =
-          current.kind === 'CORRECT'
-            ? {
-                ...current,
-                answer,
-                revision: await surveyApi.revision(answer.survey_id, answer.revision_id),
-              }
-            : { ...current, answer };
+        updated = { ...current, answer: await surveyApi.answer(current.answer.id) };
       } else {
         updated = {
           ...current,
@@ -69,11 +57,9 @@ export function useSurveyWorkspace(here: string) {
   };
   const allowed =
     !task ||
-    (task.kind === 'CORRECT' && !task.answer.superseded_by_id) ||
     (task.kind === 'WITHDRAW' && task.answer.status === 'ACTIVE') ||
     (task.kind === 'OPEN' && task.revision.status === 'DRAFT') ||
-    (task.kind === 'CLOSE' && task.revision.status !== 'CLOSED') ||
-    (task.kind === 'RECEIVE' && task.revision.status === 'OPEN');
+    (task.kind === 'CLOSE' && task.revision.status !== 'CLOSED');
   const feedback = (
     <SurveyWriteFeedback
       write={write}
@@ -106,28 +92,16 @@ export function useSurveyWorkspace(here: string) {
         )}
       </>
     ),
-    dialog:
-      task &&
-      (isReasonTask(task) ? (
-        <SurveyReasonDialog
-          key={taskKey}
-          task={task}
-          open={open}
-          onOpenChange={setOpen}
-          disabled={dialogDisabled}
-          onSubmit={write.submit}
-          feedback={feedback}
-        />
-      ) : (
-        <SurveyEditor
-          key={taskKey}
-          editor={task}
-          open={open}
-          onOpenChange={setOpen}
-          disabled={dialogDisabled}
-          onSubmit={write.submit}
-          feedback={feedback}
-        />
-      )),
+    dialog: task && (
+      <SurveyReasonDialog
+        key={taskKey}
+        task={task}
+        open={open}
+        onOpenChange={setOpen}
+        disabled={dialogDisabled}
+        onSubmit={write.submit}
+        feedback={feedback}
+      />
+    ),
   };
 }

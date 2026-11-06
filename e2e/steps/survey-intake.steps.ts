@@ -179,18 +179,21 @@ When(
     await page.keyboard.press("Enter");
     await expect(opening).toBeHidden();
     await expect(
-      page.getByRole("button", { name: "回答を受付", exact: true }),
+      page.getByRole("link", { name: "回答を受付", exact: true }),
     ).toBeVisible();
   },
 );
 When(
   "回答を人工受付し設問版を終了する",
   async ({ page, request, $testInfo }) => {
-    await page.getByRole("button", { name: "回答を受付", exact: true }).click();
-    const intake = page.getByRole("dialog", {
-      name: "回答を受付",
-      exact: true,
-    });
+    await page.getByRole("link", { name: "回答を受付", exact: true }).click();
+    await expect(page).toHaveURL(
+      `${APP_URL}/store/surveys/${surveyId}/revisions/${revisionId}/responses/new`,
+    );
+    const intake = page.getByRole("main");
+    await expect(
+      intake.getByRole("heading", { level: 1, name: "回答を受付" }),
+    ).toBeVisible();
     await intake
       .getByLabel(`${questionPrompt}（必須）`, { exact: true })
       .fill("  紙面に書かれた原回答\n二行目を保持する  ");
@@ -201,6 +204,20 @@ When(
     await intake
       .getByLabel("受領日時", { exact: true })
       .fill("2026-01-01T09:00");
+    for (const theme of ["light", "dark"]) {
+      await page.evaluate(
+        (dark) => document.documentElement.classList.toggle("dark", dark),
+        theme === "dark",
+      );
+      await page.screenshot({
+        path: $testInfo.outputPath(`survey-intake-${theme}-desktop.png`),
+        fullPage: true,
+        animations: "disabled",
+      });
+    }
+    await page.evaluate(() =>
+      document.documentElement.classList.remove("dark"),
+    );
     const [created] = await Promise.all([
       page.waitForResponse(
         (r) =>
@@ -230,7 +247,7 @@ When(
     await page.getByRole("button", { name: "受付を終了", exact: true }).click();
     await confirmWithReason(page, "受付を終了", "今回の受付を終了");
     await expect(
-      page.getByRole("button", { name: "回答を受付", exact: true }),
+      page.getByRole("link", { name: "回答を受付", exact: true }),
     ).toHaveCount(0);
     await page.setViewportSize({ width: 390, height: 844 });
     expect(
@@ -280,23 +297,28 @@ Then(
     await expect(page).toHaveURL(
       `${APP_URL}/store/surveys/responses/${answerId}`,
     );
-    await page.getByRole("button", { name: "回答を訂正", exact: true }).click();
-    const correction = page.getByRole("dialog", {
-      name: "回答を訂正",
-      exact: true,
-    });
+    await page.getByRole("link", { name: "回答を訂正", exact: true }).click();
+    await expect(page).toHaveURL(
+      `${APP_URL}/store/surveys/responses/${answerId}/correct`,
+    );
+    const correction = page.getByRole("main");
+    await expect(
+      correction.getByRole("heading", { level: 1, name: "回答を訂正" }),
+    ).toBeVisible();
     await correction
       .getByLabel(`${questionPrompt}（必須）`, { exact: true })
       .fill("訂正した回答");
     await correction.getByLabel("操作理由").fill("紙面の転記誤りを修正");
     await page.setViewportSize({ width: 390, height: 844 });
     expect(
-      await correction.evaluate(
-        (element) => element.scrollWidth <= element.clientWidth,
+      await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth,
       ),
     ).toBeTruthy();
     await page.screenshot({
-      path: $testInfo.outputPath("survey-overlay-mobile.png"),
+      path: $testInfo.outputPath("survey-correction-mobile.png"),
       fullPage: true,
       animations: "disabled",
     });
