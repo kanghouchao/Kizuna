@@ -165,7 +165,11 @@ test('受付の開始は理由だけを入力する短いダイアログで確�
     rid: '20',
     input: { version: 0, reason: '設問を確認' },
   });
-  expect(await screen.findByText('受付中')).toBeVisible();
+  // 状態は版一覧のセルにも出るので、読み直した見出しの直下のバッジで確かめる
+  await waitFor(() => {
+    const heading = screen.getByRole('heading', { level: 1, name: '店舗の問票' });
+    expect(within(heading.parentElement!).getByText('受付中')).toBeVisible();
+  });
   expect(screen.queryByRole('button', { name: '受付を開始' })).not.toBeInTheDocument();
   expect(api.revision).toHaveBeenCalledTimes(2);
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
