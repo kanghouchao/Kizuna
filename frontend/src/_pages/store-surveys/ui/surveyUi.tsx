@@ -108,8 +108,3 @@ export function Choice({
     </div>
   );
 }
-export type View =
-  | { kind: 'catalogue' }
-  | { kind: 'survey'; sid: string }
-  | { kind: 'revision'; sid: string; rid: string }
-  | { kind: 'answer'; aid: string };

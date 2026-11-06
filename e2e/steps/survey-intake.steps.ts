@@ -32,6 +32,13 @@ async function confirm(page: Page) {
   await dialog.getByRole("button", { name: "確定する", exact: true }).click();
   await expect(dialog).toBeHidden();
 }
+/** 受付の開始・終了と回答の取り下げは、操作理由だけを入力する短いダイアログで確定する。 */
+async function confirmWithReason(page: Page, name: string, reason: string) {
+  const dialog = page.getByRole("dialog", { name, exact: true });
+  await dialog.getByLabel("操作理由").fill(reason);
+  await dialog.getByRole("button", { name: "確定する", exact: true }).click();
+  await expect(dialog).toBeHidden();
+}
 Given(
   "既定権限を持たないアンケート担当者を用意する",
   async ({ page, request }) => {
@@ -170,6 +177,9 @@ When(
     revisionId = result.revision.id;
     await page.unroute("**/api/surveys");
     await expect(editor).toBeHidden();
+    await expect(page).toHaveURL(
+      `${APP_URL}/store/surveys/${surveyId}/revisions/${revisionId}`,
+    );
     await page.getByRole("button", { name: "受付を開始", exact: true }).click();
     const opening = page.getByRole("dialog", {
       name: "受付を開始",
@@ -177,11 +187,12 @@ When(
     });
     await opening.getByLabel("操作理由").fill("入力した設問を確認");
     await opening.getByLabel("操作理由").press("Tab");
+    await page.keyboard.press("Tab");
     await expect(
-      opening.getByRole("button", { name: "確認へ", exact: true }),
+      opening.getByRole("button", { name: "確定する", exact: true }),
     ).toBeFocused();
     await page.keyboard.press("Enter");
-    await confirm(page);
+    await expect(opening).toBeHidden();
     await expect(
       page.getByRole("button", { name: "回答を受付", exact: true }),
     ).toBeVisible();
@@ -210,15 +221,19 @@ When("回答を人工受付し設問版を終了する", async ({ page, request 
   expect(row.intake_source).toBe("STAFF_RECORDED");
   expect(row).not.toHaveProperty("customer_id");
   expect(row).not.toHaveProperty("anonymous");
+  await expect(page).toHaveURL(
+    `${APP_URL}/store/surveys/responses/${answerId}`,
+  );
+  await page.reload();
   await expect(
     page.getByText(/スタッフによる記録。回答者の本人確認は行っていません/),
   ).toBeVisible();
-  await page.getByRole("button", { name: "設問版へ戻る", exact: true }).click();
+  await page.getByRole("link", { name: "設問版へ戻る", exact: true }).click();
+  await expect(page).toHaveURL(
+    `${APP_URL}/store/surveys/${surveyId}/revisions/${revisionId}`,
+  );
   await page.getByRole("button", { name: "受付を終了", exact: true }).click();
-  const closing = page.getByRole("dialog", { name: "受付を終了", exact: true });
-  await closing.getByLabel("操作理由").fill("今回の受付を終了");
-  await closing.getByRole("button", { name: "確認へ", exact: true }).click();
-  await confirm(page);
+  await confirmWithReason(page, "受付を終了", "今回の受付を終了");
   await expect(
     page.getByRole("button", { name: "回答を受付", exact: true }),
   ).toHaveCount(0);
@@ -237,7 +252,16 @@ When("回答を人工受付し設問版を終了する", async ({ page, request 
 Then(
   "終了した版の回答を訂正して原文と記録件数を確認できる",
   async ({ page, request, $testInfo }) => {
-    await page.getByRole("button", { name: "回答・履歴", exact: true }).click();
+    await page.goto(`${APP_URL}/store/surveys`);
+    await page
+      .getByRole("row", { name: /担当者が作成した問票/ })
+      .first()
+      .getByRole("link", { name: "版と回答", exact: true })
+      .click();
+    await page.getByRole("link", { name: "回答・履歴", exact: true }).click();
+    await expect(page).toHaveURL(
+      `${APP_URL}/store/surveys/responses/${answerId}`,
+    );
     await page.getByRole("button", { name: "回答を訂正", exact: true }).click();
     const correction = page.getByRole("dialog", {
       name: "回答を訂正",
@@ -310,18 +334,13 @@ Then(
     expect(list.content).toHaveLength(2);
     for (const summary of list.content)
       expect(summary).not.toHaveProperty("answers");
+    await expect(page).not.toHaveURL(
+      `${APP_URL}/store/surveys/responses/${answerId}`,
+    );
     await page
       .getByRole("button", { name: "回答を取り下げ", exact: true })
       .click();
-    const withdrawal = page.getByRole("dialog", {
-      name: "回答を取り下げ",
-      exact: true,
-    });
-    await withdrawal.getByLabel("操作理由").fill("回答の取り下げ");
-    await withdrawal
-      .getByRole("button", { name: "確認へ", exact: true })
-      .click();
-    await confirm(page);
+    await confirmWithReason(page, "回答を取り下げ", "回答の取り下げ");
     await expect(page.getByText(/取り下げ済み ／ 設問版/)).toBeVisible();
     expect(
       (
