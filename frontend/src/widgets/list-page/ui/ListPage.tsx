@@ -24,6 +24,8 @@ export interface ListPageState {
 
 interface ListPageProps {
   title: string;
+  /** 画面の見出しなら 1。詳細画面の中に置く一覧は h1 の下の章なので 2。 */
+  level?: 1 | 2;
   description?: string;
   actions?: ReactNode;
   search?: ListPageSearch;
@@ -44,6 +46,7 @@ interface ListPageProps {
  */
 export function ListPage({
   title,
+  level = 1,
   description,
   actions,
   search,
@@ -78,7 +81,11 @@ export function ListPage({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">{title}</h1>
+          {level === 1 ? (
+            <h1 className="text-2xl font-bold text-foreground">{title}</h1>
+          ) : (
+            <h2 className="text-lg font-semibold text-foreground">{title}</h2>
+          )}
           {description && <p className="text-sm text-muted-foreground mt-1">{description}</p>}
         </div>
         {actions && <div className="flex items-center gap-3">{actions}</div>}

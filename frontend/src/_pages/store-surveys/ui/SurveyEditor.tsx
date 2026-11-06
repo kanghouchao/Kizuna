@@ -29,20 +29,16 @@ import { viaLabels } from './surveyUi';
 import { SurveyTextField, SurveyChoiceField } from './SurveyFields';
 export type Editor =
   | { kind: 'CREATE' }
-  | { [K in 'REVISE' | 'REPLACE' | 'OPEN' | 'CLOSE' | 'RECEIVE']: { kind: K; revision: Revision } }[
-      'REVISE' | 'REPLACE' | 'OPEN' | 'CLOSE' | 'RECEIVE']
-  | { kind: 'CORRECT'; answer: Answer; revision: Revision }
-  | { kind: 'WITHDRAW'; answer: Answer };
-export const editorTitle = (editor: Editor) =>
+  | { [K in 'REVISE' | 'REPLACE' | 'RECEIVE']: { kind: K; revision: Revision } }[
+      'REVISE' | 'REPLACE' | 'RECEIVE']
+  | { kind: 'CORRECT'; answer: Answer; revision: Revision };
+const editorTitle = (editor: Editor) =>
   ({
     CREATE: 'アンケートを作成',
     REVISE: '新しい版を作成',
     REPLACE: '下書きを編集',
-    OPEN: '受付を開始',
-    CLOSE: '受付を終了',
     RECEIVE: '回答を受付',
     CORRECT: '回答を訂正',
-    WITHDRAW: '回答を取り下げ',
   })[editor.kind];
 interface AnswerFormValues {
   reason: string;
@@ -50,7 +46,7 @@ interface AnswerFormValues {
   received_via: ReceivedVia;
   values: { value: string }[];
 }
-const clean = (value: string, max: number, trim = true) => {
+export const clean = (value: string, max: number, trim = true) => {
   const text = value.replace(/\r\n?/g, '\n');
   return (
     text.trim().length > 0 && (trim ? text.trim() : text).length <= max && !text.includes('\0')
@@ -347,13 +343,12 @@ function AnswerEditor({
   disabled,
   onSubmit,
 }: {
-  editor: Exclude<Editor, { kind: 'CREATE' | 'REVISE' | 'REPLACE' }>;
+  editor: Extract<Editor, { kind: 'RECEIVE' | 'CORRECT' }>;
   draft?: AnswerFormValues;
   onDraft: (value: AnswerFormValues) => void;
   disabled: boolean;
   onSubmit: (command: SurveyCommand) => Promise<void>;
 }) {
-  const intake = editor.kind === 'RECEIVE' || editor.kind === 'CORRECT';
   const source = editor.kind === 'CORRECT' ? editor.answer : undefined;
   const received = source ? new Date(source.received_at) : null;
   const local = received
@@ -364,12 +359,10 @@ function AnswerEditor({
       reason: '',
       received_at: local,
       received_via: source?.received_via ?? ('PAPER' as ReceivedVia),
-      values: intake
-        ? editor.revision.questions.map(q => {
-            const original = source?.answers.find(a => a.question_key === q.question_key);
-            return { value: original?.text ?? original?.option_key ?? '' };
-          })
-        : [],
+      values: editor.revision.questions.map(q => {
+        const original = source?.answers.find(a => a.question_key === q.question_key);
+        return { value: original?.text ?? original?.option_key ?? '' };
+      }),
     },
   });
   useEffect(() => {
@@ -378,137 +371,118 @@ function AnswerEditor({
       callback: ({ values }) => onDraft(values),
     });
   }, [form, onDraft]);
-  const [confirmation, setConfirmation] = useState<SurveyCommand | null>(null);
+  const [confirmation, setConfirmation] = useState<Extract<
+    SurveyCommand,
+    { kind: 'CORRECT' }
+  > | null>(null);
   const submit = form.handleSubmit(v => {
-    const base = {
-      reason: v.reason,
-      version: 'answer' in editor ? editor.answer.version : editor.revision.version,
+    const at = new Date(v.received_at).getTime();
+    const answers = editor.revision.questions.flatMap((q, index) => {
+      const value = v.values[index]?.value;
+      return value?.trim()
+        ? [
+            {
+              question_key: q.question_key,
+              ...(q.type === 'TEXT' ? { text: value } : { option_key: value }),
+            },
+          ]
+        : [];
+    });
+    if (answers.length === 0) {
+      form.setError(
+        'values.0.value',
+        { message: '少なくとも一つの回答を入力してください' },
+        { shouldFocus: true }
+      );
+      return;
+    }
+    const input = {
+      received_via: v.received_via,
+      received_at:
+        source && v.received_at === local ? source.received_at : new Date(at).toISOString(),
+      answers,
     };
-    let command: SurveyCommand;
-    if (intake) {
-      const at = new Date(v.received_at).getTime();
-      const answers = editor.revision.questions.flatMap((q, index) => {
-        const value = v.values[index]?.value;
-        return value?.trim()
-          ? [
-              {
-                question_key: q.question_key,
-                ...(q.type === 'TEXT' ? { text: value } : { option_key: value }),
-              },
-            ]
-          : [];
-      });
-      if (answers.length === 0) {
-        form.setError(
-          'values.0.value',
-          { message: '少なくとも一つの回答を入力してください' },
-          { shouldFocus: true }
-        );
-        return;
-      }
-      const input = {
-        received_via: v.received_via,
-        received_at:
-          source && v.received_at === local ? source.received_at : new Date(at).toISOString(),
-        answers,
-      };
-      command =
-        editor.kind === 'RECEIVE'
-          ? {
-              kind: 'RECEIVE',
-              sid: editor.revision.survey_id,
-              rid: editor.revision.id,
-              input: { ...input, revision_version: editor.revision.version },
-            }
-          : { kind: 'CORRECT', aid: editor.answer.id, input: { ...input, ...base } };
-    } else if (editor.kind === 'WITHDRAW')
-      command = { kind: 'WITHDRAW', aid: editor.answer.id, input: base };
-    else
-      command = {
-        kind: editor.kind as 'OPEN' | 'CLOSE',
+    if (editor.kind === 'RECEIVE')
+      void onSubmit({
+        kind: 'RECEIVE',
         sid: editor.revision.survey_id,
         rid: editor.revision.id,
-        input: base,
-      };
-    if (editor.kind === 'RECEIVE') void onSubmit(command);
-    else setConfirmation(command);
+        input: { ...input, revision_version: editor.revision.version },
+      });
+    else
+      setConfirmation({
+        kind: 'CORRECT',
+        aid: editor.answer.id,
+        input: { ...input, reason: v.reason, version: editor.answer.version },
+      });
   });
   return (
     <>
       <Form {...form}>
         <form noValidate onSubmit={submit} className="space-y-6">
           <fieldset disabled={disabled} className="space-y-6">
-            {intake && (
-              <>
-                <p>
-                  スタッフによる記録。回答者の本人確認は行っていません。設問版{' '}
-                  {editor.revision.revision_number} に記録します。
-                </p>
-                {editor.revision.questions.map((q, index) =>
-                  q.type === 'TEXT' ? (
-                    <SurveyTextField
-                      key={q.question_key}
-                      control={form.control}
-                      name={`values.${index}.value`}
-                      label={`${q.prompt}${q.required ? '（必須）' : '（任意）'}`}
-                      multiline
-                      required={q.required}
-                      maxLength={2000}
-                      validate={v =>
-                        (!q.required && !v) ||
-                        clean(v, 2000, false) ||
-                        '回答を1〜2000文字で入力してください'
-                      }
-                    />
-                  ) : (
-                    <SurveyChoiceField
-                      key={q.question_key}
-                      control={form.control}
-                      name={`values.${index}.value`}
-                      label={`${q.prompt}${q.required ? '（必須）' : '（任意）'}`}
-                      required={q.required}
-                      items={q.options.map(o => ({ value: o.option_key, label: o.label }))}
-                      disabled={disabled}
-                      validate={v =>
-                        (!q.required && !v) ||
-                        q.options.some(o => o.option_key === v) ||
-                        '回答の選択肢を選んでください'
-                      }
-                    />
-                  )
-                )}
-                <SurveyChoiceField
-                  control={form.control}
-                  name="received_via"
-                  label="取得経路"
-                  required
-                  items={Object.entries(viaLabels).map(([value, label]) => ({ value, label }))}
-                  disabled={disabled}
-                  validate={v => Object.hasOwn(viaLabels, v) || '取得経路を選択してください'}
-                />
+            <p>
+              スタッフによる記録。回答者の本人確認は行っていません。設問版{' '}
+              {editor.revision.revision_number} に記録します。
+            </p>
+            {editor.revision.questions.map((q, index) =>
+              q.type === 'TEXT' ? (
                 <SurveyTextField
+                  key={q.question_key}
                   control={form.control}
-                  name="received_at"
-                  label="受領日時"
-                  required
-                  type="datetime-local"
+                  name={`values.${index}.value`}
+                  label={`${q.prompt}${q.required ? '（必須）' : '（任意）'}`}
+                  multiline
+                  required={q.required}
+                  maxLength={2000}
                   validate={v =>
-                    validReceivedTime(new Date(v).getTime()) ||
-                    '受領日時は2000年以降、現在までで指定してください'
+                    (!q.required && !v) ||
+                    clean(v, 2000, false) ||
+                    '回答を1〜2000文字で入力してください'
                   }
                 />
-                <p className="text-sm text-muted-foreground">
-                  受領日時はこの端末の時刻で入力します。
-                </p>
-              </>
+              ) : (
+                <SurveyChoiceField
+                  key={q.question_key}
+                  control={form.control}
+                  name={`values.${index}.value`}
+                  label={`${q.prompt}${q.required ? '（必須）' : '（任意）'}`}
+                  required={q.required}
+                  items={q.options.map(o => ({ value: o.option_key, label: o.label }))}
+                  disabled={disabled}
+                  validate={v =>
+                    (!q.required && !v) ||
+                    q.options.some(o => o.option_key === v) ||
+                    '回答の選択肢を選んでください'
+                  }
+                />
+              )
             )}
+            <SurveyChoiceField
+              control={form.control}
+              name="received_via"
+              label="取得経路"
+              required
+              items={Object.entries(viaLabels).map(([value, label]) => ({ value, label }))}
+              disabled={disabled}
+              validate={v => Object.hasOwn(viaLabels, v) || '取得経路を選択してください'}
+            />
+            <SurveyTextField
+              control={form.control}
+              name="received_at"
+              label="受領日時"
+              required
+              type="datetime-local"
+              validate={v =>
+                validReceivedTime(new Date(v).getTime()) ||
+                '受領日時は2000年以降、現在までで指定してください'
+              }
+            />
+            <p className="text-sm text-muted-foreground">受領日時はこの端末の時刻で入力します。</p>
             {editor.kind === 'CORRECT' && (
               <p>旧回答を取り下げ、同じ設問版に新しい回答を記録します。旧原文は残ります。</p>
             )}
-            {editor.kind === 'WITHDRAW' && (
-              <p>取り下げ後は復帰できません。原文と履歴は残り、個人情報の消去ではありません。</p>
-            )}
-            {editor.kind !== 'RECEIVE' && (
+            {editor.kind === 'CORRECT' && (
               <SurveyTextField
                 control={form.control}
                 name="reason"
@@ -533,11 +507,7 @@ function AnswerEditor({
       <ConfirmDialog
         open={confirmation !== null && !disabled}
         title={editorTitle(editor)}
-        description={
-          editor.kind === 'CORRECT'
-            ? '旧回答を取り下げ、同じ版へ訂正を記録します。原文は変更しません。'
-            : '理由と対象の版・回答を確認して確定してください。'
-        }
+        description="旧回答を取り下げ、同じ版へ訂正を記録します。原文は変更しません。"
         confirmLabel="確定する"
         onClose={() => setConfirmation(null)}
         onConfirm={() => {

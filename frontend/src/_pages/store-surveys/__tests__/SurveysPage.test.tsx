@@ -1,16 +1,20 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { SurveysPage } from '../ui/SurveysPage';
-import { surveyApi, Revision, Answer, Survey } from '@/entities/survey';
 import { useMe } from '@/entities/user';
-import type { PermissionCode } from '@/entities/user';
-import { storeSessionToken } from '@/shared/api';
-import { setCurrentStore } from '@/shared/lib';
-let mockStoreId = '1';
+import {
+  api,
+  fixtures,
+  permission,
+  resetSurveyTest,
+  revision,
+  written,
+} from '../testing/survey-test-support';
+
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
   useStoreContext: () => ({
     stores: [{ id: 1, name: 'テスト店舗' }],
-    currentStoreId: mockStoreId,
+    currentStoreId: '1',
     currentStore: { id: 1, name: 'テスト店舗' },
     loadFailed: false,
     reload: jest.fn(),
@@ -35,90 +39,12 @@ jest.mock('@/entities/user/model/MeContext', () => ({
   useMe: jest.fn(),
 }));
 jest.mock('@/shared/notify', () => ({ notify: { success: jest.fn(), error: jest.fn() } }));
-const api = jest.mocked(surveyApi);
-const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
-const permission = (...permissions: PermissionCode[]) =>
-  mockedUseMe.mockReturnValue({
-    me: {
-      email: 'staff@example.com',
-      user_type: 'STAFF',
-      permissions,
-      line_linked: false,
-      email_verified: false,
-    },
-    isLoading: false,
-    failure: null,
-    reload: jest.fn(),
-    setMe: jest.fn(),
-  });
-const revision: Revision = {
-  id: '20',
-  survey_id: '10',
-  revision_number: 1,
-  title: '店舗の問票',
-  status: 'OPEN',
-  version: 1,
-  created_at: '2026-01-01T00:00:00Z',
-  opened_at: '2026-01-01T00:00:00Z',
-  questions: [
-    {
-      question_key: 'q1',
-      type: 'TEXT',
-      prompt: '担当者が入力した質問',
-      required: true,
-      options: [],
-    },
-  ],
-  created_by: { id: '1', display_name: '担当' },
-  retention_policy: 'NOT_CONFIGURED',
-};
-const survey: Survey = {
-  id: '10',
-  latest_revision_id: '20',
-  latest_revision_number: 1,
-  latest_title: '店舗の問票',
-  latest_status: 'OPEN',
-  open_revision_id: '20',
-  created_at: '2026-01-01T00:00:00Z',
-  created_by: { id: '1', display_name: '担当' },
-  retention_policy: 'NOT_CONFIGURED',
-};
-const answer: Answer = {
-  id: '30',
-  survey_id: '10',
-  revision_id: '20',
-  revision_number: 1,
-  intake_source: 'STAFF_RECORDED',
-  received_via: 'PAPER',
-  received_at: '2026-01-01T00:00:00Z',
-  created_at: '2026-01-01T00:00:00Z',
-  status: 'ACTIVE',
-  version: 0,
-  answers: [{ question_key: 'q1', text: '保護された原回答' }],
-  recorded_by: { id: '1', display_name: '担当' },
-  retention_policy: 'NOT_CONFIGURED',
-};
-function fixtures() {
-  api.list.mockResolvedValue({ rows: [survey], page: 0, pageCount: 1, total: 1 });
-  api.survey.mockResolvedValue(survey);
-  api.revisions.mockResolvedValue({ rows: [revision], page: 0, pageCount: 1, total: 1 });
-  api.revision.mockResolvedValue(revision);
-  api.answers.mockResolvedValue({ rows: [answer], page: 0, pageCount: 1, total: 1 });
-  api.answer.mockResolvedValue(answer);
-  api.counts.mockResolvedValue({
-    survey_id: '10',
-    revision_id: '20',
-    total_records: 1,
-    active_records: 1,
-    withdrawn_records: 0,
-  });
-  api.history.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
-}
-async function showRevision() {
-  fireEvent.click(await screen.findByRole('button', { name: '版と回答' }));
-  fireEvent.click(await screen.findByRole('button', { name: '設問・回答' }));
-  await screen.findByText('この版の記録件数');
-}
+const mockPush = jest.fn();
+jest.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mockPush, replace: jest.fn(), back: jest.fn() }),
+}));
+const mockedUseMe = jest.mocked(useMe);
+
 async function createForm() {
   fireEvent.click(await screen.findByRole('button', { name: 'アンケートを作成' }));
   const dialog = await screen.findByRole('dialog');
@@ -128,15 +54,17 @@ async function createForm() {
   });
   return dialog;
 }
-beforeEach(() => {
-  jest.resetAllMocks();
-  mockStoreId = '1';
-  // 結果不明の操作は、このタブの本人と現在店舗の作用域でだけ起こせる
-  storeSessionToken({ token: 't', expires_at: 1, user_id: 7, refresh_expires_at: 2 });
-  setCurrentStore('1');
-  permission('SURVEY_VIEW');
-  api.list.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
+beforeEach(resetSurveyTest);
+
+test('一覧の行は最新版の詳細へのリンクを持つ', async () => {
+  fixtures();
+  render(<SurveysPage />);
+  expect(await screen.findByRole('link', { name: '版と回答' })).toHaveAttribute(
+    'href',
+    '/store/surveys/10/revisions/20'
+  );
 });
+
 test('閲覧権限なしでは取得せず、閲覧のみでは設問作成を表示しない', async () => {
   permission('SURVEY_MANAGE');
   const view = render(<SurveysPage />);
@@ -178,86 +106,6 @@ test('本人情報の取得に失敗したら再試行だけを出し、一覧�
   expect(api.list).not.toHaveBeenCalled();
 });
 
-test('閲覧のみでは設問版・回答・記録件数を確認し、管理操作を持たない', async () => {
-  fixtures();
-  render(<SurveysPage />);
-  await showRevision();
-  expect(screen.getByText(/回答者数や回答率ではありません/)).toBeVisible();
-  expect(screen.queryByRole('button', { name: '回答を受付' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: '受付を終了' })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '回答・履歴' }));
-  expect(await screen.findByText('保護された原回答')).toBeVisible();
-  expect(screen.queryByRole('button', { name: '回答を訂正' })).not.toBeInTheDocument();
-});
-
-test('版の操作履歴をページ番号で送り、次のページを取り直す', async () => {
-  fixtures();
-  const event = (id: string, reason: string) => ({
-    id,
-    type: 'OPENED' as const,
-    created_at: '2026-01-01T00:00:00Z',
-    actor: { id: '1', display_name: '担当' },
-    after_version: 1,
-    after_status: 'OPEN',
-    reason,
-  });
-  api.history
-    .mockResolvedValueOnce({ rows: [event('h2', '新しい操作')], page: 0, pageCount: 2, total: 2 })
-    .mockResolvedValueOnce({ rows: [event('h1', '古い操作')], page: 1, pageCount: 2, total: 2 });
-  render(<SurveysPage />);
-  await showRevision();
-  const section = screen.getByRole('heading', { name: '操作履歴' }).closest('section')!;
-  expect(await within(section).findByText('新しい操作')).toBeVisible();
-  fireEvent.click(within(section).getAllByRole('button', { name: '次へ' })[0]);
-  expect(await within(section).findByText('古い操作')).toBeVisible();
-  expect(api.history).toHaveBeenLastCalledWith({ sid: '10', rid: '20' }, 1);
-});
-
-test('受付権限は設問管理を含まず、任意回答を省略して原文と取得時刻を送る', async () => {
-  fixtures();
-  permission('SURVEY_VIEW', 'SURVEY_RECORD');
-  api.revision.mockResolvedValue({
-    ...revision,
-    questions: [
-      ...revision.questions,
-      {
-        question_key: 'optional',
-        type: 'TEXT',
-        prompt: '任意の設問',
-        required: false,
-        options: [],
-      },
-    ],
-  });
-  api.write.mockResolvedValue({
-    answer,
-    operation: {
-      id: '50',
-      type: 'RECEIVED',
-      resource_id: '30',
-      committed_version: 0,
-      replayed: false,
-    },
-  });
-  render(<SurveysPage />);
-  await showRevision();
-  expect(screen.queryByRole('button', { name: '受付を終了' })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '回答を受付' }));
-  fireEvent.change(await screen.findByLabelText('担当者が入力した質問（必須）'), {
-    target: { value: '  入力した原文  ' },
-  });
-  fireEvent.change(screen.getByLabelText('受領日時'), { target: { value: '2026-01-01T09:00' } });
-  fireEvent.click(screen.getByRole('button', { name: '回答を記録' }));
-  await waitFor(() => expect(api.write).toHaveBeenCalledTimes(1));
-  expect(api.write.mock.calls[0][0]).toMatchObject({
-    kind: 'RECEIVE',
-    sid: '10',
-    rid: '20',
-    input: { revision_version: 1, answers: [{ question_key: 'q1', text: '  入力した原文  ' }] },
-  });
-  expect(await screen.findByText('保護された原回答')).toBeVisible();
-});
-
 test('作成の結果不明を閉じても入力を保持し、新しい操作を止めて再確認へ導く', async () => {
   fixtures();
   permission('SURVEY_VIEW', 'SURVEY_MANAGE');
@@ -284,96 +132,29 @@ test('作成の結果不明を閉じても入力を保持し、新しい操作�
   fireEvent.click(screen.getByRole('button', { name: '同じ要求で結果を確認' }));
   await waitFor(() => expect(api.write).toHaveBeenCalledTimes(2));
   expect(api.write.mock.calls[0][2]).toEqual({ headers: { 'X-Store-ID': '1' } });
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/surveys/10/revisions/20'));
 });
 
-test('権限拒否で機密の詳細と編集中の内容を破棄する', async () => {
+test('画面を離れても結果不明の操作は残り、開き直した画面から同じ要求で確かめる', async () => {
   fixtures();
-  permission('SURVEY_VIEW', 'SURVEY_RECORD');
-  api.write.mockRejectedValue({ response: { status: 403 } });
+  permission('SURVEY_VIEW', 'SURVEY_MANAGE');
+  api.write
+    .mockRejectedValueOnce(new Error('network'))
+    .mockResolvedValueOnce(written('DRAFT_CREATED', { revision }));
+  const first = render(<SurveysPage />);
+  const dialog = await createForm();
+  fireEvent.click(within(dialog).getByRole('button', { name: '下書きを保存' }));
+  await screen.findByText(/結果が確認できません。同じ要求/);
+  first.unmount();
   render(<SurveysPage />);
-  await showRevision();
-  fireEvent.click(screen.getByRole('button', { name: '回答・履歴' }));
-  await screen.findByText('保護された原回答');
-  fireEvent.click(screen.getByRole('button', { name: '回答を取り下げ' }));
-  fireEvent.change(await screen.findByLabelText('操作理由'), { target: { value: '撤回の理由' } });
-  fireEvent.click(screen.getByRole('button', { name: '確認へ' }));
-  fireEvent.click(await screen.findByRole('button', { name: '確定する' }));
-  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('現在の閲覧・操作権限'));
-  expect(screen.queryByText('保護された原回答')).not.toBeInTheDocument();
-  expect(screen.queryByLabelText('操作理由')).not.toBeInTheDocument();
+  expect(await screen.findByText(/結果が確認できません。同じ要求/)).toBeVisible();
+  expect(screen.getByRole('button', { name: 'アンケートを作成' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: '同じ要求で結果を確認' }));
+  await waitFor(() => expect(api.write).toHaveBeenCalledTimes(2));
+  expect(api.write.mock.calls[1][0]).toEqual(api.write.mock.calls[0][0]);
+  expect(api.write.mock.calls[1][1]).toBe(api.write.mock.calls[0][1]);
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/surveys/10/revisions/20'));
 });
-
-test('受付409で入力を保持し、終了した版へ新しい要求を自動送信しない', async () => {
-  fixtures();
-  permission('SURVEY_VIEW', 'SURVEY_RECORD');
-  api.write.mockRejectedValue({ response: { status: 409 } });
-  render(<SurveysPage />);
-  await showRevision();
-  fireEvent.click(screen.getByRole('button', { name: '回答を受付' }));
-  fireEvent.change(await screen.findByLabelText('担当者が入力した質問（必須）'), {
-    target: { value: '保持する回答' },
-  });
-  fireEvent.change(screen.getByLabelText('受領日時'), { target: { value: '2026-01-01T09:00' } });
-  fireEvent.click(screen.getByRole('button', { name: '回答を記録' }));
-  await screen.findByText(/状態が更新されています/);
-  api.revision.mockResolvedValue({ ...revision, status: 'CLOSED', version: 2 });
-  fireEvent.click(screen.getByRole('button', { name: '最新状態を確認' }));
-  await screen.findByText(/現在の状態ではこの操作を実行できません/);
-  expect(screen.getByLabelText('担当者が入力した質問（必須）')).toHaveValue('保持する回答');
-  expect(screen.getByRole('button', { name: '回答を記録' })).toBeDisabled();
-  expect(api.write).toHaveBeenCalledTimes(1);
-});
-
-test.each([false, true])(
-  '同じ版の訂正は日時変更=%sに従って受領日時を保持する',
-  async changeReceivedAt => {
-    fixtures();
-    const originalReceivedAt = '2026-01-01T12:34:56.123456Z';
-    api.answer.mockResolvedValue({ ...answer, received_at: originalReceivedAt });
-    permission('SURVEY_VIEW', 'SURVEY_RECORD');
-    api.write.mockResolvedValue({
-      answer: { ...answer, id: '31', supersedes_id: '30' },
-      operation: {
-        id: '50',
-        type: 'CORRECTION_RECEIVED',
-        resource_id: '31',
-        committed_version: 0,
-        replayed: false,
-      },
-    });
-    render(<SurveysPage />);
-    await showRevision();
-    fireEvent.click(screen.getByRole('button', { name: '回答・履歴' }));
-    await screen.findByText('保護された原回答');
-    fireEvent.click(screen.getByRole('button', { name: '回答を訂正' }));
-    fireEvent.change(await screen.findByLabelText('担当者が入力した質問（必須）'), {
-      target: { value: '訂正後の回答' },
-    });
-    if (changeReceivedAt) {
-      fireEvent.change(screen.getByLabelText('受領日時'), {
-        target: { value: '2026-01-02T10:15' },
-      });
-    }
-    fireEvent.change(screen.getByLabelText('操作理由'), { target: { value: '転記の修正' } });
-    fireEvent.click(screen.getByRole('button', { name: '確認へ' }));
-    const confirm = await screen.findByRole('alertdialog');
-    expect(within(confirm).getByText(/同じ版へ訂正/)).toBeVisible();
-    fireEvent.click(within(confirm).getByRole('button', { name: '確定する' }));
-    await waitFor(() => expect(api.write).toHaveBeenCalledTimes(1));
-    expect(api.write.mock.calls[0][0]).toMatchObject({
-      kind: 'CORRECT',
-      aid: '30',
-      input: {
-        version: 0,
-        reason: '転記の修正',
-        received_at: changeReceivedAt
-          ? new Date('2026-01-02T10:15').toISOString()
-          : originalReceivedAt,
-        answers: [{ question_key: 'q1', text: '訂正後の回答' }],
-      },
-    });
-  }
-);
 
 test('遅れて失敗した旧一覧要求で新しい検索結果の権限を消さない', async () => {
   fixtures();
@@ -386,63 +167,10 @@ test('遅れて失敗した旧一覧要求で新しい検索結果の権限を�
   render(<SurveysPage />);
   fireEvent.change(screen.getByLabelText('最新版の題名'), { target: { value: '新しい検索' } });
   fireEvent.click(screen.getByRole('button', { name: '検索' }));
-  await screen.findByRole('button', { name: '版と回答' });
+  await screen.findByRole('link', { name: '版と回答' });
   await act(async () => rejectOld({ response: { status: 403 } }));
-  expect(screen.getByRole('button', { name: '版と回答' })).toBeVisible();
+  expect(screen.getByRole('link', { name: '版と回答' })).toBeVisible();
   expect(screen.queryByText(/現在の閲覧・操作権限/)).not.toBeInTheDocument();
-});
-
-test('改版元404でも親アンケートが存在すればフォームを保持する', async () => {
-  fixtures();
-  permission('SURVEY_VIEW', 'SURVEY_MANAGE');
-  api.write.mockRejectedValue({ response: { status: 404 } });
-  render(<SurveysPage />);
-  await showRevision();
-  fireEvent.click(screen.getByRole('button', { name: '新しい版を作成' }));
-  fireEvent.change(await screen.findByLabelText('題名'), { target: { value: '保持する改版案' } });
-  fireEvent.click(screen.getByRole('button', { name: '下書きを保存' }));
-  await screen.findByText(/対象が見つかりません。入力は保持/);
-  api.revision.mockRejectedValue({ response: { status: 404 } });
-  fireEvent.click(screen.getByRole('button', { name: '最新状態を確認' }));
-  await waitFor(() => expect(api.survey).toHaveBeenCalledWith('10'));
-  expect(screen.getByLabelText('題名')).toHaveValue('保持する改版案');
-  expect(screen.getByRole('button', { name: '下書きを保存' })).toBeDisabled();
-});
-
-test('設問管理は版の開始を理由付きで確定し、回答受付を許さない', async () => {
-  fixtures();
-  permission('SURVEY_VIEW', 'SURVEY_MANAGE');
-  api.revision.mockResolvedValue({ ...revision, status: 'DRAFT', version: 0 });
-  api.survey.mockResolvedValue({
-    ...survey,
-    latest_status: 'DRAFT',
-    open_revision_id: undefined,
-    draft_revision_id: '20',
-  });
-  api.write.mockResolvedValue({
-    revision,
-    operation: {
-      id: '50',
-      type: 'OPENED',
-      resource_id: '20',
-      committed_version: 1,
-      replayed: false,
-    },
-  });
-  render(<SurveysPage />);
-  await showRevision();
-  expect(screen.queryByRole('button', { name: '回答を受付' })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '受付を開始' }));
-  fireEvent.change(await screen.findByLabelText('操作理由'), { target: { value: '設問を確認' } });
-  fireEvent.click(screen.getByRole('button', { name: '確認へ' }));
-  fireEvent.click(await screen.findByRole('button', { name: '確定する' }));
-  await waitFor(() => expect(api.write).toHaveBeenCalledTimes(1));
-  expect(api.write.mock.calls[0][0]).toMatchObject({
-    kind: 'OPEN',
-    sid: '10',
-    rid: '20',
-    input: { version: 0, reason: '設問を確認' },
-  });
 });
 
 test('任意の単一選択は空から選択でき、空の質問票は保存しない', async () => {
@@ -475,133 +203,11 @@ test('任意の単一選択は空から選択でき、空の質問票は保存�
   });
   fireEvent.click(screen.getByRole('button', { name: '下書きを保存' }));
   await waitFor(() => expect(api.write).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/surveys/10/revisions/20'));
   expect(api.write.mock.calls[0][0]).toMatchObject({
     kind: 'CREATE',
     input: {
       questions: [{ type: 'SINGLE_CHOICE', options: [{ label: '一つ目' }, { label: '二つ目' }] }],
     },
   });
-});
-
-test('契約で許可された設問キーをフォーム内部のプロパティと混同しない', async () => {
-  fixtures();
-  permission('SURVEY_VIEW', 'SURVEY_RECORD');
-  api.revision.mockResolvedValue({
-    ...revision,
-    questions: [{ ...revision.questions[0], question_key: '__proto__' }],
-  });
-  // 送信内容だけを確かめる。業務拒否で操作を確定させ、後の用例へ結果不明を残さない。
-  api.write.mockRejectedValue({ response: { status: 422 } });
-  render(<SurveysPage />);
-  await showRevision();
-  fireEvent.click(screen.getByRole('button', { name: '回答を受付' }));
-  fireEvent.change(await screen.findByLabelText('担当者が入力した質問（必須）'), {
-    target: { value: '記録する回答' },
-  });
-  fireEvent.change(screen.getByLabelText('受領日時'), { target: { value: '2026-01-01T09:00' } });
-  fireEvent.click(screen.getByRole('button', { name: '回答を記録' }));
-  await waitFor(() => expect(api.write).toHaveBeenCalledTimes(1));
-  expect(api.write.mock.calls[0][0]).toMatchObject({
-    input: { answers: [{ question_key: '__proto__', text: '記録する回答' }] },
-  });
-});
-
-test('対象から離れると閉じた未送信フォームを破棄する', async () => {
-  fixtures();
-  permission('SURVEY_VIEW', 'SURVEY_RECORD');
-  render(<SurveysPage />);
-  await showRevision();
-  fireEvent.click(screen.getByRole('button', { name: '回答を受付' }));
-  fireEvent.change(await screen.findByLabelText('担当者が入力した質問（必須）'), {
-    target: { value: '対象固有の入力' },
-  });
-  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }));
-  fireEvent.click(screen.getByRole('button', { name: 'アンケート一覧へ' }));
-  await screen.findByRole('button', { name: '版と回答' });
-  expect(screen.queryByRole('button', { name: '入力画面へ戻る' })).not.toBeInTheDocument();
-  await showRevision();
-  fireEvent.click(screen.getByRole('button', { name: '回答を受付' }));
-  expect(await screen.findByLabelText('担当者が入力した質問（必須）')).toHaveValue('');
-});
-
-test('改版競合では最新系列を確認し入力を保って明示的に新基準を選ぶ', async () => {
-  fixtures();
-  permission('SURVEY_VIEW', 'SURVEY_MANAGE');
-  api.write.mockRejectedValue({ response: { status: 409 } });
-  render(<SurveysPage />);
-  await showRevision();
-  fireEvent.click(screen.getByRole('button', { name: '新しい版を作成' }));
-  fireEvent.change(await screen.findByLabelText('題名'), { target: { value: '自分の改版案' } });
-  fireEvent.click(screen.getByRole('button', { name: '下書きを保存' }));
-  await screen.findByText(/状態が更新されています/);
-  api.survey.mockResolvedValue({ ...survey, latest_revision_id: '21', latest_revision_number: 2 });
-  api.revision.mockImplementation(async (_sid, rid) => ({
-    ...revision,
-    id: rid,
-    revision_number: rid === '21' ? 2 : 1,
-  }));
-  fireEvent.click(screen.getByRole('button', { name: '最新状態を確認' }));
-  expect(await screen.findByText(/最新版は版 2/)).toBeVisible();
-  expect(screen.getByLabelText('題名')).toHaveValue('自分の改版案');
-  expect(screen.getByRole('button', { name: '下書きを保存' })).toBeDisabled();
-  fireEvent.click(screen.getByRole('button', { name: 'この最新版を改版元にする' }));
-  fireEvent.click(screen.getByRole('button', { name: '下書きを保存' }));
-  await waitFor(() => expect(api.write).toHaveBeenCalledTimes(2));
-  expect(api.write.mock.calls[1][0]).toMatchObject({
-    input: { based_on_revision_id: '21', title: '自分の改版案' },
-  });
-});
-
-test('改版元が不在でも系列確認の通信障害で入力を消さない', async () => {
-  fixtures();
-  permission('SURVEY_VIEW', 'SURVEY_MANAGE');
-  api.write.mockRejectedValue({ response: { status: 404 } });
-  render(<SurveysPage />);
-  await showRevision();
-  fireEvent.click(screen.getByRole('button', { name: '新しい版を作成' }));
-  fireEvent.change(await screen.findByLabelText('題名'), { target: { value: '消さない改版案' } });
-  fireEvent.click(screen.getByRole('button', { name: '下書きを保存' }));
-  await screen.findByText(/対象が見つかりません。入力は保持/);
-  api.survey.mockRejectedValue(new Error('network'));
-  fireEvent.click(screen.getByRole('button', { name: '最新状態を確認' }));
-  expect(await screen.findByText(/最新状態を確認できません。入力は保持しています/)).toBeVisible();
-  expect(screen.getByLabelText('題名')).toHaveValue('消さない改版案');
-});
-
-test('詳細の404は再試行せず一覧へ戻す', async () => {
-  fixtures();
-  api.revision.mockRejectedValue({ response: { status: 404 } });
-  render(<SurveysPage />);
-  fireEvent.click(await screen.findByRole('button', { name: '版と回答' }));
-  fireEvent.click(await screen.findByRole('button', { name: '設問・回答' }));
-  expect(await screen.findByText('設問版が見つかりません')).toBeVisible();
-  expect(screen.queryByRole('button', { name: /再試行/ })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '一覧へ戻る' }));
-  expect(await screen.findByRole('button', { name: '版と回答' })).toBeVisible();
-});
-
-test('数字の選択肢キーでも設問版に記録した順序で表示する', async () => {
-  fixtures();
-  permission('SURVEY_VIEW', 'SURVEY_RECORD');
-  api.revision.mockResolvedValue({
-    ...revision,
-    questions: [
-      {
-        question_key: 'choice',
-        type: 'SINGLE_CHOICE',
-        prompt: '順序付き選択',
-        required: true,
-        options: [
-          { option_key: '2', label: '先に表示' },
-          { option_key: '1', label: '後に表示' },
-        ],
-      },
-    ],
-  });
-  render(<SurveysPage />);
-  await showRevision();
-  fireEvent.click(screen.getByRole('button', { name: '回答を受付' }));
-  fireEvent.click(await screen.findByLabelText('順序付き選択（必須）'));
-  const options = await screen.findAllByRole('option');
-  expect(options.map(option => option.textContent)).toEqual(['先に表示', '後に表示']);
 });
