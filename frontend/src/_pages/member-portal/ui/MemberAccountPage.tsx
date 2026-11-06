@@ -28,7 +28,7 @@ export function MemberAccountPage() {
       <p className="text-center text-sm">
         <Link
           href="/member/withdrawal"
-          className="text-muted-foreground underline underline-offset-4 hover:text-foreground"
+          className="inline-flex min-h-12 min-w-12 items-center justify-center text-muted-foreground underline underline-offset-4 hover:text-foreground"
         >
           退会する
         </Link>

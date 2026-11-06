@@ -17,7 +17,16 @@ function routes(portal: string): string[] {
       return entry === 'page.tsx' ? [full] : [];
     });
   return walk(join(APP_ROOT, portal))
-    .map(file => '/' + relative(APP_ROOT, file).split(sep).slice(0, -1).join('/'))
+    .map(
+      file =>
+        '/' +
+        relative(APP_ROOT, file)
+          .split(sep)
+          .slice(0, -1)
+          // ルートグループ「(name)」は URL に現れない
+          .filter(segment => !/^\(.+\)$/.test(segment))
+          .join('/')
+    )
     .sort();
 }
 
