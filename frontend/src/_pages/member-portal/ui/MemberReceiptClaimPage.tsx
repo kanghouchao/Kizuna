@@ -98,9 +98,8 @@ export function MemberReceiptClaimPage() {
   }, [claim]);
 
   return (
-    <div className="mx-auto w-full max-w-md p-4">
-      <h1 className="mt-2 text-lg font-semibold text-foreground">伝票の取り込み</h1>
-      <Card className="mt-4">
+    <div>
+      <Card>
         <CardHeader>
           <CardTitle role="heading" aria-level={2}>
             来店の取り込み
@@ -150,9 +149,6 @@ export function MemberReceiptClaimPage() {
       </Card>
       <Button render={<Link href="/member/visits/" />} className="mt-4 w-full">
         来店履歴を見る
-      </Button>
-      <Button render={<Link href="/member/" />} variant="outline" className="mt-3 w-full">
-        ホームへ戻る
       </Button>
     </div>
   );

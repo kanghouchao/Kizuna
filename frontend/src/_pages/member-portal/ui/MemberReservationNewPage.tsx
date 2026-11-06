@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
@@ -123,9 +122,8 @@ export function MemberReservationNewPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-md p-4">
-      <h1 className="mt-2 text-lg font-semibold text-foreground">予約申請</h1>
-      <Card className="mt-4">
+    <div>
+      <Card>
         <CardHeader>
           <CardTitle role="heading" aria-level={2}>
             {store ? store.name : '店舗'}
@@ -287,13 +285,6 @@ export function MemberReservationNewPage() {
           )}
         </CardContent>
       </Card>
-      <Button
-        render={<Link href="/member/reservations/" />}
-        variant="outline"
-        className="mt-6 w-full"
-      >
-        予約一覧へ
-      </Button>
     </div>
   );
 }

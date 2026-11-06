@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { selfRemunerationApi } from '@/entities/order';
 import { isForbidden, isNotFound, useListPage } from '@/shared/lib';
 import { Button, Card, CardContent } from '@/shared/ui';
@@ -13,11 +12,8 @@ const memberships = { ENROLLED: '在籍中', SUSPENDED: '停止中', WITHDRAWN: 
 export function CastRemunerationsPage() {
   const [orderId, setOrderId] = useState<string | null>(null);
   return (
-    <div className="mx-auto max-w-3xl space-y-4 p-4">
+    <div className="space-y-4">
       {orderId && <h1 className="text-2xl font-bold">報酬明細</h1>}
-      <Button variant="outline" render={<Link href="/cast/remunerations/monthly" />}>
-        月次給与明細
-      </Button>
       <p className="text-sm text-muted-foreground">
         予定・発生済みの固定報酬を確認できます。支払済み額ではありません。
       </p>

@@ -1,4 +1,5 @@
-export { CastPortalShell } from './ui/CastPortalShell';
+export { CastPortalLayout } from './ui/CastPortalLayout';
+export { CastHomePage } from './ui/CastHomePage';
 export { CastSchedulePage } from './ui/CastSchedulePage';
 export { CastRequestsPage } from './ui/CastRequestsPage';
 export { CastAccountPage } from './ui/CastAccountPage';

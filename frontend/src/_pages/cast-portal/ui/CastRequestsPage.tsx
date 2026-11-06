@@ -150,11 +150,8 @@ export function CastRequestsPage() {
   };
 
   return (
-    <div className="space-y-6 p-4">
-      <div>
-        <h1 className="text-lg font-bold text-foreground">希望提出</h1>
-        <p className="mt-1 text-xs text-muted-foreground">出勤したい店舗・日時を提出できます。</p>
-      </div>
+    <div className="space-y-6">
+      <p className="text-xs text-muted-foreground">出勤したい店舗・日時を提出できます。</p>
 
       <Form {...form}>
         {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、

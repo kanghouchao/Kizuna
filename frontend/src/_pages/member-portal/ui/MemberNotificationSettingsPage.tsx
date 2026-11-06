@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { notify } from '@/shared/notify';
 import {
   memberApi,
@@ -11,7 +10,6 @@ import {
 } from '@/entities/member';
 import { getApiErrorMessage, useResource } from '@/shared/lib';
 import {
-  Button,
   Card,
   CardContent,
   CardHeader,
@@ -66,8 +64,7 @@ export function MemberNotificationSettingsPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-md p-4">
-      <h1 className="mt-2 text-lg font-semibold text-foreground">通知の設定</h1>
+    <div>
       <p className="mt-2 text-sm text-muted-foreground">
         ログインに使うメールアドレスへ届くお知らせを選べます。選ぶまでは、ご利用に関するお知らせはメールアドレスの確認が済んでからお送りし、キャンペーン・おすすめのご案内はお送りしません。
       </p>
@@ -115,9 +112,6 @@ export function MemberNotificationSettingsPage() {
           );
         })
       )}
-      <Button render={<Link href="/member/" />} variant="outline" className="mt-6 w-full">
-        ホームへ戻る
-      </Button>
     </div>
   );
 }

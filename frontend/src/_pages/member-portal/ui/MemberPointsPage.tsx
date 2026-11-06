@@ -1,18 +1,8 @@
 'use client';
 
-import Link from 'next/link';
 import { MemberPointEntry, POINT_ENTRY_TYPE_LABELS, memberPointApi } from '@/entities/point';
 import { useListPage, useResource } from '@/shared/lib';
-import {
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Pager,
-  RegionError,
-} from '@/shared/ui';
+import { Badge, Card, CardContent, CardHeader, CardTitle, Pager, RegionError } from '@/shared/ui';
 
 /** 増減は符号を付けて出す。加算と減算が同じ一本に並ぶので、符号が無いとどちらか読めない。 */
 function formatAmount(amount: number): string {
@@ -69,9 +59,8 @@ export function MemberPointsPage() {
   } = useListPage<MemberPointEntry>(page => memberPointApi.entries(page));
 
   return (
-    <div className="mx-auto w-full max-w-md p-4">
-      <h1 className="mt-2 text-lg font-semibold text-foreground">ポイント</h1>
-      <Card className="mt-4">
+    <div>
+      <Card>
         <CardHeader>
           <CardTitle role="heading" aria-level={2}>
             現在の残高
@@ -129,9 +118,6 @@ export function MemberPointsPage() {
           </div>
         </CardContent>
       </Card>
-      <Button render={<Link href="/member/" />} variant="outline" className="mt-6 w-full">
-        ホームへ戻る
-      </Button>
     </div>
   );
 }

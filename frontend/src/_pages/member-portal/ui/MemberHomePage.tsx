@@ -23,10 +23,8 @@ export function MemberHomePage() {
   const memberCode = home?.member_code ?? null;
 
   return (
-    <div className="mx-auto w-full max-w-md p-4">
-      <h1 className="mt-2 text-lg font-semibold text-foreground">
-        {displayName ? `${displayName} さん` : 'ホーム'}
-      </h1>
+    <div>
+      {displayName && <p className="font-semibold text-foreground">{displayName} さん</p>}
       <Card className="mt-4">
         <CardHeader>
           <CardTitle role="heading" aria-level={2}>

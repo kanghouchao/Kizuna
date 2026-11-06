@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useState } from 'react';
 import { notify } from '@/shared/notify';
 import {
@@ -66,9 +65,8 @@ export function MemberReservationsPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-md p-4">
-      <h1 className="mt-2 text-lg font-semibold text-foreground">予約</h1>
-      <Card className="mt-4">
+    <div>
+      <Card>
         <CardHeader>
           <CardTitle role="heading" aria-level={2}>
             予約一覧
@@ -131,9 +129,6 @@ export function MemberReservationsPage() {
           </div>
         </CardContent>
       </Card>
-      <Button render={<Link href="/member/" />} variant="outline" className="mt-6 w-full">
-        ホームへ戻る
-      </Button>
     </div>
   );
 }

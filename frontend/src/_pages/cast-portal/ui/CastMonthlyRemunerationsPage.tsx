@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import {
   selfMonthlyRemunerationApi,
@@ -101,7 +100,7 @@ export function CastMonthlyRemunerationsPage() {
       });
   });
   return (
-    <div className="mx-auto max-w-3xl space-y-4 p-4">
+    <div className="space-y-4">
       {orderId ? (
         <>
           <h1 className="text-2xl font-bold">報酬明細</h1>
@@ -112,11 +111,6 @@ export function CastMonthlyRemunerationsPage() {
           <ListPage
             title={title}
             description="原営業日の日別・月別に発生済み固定報酬を確認します。"
-            actions={
-              <Button variant="outline" render={<Link href="/cast/remunerations" />}>
-                報酬一覧
-              </Button>
-            }
             search={{
               onSearch: () => void submit(),
               content: (

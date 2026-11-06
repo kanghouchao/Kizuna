@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import { useForm, useWatch } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { memberApi } from '@/entities/member';
@@ -68,9 +67,8 @@ export function MemberWithdrawalPage() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-md p-4">
-      <h1 className="mt-2 text-lg font-semibold text-foreground">退会</h1>
-      <Card className="mt-4">
+    <div>
+      <Card>
         <CardHeader>
           <CardTitle role="heading" aria-level={2}>
             退会すると
@@ -138,9 +136,6 @@ export function MemberWithdrawalPage() {
           </Card>
         </form>
       </Form>
-      <Button render={<Link href="/member/" />} variant="outline" className="mt-6 w-full">
-        ホームへ戻る
-      </Button>
     </div>
   );
 }

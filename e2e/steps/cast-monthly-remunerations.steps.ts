@@ -202,8 +202,14 @@ When("本人が月次給与明細で退店店舗と原月を選ぶ", async ({ pa
   await page.getByLabel("パスワード", { exact: true }).fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();
   await expect(page).toHaveURL(/\/cast\/schedule/);
-  await page.getByRole("link", { name: "報酬明細", exact: true }).click();
-  await page.getByRole("link", { name: "月次給与明細", exact: true }).click();
+  await page
+    .getByRole("navigation", { name: "メニュー" })
+    .getByRole("link", { name: "報酬", exact: true })
+    .click();
+  await page
+    .getByRole("navigation", { name: "報酬の切替" })
+    .getByRole("link", { name: "月次", exact: true })
+    .click();
   await page.getByRole("combobox", { name: "店舗", exact: true }).click();
   await page.getByRole("option", { name: storeName, exact: true }).click();
   await page.getByLabel("対象月").fill(month);
