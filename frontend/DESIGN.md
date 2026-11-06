@@ -174,7 +174,7 @@ ListPage（`@/widgets/list-page`）が見出し・検索 form・表枠・読み�
 - **下部タブ**: アイコン 24px＋文字、4 個。選択は `aria-current="page"` と primary-strong、非選択 hover は背景と文字を同時に変える。件数バッジは外枠が受け、0 件では出さない（タブの accessible name も変えない）。キャスト: ホーム / スケジュール / 報酬 / アカウント。会員: ホーム / 予約 / ポイント / アカウント。
 - **タブの中の切替**: 一つのタブに複数の画面がある場合（スケジュール = 出勤予定 / 希望提出、報酬 = 明細 / 月次）は題名帯の下の segmented で切り替え、どちらの URL でもタブは選択状態にする。
 - **safe-area**: portal の layout が `viewport-fit=cover` を指定し、題名帯は `env(safe-area-inset-top)`、下部タブと本文の下端は `env(safe-area-inset-bottom)` を足して home indicator に重ねない。
-- **管理画面から外れる点**: 見出しは `text-2xl` ではなく題名帯の `text-lg`。ListPage・TableCard・Table・`min-w-[44rem]` の横スクロールを使わない（作り直しの済んでいない画面に残るものは各画面の作り直しで外す）。本文の大きさは利用者層の段に従う。
+- **管理画面から外れる点**: 見出しは `text-2xl` ではなく題名帯の `text-lg`。ListPage・TableCard・Table・`min-w-[44rem]` の横スクロールを使わない（作り直しの済んでいない画面に残る ListPage は自前の h1 を持ち、各画面の作り直しで外す）。本文の大きさは利用者層の段に従う。
 - **色**: 管理画面と同じ意味 token だけを使い、ポータル専用の色を足さない。キャストの柔らかさは角丸・余白・文字の太さ・カードの重なりで出す。
 
 ### 利用者層の段

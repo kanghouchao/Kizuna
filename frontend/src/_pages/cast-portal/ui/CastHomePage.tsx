@@ -9,7 +9,7 @@ const LINKS = [
   { href: '/cast/remunerations', label: '報酬を見る' },
 ] as const;
 
-/** ホームタブの仮の画面。今日の出勤・やること・累計報酬はホームの作り直しで載せる。 */
+/** ホームタブ。よく使う画面への入口を並べる。 */
 export function CastHomePage() {
   return (
     <Card className="py-0">
