@@ -1,15 +1,15 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { Drawer } from '@base-ui/react/drawer';
 
 interface BottomSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: ReactNode;
-  description?: ReactNode;
-  /** 操作帯。主操作を先頭に、全幅で縦に並ぶ。 */
-  footer?: ReactNode;
+  description?: string;
+  /** 操作帯。主操作を先頭に、全幅で縦に並ぶ。要素（Fragment 可）に限り、数値などの裸の値を受けない。 */
+  footer?: ReactElement;
   children?: ReactNode;
 }
 
