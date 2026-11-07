@@ -30,8 +30,10 @@ export function BottomSheet({
       <Drawer.VirtualKeyboardProvider>
         <Drawer.Portal>
           <Drawer.Backdrop className="fixed inset-0 z-50 bg-black/50 opacity-[calc(1-var(--drawer-swipe-progress,0))] transition-opacity duration-300 data-ending-style:opacity-0 data-starting-style:opacity-0 data-swiping:duration-0" />
-          <Drawer.Viewport className="fixed inset-0 z-50 flex items-end justify-center">
-            <Drawer.Popup className="flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col rounded-t-2xl bg-card text-card-foreground outline-none [transform:translateY(var(--drawer-swipe-movement-y,0px))] transition-transform duration-300 ease-out data-ending-style:[transform:translateY(100%)] data-starting-style:[transform:translateY(100%)] data-swiping:duration-0 data-swiping:select-none">
+          {/* Provider はソフトキーボードの高さを Viewport の --drawer-keyboard-inset に置く。下端と高さから
+              差し引き、操作帯（スクロール領域の外）をキーボードの上に残す。 */}
+          <Drawer.Viewport className="fixed inset-0 z-50 flex items-end justify-center pb-[var(--drawer-keyboard-inset,0px)]">
+            <Drawer.Popup className="flex max-h-[calc(100dvh-2rem-var(--drawer-keyboard-inset,0px))] w-full max-w-md flex-col rounded-t-2xl bg-card text-card-foreground outline-none [transform:translateY(var(--drawer-swipe-movement-y,0px))] transition-transform duration-300 ease-out data-ending-style:[transform:translateY(100%)] data-starting-style:[transform:translateY(100%)] data-swiping:duration-0 data-swiping:select-none">
               <div className="shrink-0 border-b px-4 pt-2 pb-3">
                 <div aria-hidden="true" className="mx-auto mb-3 h-1 w-10 rounded-full bg-muted" />
                 <Drawer.Title className="text-lg font-semibold">{title}</Drawer.Title>
