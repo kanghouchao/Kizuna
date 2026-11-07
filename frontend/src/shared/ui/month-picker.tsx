@@ -29,6 +29,10 @@ export function MonthPicker({ value, currentMonth, onValueChange }: MonthPickerP
   const months = Array.from({ length: 12 }, (_, i) => shiftMonth(currentMonth, -i));
   const items = months.map(month => ({ value: month, label: monthLabel(month) }));
   const oldest = months[months.length - 1];
+  // 移動先が範囲内のときだけ押せる。範囲外の value からは一覧で選び直させる。
+  const inRange = (month: string) => month >= oldest && month <= currentMonth;
+  const prev = shiftMonth(value, -1);
+  const next = shiftMonth(value, 1);
 
   return (
     <div className="flex items-center justify-between gap-2">
@@ -37,8 +41,8 @@ export function MonthPicker({ value, currentMonth, onValueChange }: MonthPickerP
         variant="ghost"
         aria-label="前の月"
         className="size-11"
-        disabled={value <= oldest}
-        onClick={() => onValueChange(shiftMonth(value, -1))}
+        disabled={!inRange(prev)}
+        onClick={() => onValueChange(prev)}
       >
         <ChevronLeftIcon className="size-6" aria-hidden="true" />
       </Button>
@@ -65,8 +69,8 @@ export function MonthPicker({ value, currentMonth, onValueChange }: MonthPickerP
         variant="ghost"
         aria-label="次の月"
         className="size-11"
-        disabled={value >= currentMonth}
-        onClick={() => onValueChange(shiftMonth(value, 1))}
+        disabled={!inRange(next)}
+        onClick={() => onValueChange(next)}
       >
         <ChevronRightIcon className="size-6" aria-hidden="true" />
       </Button>

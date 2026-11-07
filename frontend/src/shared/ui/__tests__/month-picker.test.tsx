@@ -58,4 +58,11 @@ describe('MonthPicker', () => {
     expect(screen.getByRole('status')).toHaveTextContent('2026-03');
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
+
+  it('範囲外の月が渡されても、‹ › は範囲外の月へ動かさないこと', () => {
+    render(<Harness initial="2025-06" />);
+
+    expect(screen.getByRole('button', { name: '前の月' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '次の月' })).toBeDisabled();
+  });
 });
