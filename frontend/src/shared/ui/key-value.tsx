@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
 import { cn } from '@/shared/lib/utils';
 
-/** ダイアログ内のキー値の明細書型（DESIGN.md「キー値と変更前後」）。行は KeyValueRow で並べる。 */
-export function KeyValueList({ children }: { children: ReactNode }) {
-  return <dl className="divide-y text-sm">{children}</dl>;
+/** キー値の明細書型（DESIGN.md「キー値と変更前後」）。行は KeyValueRow で並べる。本人ポータルは className で本文の大きさに合わせる。 */
+export function KeyValueList({ children, className }: { children: ReactNode; className?: string }) {
+  return <dl className={cn('divide-y text-sm', className)}>{children}</dl>;
 }
 
 interface KeyValueRowProps {

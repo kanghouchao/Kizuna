@@ -102,17 +102,17 @@ default / modern / classic は同一の `--storefront-*` 契約を各 theme.css 
 
 既存 primitive を `@/shared/ui` から使う。vendored への画面別変更は consumer の className で表す。
 
-| 用途             | 規則                                                                                                                         |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| 主／副／破壊操作 | Button の default / outline / destructive。遷移は `render={<Link href="…" />}`、ボタン本文は Button の children              |
-| 入力             | Input / Textarea / Select / Checkbox / Switch / RadioGroup / Label                                                           |
-| モーダル         | [下記の基準](#ダイアログか画面か)で先に判定する。中央の Dialog を DialogFrame で描く（下記）。横スライド Drawer は追加しない |
-| 破壊確認         | ConfirmDialog。window.confirm や画面内での AlertDialog 再構築をしない                                                        |
-| 検索選択         | 共有 Combobox を公開入口から使う。サーバ検索は `filter={null}`。候補取得・検索語・選択の業務制御はページ slice に置く        |
-| 表／タブ         | TableCard + Table / Tabs                                                                                                     |
-| 状態             | outline Badge と tint、`border-transparent`                                                                                  |
-| 読み込み         | 形が既知なら Skeleton、未知または小領域は「読み込み中...」。手製 animate-pulse を作らない                                    |
-| 進捗             | `bg-muted h-2 rounded-full` と `bg-primary-strong`                                                                           |
+| 用途             | 規則                                                                                                                                                                                                  |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 主／副／破壊操作 | Button の default / outline / destructive。遷移は `render={<Link href="…" />}`、ボタン本文は Button の children                                                                                       |
+| 入力             | Input / Textarea / Select / Checkbox / Switch / RadioGroup / Label                                                                                                                                    |
+| モーダル         | [下記の基準](#ダイアログか画面か)で先に判定する。中央の Dialog を DialogFrame で描く（下記）。横スライド Drawer は追加しない。本人ポータル（キャスト）の下部シートだけは例外（[本人ポータル](#部品)） |
+| 破壊確認         | ConfirmDialog。window.confirm や画面内での AlertDialog 再構築をしない                                                                                                                                 |
+| 検索選択         | 共有 Combobox を公開入口から使う。サーバ検索は `filter={null}`。候補取得・検索語・選択の業務制御はページ slice に置く                                                                                 |
+| 表／タブ         | TableCard + Table / Tabs                                                                                                                                                                              |
+| 状態             | outline Badge と tint、`border-transparent`                                                                                                                                                           |
+| 読み込み         | 形が既知なら Skeleton、未知または小領域は「読み込み中...」。手製 animate-pulse を作らない                                                                                                             |
+| 進捗             | `bg-muted h-2 rounded-full` と `bg-primary-strong`                                                                                                                                                    |
 
 - DialogFrame は題名帯（DialogTitle・DialogDescription）と操作帯（DialogFooter）を固定し、本文だけをスクロールする。主操作は操作帯の右端、副操作はその左。本文の部品が自前の form と操作を持つときは DialogFrameActions で操作帯へ置き、submit は `form={id}` で結び付ける。
 - 幅は段の名前で選ぶ: `sm` 28rem（確認・1 列の小フォーム）/ `md` 42rem（キー値の詳細・2 列のフォーム）/ `lg` 56rem（本文が多列の表）。ほかの幅を足さない。
@@ -186,6 +186,52 @@ ListPage（`@/widgets/list-page`）が見出し・検索 form・表枠・読み�
 
 段は外枠の `tier` で渡し、外枠が本文の大きさと題名帯・タブの押せる領域を決める。ページの操作要素も同じ段の押せる領域に揃える。
 
+### 部品
+
+本人ポータルの画面は `@/shared/ui` の次の部品で組み、管理画面の ListPage・TableCard・Table を使わない。
+
+| 用途           | 部品                           | 規則                                                                                                                                                                                                               |
+| -------------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 一覧           | ListRows + ListRow             | 区切り線のあるカード 1 枚。行は題・補足（muted、hover の面では foreground）・右端の値。`href` を渡すと行全体が詳細へのリンク。高さ 48px 以上                                                                       |
+| キー値         | KeyValueList + KeyValueRow     | 管理画面と同じ明細書型。`className` で本文の大きさ（`text-base` 等）に合わせる                                                                                                                                     |
+| 金額           | Money                          | 書式表の金額・変更の書式と `tabular-nums`。合計など大きく出す額は className で大きさだけ変える                                                                                                                     |
+| 状態           | StatusBadge                    | 下記の状態の語だけを受け、語から見た目が決まる                                                                                                                                                                     |
+| 読み込み中     | ListRowsSkeleton ／ Skeleton   | 中身の形の骨組み。一覧は ListRowsSkeleton、それ以外は区画の形に Skeleton を並べる                                                                                                                                  |
+| 空             | EmptyState                     | 何が無いか＋次の操作（例:「まだ予約はありません」＋「新しく予約」）                                                                                                                                                |
+| 失敗           | RegionError                    | その区画に `onRetry` 付きで出す（[領域内エラー](#領域内エラー)）                                                                                                                                                   |
+| 月の選択       | MonthPicker                    | 「‹ 2026年11月 ›」と、中央を押すと今月から遡る 12 か月の一覧。値は `YYYY-MM`。手入力させない。今月より先と 12 か月より前へは進めない                                                                               |
+| 絞り込みの切替 | Segmented                      | 常にどれか一つが選ばれた button の組（ToggleGroup）。URL が変わる画面の切替は外枠の区分で行い、これを使わない                                                                                                      |
+| 店舗の切替     | StoreChips                     | 複数店舗に在籍するときだけ横スクロールのチップ（ToggleGroup）。1 店舗ならチップを出さず、その店舗を自動で選ぶ                                                                                                      |
+| 下部シート     | BottomSheet + BottomSheetClose | キャストのみ。Base UI の Drawer。題名帯と操作帯（全幅・主操作が先頭）を固定し本文だけをスクロール。背景幕は Dialog の overlay と同じ `bg-black/50`（自作ファイルでの生の色名の唯一の例外）。会員の画面では使わない |
+
+### 書式
+
+`@/shared/lib` の純粋関数で書式化し、ISO 形式の値・内部 ID を利用者に見せない。関数は現在時刻を読まないので、今日は `tokyoDate(new Date())` で求めて渡す。
+
+| 値             | 関数                | 例                                                    |
+| -------------- | ------------------- | ----------------------------------------------------- |
+| 日付           | `formatDate`        | `11/5（水）`、今年でなければ `2025/11/5（水）`        |
+| 時間帯         | `formatTimeRange`   | `19:00〜21:00`、終了が開始以前なら `19:00〜翌2:00`    |
+| 日時           | `formatDateTime`    | `11/5（水）19:00`（時差付きの瞬間は東京の時刻に直す） |
+| サービスの長さ | `formatMinutes`     | `90分`（コース等）                                    |
+| 経過時間       | `formatDuration`    | `1時間30分`、`2時間`、`45分`（出勤時間等）            |
+| 金額           | `formatMoney`       | `¥12,000`、負は `−¥1,000`（U+2212）                   |
+| 金額の変更     | `formatMoneyChange` | `¥8,000 → ¥10,000`                                    |
+| 版             | `formatRevision`    | `第2版`（必要な所だけ）                               |
+
+時は 0 埋めしない（`9:30`）。
+
+### 状態の語彙
+
+両ポータル共通。API の状態からこの語への写しは各画面が持ち、同じ意味の状態に別の語を使わない（変更申請の「謝絶」も「却下」）。
+
+| 語                                          | 見た目                                          |
+| ------------------------------------------- | ----------------------------------------------- |
+| 申請中 / 受諾待ち / 承諾待ち / 再承諾が必要 | warning（`bg-warning/10 text-warning-strong`）  |
+| 承認 / 受諾済み / 承諾済み                  | success（`bg-success/10 text-success-strong`）  |
+| 却下                                        | destructive（店舗による否定）                   |
+| 取り下げ / 拒否済み                         | 中立 `bg-muted text-foreground`（本人が閉じた） |
+
 ### ホームの告知・お知らせ区画
 
 - 会員ホームは上から 会員コード（QR）→ ポイント残高 → 次の予約 → 自社の告知。告知は会員コードより上に置かない（店頭で提示する用途を妨げない）。
@@ -246,7 +292,7 @@ RegionError の `message` と、`onRetry` または `fallback: {href,label}` の
 
 vendored は combobox / alert-dialog / button / card / dialog / select / form / table / badge / popover / skeleton / tabs / dropdown-menu / checkbox / switch / radio-group / input / label / textarea。整形以外は生成状態を保つ。
 
-image-upload / auth-layout / theme-provider / confirm-dialog / dialog-frame / table-card / toast / region-error / pager / key-value / change-table は自作で、用途に応じて編集する。分類の正本はこの一覧。data-slot や Base UI import だけでは区別できず、未知のファイルは git log で確認する。
+image-upload / auth-layout / theme-provider / confirm-dialog / dialog-frame / table-card / toast / region-error / pager / key-value / change-table / status-badge / segmented / store-chips / month-picker / bottom-sheet / list-row / money / empty-state は自作で、用途に応じて編集する。分類の正本はこの一覧。data-slot や Base UI import だけでは区別できず、未知のファイルは git log で確認する。
 
 - 管理画面の raw palette 検索は page だけでなく参照する entities と自作 shared/ui も対象にする。例外は storefront、AuthLayout 内、vendored のみ。生 hex も確認する。
 - setupTests.ts が ResizeObserver、scrollIntoView、PointerEvent を供給する。追加 shim は実際の失敗を確認してから同ファイルにまとめる。
