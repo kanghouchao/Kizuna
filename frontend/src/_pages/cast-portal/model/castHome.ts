@@ -144,10 +144,9 @@ export function useCastHomeSource(): CastHome {
     monthTotals: region(
       storeList && statements.data
         ? statements.data.current
-            // 退店した店舗は今月の動きがあるときだけ出す。昔の店舗の ¥0 を並べ続けない。
-            .filter(
-              s => storeList.some(store => store.store_id === s.store_id) || s.days.length > 0
-            )
+            // 退店した店舗は今月の動きがあるときだけ出す。明細は動きが無くても全日分あるので合計で見る
+            // （動きが無い日は ¥0 で確定し、未確定の undefined は出勤があった印）。
+            .filter(s => storeList.some(store => store.store_id === s.store_id) || s.total !== 0)
             .map(s => ({ storeId: s.store_id, storeName: s.store_name, total: s.total }))
         : null,
       [stores, statements]

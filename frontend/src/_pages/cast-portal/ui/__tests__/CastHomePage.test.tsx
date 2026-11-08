@@ -37,16 +37,30 @@ function day(business_date: string, acceptance_state: string) {
   return { business_date, acceptance_state };
 }
 
-function statementOf(storeId: number, storeName: string, overrides: object = {}) {
+// 明細は動きの有無にかかわらず対象月の全日を持つ。動きの無い日は全額 0 で承諾できない。
+function quietDays(month: string) {
+  const [y, m] = month.split('-').map(Number);
+  const count = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return Array.from({ length: count }, (_, i) =>
+    day(`${month}-${String(i + 1).padStart(2, '0')}`, 'NOT_ACCEPTABLE')
+  );
+}
+
+function statementOf(
+  storeId: number,
+  storeName: string,
+  overrides: { month?: string; [key: string]: unknown } = {}
+) {
+  const month = overrides.month ?? '2026-11';
   return {
     store_id: storeId,
     store_name: storeName,
-    month: '2026-11',
+    month,
     order_total: 0,
     known_guarantee_total: 0,
     bonus_total: 0,
     total: 0,
-    days: [],
+    days: quietDays(month),
     ...overrides,
   };
 }
@@ -201,10 +215,13 @@ describe('CastHomePage', () => {
     statement.mockImplementation((scope: { storeId: number }, month: string) => {
       if (scope.storeId === 2)
         return Promise.resolve(
-          statementOf(2, '退店した店舗', {
-            month,
-            days: month === '2026-10' ? [] : [day('2026-11-01', 'NOT_ACCEPTED')],
-          })
+          month === '2026-10'
+            ? statementOf(2, '退店した店舗', { month })
+            : statementOf(2, '退店した店舗', {
+                order_total: 8000,
+                total: 8000,
+                days: [day('2026-11-01', 'NOT_ACCEPTED'), ...quietDays(month).slice(1)],
+              })
         );
       if (scope.storeId === 3) return Promise.resolve(statementOf(3, '昔の店舗', { month }));
       return Promise.resolve(statementOf(1, '店舗A', { month }));
