@@ -150,6 +150,58 @@ When('店舗管理者が API で出勤希望を承認する', async ({ request }
   await approveShiftRequest(request, adminToken, createdShiftRequestId);
 });
 
+When('アカウントタブからパスワード変更を開く', async ({ page }) => {
+  await page
+    .getByRole('navigation', { name: 'メニュー' })
+    .getByRole('link', { name: 'アカウント', exact: true })
+    .click();
+  await page
+    .getByRole('navigation', { name: '設定' })
+    .getByRole('link', { name: 'パスワード変更', exact: true })
+    .click();
+  await expect(page.getByRole('heading', { level: 1, name: 'パスワード変更' })).toBeVisible();
+});
+
+async function changePassword(page: Page, current: string, next: string, confirm: string) {
+  await page.getByLabel('現在のパスワード *', { exact: true }).fill(current);
+  await page.getByLabel('新しいパスワード（8文字以上）*', { exact: true }).fill(next);
+  await page.getByLabel('新しいパスワード（確認）*', { exact: true }).fill(confirm);
+  await page.getByRole('button', { name: 'パスワードを変更する', exact: true }).click();
+}
+
+When(
+  '現在のパスワードを正しく・新しい {string}・確認 {string} でパスワードを変更する',
+  async ({ page }, next: string, confirm: string) => {
+    await changePassword(page, CAST_PASSWORD, next, confirm);
+  }
+);
+
+When(
+  '現在のパスワードを {string}・新しい {string}・確認 {string} でパスワードを変更する',
+  async ({ page }, current: string, next: string, confirm: string) => {
+    await changePassword(page, current, next, confirm);
+  }
+);
+
+Then('パスワード変更の画面に {string} が表示される', async ({ page }, message: string) => {
+  // 現在のパスワードの誤りは通知で出る。通知の文言が別の要素と重なっても先頭だけを見る
+  await expect(page.getByText(message, { exact: true }).first()).toBeVisible({ timeout: 15000 });
+});
+
+Then('ログイン画面に {string} が表示される', async ({ page }, message: string) => {
+  await expect(page).toHaveURL(/\/auth\/login/, { timeout: 15000 });
+  await expect(page.getByText(message, { exact: true })).toBeVisible();
+});
+
+When(
+  '作成したキャストのメールと新しいパスワード {string} でログインする',
+  async ({ page }, password: string) => {
+    await page.getByLabel('メールアドレス', { exact: true }).fill(createdCastEmail);
+    await page.getByLabel('パスワード', { exact: true }).fill(password);
+    await page.getByRole('button', { name: 'ログイン', exact: true }).click();
+  }
+);
+
 // 播種した実体を無条件で片付ける（テスト失敗・途中クラッシュでも実行）。CAST User には
 // 削除 API が無いため残留を許容する（タイムスタンプ付きメールアドレスで以後の run と隔離済み）。
 // t_shift_requests は cast_id の FK CASCADE により cast 削除で自動的に片付く。

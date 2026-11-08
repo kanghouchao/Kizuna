@@ -11,18 +11,20 @@ import {
   consumeLineAuthorization,
   getApiErrorMessage,
   lineCallbackRedirectUri,
+  type LineLinkReturn,
 } from '@/shared/lib';
 import { AuthLayout } from '@/shared/ui';
 import LineRegisterStep, { LineRegisterValues } from './LineRegisterStep';
 
 type Stage = 'processing' | 'register' | 'error';
 
-/** エラー表示の戻り先。連携（ログイン済み）はアカウント設定、それ以外はログイン画面。 */
-type BackTo = 'login' | 'settings';
+/** エラー表示の戻り先。連携（ログイン済み）は連携を始めた画面、それ以外はログイン画面。 */
+type BackTo = 'login' | LineLinkReturn;
 
 const BACK_LINKS: Record<BackTo, { href: string; label: string }> = {
   login: { href: '/auth/login', label: 'ログイン画面へ戻る' },
-  settings: { href: '/admin/settings/account', label: 'アカウント設定へ戻る' },
+  'account-settings': { href: '/admin/settings/account', label: 'アカウント設定へ戻る' },
+  'cast-account': { href: '/cast/account/line', label: 'LINE連携へ戻る' },
 };
 
 /**
@@ -66,14 +68,18 @@ export default function LineCallbackPage() {
       router.replace(completion.path);
     };
 
-    const runLink = async (request: LineAuthorizationRequest, subject: string | undefined) => {
+    const runLink = async (
+      request: LineAuthorizationRequest,
+      subject: string,
+      returnTo: LineLinkReturn
+    ) => {
       // 発起主体と現在のログインが一致するときだけ連携する。外部認可の往復中に別アカウントへ
       // 切り替わっていた場合、そのまま送ると意図しないアカウントに LINE が恒久的に付く（解除は未提供）。
       const me = await authApi.me();
-      if (!subject || me.email !== subject) {
+      if (me.email !== subject) {
         fail(
-          'LINE連携を開始したアカウントと現在のログインが一致しません。アカウント設定からやり直してください',
-          'settings'
+          'LINE連携を開始したアカウントと現在のログインが一致しません。連携を始めた画面からやり直してください',
+          returnTo
         );
         return;
       }
@@ -81,16 +87,17 @@ export default function LineCallbackPage() {
         await lineApi.link(request);
       } catch (error) {
         // 409 には「本人が連携済み」「他の身分が連携済み」の二つの原因があり、区別はサーバーの文言が正
-        fail(getApiErrorMessage(error, 'LINE連携に失敗しました'), 'settings');
+        fail(getApiErrorMessage(error, 'LINE連携に失敗しました'), returnTo);
         return;
       }
-      router.replace('/admin/settings/account');
+      router.replace(BACK_LINKS[returnTo].href);
     };
 
     const run = async () => {
       const params = new URLSearchParams(window.location.search);
       const authorization = consumeLineAuthorization(params.get('state'));
-      const destination: BackTo = authorization?.intent === 'link' ? 'settings' : 'login';
+      const destination: BackTo =
+        authorization?.intent === 'link' ? authorization.returnTo : 'login';
 
       // 利用者が LINE 側で拒否した場合など。error_description は英語のため表示しない
       if (params.get('error')) {
@@ -112,7 +119,7 @@ export default function LineCallbackPage() {
 
       try {
         if (authorization.intent === 'link') {
-          await runLink(request, authorization.subject);
+          await runLink(request, authorization.subject, authorization.returnTo);
           return;
         }
         await runLogin(request);

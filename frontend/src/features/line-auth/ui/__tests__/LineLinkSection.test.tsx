@@ -77,7 +77,11 @@ describe('LineLinkSection', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'LINEを連携する' }));
 
     await waitFor(() =>
-      expect(mockedStart).toHaveBeenCalledWith('channel-1', 'link', 'user@kizuna.test')
+      expect(mockedStart).toHaveBeenCalledWith('channel-1', {
+        intent: 'link',
+        subject: 'user@kizuna.test',
+        returnTo: 'account-settings',
+      })
     );
   });
 
