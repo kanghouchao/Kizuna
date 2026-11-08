@@ -1,55 +1,55 @@
-import type { ReactNode } from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { CastAccountPage } from '../CastAccountPage';
-import { authApi, lineApi, useAuth } from '@/entities/user';
-import { AppDomainProvider } from '@/shared/lib';
+import { authApi, useAuth } from '@/entities/user';
 
 jest.mock('@/entities/user', () => ({
   authApi: { me: jest.fn() },
-  lineApi: { config: jest.fn() },
   useAuth: jest.fn(),
 }));
 
 const mockedMe = authApi.me as jest.Mock;
-const mockedLineConfig = lineApi.config as jest.Mock;
 const mockedUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 const mockLogout = jest.fn();
-
-// jsdom の location.hostname（localhost）をアプリドメインとして渡し、アプリの画面として描く
-function OnAppHost({ children }: { children: ReactNode }) {
-  return <AppDomainProvider appDomain="localhost">{children}</AppDomainProvider>;
-}
 
 describe('CastAccountPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedUseAuth.mockReturnValue({ logout: mockLogout });
-    mockedLineConfig.mockResolvedValue({ enabled: false, channel_id: null });
   });
 
   it('表示名を取得して表示する', async () => {
     mockedMe.mockResolvedValue({ display_name: '田中一郎' });
 
-    render(<CastAccountPage />, { wrapper: OnAppHost });
+    render(<CastAccountPage />);
 
     expect(await screen.findByText('田中一郎')).toBeInTheDocument();
   });
 
-  it('サービス条件へ入れる', async () => {
+  it('サービス条件・パスワード変更・LINE連携の下位画面へ入れる', async () => {
     mockedMe.mockResolvedValue({ display_name: '田中一郎' });
 
-    render(<CastAccountPage />, { wrapper: OnAppHost });
+    render(<CastAccountPage />);
 
-    expect(await screen.findByRole('link', { name: 'サービス条件' })).toHaveAttribute(
+    const settings = screen.getByRole('navigation', { name: '設定' });
+    expect(within(settings).getByRole('link', { name: 'サービス条件' })).toHaveAttribute(
       'href',
       '/cast/service-conditions'
     );
+    expect(within(settings).getByRole('link', { name: 'パスワード変更' })).toHaveAttribute(
+      'href',
+      '/cast/account/password'
+    );
+    expect(within(settings).getByRole('link', { name: 'LINE連携' })).toHaveAttribute(
+      'href',
+      '/cast/account/line'
+    );
+    await screen.findByText('田中一郎');
   });
 
   it('ログアウトボタンは useAuth().logout を呼ぶ', async () => {
     mockedMe.mockResolvedValue({ display_name: '田中一郎' });
 
-    render(<CastAccountPage />, { wrapper: OnAppHost });
+    render(<CastAccountPage />);
     await screen.findByText('田中一郎');
     fireEvent.click(screen.getByRole('button', { name: 'ログアウト' }));
 
@@ -57,28 +57,17 @@ describe('CastAccountPage', () => {
   });
 
   it('表示名が取れなければ読み込み表示に固着せず、失敗を名乗って再試行できる', async () => {
-    // LINE 連携ブロックも同じ me() を叩くため、Once では意図しない側が消費する
-    mockedMe.mockRejectedValue(new Error('boom'));
+    mockedMe.mockRejectedValueOnce(new Error('boom'));
 
-    render(<CastAccountPage />, { wrapper: OnAppHost });
+    render(<CastAccountPage />);
 
     const region = await screen.findByRole('alert');
     expect(within(region).getByText('表示名を取得できませんでした')).toBeInTheDocument();
-    expect(screen.queryByText('読み込み中...')).not.toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: '読み込み中' })).not.toBeInTheDocument();
 
     mockedMe.mockResolvedValue({ display_name: '田中一郎' });
     fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
 
     expect(await screen.findByText('田中一郎')).toBeInTheDocument();
-  });
-
-  it('LINE 連携が有効なら連携ブロックを表示する', async () => {
-    mockedMe.mockResolvedValue({ display_name: '田中一郎', line_linked: false });
-    mockedLineConfig.mockResolvedValue({ enabled: true, channel_id: 'channel-1' });
-
-    render(<CastAccountPage />, { wrapper: OnAppHost });
-
-    expect(await screen.findByRole('heading', { name: 'LINE連携' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'LINEを連携する' })).toBeInTheDocument();
   });
 });

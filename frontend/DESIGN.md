@@ -10,7 +10,7 @@ UI の追加・変更前に読む規約。コード構成とデータ取得の�
 | 公開店舗サイト                          | `_pages/store-site/templates/<key>/theme.css` | `--storefront-*` と共有 `_sections/`                |
 | AuthLayout 内の認証画面                 | `src/styles/auth.css`                         | 認証専用のクラス                                    |
 
-AuthLayout の利用で認証画面を判定する。アカウント設定内の password-change は管理画面に属す。`(public)` の 404 画面は管理 token を使うがライト専用であり、公開 layout に theme wiring を追加しない。テーマの配置は `src/__tests__/theme-provider-scope.test.tsx` が固定する。
+AuthLayout の利用で認証画面を判定する。password-change は認証画面ではなく、管理画面のアカウント設定と本人ポータルのパスワード変更に属す。`(public)` の 404 画面は管理 token を使うがライト専用であり、公開 layout に theme wiring を追加しない。テーマの配置は `src/__tests__/theme-provider-scope.test.tsx` が固定する。
 
 ## 色
 

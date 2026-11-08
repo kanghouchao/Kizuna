@@ -85,6 +85,6 @@ describe('LineLoginButton', () => {
     render(<LineLoginButton />, { wrapper: onHost('localhost') });
     fireEvent.click(await screen.findByRole('button', { name: 'LINEでログイン' }));
 
-    await waitFor(() => expect(mockedStart).toHaveBeenCalledWith('channel-1', 'login'));
+    await waitFor(() => expect(mockedStart).toHaveBeenCalledWith('channel-1', { intent: 'login' }));
   });
 });

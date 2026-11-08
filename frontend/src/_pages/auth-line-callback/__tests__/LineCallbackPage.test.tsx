@@ -42,7 +42,13 @@ const REDIRECT_URI = 'http://localhost/auth/line/callback';
 
 function arriveAt(
   query: string,
-  stored?: { state: string; verifier: string; intent: string; subject?: string }
+  stored?: {
+    state: string;
+    verifier: string;
+    intent: string;
+    subject?: string;
+    returnTo?: string;
+  }
 ) {
   if (stored) {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
@@ -213,6 +219,7 @@ describe('LineCallbackPage', () => {
         verifier: 'v2',
         intent: 'link',
         subject: 'me@kizuna.test',
+        returnTo: 'account-settings',
       });
       mockedMe.mockResolvedValue({ email: 'me@kizuna.test' });
       mockedLineApi.link.mockResolvedValue(undefined);
@@ -236,6 +243,7 @@ describe('LineCallbackPage', () => {
         verifier: 'v2',
         intent: 'link',
         subject: 'me@kizuna.test',
+        returnTo: 'account-settings',
       });
       mockedMe.mockResolvedValue({ email: 'other@kizuna.test' });
 
@@ -243,7 +251,7 @@ describe('LineCallbackPage', () => {
 
       expect(
         await screen.findByText(
-          'LINE連携を開始したアカウントと現在のログインが一致しません。アカウント設定からやり直してください'
+          'LINE連携を開始したアカウントと現在のログインが一致しません。連携を始めた画面からやり直してください'
         )
       ).toBeInTheDocument();
       expect(mockedLineApi.link).not.toHaveBeenCalled();
@@ -255,6 +263,7 @@ describe('LineCallbackPage', () => {
         verifier: 'v2',
         intent: 'link',
         subject: 'me@kizuna.test',
+        returnTo: 'account-settings',
       });
       mockedMe.mockResolvedValue({ email: 'me@kizuna.test' });
       // 「本人が連携済み」と「他の身分が連携済み」はサーバーが文言で区別する
@@ -271,6 +280,59 @@ describe('LineCallbackPage', () => {
         'href',
         '/admin/settings/account'
       );
+      expect(mockReplace).not.toHaveBeenCalled();
+    });
+
+    it('キャストのLINE連携から始めた連携は、完了後にキャストのLINE連携へ戻す', async () => {
+      arriveAt('?code=auth-code&state=s2', {
+        state: 's2',
+        verifier: 'v2',
+        intent: 'link',
+        subject: 'me@kizuna.test',
+        returnTo: 'cast-account',
+      });
+      mockedMe.mockResolvedValue({ email: 'me@kizuna.test' });
+      mockedLineApi.link.mockResolvedValue(undefined);
+
+      render(<LineCallbackPage />);
+
+      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/cast/account/line'));
+    });
+
+    it('キャストのLINE連携から始めた連携の失敗は、キャストのLINE連携への戻り導線を示す', async () => {
+      arriveAt('?error=access_denied&state=s2', {
+        state: 's2',
+        verifier: 'v2',
+        intent: 'link',
+        subject: 'me@kizuna.test',
+        returnTo: 'cast-account',
+      });
+
+      render(<LineCallbackPage />);
+
+      expect(await screen.findByRole('link', { name: 'LINE連携へ戻る' })).toHaveAttribute(
+        'href',
+        '/cast/account/line'
+      );
+    });
+
+    it('戻り先の無い連携の保存値は改竄とみなし、連携を送らない', async () => {
+      arriveAt('?code=auth-code&state=s2', {
+        state: 's2',
+        verifier: 'v2',
+        intent: 'link',
+        subject: 'me@kizuna.test',
+        returnTo: 'https://evil.example',
+      });
+
+      render(<LineCallbackPage />);
+
+      expect(
+        await screen.findByText(
+          '認証を確認できませんでした。お手数ですが最初からやり直してください'
+        )
+      ).toBeInTheDocument();
+      expect(mockedLineApi.link).not.toHaveBeenCalled();
       expect(mockReplace).not.toHaveBeenCalled();
     });
   });

@@ -7,16 +7,19 @@ const LINE_SCOPE = 'profile openid';
 /** state / code_verifier / 開始時の意図の保管先。単一のコールバック画面が三つの入口を捌くため意図も持たせる。 */
 const STORAGE_KEY = 'kizuna-line-oauth';
 
-/** LINE 認可を開始した入口。ログイン（未登録なら会員登録へ分岐）と既存アカウントへの連携。 */
-export type LineOauthIntent = 'login' | 'link';
+/** 連携の完了・失敗後に戻る画面。戻り先は閉じた集合とし、保存値から任意の URL へ飛ばない。 */
+export type LineLinkReturn = 'account-settings' | 'cast-account';
 
-interface LineAuthorizationRecord {
-  state: string;
-  verifier: string;
-  intent: LineOauthIntent;
-  /** 連携意図の発起主体（メールアドレス）。外部認可の往復中に別アカウントへ切り替わった場合の誤連携を拒むための束縛。 */
-  subject?: string;
-}
+const LINE_LINK_RETURNS: readonly LineLinkReturn[] = ['account-settings', 'cast-account'];
+
+/**
+ * LINE 認可を開始した入口。ログイン（未登録なら会員登録へ分岐）と既存アカウントへの連携。
+ * 連携は発起主体（メールアドレス）を束縛し、外部認可の往復中に別アカウントへ切り替わった場合の誤連携を拒む。
+ */
+export type LineOauthStart =
+  { intent: 'login' } | { intent: 'link'; subject: string; returnTo: LineLinkReturn };
+
+type LineAuthorizationRecord = { state: string; verifier: string } & LineOauthStart;
 
 /**
  * この host で LINE 入口を出してよいか。コールバック URL はチャネルに登録したアプリ origin だけが有効なため、
@@ -53,8 +56,7 @@ export function lineCallbackRedirectUri(): string {
  */
 export async function prepareLineAuthorization(
   channelId: string,
-  intent: LineOauthIntent,
-  subject?: string
+  start: LineOauthStart
 ): Promise<string> {
   const subtle = globalThis.crypto?.subtle;
   if (!subtle) {
@@ -66,7 +68,7 @@ export async function prepareLineAuthorization(
   const digest = await subtle.digest('SHA-256', new TextEncoder().encode(verifier));
   const challenge = toBase64Url(new Uint8Array(digest));
 
-  const record: LineAuthorizationRecord = { state, verifier, intent, subject };
+  const record: LineAuthorizationRecord = { state, verifier, ...start };
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify(record));
 
   const params = new URLSearchParams({
@@ -84,17 +86,16 @@ export async function prepareLineAuthorization(
 /** 認可 URL を組み立てて LINE へ遷移する。 */
 export async function startLineAuthorization(
   channelId: string,
-  intent: LineOauthIntent,
-  subject?: string
+  start: LineOauthStart
 ): Promise<void> {
-  const url = await prepareLineAuthorization(channelId, intent, subject);
+  const url = await prepareLineAuthorization(channelId, start);
   window.location.assign(url);
 }
 
 /**
  * コールバックで受け取った state を保存値と照合し、code_verifier と意図を取り出す。
  * 保存値は照合の成否に依らず破棄する（認可要求 1 回に対して引き換えは 1 回）。
- * 保存が無い・state が食い違う場合は null（改竄ないし別タブでの開始）。
+ * 保存が無い・state が食い違う・連携の束縛が欠ける場合は null（改竄ないし別タブでの開始）。
  */
 export function consumeLineAuthorization(state: string | null): LineAuthorizationRecord | null {
   const raw = sessionStorage.getItem(STORAGE_KEY);
@@ -109,15 +110,24 @@ export function consumeLineAuthorization(state: string | null): LineAuthorizatio
   }
   if (!parsed || typeof parsed !== 'object') return null;
 
-  const record = parsed as Partial<LineAuthorizationRecord>;
+  const record = parsed as Record<string, unknown>;
   if (typeof record.state !== 'string' || typeof record.verifier !== 'string') return null;
-  if (record.intent !== 'login' && record.intent !== 'link') return null;
   if (record.state !== state) return null;
+  const base = { state: record.state, verifier: record.verifier };
 
-  return {
-    state: record.state,
-    verifier: record.verifier,
-    intent: record.intent,
-    subject: typeof record.subject === 'string' ? record.subject : undefined,
-  };
+  if (record.intent === 'login') return { ...base, intent: 'login' };
+  // 連携は発起主体と戻り先が揃って初めて成立する。欠けた保存値は改竄とみなす
+  if (
+    record.intent === 'link' &&
+    typeof record.subject === 'string' &&
+    LINE_LINK_RETURNS.includes(record.returnTo as LineLinkReturn)
+  ) {
+    return {
+      ...base,
+      intent: 'link',
+      subject: record.subject,
+      returnTo: record.returnTo as LineLinkReturn,
+    };
+  }
+  return null;
 }

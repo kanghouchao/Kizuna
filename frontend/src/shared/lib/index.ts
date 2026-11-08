@@ -41,7 +41,7 @@ export {
   prepareLineAuthorization,
   startLineAuthorization,
 } from './line-oauth';
-export type { LineOauthIntent } from './line-oauth';
+export type { LineLinkReturn, LineOauthStart } from './line-oauth';
 
 export { useKeyedResource } from './hooks/useKeyedResource';
 export type { KeyedResource, ResourceSuccess } from './hooks/useKeyedResource';

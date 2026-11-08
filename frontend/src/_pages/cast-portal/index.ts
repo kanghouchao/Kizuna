@@ -7,3 +7,5 @@ export { CastServiceConditionsPage } from './ui/CastServiceConditionsPage';
 export { CastRemunerationsPage } from './ui/CastRemunerationsPage';
 export { CastRemunerationDetailPage } from './ui/CastRemunerationDetailPage';
 export { CastMonthlyRemunerationsPage } from './ui/CastMonthlyRemunerationsPage';
+export { CastPasswordPage } from './ui/CastPasswordPage';
+export { CastLineLinkPage } from './ui/CastLineLinkPage';
