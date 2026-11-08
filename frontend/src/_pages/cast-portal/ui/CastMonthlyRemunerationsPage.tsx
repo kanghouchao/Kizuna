@@ -19,7 +19,12 @@ import {
 } from '@/shared/ui';
 import { remunerationApi, type Day, type Statement } from '@/widgets/remuneration-statement';
 import { collectPages } from '../lib/collectPages';
-import { statementDays, type StatementBonus, type StatementOrder } from '../lib/monthlyStatement';
+import {
+  pagesAgree,
+  statementDays,
+  type StatementBonus,
+  type StatementOrder,
+} from '../lib/monthlyStatement';
 import { PANEL } from './RemunerationDetail';
 import { StatementDayFold } from './StatementDayFold';
 
@@ -31,11 +36,9 @@ interface FullStatement {
   bonuses: StatementBonus[];
 }
 
-/**
- * 受注とボーナスを各日へ割り振るため、両方のページを最後まで読む。合計と日ごとの額は最初の応答のもの。
- * 後のページの取得の間に訂正が入ると根拠の行と額がずれ得るが、承諾は内容の要約で照合され 409 になる。
- */
-async function fullStatement(storeId: number, month: string): Promise<FullStatement> {
+const ATTEMPTS = 3;
+
+async function readPages(storeId: number, month: string): Promise<FullStatement> {
   const scope = { scope: 'self', storeId } as const;
   const first = await remunerationApi.statement(scope, month, 0, 0, PAGE_SIZE);
   const pages = Math.max(first.orders.total_pages, first.bonus_awards.total_pages);
@@ -50,6 +53,20 @@ async function fullStatement(storeId: number, month: string): Promise<FullStatem
     orders: all.flatMap(result => result.orders.content),
     bonuses: all.flatMap(result => result.bonus_awards.content),
   };
+}
+
+/** 受注とボーナスを各日へ割り振るため、両方のページを最後まで読む。繋いだ行が最初の応答と合わなければ読み直す。 */
+async function fullStatement(storeId: number, month: string): Promise<FullStatement> {
+  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+    const read = await readPages(storeId, month);
+    const { statement } = read;
+    const totals = {
+      orders: statement.orders.total_elements,
+      bonuses: statement.bonus_awards.total_elements,
+    };
+    if (pagesAgree(statement.days, totals, read.orders, read.bonuses)) return read;
+  }
+  throw new Error('明細のページの間で内容が変わり続けたため、読み切れませんでした');
 }
 
 export function CastMonthlyRemunerationsPage() {
@@ -239,7 +256,9 @@ function MonthSummary({
       <p>
         承諾 {statement.accepted_days} / {statement.acceptable_days} 日
       </p>
-      <p className="text-sm text-muted-foreground">支払済み額ではありません。</p>
+      <p className="text-sm text-muted-foreground">
+        支払済み額ではありません。PDF は受注報酬だけの集計です（日額保証・ボーナスを含みません）。
+      </p>
       <MonthlyPdfActions criteria={{ scope: 'self', storeId, month }} />
     </section>
   );

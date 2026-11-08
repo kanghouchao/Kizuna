@@ -300,7 +300,20 @@ function selfStatement(storeId: number, month: string): Statement {
         content_digest: 'digest',
       },
     ],
-    orders: empty,
+    orders: {
+      ...empty,
+      content: [
+        {
+          order_id: 'self-order',
+          business_date: `${month}-01`,
+          service_summary: '対象サービス',
+          accrued_remuneration: 7000,
+          completion_invalidated: false,
+        },
+      ],
+      total_elements: 1,
+      total_pages: 1,
+    },
     bonus_awards: empty,
   };
 }

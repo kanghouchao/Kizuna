@@ -317,13 +317,18 @@ it('「承諾待ち」で承諾待ち・再承諾が必要な日だけに絞る'
 });
 
 it('受注とボーナスのページを最後まで読み、各日へ割り振る', async () => {
-  jest
-    .mocked(remunerationApi.statement)
-    .mockImplementation(async (_scope, _month, orderPage) =>
-      orderPage === 0
-        ? statement({ orders: page([order(3, 'order-3', 21000)], 2) })
-        : statement({ orders: page([order(2, 'order-2a', 13000)], 2), bonus_awards: page([], 1) })
-    );
+  const twoPages = <T,>(content: T[]) => ({ ...page(content, 2), total_elements: 4 });
+  jest.mocked(remunerationApi.statement).mockImplementation(async (_scope, _month, orderPage) =>
+    orderPage === 0
+      ? statement({
+          orders: twoPages([
+            order(4, 'order-4', 2000),
+            order(3, 'order-3', 21000),
+            order(2, 'order-2b', 5000),
+          ]),
+        })
+      : statement({ orders: twoPages([order(2, 'order-2a', 8000)]), bonus_awards: page([]) })
+  );
   await renderPage();
   expect(remunerationApi.statement).toHaveBeenCalledWith(
     { scope: 'self', storeId: 1 },
@@ -334,6 +339,45 @@ it('受注とボーナスのページを最後まで読み、各日へ割り振�
   );
   fireEvent.click(dayButton(2));
   expect(within(dayRegion(2)).getByRole('link', { name: /order-2a のコース/ })).toBeInTheDocument();
+});
+
+it('ページの間で受注が変わって根拠が合わなければ、全体を取り直す', async () => {
+  const first = statement({
+    orders: { ...page([order(3, 'order-3', 21000)], 2), total_elements: 2 },
+    days: [day(3, { order_amount: 21000, acceptance_state: 'NOT_ACCEPTED', content_digest: 'd' })],
+    bonus_awards: page([]),
+  });
+  jest
+    .mocked(remunerationApi.statement)
+    // 2 ページ目の取得の前に同じ日の受注が先頭に増え、1 ページ目の行が繰り下がって重複した
+    .mockResolvedValueOnce(first)
+    .mockResolvedValueOnce({
+      ...first,
+      orders: { ...page([order(3, 'order-3', 21000)], 2), total_elements: 2 },
+    })
+    .mockResolvedValue({
+      ...first,
+      orders: page([order(3, 'order-3', 21000)]),
+    });
+  await renderPage();
+  expect(remunerationApi.statement).toHaveBeenCalledTimes(3);
+  expect(within(dayRegion(3)).getAllByRole('link')).toHaveLength(1);
+});
+
+it('読み直しても根拠が合わないままなら、合わない行を出さずに再試行を出す', async () => {
+  jest
+    .mocked(remunerationApi.statement)
+    .mockResolvedValue(statement({ orders: page([order(3, 'order-3', 1)]) }));
+  render(<CastMonthlyRemunerationsPage />);
+  expect(await screen.findByText('月次明細の取得に失敗しました')).toBeInTheDocument();
+  expect(remunerationApi.statement).toHaveBeenCalledTimes(3);
+  expect(screen.queryByRole('region', { name: /月の合計/ })).toBeNull();
+});
+
+it('PDF が受注報酬だけの集計であることを PDF の近くに出す', async () => {
+  await renderPage();
+  const summary = screen.getByRole('region', { name: /月の合計/ });
+  expect(within(summary).getByText(/PDF は受注報酬だけの集計です/)).toBeInTheDocument();
 });
 
 it('月を ‹ で前の月へ切り替えると、その月の明細と PDF に替える', async () => {
