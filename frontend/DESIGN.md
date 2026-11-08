@@ -218,6 +218,8 @@ ListPage（`@/widgets/list-page`）が見出し・検索 form・表枠・読み�
 | 金額           | `formatMoney`       | `¥12,000`、負は `−¥1,000`（U+2212）                   |
 | 金額の変更     | `formatMoneyChange` | `¥8,000 → ¥10,000`                                    |
 | 版             | `formatRevision`    | `第2版`（必要な所だけ）                               |
+| ポイント       | `formatPoints`      | `1,200 ポイント`                                      |
+| ポイントの増減 | `formatPointChange` | `+500 ポイント`、減算は `−300 ポイント`（U+2212）     |
 
 時は 0 埋めしない（`9:30`）。
 

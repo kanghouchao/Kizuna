@@ -129,6 +129,16 @@ describe('MemberPointsPage', () => {
     expect(mockedVisits).toHaveBeenCalledWith(0);
   });
 
+  it('最近の分で全件が見えていれば、すべてへの導線は出さない', async () => {
+    mockedVisits.mockResolvedValue(page(visits(5)));
+
+    render(<MemberPointsPage />);
+
+    const recent = within(await screen.findByRole('list', { name: '来店履歴' }));
+    expect(recent.getAllByRole('listitem')).toHaveLength(5);
+    expect(screen.queryByRole('link', { name: 'すべて見る' })).not.toBeInTheDocument();
+  });
+
   it('来店が無ければ来店履歴の空を名乗り、すべてへの導線は出さない', async () => {
     render(<MemberPointsPage />);
 

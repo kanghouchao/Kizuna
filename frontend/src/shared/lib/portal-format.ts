@@ -81,3 +81,14 @@ export function formatMoneyChange(before: number, after: number): string {
 export function formatRevision(revision: number): string {
   return `第${revision}版`;
 }
+
+/** ポイント「1,200 ポイント」。 */
+export function formatPoints(points: number): string {
+  return `${points.toLocaleString('ja-JP')} ポイント`;
+}
+
+/** ポイントの増減「+500 ポイント」「−300 ポイント」。加算と減算が同じ一覧に並ぶので符号を省かない。0 は符号なし。 */
+export function formatPointChange(points: number): string {
+  const sign = points > 0 ? '+' : points < 0 ? '−' : '';
+  return `${sign}${formatPoints(Math.abs(points))}`;
+}

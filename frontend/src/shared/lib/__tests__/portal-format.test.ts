@@ -5,6 +5,8 @@ import {
   formatMinutes,
   formatMoney,
   formatMoneyChange,
+  formatPointChange,
+  formatPoints,
   formatRevision,
   formatTimeRange,
   tokyoDate,
@@ -88,5 +90,17 @@ describe('formatMoney / formatMoneyChange', () => {
 describe('formatRevision', () => {
   it('版を「第N版」にする', () => {
     expect(formatRevision(2)).toBe('第2版');
+  });
+});
+
+describe('formatPoints / formatPointChange', () => {
+  it('ポイントは 3 桁区切りと単位で出す', () => {
+    expect(formatPoints(1200)).toBe('1,200 ポイント');
+  });
+
+  it('増減は符号を付け、減算はマイナス記号（U+2212）、0 は符号なしで出す', () => {
+    expect(formatPointChange(500)).toBe('+500 ポイント');
+    expect(formatPointChange(-1300)).toBe('−1,300 ポイント');
+    expect(formatPointChange(0)).toBe('0 ポイント');
   });
 });
