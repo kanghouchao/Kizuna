@@ -32,12 +32,18 @@ const pagedServer = (total: number) => (number: number) => {
 };
 
 describe('MemberVisitsPage', () => {
+  afterEach(() => jest.useRealTimers());
+
   beforeEach(() => {
+    jest.useFakeTimers({
+      now: new Date('2026-11-08T12:00:00+09:00'),
+      doNotFake: ['setTimeout', 'setInterval', 'queueMicrotask'],
+    });
     jest.clearAllMocks();
     mockedList.mockResolvedValue(page([]));
   });
 
-  it('全店舗の来店を新しい順に、日付・店舗・人数・担当・獲得ポイントで並べる', async () => {
+  it('全店舗の来店を新しい順に、日付・店舗・獲得ポイントで並べる', async () => {
     mockedList.mockResolvedValue(
       page([
         {
@@ -48,11 +54,10 @@ describe('MemberVisitsPage', () => {
           granted_points: 120,
         },
         {
-          visited_on: '2026-08-10',
+          visited_on: '2025-12-30',
           store_name: '店舗A',
           pax: 2,
-          cast_name: 'キャスト花子',
-          granted_points: 80,
+          granted_points: 1080,
         },
       ])
     );
@@ -60,17 +65,16 @@ describe('MemberVisitsPage', () => {
     render(<MemberVisitsPage />);
 
     const rows = await screen.findAllByRole('listitem');
-    expect(within(rows[0]).getByText('2026-08-11')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('8/11（火）')).toBeInTheDocument();
     expect(within(rows[0]).getByText('店舗B')).toBeInTheDocument();
-    expect(within(rows[0]).getByText('3 名')).toBeInTheDocument();
-    expect(within(rows[0]).getByText('担当: キャスト太郎')).toBeInTheDocument();
-    expect(within(rows[0]).getByText('+120 pt')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('+120 ポイント')).toBeInTheDocument();
+    // 今年でない来店は年を添える
+    expect(within(rows[1]).getByText('2025/12/30（火）')).toBeInTheDocument();
     expect(within(rows[1]).getByText('店舗A')).toBeInTheDocument();
-    expect(within(rows[1]).getByText('+80 pt')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('+1,080 ポイント')).toBeInTheDocument();
   });
 
-  it('担当の記録が無い来店も行として出す', async () => {
-    // 指名も割り当ても無い受注では担当名が応答から消える。担当欄が無いだけで行は残る。
+  it('付与の無い来店も行として出し、「+0」は出さない', async () => {
     mockedList.mockResolvedValue(
       page([{ visited_on: '2026-08-11', store_name: '店舗A', pax: 1, granted_points: 0 }])
     );
@@ -79,8 +83,7 @@ describe('MemberVisitsPage', () => {
 
     const row = await screen.findByRole('listitem');
     expect(within(row).getByText('店舗A')).toBeInTheDocument();
-    expect(within(row).getByText('+0 pt')).toBeInTheDocument();
-    expect(within(row).queryByText(/担当:/)).not.toBeInTheDocument();
+    expect(within(row).queryByText(/ポイント/)).not.toBeInTheDocument();
   });
 
   it('取得完了までは読み込み中を表示する', () => {
@@ -88,7 +91,7 @@ describe('MemberVisitsPage', () => {
 
     render(<MemberVisitsPage />);
 
-    expect(screen.getByText('読み込み中...')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: '読み込み中' })).toBeInTheDocument();
   });
 
   it('取得に失敗したら失敗を名乗り、再試行で復帰できる', async () => {
@@ -98,8 +101,8 @@ describe('MemberVisitsPage', () => {
     render(<MemberVisitsPage />);
 
     const region = await screen.findByRole('alert');
-    expect(region).toHaveTextContent('来店履歴を取得できませんでした。');
-    expect(screen.queryByText('来店の記録はまだありません。')).not.toBeInTheDocument();
+    expect(region).toHaveTextContent('来店履歴を取得できませんでした');
+    expect(screen.queryByText('まだ来店の記録はありません')).not.toBeInTheDocument();
 
     fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
 
@@ -125,6 +128,6 @@ describe('MemberVisitsPage', () => {
   it('来店が無ければ空を名乗る', async () => {
     render(<MemberVisitsPage />);
 
-    expect(await screen.findByText('来店の記録はまだありません。')).toBeInTheDocument();
+    expect(await screen.findByText('まだ来店の記録はありません')).toBeInTheDocument();
   });
 });

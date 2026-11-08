@@ -3,14 +3,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { memberReceiptApi } from '@/entities/order';
+import { memberPointApi } from '@/entities/point';
 import {
   getApiErrorMessage,
   isForbidden,
   isNotFound,
   redirectToLogin,
   rememberMemberReturnPath,
+  useResource,
 } from '@/shared/lib';
-import { Button, Card, CardContent, CardHeader, CardTitle, RegionError } from '@/shared/ui';
+import { Button, RegionError, Skeleton } from '@/shared/ui';
+import { formatPointChange, formatPoints } from '../lib/points';
 
 /**
  * 申領の失敗。理由が変わらない失敗（＝サーバが同形で返す申領不能）だけは再試行を出さない。
@@ -98,58 +101,72 @@ export function MemberReceiptClaimPage() {
   }, [claim]);
 
   return (
-    <div>
-      <Card>
-        <CardHeader>
-          <CardTitle role="heading" aria-level={2}>
-            来店の取り込み
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {failure !== null ? (
-            failure.retryable && token !== null ? (
-              <RegionError message={failure.message} onRetry={() => void claim(token)} />
-            ) : (
-              // 押しても結果の変わらない失敗に再試行を出さない（DESIGN.md「領域内エラー態」）。
-              // 逃げ道は、結果が不明なら確かめられる来店履歴、そうでなければホーム
-              // （伝票そのものの取り直しは店舗に尋ねるしかない）
-              <RegionError
-                message={failure.message}
-                fallback={
-                  failure.verifyInHistory
-                    ? { href: '/member/visits/', label: '来店履歴へ' }
-                    : { href: '/member/', label: 'ホームへ' }
-                }
-              />
-            )
-          ) : grantedPoints === null ? (
-            <p className="text-sm text-muted-foreground">読み込み中...</p>
-          ) : (
-            <div className="flex flex-col items-center gap-3">
-              <p className="text-sm font-medium text-foreground">来店履歴に取り込みました</p>
-              {/* 「取り込めた」ことと「ポイントが付いた」ことは別で、前者だけでも成立する。
-                  付与の無い伝票（0 円完了）に大きな「+0 pt」を出すと、成立した申領が失敗に見える */}
-              {grantedPoints > 0 ? (
-                <>
-                  <p className="text-3xl font-bold tracking-wider text-primary-strong">
-                    +{grantedPoints.toLocaleString('ja-JP')} pt
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    この来店が履歴に並び、ポイントは残高に加わりました。
-                  </p>
-                </>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  この来店が履歴に並びました。この伝票にポイントの付与はありません。
-                </p>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-      <Button render={<Link href="/member/visits/" />} className="mt-4 w-full">
-        来店履歴を見る
-      </Button>
+    <div className="space-y-4">
+      {failure !== null ? (
+        failure.retryable && token !== null ? (
+          <RegionError message={failure.message} onRetry={() => void claim(token)} />
+        ) : (
+          // 押しても結果の変わらない失敗に再試行を出さない（DESIGN.md「領域内エラー態」）。
+          // 逃げ道は、結果が不明なら確かめられる来店履歴、そうでなければ上位のポイント
+          // （伝票そのものの取り直しは店舗に尋ねるしかない）
+          <RegionError
+            message={failure.message}
+            fallback={
+              failure.verifyInHistory
+                ? { href: '/member/visits/', label: '来店履歴へ' }
+                : { href: '/member/points/', label: 'ポイントへ' }
+            }
+          />
+        )
+      ) : grantedPoints === null ? (
+        <div role="status" aria-label="読み込み中" className="space-y-3 rounded-xl border p-6">
+          <Skeleton className="mx-auto h-5 w-48" />
+          <Skeleton className="mx-auto h-10 w-40" />
+        </div>
+      ) : (
+        <Claimed grantedPoints={grantedPoints} />
+      )}
     </div>
+  );
+}
+
+/** 申領の成立後。残高は申領の成立を待って取る — 並べて取ると付与前の残高を出しうる。 */
+function Claimed({ grantedPoints }: { grantedPoints: number }) {
+  const balance = useResource(() => memberPointApi.balance());
+  return (
+    <>
+      <section className="flex flex-col items-center gap-2 rounded-xl border bg-card p-6 text-center text-card-foreground">
+        <p className="font-medium">来店履歴に取り込みました</p>
+        {/* 「取り込めた」ことと「ポイントが付いた」ことは別で、前者だけでも成立する。
+            付与の無い伝票（0 円完了）に大きな「+0」を出すと、成立した申領が失敗に見える */}
+        {grantedPoints > 0 ? (
+          <p className="text-4xl font-bold text-primary-strong tabular-nums">
+            {formatPointChange(grantedPoints)}
+          </p>
+        ) : (
+          <p className="text-muted-foreground">この伝票にポイントの付与はありません。</p>
+        )}
+      </section>
+      <section
+        aria-labelledby="claimed-balance"
+        className="flex min-h-12 items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3 text-card-foreground"
+      >
+        <h2 id="claimed-balance" className="text-muted-foreground">
+          現在の残高
+        </h2>
+        {balance.isLoading ? (
+          <Skeleton className="h-6 w-28" />
+        ) : balance.failure ? (
+          <RegionError message="残高を取得できませんでした" onRetry={() => void balance.reload()} />
+        ) : (
+          balance.data && (
+            <p className="text-xl font-bold tabular-nums">{formatPoints(balance.data.balance)}</p>
+          )
+        )}
+      </section>
+      <Button render={<Link href="/member/points/" />} className="h-12 w-full text-base">
+        ポイントを見る
+      </Button>
+    </>
   );
 }

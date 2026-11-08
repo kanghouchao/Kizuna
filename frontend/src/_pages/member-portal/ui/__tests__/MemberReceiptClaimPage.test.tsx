@@ -2,10 +2,15 @@ import { StrictMode } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemberReceiptClaimPage } from '../MemberReceiptClaimPage';
 import { memberReceiptApi } from '@/entities/order';
+import { memberPointApi } from '@/entities/point';
 import { redirectToLogin, rememberMemberReturnPath } from '@/shared/lib';
 
 jest.mock('@/entities/order', () => ({
   memberReceiptApi: { claim: jest.fn() },
+}));
+
+jest.mock('@/entities/point', () => ({
+  memberPointApi: { balance: jest.fn() },
 }));
 
 jest.mock('@/shared/lib', () => ({
@@ -15,6 +20,7 @@ jest.mock('@/shared/lib', () => ({
 }));
 
 const mockedClaim = memberReceiptApi.claim as jest.Mock;
+const mockedBalance = memberPointApi.balance as jest.Mock;
 
 /** 伝票の QR は申領 URL のフラグメントにトークンを載せて運ぶ。 */
 const openWithToken = (token: string) =>
@@ -28,16 +34,56 @@ describe('MemberReceiptClaimPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedClaim.mockResolvedValue({ granted_points: 0 });
+    mockedBalance.mockResolvedValue({ balance: 1320 });
     openWithToken('tok3n');
   });
 
-  it('フラグメントのトークンで申領し、取り込めたポイントを出す', async () => {
+  it('フラグメントのトークンで申領し、付与されたポイントと申領後の残高とポイントへの導線を出す', async () => {
     mockedClaim.mockResolvedValue({ granted_points: 120 });
 
     render(<MemberReceiptClaimPage />);
 
-    expect(await screen.findByText('+120 pt')).toBeInTheDocument();
+    expect(await screen.findByText('+120 ポイント')).toBeInTheDocument();
     expect(mockedClaim).toHaveBeenCalledWith('tok3n');
+    expect(await screen.findByText('1,320 ポイント')).toBeInTheDocument();
+    expect(screen.getByText('現在の残高')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'ポイントを見る' })).toHaveAttribute(
+      'href',
+      '/member/points'
+    );
+  });
+
+  it('残高は申領が成立してから取る', async () => {
+    // 申領と並べて取ると、付与前の残高を「現在の残高」として出しうる
+    let resolveClaim: (value: { granted_points: number }) => void = () => {};
+    mockedClaim.mockReturnValue(new Promise(resolve => (resolveClaim = resolve)));
+
+    render(<MemberReceiptClaimPage />);
+
+    await waitFor(() => expect(mockedClaim).toHaveBeenCalledTimes(1));
+    expect(mockedBalance).not.toHaveBeenCalled();
+
+    resolveClaim({ granted_points: 120 });
+
+    expect(await screen.findByText('1,320 ポイント')).toBeInTheDocument();
+    expect(mockedBalance).toHaveBeenCalledTimes(1);
+  });
+
+  it('残高だけが読めなくても、付与されたポイントは出したまま残高の区画が失敗を名乗る', async () => {
+    mockedClaim.mockResolvedValue({ granted_points: 120 });
+    mockedBalance.mockRejectedValueOnce(new Error('failed'));
+
+    render(<MemberReceiptClaimPage />);
+
+    const region = await screen.findByRole('alert');
+    expect(region).toHaveTextContent('残高を取得できませんでした');
+    expect(screen.getByText('+120 ポイント')).toBeInTheDocument();
+
+    fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
+
+    expect(await screen.findByText('1,320 ポイント')).toBeInTheDocument();
+    // 再試行は残高だけを読み直す。申領を二度投げると成立した申領が失敗に化ける
+    expect(mockedClaim).toHaveBeenCalledTimes(1);
   });
 
   it('別コンソールのセッション（403）ではトークンごと戻り先を預けてログインへ送る', async () => {
@@ -61,7 +107,7 @@ describe('MemberReceiptClaimPage', () => {
     expect(await screen.findByText('来店履歴に取り込みました')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     // 大きな「+0 pt」は、成立した申領を失敗に見せる
-    expect(screen.queryByText('+0 pt')).not.toBeInTheDocument();
+    expect(screen.queryByText('+0 ポイント')).not.toBeInTheDocument();
   });
 
   it('申領が終わるまでは読み込み中を表示する', () => {
@@ -69,7 +115,8 @@ describe('MemberReceiptClaimPage', () => {
 
     render(<MemberReceiptClaimPage />);
 
-    expect(screen.getByText('読み込み中...')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: '読み込み中' })).toBeInTheDocument();
+    expect(mockedBalance).not.toHaveBeenCalled();
   });
 
   it('通信に失敗したら失敗を名乗り、再試行で復帰できる', async () => {
@@ -83,7 +130,7 @@ describe('MemberReceiptClaimPage', () => {
 
     fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
 
-    expect(await screen.findByText('+80 pt')).toBeInTheDocument();
+    expect(await screen.findByText('+80 ポイント')).toBeInTheDocument();
   });
 
   it('申領できない伝票はサーバの理由を出し、再試行は出さない', async () => {
@@ -95,6 +142,11 @@ describe('MemberReceiptClaimPage', () => {
     const region = await screen.findByRole('alert');
     expect(region).toHaveTextContent('この伝票は申領できません。');
     expect(within(region).queryByRole('button', { name: '再試行' })).not.toBeInTheDocument();
+    // 伝票の取り直しは店舗に尋ねるしかない。この画面の上位のポイントへ戻す
+    expect(within(region).getByRole('link', { name: 'ポイントへ' })).toHaveAttribute(
+      'href',
+      '/member/points'
+    );
   });
 
   it('通信失敗の後の再試行が申領不能で返ったら、結果不明として履歴の確認を促す', async () => {
@@ -146,7 +198,7 @@ describe('MemberReceiptClaimPage', () => {
       </StrictMode>
     );
 
-    await screen.findByText('+120 pt');
+    await screen.findByText('+120 ポイント');
     await waitFor(() => expect(mockedClaim).toHaveBeenCalledTimes(1));
   });
 });
