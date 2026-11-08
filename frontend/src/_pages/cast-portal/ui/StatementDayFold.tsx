@@ -236,7 +236,7 @@ export function StatementDayFold({
                 )}
               </div>
             )}
-            {day.acceptance_state === 'ACCEPTED' && day.latest_acceptance && (
+            {day.latest_acceptance && (
               <p className="text-sm text-muted-foreground">
                 {formatDateTime(day.latest_acceptance.accepted_at, today)}に承諾しました
               </p>
