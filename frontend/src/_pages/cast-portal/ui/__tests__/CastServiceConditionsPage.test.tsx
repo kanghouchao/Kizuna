@@ -43,7 +43,7 @@ it('1 サービス 1 カードにお客様料金とあなたの報酬・状態�
   const service = await card('追加');
   expect(within(service).getByRole('heading', { name: '追加' })).toBeInTheDocument();
   expect(within(service).getByText('店舗一')).toBeInTheDocument();
-  expect(within(service).getByText('特殊サービス · 30分 · 有料')).toBeInTheDocument();
+  expect(within(service).getByText('特殊サービス · 30分')).toBeInTheDocument();
   expect(within(service).getByText('受諾待ち')).toBeInTheDocument();
   expect(within(service).getByText('お客様料金').nextSibling).toHaveTextContent('¥2,000');
   expect(within(service).getByText('あなたの報酬').nextSibling).toHaveTextContent('¥1,500');
