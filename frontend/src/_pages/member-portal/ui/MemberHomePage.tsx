@@ -54,7 +54,7 @@ function MemberCode() {
       <p className="text-3xl font-bold tracking-wider tabular-nums">
         {formatMemberCode(home.member_code)}
       </p>
-      <p className="text-center text-base text-muted-foreground">
+      <p className="text-center text-muted-foreground">
         来店時にこのコードを店舗へ提示してください。
       </p>
     </div>
@@ -84,7 +84,7 @@ type Upcoming = MemberOrderApplication & {
 };
 
 /**
- * 一覧は希望日の新しい順なので、先頭ページの中で今日以降の最も近い申請を選ぶ（未来の予約が 20 件を超える会員は想定しない）。
+ * 一覧は希望日の新しい順なので、先頭ページの中で今日以降の最も近い申請を選ぶ（今日以降の申請が 20 件を超える会員は想定しない）。
  * サーバの失効は申請中にしか付かないため、承認済みの過去日は暦日で落とす。日付変更時刻より前の深夜は前日の予約が先に消える。
  */
 function pickNext(rows: MemberOrderApplication[], today: string): Upcoming | null {
