@@ -184,7 +184,7 @@ ListPage（`@/widgets/list-page`）が見出し・検索 form・表枠・読み�
 | 会員     | 18px | 48px 以上  | 1 画面の情報を少なく。スワイプ・下部シートを使わず、見える操作で縦に並べる |
 | キャスト | 16px | 44px 以上  | 下部シート（Drawer）と segmented を使ってよい                              |
 
-段は外枠の `tier` で渡し、外枠が本文の大きさと題名帯・タブの押せる領域を決める。ページの操作要素も同じ段の押せる領域に揃える。
+段は外枠の `tier` で渡し、外枠が本文の大きさと題名帯・タブの押せる領域を決める。外枠は段を `PortalTierProvider` で内容へ伝え、共有部品（RegionError）は `usePortalTierSizes()` で自分を段に揃えるので、ページは大きさを渡さない。ページが自分で描く操作要素は同じ段の押せる領域に揃える。
 
 ### 部品
 
@@ -272,7 +272,7 @@ server の details は現行クライアントでは field error に戻さず、
 
 ### 領域内エラー
 
-RegionError の `message` と、`onRetry` または `fallback: {href,label}` のどちらか一つを渡す。className は配置だけに使う。赤い一文と outline の回復操作で示す。
+RegionError の `message` と、`onRetry` または `fallback: {href,label}` のどちらか一つを渡す。className は配置だけに使う。赤い一文と outline の回復操作で示す。本人ポータルの外枠の中では文言と回復操作が段の本文と押せる領域に揃い、外の管理画面では `text-sm` と `size="sm"` のまま。
 
 - 失敗時は古い値と paging を消す。load-more 失敗も最初のページから再試行する。取得失敗だけを理由に送信を止めず、必須入力検証は維持する。
 - 詳細の 404 はその場で一覧リンクを出し、retry を出さない。削除済み対象のモーダルは alert の本文と閉じる操作に置換し、保存を外して閉じる際に一覧を更新する。
@@ -296,7 +296,7 @@ RegionError の `message` と、`onRetry` または `fallback: {href,label}` の
 
 vendored は combobox / alert-dialog / button / card / dialog / select / form / table / badge / popover / skeleton / tabs / dropdown-menu / checkbox / switch / radio-group / input / label / textarea。整形以外は生成状態を保つ。
 
-image-upload / auth-layout / theme-provider / confirm-dialog / dialog-frame / table-card / toast / region-error / pager / key-value / change-table / status-badge / segmented / store-chips / month-picker / bottom-sheet / list-row / money / empty-state は自作で、用途に応じて編集する。分類の正本はこの一覧。data-slot や Base UI import だけでは区別できず、未知のファイルは git log で確認する。
+image-upload / auth-layout / theme-provider / confirm-dialog / dialog-frame / table-card / toast / region-error / pager / key-value / change-table / status-badge / segmented / store-chips / month-picker / bottom-sheet / list-row / money / empty-state / portal-tier は自作で、用途に応じて編集する。分類の正本はこの一覧。data-slot や Base UI import だけでは区別できず、未知のファイルは git log で確認する。
 
 - 管理画面の raw palette 検索は page だけでなく参照する entities と自作 shared/ui も対象にする。例外は storefront、AuthLayout 内、vendored のみ。生 hex も確認する。
 - setupTests.ts が ResizeObserver、scrollIntoView、PointerEvent を供給する。追加 shim は実際の失敗を確認してから同ファイルにまとめる。

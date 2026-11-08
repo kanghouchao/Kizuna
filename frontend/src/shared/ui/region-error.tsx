@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { cn } from '@/shared/lib/utils';
 import { Button } from './button';
+import { usePortalTierSizes } from './portal-tier';
 
 type RegionErrorProps = {
   /** 読めなかったものを 1 行で述べる文言。 */
@@ -33,21 +34,35 @@ type RegionErrorProps = {
  * toast を排しているため、これが無いと行が消えたことも再試行が現れたことも読み上げ利用者に
  * 届かない。暗黙の aria-atomic で容器が丸ごと読まれるので、ボタンのラベルも文言と共に届く。
  * 焦点は移さない — 対象にはフォーム内の選択肢も含まれ、打鍵中の欄から焦点を奪う方が害が大きい。
+ * 本人ポータルの外枠の中では、文言とボタンを外枠の段の本文と押せる領域に揃える。
  */
 export function RegionError(props: RegionErrorProps) {
   const { message, className } = props;
+  const tier = usePortalTierSizes();
+  const buttonClass = tier ? cn(tier.body, tier.target) : undefined;
 
   return (
     <div role="alert" className={cn('flex items-center gap-3', className)}>
-      <p className="text-sm text-destructive-strong">{message}</p>
+      <p className={cn(tier?.body ?? 'text-sm', 'text-destructive-strong')}>{message}</p>
       {props.onRetry ? (
         // Button は素の <button> を描くため既定は submit。フォーム内の選択肢が失敗した場面で
         // 送信してしまわないよう type を明示する。
-        <Button type="button" variant="outline" size="sm" onClick={props.onRetry}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className={buttonClass}
+          onClick={props.onRetry}
+        >
           再試行
         </Button>
       ) : (
-        <Button render={<Link href={props.fallback.href} />} variant="outline" size="sm">
+        <Button
+          render={<Link href={props.fallback.href} />}
+          variant="outline"
+          size="sm"
+          className={buttonClass}
+        >
           {props.fallback.label}
         </Button>
       )}

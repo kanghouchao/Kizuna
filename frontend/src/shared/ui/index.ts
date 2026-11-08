@@ -22,6 +22,7 @@ export * from './money';
 export * from './month-picker';
 export * from './pager';
 export * from './popover';
+export * from './portal-tier';
 export * from './radio-group';
 export * from './region-error';
 export * from './segmented';
