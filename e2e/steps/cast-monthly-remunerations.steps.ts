@@ -201,7 +201,7 @@ When("本人が月次給与明細で退店店舗と原月を選ぶ", async ({ pa
   await page.getByLabel("メールアドレス").fill(email);
   await page.getByLabel("パスワード", { exact: true }).fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();
-  await expect(page).toHaveURL(/\/cast\/schedule/);
+  await expect(page).toHaveURL(/\/cast\/?$/);
   await page
     .getByRole("navigation", { name: "メニュー" })
     .getByRole("link", { name: "報酬", exact: true })

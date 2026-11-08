@@ -42,7 +42,7 @@ export function landSession(kind: SessionKind, refreshExpiresAt: number): string
   startSession(kind, refreshExpiresAt);
   // 従業員は一つの管理画面へ入り、着地は全員ダッシュボード（集計カードは権限で出し分ける）。
   if (kind === 'admin') return '/admin/dashboard/';
-  if (kind === 'cast') return '/cast/schedule/';
+  if (kind === 'cast') return '/cast/';
   return memberReturnPath ?? '/member/';
 }
 

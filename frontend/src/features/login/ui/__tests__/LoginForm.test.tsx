@@ -87,12 +87,12 @@ describe('LoginForm の利用者種別による分岐', () => {
     expect(getSessionUserId()).toBeUndefined();
   });
 
-  it('user_type=CAST は cast セッションを開始し /cast/schedule/ へ遷移する', async () => {
+  it('user_type=CAST は cast セッションを開始し /cast/ へ遷移する', async () => {
     mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'CAST' }));
 
     await submitLoginForm();
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/cast/schedule/'));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/cast/'));
     expect(Cookies.get('session-kind')).toBe('cast');
     expect(getSessionUserId()).toBe(7);
     expect(mockedNotifyError).not.toHaveBeenCalled();
@@ -132,7 +132,7 @@ describe('LoginForm の利用者種別による分岐', () => {
 
     await submitLoginForm();
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/cast/schedule/'));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/cast/'));
     expect(Cookies.get('member-return-path')).toBeUndefined();
     expect(sessionStorage.getItem('member-return-target')).toBeNull();
   });
