@@ -109,6 +109,47 @@ describe('MemberHomePage', () => {
     expect(within(next).queryByText('失効した店')).not.toBeInTheDocument();
   });
 
+  it('先頭ページが今日以降の申請で埋まっていれば、過去の日付に届くまで次のページも読む', async () => {
+    const later = Array.from({ length: 20 }, (_, i) => ({
+      id: `later-${i}`,
+      store_name: '後日の店',
+      business_date: '2026-12-01',
+      status: 'WITHDRAWN',
+      expired: false,
+    }));
+    mockedList
+      .mockResolvedValueOnce({ rows: later, page: 0, pageCount: 3, total: 45 })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            id: 'near',
+            store_name: '近い店',
+            business_date: '2026-11-10',
+            status: 'CONFIRMED',
+            expired: false,
+          },
+          {
+            id: 'past',
+            store_name: '終わった店',
+            business_date: '2026-11-01',
+            status: 'CONFIRMED',
+            expired: false,
+          },
+        ],
+        page: 1,
+        pageCount: 3,
+        total: 45,
+      });
+
+    render(<MemberHomePage />);
+
+    expect(
+      await within(section('次の予約')).findByRole('link', { name: /近い店/ })
+    ).toBeInTheDocument();
+    // 2 ページ目に過去の日付が出たので、3 ページ目は読まない。
+    expect(mockedList.mock.calls).toEqual([[0], [1]]);
+  });
+
   it('次の予約が無ければ空の表示と「新しく予約」を出す', async () => {
     mockedList.mockResolvedValue(
       page([

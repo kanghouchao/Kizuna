@@ -84,8 +84,8 @@ type Upcoming = MemberOrderApplication & {
 };
 
 /**
- * 一覧は希望日の新しい順なので、先頭ページの中で今日以降の最も近い申請を選ぶ（今日以降の申請が 20 件を超える会員は想定しない）。
- * サーバの失効は申請中にしか付かないため、承認済みの過去日は暦日で落とす。日付変更時刻より前の深夜は前日の予約が先に消える。
+ * 今日以降で最も近い申請中・承認の申請。サーバの失効は申請中にしか付かないため、承認済みの過去日は暦日で落とす。
+ * 日付変更時刻より前の深夜は前日の予約が先に消える（境界を知るのはサーバだけ）。
  */
 function pickNext(rows: MemberOrderApplication[], today: string): Upcoming | null {
   const upcoming = rows.filter(
@@ -102,15 +102,26 @@ function pickNext(rows: MemberOrderApplication[], today: string): Upcoming | nul
   );
 }
 
+/** 一覧は希望日の新しい順なので、今日より前の日付が出たページで読むのを止める。普通は先頭ページだけで済む。 */
+async function listFromToday(today: string): Promise<MemberOrderApplication[]> {
+  const rows: MemberOrderApplication[] = [];
+  for (let page = 0; ; page++) {
+    const result = await memberOrderApplicationApi.list(page);
+    rows.push(...result.rows);
+    const last = result.rows.at(-1)?.business_date;
+    if (last === undefined || last < today || page + 1 >= result.pageCount) return rows;
+  }
+}
+
 const STATUS_WORD = { PENDING: '申請中', CONFIRMED: '承認' } as const;
 
 function NextReservation() {
   const today = tokyoDate(new Date());
-  const { data, failure, reload } = useResource(() => memberOrderApplicationApi.list(0));
+  const { data, failure, reload } = useResource(() => listFromToday(today));
   if (failure !== null)
     return <RegionError message="次の予約を取得できませんでした" onRetry={() => void reload()} />;
   if (data === null) return <ListRowsSkeleton rows={1} />;
-  const next = pickNext(data.rows, today);
+  const next = pickNext(data, today);
   if (next === null)
     return (
       <EmptyState
