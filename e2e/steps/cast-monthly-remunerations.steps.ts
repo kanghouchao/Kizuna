@@ -482,7 +482,11 @@ Then(
       params: { store_id: STORE1_ID, month },
       headers: { Authorization: `Bearer ${otherToken}` },
     });
-    expect(await foreign.text()).not.toContain(firstOrder);
+    const foreignBody = await foreign.text();
+    expect(foreign.status(), foreignBody).toBe(200);
+    expect(foreignBody).toContain(otherOrder);
+    expect(foreignBody).not.toContain(firstOrder);
+    expect(foreignBody).not.toContain(secondOrder);
     const filtered = await request.get("/api/me/remunerations", {
       params: { enrollment_id: otherEnrollment },
       headers,
