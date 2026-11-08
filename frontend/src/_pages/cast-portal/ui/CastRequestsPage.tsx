@@ -1,20 +1,23 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
+import { ShiftRequestStatus, ShiftRequestCreateRequest, shiftApi } from '@/entities/shift';
 import {
-  CastShiftRequestItem,
-  ShiftRequestStatus,
-  ShiftRequestCreateRequest,
-  shiftApi,
-} from '@/entities/shift';
-import { getApiErrorMessage, useListPage, useResource } from '@/shared/lib';
+  formatDate,
+  formatTimeRange,
+  getApiErrorMessage,
+  tokyoDate,
+  useListPage,
+  useResource,
+} from '@/shared/lib';
 import {
   Badge,
+  BottomSheet,
+  BottomSheetClose,
   Button,
-  Card,
-  CardContent,
+  EmptyState,
   Form,
   FormControl,
   FormField,
@@ -22,48 +25,33 @@ import {
   FormLabel,
   FormMessage,
   Input,
+  ListRow,
+  ListRows,
+  ListRowsSkeleton,
   Pager,
   RegionError,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  StatusBadge,
+  type StatusWord,
+  StoreChips,
   Textarea,
 } from '@/shared/ui';
 import { toDateStr } from '../lib/week';
 
 interface RequestFormValues {
-  store_id: string;
   work_date: string;
   start_time: string;
   end_time: string;
   note: string;
 }
 
-const STATUS_LABELS: Record<ShiftRequestStatus, string> = {
-  PENDING: '受付済み',
-  APPROVED: '確定済み',
+// 状態の語は両ポータル共通の対応表（DESIGN.md）。変更申請も通常の申請と同じ語を使う。
+const STATUS_WORDS: Record<ShiftRequestStatus, StatusWord> = {
+  PENDING: '申請中',
+  APPROVED: '承認',
   DECLINED: '却下',
 };
 
-// 変更申請（type=CHANGE）は結果の意味が異なるため専用の状態文言を使う。
-const CHANGE_STATUS_LABELS: Record<ShiftRequestStatus, string> = {
-  PENDING: '変更申請中',
-  APPROVED: '変更承認済み',
-  DECLINED: '謝絶',
-};
-
-const STATUS_PILL_CLASS: Record<ShiftRequestStatus, string> = {
-  PENDING: 'border-transparent bg-warning/10 text-warning-strong',
-  APPROVED: 'border-transparent bg-success/10 text-success-strong',
-  DECLINED: 'border-transparent bg-destructive/10 text-destructive-strong',
-};
-
-function statusLabel(item: CastShiftRequestItem): string | undefined {
-  if (!item.status) return undefined;
-  return item.type === 'CHANGE' ? CHANGE_STATUS_LABELS[item.status] : STATUS_LABELS[item.status];
-}
+const FORM_ID = 'shift-request-form';
 
 /** 明日の 'yyyy-MM-dd' を返す（提出フォームの初期日付に使う）。 */
 function tomorrowStr(): string {
@@ -72,17 +60,14 @@ function tomorrowStr(): string {
   return toDateStr(d);
 }
 
-function defaultValues(storeId: string): RequestFormValues {
-  return {
-    store_id: storeId,
-    work_date: tomorrowStr(),
-    start_time: '18:00',
-    end_time: '23:00',
-    note: '',
-  };
+function defaultValues(): RequestFormValues {
+  return { work_date: tomorrowStr(), start_time: '18:00', end_time: '23:00', note: '' };
 }
 
-/** 出勤希望の提出フォームと提出履歴。所属店を跨いで全量・新しい順に表示する。 */
+/**
+ * 出勤希望の提出（下部シート）と提出履歴。提出先は店舗チップで選び、履歴は所属店を跨いで
+ * 新しい順に出す — 履歴 API は店舗で絞れず、ページ単位の結果を手元で絞るとページ送りが合わない。
+ */
 export function CastRequestsPage() {
   // 所属店と履歴は別々の読み口。まとめて 1 つの失敗にすると、店舗が読めなかったときに
   // 「履歴の取得に失敗しました」と名乗ることになる
@@ -92,7 +77,10 @@ export function CastRequestsPage() {
     failure: storesFailure,
     reload: reloadStores,
   } = useResource(() => shiftApi.myStores());
-  const stores = storesData ?? [];
+  const stores = (storesData ?? []).map(s => ({
+    id: String(s.store_id),
+    name: s.store_name ?? '',
+  }));
   const {
     rows: history,
     page: historyPage,
@@ -103,33 +91,25 @@ export function CastRequestsPage() {
     reload: reloadHistory,
     onPageChange: changeHistoryPage,
   } = useListPage(page => shiftApi.myShiftRequests(page));
+  const today = tokyoDate(new Date());
 
-  // 引き金に出る文言は候補一覧から引かれるので、選べる値はここ一箇所に持つ。
-  const storeOptions = stores.map(s => ({
-    value: String(s.store_id),
-    label: s.store_name ?? '',
-  }));
+  // 未選択の間は先頭の店舗を提出先とする。選んだ店舗は提出後も保つ。
+  const [pickedStoreId, setPickedStoreId] = useState<string | null>(null);
+  const store = stores.find(s => s.id === pickedStoreId) ?? stores[0] ?? null;
+  const [sheetOpen, setSheetOpen] = useState(false);
 
-  const form = useForm<RequestFormValues>({ defaultValues: defaultValues('') });
+  const form = useForm<RequestFormValues>({ defaultValues: defaultValues() });
   const {
     handleSubmit,
     reset,
-    setValue,
     control,
     formState: { isSubmitting },
   } = form;
 
-  // 初期店舗の流し込みは選択肢が描画され終えた次のコミットで行う。Select は
-  // form 内で隠し input を併走させており、選択肢が未登録のまま値だけ変わると
-  // その隠し要素が値を保持できず change を打ち返して選択を空へ巻き戻すため。
-  useEffect(() => {
-    const first = storesData?.[0];
-    if (first) setValue('store_id', String(first.store_id));
-  }, [storesData, setValue]);
-
   const submit = async (values: RequestFormValues) => {
+    if (!store) return;
     const payload: ShiftRequestCreateRequest = {
-      store_id: Number(values.store_id),
+      store_id: Number(store.id),
       work_date: values.work_date,
       start_time: `${values.start_time}:00`,
       end_time: `${values.end_time}:00`,
@@ -138,7 +118,8 @@ export function CastRequestsPage() {
     try {
       await shiftApi.submitShiftRequest(payload);
       notify.success('出勤希望を提出しました');
-      reset(defaultValues(values.store_id));
+      reset(defaultValues());
+      setSheetOpen(false);
       // 提出した希望は先頭ページの最上段に載るので、先頭ページへ戻して見せる
       void changeHistoryPage(0);
     } catch (e) {
@@ -151,191 +132,165 @@ export function CastRequestsPage() {
 
   return (
     <div className="space-y-6">
-      <p className="text-xs text-muted-foreground">出勤したい店舗・日時を提出できます。</p>
+      <section className="space-y-3">
+        <StoreChips stores={stores} value={store?.id ?? null} onValueChange={setPickedStoreId} />
+        {storesFailure !== null ? (
+          <RegionError message="所属店舗の取得に失敗しました" onRetry={() => void reloadStores()} />
+        ) : (
+          !storesLoading &&
+          store === null && (
+            <p className="text-muted-foreground">所属店舗が無いため、出勤希望を出せません</p>
+          )
+        )}
+        <Button
+          className="min-h-11 w-full"
+          disabled={store === null}
+          onClick={() => setSheetOpen(true)}
+        >
+          出勤希望を出す
+        </Button>
+      </section>
 
-      <Form {...form}>
-        {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
-            我々の文言は永久に描かれない。執行は各 rules が担う */}
-        <form onSubmit={handleSubmit(submit)} noValidate>
-          <Card>
-            <CardContent className="space-y-4">
+      <BottomSheet
+        open={sheetOpen}
+        onOpenChange={setSheetOpen}
+        title="出勤希望を出す"
+        description={store ? `${store.name} に提出します` : undefined}
+        footer={
+          <>
+            {/* 操作帯は本文の外に固定されるので、form 属性で本文のフォームへ結ぶ */}
+            <Button type="submit" form={FORM_ID} disabled={isSubmitting}>
+              {isSubmitting ? '提出中...' : '提出する'}
+            </Button>
+            <BottomSheetClose render={<Button variant="outline" />}>やめる</BottomSheetClose>
+          </>
+        }
+      >
+        <Form {...form}>
+          {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
+              我々の文言は永久に描かれない。執行は各 rules が担う */}
+          <form id={FORM_ID} onSubmit={handleSubmit(submit)} noValidate className="space-y-4">
+            <FormField
+              control={control}
+              name="work_date"
+              rules={{ required: '希望する日付を指定してください' }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>日付</FormLabel>
+                  <FormControl>
+                    <Input type="date" required className="h-11" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <div className="grid grid-cols-2 gap-4">
               <FormField
                 control={control}
-                name="store_id"
-                rules={{ required: '店舗を選択してください' }}
+                name="start_time"
+                rules={{ required: '開始時刻を入力してください' }}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>店舗</FormLabel>
-                    <Select
-                      items={storeOptions}
-                      value={field.value || null}
-                      onValueChange={field.onChange}
-                      required
-                    >
-                      <FormControl>
-                        {/* handleSubmit の焦点移動は登録された ref を叩く。ref が trigger へ
-                            届かないと、文言だけ出て焦点が動かない。 */}
-                        <SelectTrigger className="w-full" ref={field.ref}>
-                          {/* 所属店舗が無いときは選択肢自体が無く、値は空のままなので placeholder が出る。 */}
-                          <SelectValue placeholder="所属店舗がありません" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {storeOptions.map(o => (
-                          <SelectItem key={o.value} value={o.value}>
-                            {o.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {/* placeholder の「所属店舗がありません」は取得中も失敗時も同じ顔をする。
-                        どちらなのかを欄の傍で述べる */}
-                    {storesLoading ? (
-                      <p className="text-sm text-muted-foreground">読み込み中...</p>
-                    ) : (
-                      storesFailure !== null && (
-                        <RegionError
-                          message="所属店舗の取得に失敗しました"
-                          onRetry={() => void reloadStores()}
-                        />
-                      )
-                    )}
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={control}
-                name="work_date"
-                rules={{ required: '希望する日付を指定してください' }}
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>日付</FormLabel>
+                    <FormLabel>開始</FormLabel>
                     <FormControl>
-                      <Input type="date" required {...field} />
+                      <Input type="time" required className="h-11" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <div className="grid grid-cols-2 gap-4">
-                <FormField
-                  control={control}
-                  name="start_time"
-                  rules={{ required: '開始時刻を入力してください' }}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>開始</FormLabel>
-                      <FormControl>
-                        <Input type="time" required {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={control}
-                  name="end_time"
-                  rules={{ required: '終了時刻を入力してください' }}
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>終了</FormLabel>
-                      <FormControl>
-                        <Input type="time" required {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
               <FormField
                 control={control}
-                name="note"
-                rules={{
-                  maxLength: { value: 500, message: '備考は500文字以内で入力してください' },
-                }}
+                name="end_time"
+                rules={{ required: '終了時刻を入力してください' }}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>備考</FormLabel>
+                    <FormLabel>終了</FormLabel>
                     <FormControl>
-                      <Textarea rows={3} {...field} />
+                      <Input type="time" required className="h-11" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={isSubmitting || stores.length === 0}
-              >
-                {isSubmitting ? '提出中...' : '提出する'}
-              </Button>
-            </CardContent>
-          </Card>
-        </form>
-      </Form>
+            </div>
+            <FormField
+              control={control}
+              name="note"
+              rules={{
+                maxLength: { value: 500, message: '備考は500文字以内で入力してください' },
+              }}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>備考</FormLabel>
+                  <FormControl>
+                    <Textarea rows={3} {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </form>
+        </Form>
+      </BottomSheet>
 
-      <div>
-        <h2 className="mb-2 text-sm font-semibold text-foreground">提出履歴</h2>
+      <section aria-labelledby="request-history-heading" className="space-y-3">
+        <h2 id="request-history-heading" className="font-semibold">
+          提出履歴
+        </h2>
         {historyLoading ? (
-          <p className="text-sm text-muted-foreground">読み込み中...</p>
+          <ListRowsSkeleton />
         ) : historyFailed ? (
           // 読めなかった履歴を空に見せると、提出済みの希望が消えたと読める
           <RegionError message="履歴の取得に失敗しました" onRetry={() => void reloadHistory()} />
         ) : history.length === 0 ? (
-          <p className="text-sm text-muted-foreground">提出履歴はありません</p>
+          <EmptyState message="まだ提出した希望はありません" />
         ) : (
-          <ul className="space-y-2">
+          <ListRows label="提出履歴">
             {history.map(item => (
-              <li key={item.id}>
-                <Card className="py-3">
-                  <CardContent className="px-3">
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-foreground">
-                          {item.store_name}
-                        </span>
-                        {item.type === 'CHANGE' && (
-                          <Badge
-                            variant="outline"
-                            className="border-transparent bg-primary/10 text-primary-strong"
-                          >
-                            変更申請
-                          </Badge>
-                        )}
-                      </span>
+              <ListRow
+                key={item.id}
+                title={
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{item.store_name}</span>
+                    {item.type === 'CHANGE' && (
                       <Badge
                         variant="outline"
-                        className={item.status && STATUS_PILL_CLASS[item.status]}
+                        className="border-transparent bg-primary/10 text-primary-strong"
                       >
-                        {statusLabel(item)}
+                        変更申請
                       </Badge>
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {item.work_date} {item.start_time?.slice(0, 5)}–{item.end_time?.slice(0, 5)}
-                    </p>
-                    {item.note && <p className="mt-1 text-xs text-muted-foreground">{item.note}</p>}
-                  </CardContent>
-                </Card>
-              </li>
+                    )}
+                  </span>
+                }
+                meta={
+                  <>
+                    <span className="block">
+                      {item.work_date && formatDate(item.work_date, today)}
+                      {item.start_time &&
+                        item.end_time &&
+                        formatTimeRange(item.start_time, item.end_time)}
+                    </span>
+                    {item.note && <span className="block">{item.note}</span>}
+                  </>
+                }
+                trailing={item.status && <StatusBadge status={STATUS_WORDS[item.status]} />}
+              />
             ))}
-          </ul>
+          </ListRows>
         )}
 
         {!historyFailed && (
-          <div className="mt-3">
-            <Pager
-              page={historyPage}
-              pageCount={historyPageCount}
-              total={historyTotal}
-              rowCount={history.length}
-              disabled={historyLoading}
-              onPageChange={page => void changeHistoryPage(page)}
-            />
-          </div>
+          <Pager
+            page={historyPage}
+            pageCount={historyPageCount}
+            total={historyTotal}
+            rowCount={history.length}
+            disabled={historyLoading}
+            onPageChange={page => void changeHistoryPage(page)}
+          />
         )}
-      </div>
+      </section>
     </div>
   );
 }
