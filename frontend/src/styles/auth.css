@@ -512,6 +512,8 @@
   font-size: 14px;
   text-align: center;
   line-height: 1.5;
+  /* 店舗名など空白の無い長い英字でも枠の中で折り返す */
+  overflow-wrap: anywhere;
 }
 
 .auth-alert--error {
@@ -547,6 +549,7 @@
   line-height: 1.25;
   letter-spacing: -0.025em;
   color: #1a1040;
+  overflow-wrap: anywhere;
 }
 
 /* 見出しの補足。この大きさでも 4.5:1 を満たす色にする */
@@ -555,6 +558,7 @@
   font-size: 0.875rem;
   line-height: 1.625;
   color: #6b6660;
+  overflow-wrap: anywhere;
 }
 
 .auth-text {
