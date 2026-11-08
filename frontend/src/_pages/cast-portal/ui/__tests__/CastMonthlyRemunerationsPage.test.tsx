@@ -260,6 +260,42 @@ it('承諾できない日は理由を出し、ボタンを出さない', async (
   expect(within(fifth).queryByRole('button')).toBeNull();
 });
 
+it('不足分が 0 円の日も、承諾の根拠になる日額と保証の停止を出す', async () => {
+  const base = statement();
+  jest.mocked(remunerationApi.statement).mockResolvedValue(
+    statement({
+      days: [
+        ...base.days,
+        day(6, {
+          closed_duration: 'PT6H',
+          order_amount: 30000,
+          guarantee_status: 'CALCULATED',
+          daily_amount: 25000,
+          acceptance_state: 'ACCEPTED',
+        }),
+        day(7, {
+          closed_duration: 'PT6H',
+          order_amount: 30000,
+          guarantee_status: 'STOPPED',
+          guarantee_state: 'STOPPED',
+          daily_amount: 25000,
+          acceptance_state: 'ACCEPTED',
+        }),
+      ],
+      orders: page([
+        ...base.orders.content,
+        order(6, 'order-6', 30000),
+        order(7, 'order-7', 30000),
+      ]),
+    })
+  );
+  await renderPage();
+  fireEvent.click(dayButton(6));
+  expect(within(dayRegion(6)).getByText('日額 ¥25,000 に対する不足分')).toBeInTheDocument();
+  fireEvent.click(dayButton(7));
+  expect(within(dayRegion(7)).getByText('保証停止')).toBeInTheDocument();
+});
+
 it('承諾した後に承諾できなくなった日・再承諾が必要な日にも、前に承諾した日時を出す', async () => {
   const base = statement();
   jest.mocked(remunerationApi.statement).mockResolvedValue(
