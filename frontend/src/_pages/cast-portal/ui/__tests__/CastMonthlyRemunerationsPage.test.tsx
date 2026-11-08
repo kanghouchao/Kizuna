@@ -319,7 +319,7 @@ it('承諾した後に承諾できなくなった日・再承諾が必要な日�
   await renderPage();
   fireEvent.click(dayButton(6));
   const sixth = dayRegion(6);
-  expect(within(sixth).getByText('報酬が無いため承諾はありません')).toBeInTheDocument();
+  expect(within(sixth).getByText('今は報酬が無いため承諾できません')).toBeInTheDocument();
   expect(
     within(sixth).getByText(`${formatDateTime(`${date(7)}T02:00:00Z`, today)}に承諾しました`)
   ).toBeInTheDocument();

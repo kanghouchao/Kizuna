@@ -18,7 +18,7 @@ const STATUS: Partial<Record<Day['acceptance_state'], StatusWord>> = {
 const NOT_ACCEPTABLE: Record<NonNullable<Day['not_acceptable_reason']>, string> = {
   BUSINESS_DAY_NOT_ENDED: '営業日の終了後に承諾できます',
   GUARANTEE_UNDETERMINED: '退勤の記録と日額が確定すると承諾できます',
-  ALL_ZERO: '報酬が無いため承諾はありません',
+  ALL_ZERO: '今は報酬が無いため承諾できません',
 };
 
 const PENDING_GUARANTEE: Partial<Record<Day['guarantee_status'], string>> = {
