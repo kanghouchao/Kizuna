@@ -3,7 +3,7 @@ import { Badge } from './badge';
 
 /**
  * 本人ポータルの状態の語彙。両ポータルでこの語だけを使い、API の状態からの写しは各画面が持つ。
- * 待ちは warning、済みは success、店舗による否定は destructive、本人が自分で閉じたものは中立。
+ * 待ちは warning、済みは success、店舗による否定は destructive、本人が閉じたもの・期限で閉じたものは中立。
  */
 const TONE_CLASS = {
   waiting: 'bg-warning/10 text-warning-strong',
@@ -17,6 +17,7 @@ const TONES = {
   承認: 'done',
   却下: 'rejected',
   取り下げ: 'closed',
+  失効: 'closed',
   受諾待ち: 'waiting',
   受諾済み: 'done',
   拒否済み: 'closed',

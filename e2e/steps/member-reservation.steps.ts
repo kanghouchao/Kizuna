@@ -155,11 +155,14 @@ Then("指名候補に本日の出勤キャストが出る", async ({ page }) => 
   // 指名候補はその日の確定シフトから引くため、日付を入れて初めて選択肢が現れる。
   // 件数ではなく作成したキャスト自身を名指すのは、共有 dev 店舗に本日出勤の別キャストが
   // 居ても成立させるため（選択肢の総数は他シナリオの残留シフトで動く）。
+  // 候補は Select を開いている間だけ描かれるので、開いて確かめてから閉じる。
+  await page.getByRole("combobox", { name: "指名（任意）" }).click();
+  // 候補の文言は「源氏名（18:00〜）」。開始時刻の付いた名前を前方一致で名指す。
   await expect(
-    page
-      .getByLabel("指名（任意）")
-      .getByRole("option", { name: createdCastName }),
+    page.getByRole("option", { name: `${createdCastName}（` }),
   ).toHaveCount(1, { timeout: 15000 });
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("listbox")).toBeHidden();
 });
 
 When("人数 {string} で予約を申請する", async ({ page }, pax: string) => {
@@ -242,6 +245,15 @@ When("予約一覧を開き直す", async ({ page }) => {
 });
 
 When("予約を取り下げる", async ({ page }) => {
+  // 行の「取り下げる」は確認ダイアログを開くだけ。取り下げはダイアログの同名ボタンで確定する。
+  await page
+    .getByRole("listitem")
+    .filter({ hasText: "Sample" })
+    .getByRole("button", { name: "取り下げる" })
+    .first()
+    .click();
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toBeVisible();
   await Promise.all([
     page.waitForResponse(
       (resp) =>
@@ -249,8 +261,25 @@ When("予約を取り下げる", async ({ page }) => {
         resp.request().method() === "POST",
       { timeout: 15000 },
     ),
-    page.getByRole("button", { name: "取り下げる" }).first().click(),
+    dialog.getByRole("button", { name: "取り下げる" }).click(),
   ]);
+});
+
+When("予約一覧の「新しく予約」を押す", async ({ page }) => {
+  await page.getByRole("link", { name: "新しく予約" }).click();
+  await expect(page).toHaveURL(/\/member\/reservations\/new\/?$/, {
+    timeout: 15000,
+  });
+});
+
+Then("過去に予約した店舗宛の予約申請画面が開く", async ({ page }) => {
+  // このシナリオの会員が予約した店舗は 1 つだけなので、選ばせずにその店舗のフォームを出す。
+  await expect(
+    page.getByRole("heading", { name: "Sample", level: 2 }),
+  ).toBeVisible({ timeout: 15000 });
+  await expect(
+    page.getByRole("button", { name: "この内容で申請する" }),
+  ).toBeVisible();
 });
 
 // 播種した実体を無条件で片付ける（テスト失敗・途中クラッシュでも実行）。MEMBER User には

@@ -8,6 +8,7 @@ import {
   formatPointChange,
   formatPoints,
   formatRevision,
+  formatTime,
   formatTimeRange,
   tokyoDate,
 } from '@/shared/lib';
@@ -19,6 +20,13 @@ describe('formatDate', () => {
 
   it('今年でなければ年を付ける（年またぎ）', () => {
     expect(formatDate('2025-11-05', '2026-01-02')).toBe('2025/11/5（水）');
+  });
+});
+
+describe('formatTime', () => {
+  it('時の 0 埋めを外し、秒を落とす', () => {
+    expect(formatTime('09:30:00')).toBe('9:30');
+    expect(formatTime('18:00')).toBe('18:00');
   });
 });
 

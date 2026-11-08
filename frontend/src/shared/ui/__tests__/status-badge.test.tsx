@@ -25,4 +25,9 @@ describe('StatusBadge', () => {
       expect(badge).not.toHaveClass('text-muted-foreground');
     }
   );
+
+  it('期限で閉じた「失効」も中立の面で描くこと', () => {
+    render(<StatusBadge status="失効" />);
+    expect(screen.getByText('失効')).toHaveClass('bg-muted', 'text-foreground');
+  });
 });

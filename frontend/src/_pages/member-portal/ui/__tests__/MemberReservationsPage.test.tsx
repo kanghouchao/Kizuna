@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemberReservationsPage } from '../MemberReservationsPage';
 import { memberOrderApplicationApi } from '@/entities/order';
 import { notify } from '@/shared/notify';
@@ -17,6 +17,27 @@ const mockedList = memberOrderApplicationApi.list as jest.Mock;
 const mockedWithdraw = memberOrderApplicationApi.withdraw as jest.Mock;
 
 const PAGE_SIZE = 20;
+
+// 年の省略（今年なら「8/10（月）」）が時の経過で変わらないよう、今日を固定する。
+const NOW = new Date('2026-08-01T03:00:00Z');
+
+/** 行の「取り下げる」から確認ダイアログを開く。 */
+const openWithdrawDialog = async (index = 0) => {
+  fireEvent.click((await screen.findAllByRole('button', { name: '取り下げる' }))[index]);
+  return screen.findByRole('alertdialog');
+};
+
+/** 行の「取り下げる」を押し、確認ダイアログでも「取り下げる」を選ぶ。 */
+const withdrawThroughDialog = async (index = 0) => {
+  const dialog = await openWithdrawDialog(index);
+  fireEvent.click(within(dialog).getByRole('button', { name: '取り下げる' }));
+};
+
+/** 確認ダイアログの外にある、行ごとの「取り下げる」。 */
+const rowWithdrawButtons = () =>
+  within(screen.getByRole('list', { name: '予約' })).queryAllByRole('button', {
+    name: '取り下げる',
+  });
 
 const page = (rows: unknown[], number = 0, total = rows.length) => ({
   rows,
@@ -42,15 +63,21 @@ const pagedServer = (total: number) => (number: number) => {
 describe('MemberReservationsPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useFakeTimers({ now: NOW, doNotFake: ['setTimeout', 'setInterval', 'queueMicrotask'] });
   });
 
-  it('全店舗の予約を状態つきで表示する', async () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('全店舗の予約を店舗名・日時・人数・指名と状態の語で表示する', async () => {
     mockedList.mockResolvedValue(
       page([
         {
           id: 'o1',
           store_name: '店舗A',
           business_date: '2026-08-10',
+          arrival_scheduled_start_time: '19:00:00',
           pax: 2,
           status: 'PENDING',
           expired: false,
@@ -68,10 +95,97 @@ describe('MemberReservationsPage', () => {
 
     render(<MemberReservationsPage />);
 
-    expect(await screen.findByText('店舗A')).toBeInTheDocument();
-    expect(screen.getByText('店舗B')).toBeInTheDocument();
-    expect(screen.getByText('申請中')).toBeInTheDocument();
-    expect(screen.getByText('確定')).toBeInTheDocument();
+    const rows = within(await screen.findByRole('list', { name: '予約' })).getAllByRole('listitem');
+    expect(rows[0]).toHaveTextContent('店舗A');
+    expect(rows[0]).toHaveTextContent('8/10（月）19:00');
+    expect(rows[0]).toHaveTextContent('2名');
+    expect(rows[0]).toHaveTextContent('指名なし');
+    expect(within(rows[0]).getByText('申請中')).toBeInTheDocument();
+    expect(rows[1]).toHaveTextContent('店舗B');
+    expect(rows[1]).toHaveTextContent('8/11（火）');
+    expect(rows[1]).toHaveTextContent('指名: さくら');
+    // 店舗が確定した申請は両ポータル共通の語「承認」で出す
+    expect(within(rows[1]).getByText('承認')).toBeInTheDocument();
+  });
+
+  it('店舗の謝絶は「却下」、本人の取り下げは「取り下げ」、希望日を過ぎた未処理は「失効」と出す', async () => {
+    mockedList.mockResolvedValue(
+      page([
+        {
+          id: 'o1',
+          store_name: '店舗A',
+          business_date: '2026-08-10',
+          status: 'DECLINED',
+          expired: false,
+        },
+        {
+          id: 'o2',
+          store_name: '店舗B',
+          business_date: '2026-08-11',
+          status: 'WITHDRAWN',
+          expired: false,
+        },
+        // 失効は状態ではなくサーバの導出。画面が日時を比べると営業日の区切りとずれる
+        {
+          id: 'o3',
+          store_name: '店舗C',
+          business_date: '2026-07-20',
+          status: 'PENDING',
+          expired: true,
+        },
+      ])
+    );
+
+    render(<MemberReservationsPage />);
+
+    const rows = within(await screen.findByRole('list', { name: '予約' })).getAllByRole('listitem');
+    expect(within(rows[0]).getByText('却下')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('取り下げ')).toBeInTheDocument();
+    expect(within(rows[2]).getByText('失効')).toBeInTheDocument();
+    expect(within(rows[2]).queryByText('申請中')).not.toBeInTheDocument();
+    // 店舗がもう処理しない申請に取り下げを出すと、「失効」の隣で何かが残っているように読める
+    expect(rowWithdrawButtons()).toHaveLength(0);
+  });
+
+  it('一覧の上部から予約の新規作成へ進める', async () => {
+    mockedList.mockImplementation(pagedServer(1));
+
+    render(<MemberReservationsPage />);
+
+    expect(await screen.findByRole('link', { name: '新しく予約' })).toHaveAttribute(
+      'href',
+      '/member/reservations/new'
+    );
+  });
+
+  it('予約が無いときは無いことと新規作成への入口を一つだけ出す', async () => {
+    mockedList.mockResolvedValue(page([]));
+
+    render(<MemberReservationsPage />);
+
+    expect(await screen.findByText('まだ予約はありません')).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: '新しく予約' })).toHaveLength(1);
+  });
+
+  it('読み込み中は一覧の形の骨組みを出す', () => {
+    mockedList.mockReturnValue(new Promise(() => {}));
+
+    render(<MemberReservationsPage />);
+
+    expect(screen.getByRole('status', { name: '読み込み中' })).toBeInTheDocument();
+  });
+
+  it('取り下げは確認ダイアログを経て、「やめる」なら取り下げない', async () => {
+    mockedList.mockImplementation(pagedServer(1));
+
+    render(<MemberReservationsPage />);
+
+    const dialog = await openWithdrawDialog();
+    expect(within(dialog).getByRole('button', { name: '取り下げる' })).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'やめる' }));
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(mockedWithdraw).not.toHaveBeenCalled();
   });
 
   it('取り下げボタンは確定前の予約にだけ出す', async () => {
@@ -97,7 +211,7 @@ describe('MemberReservationsPage', () => {
     render(<MemberReservationsPage />);
 
     await screen.findByText('店舗A');
-    expect(screen.getAllByRole('button', { name: '取り下げる' })).toHaveLength(1);
+    expect(rowWithdrawButtons()).toHaveLength(1);
   });
 
   it('取り下げると本人取り下げの API を呼び、表示中のページを取り直す', async () => {
@@ -115,7 +229,7 @@ describe('MemberReservationsPage', () => {
 
     render(<MemberReservationsPage />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '取り下げる' }));
+    await withdrawThroughDialog();
 
     await waitFor(() => expect(mockedWithdraw).toHaveBeenCalledWith('o1'));
     expect(await screen.findByText('取り下げ')).toBeInTheDocument();
@@ -137,7 +251,7 @@ describe('MemberReservationsPage', () => {
 
     render(<MemberReservationsPage />);
 
-    fireEvent.click(await screen.findByRole('button', { name: '取り下げる' }));
+    await withdrawThroughDialog();
 
     await waitFor(() =>
       expect(notify.error).toHaveBeenCalledWith(
@@ -153,7 +267,7 @@ describe('MemberReservationsPage', () => {
     render(<MemberReservationsPage />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('予約を取得できませんでした。');
-    expect(screen.queryByText('予約はまだありません。')).not.toBeInTheDocument();
+    expect(screen.queryByText('まだ予約はありません')).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '再試行' }));
 
@@ -181,9 +295,7 @@ describe('MemberReservationsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '再試行' }));
 
     await waitFor(() => expect(mockedList).toHaveBeenLastCalledWith(0));
-    await waitFor(() =>
-      expect(screen.getAllByRole('button', { name: '取り下げる' })).toHaveLength(20)
-    );
+    await waitFor(() => expect(rowWithdrawButtons()).toHaveLength(20));
   });
 
   it('ページ送りで次のページを取り直し、最終ページでは先へ進めない', async () => {
@@ -196,9 +308,7 @@ describe('MemberReservationsPage', () => {
     expect(await screen.findByText('店舗20')).toBeInTheDocument();
     expect(screen.queryByText('店舗0')).not.toBeInTheDocument();
     fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
-    await waitFor(() =>
-      expect(screen.getAllByRole('button', { name: '取り下げる' })).toHaveLength(5)
-    );
+    await waitFor(() => expect(rowWithdrawButtons()).toHaveLength(5));
 
     expect(mockedList.mock.calls.map(([number]) => number)).toEqual([0, 1, 2]);
     expect(screen.getAllByRole('button', { name: '次へ' })[0]).toBeDisabled();

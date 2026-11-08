@@ -1,290 +1,131 @@
 'use client';
 
 import { useSearchParams } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import { useForm, useWatch } from 'react-hook-form';
-import { notify } from '@/shared/notify';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { memberOrderApplicationApi } from '@/entities/order';
-import { ConfirmedShiftCast, shiftApi } from '@/entities/shift';
 import { adminStoreApi } from '@/entities/store';
-import { integerRule, useResource } from '@/shared/lib';
-import {
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-  Input,
-  Label,
-  RegionError,
-  Textarea,
-} from '@/shared/ui';
+import { useResource } from '@/shared/lib';
+import { Button, RegionError, Skeleton } from '@/shared/ui';
+import { MemberReservationForm } from './MemberReservationForm';
 
-interface ReservationFormValues {
-  declared_name: string;
-  business_date: string;
-  arrival_scheduled_start_time: string;
-  pax: number;
-  cast_id: string;
-  remarks: string;
+interface PastStore {
+  id: number;
+  name: string;
+}
+
+function Loading() {
+  return (
+    <div role="status" aria-label="読み込み中" className="space-y-4">
+      <Skeleton className="h-7 w-1/2" />
+      {Array.from({ length: 4 }, (_, i) => (
+        <Skeleton key={i} className="h-12 w-full" />
+      ))}
+    </div>
+  );
+}
+
+function Guidance() {
+  return (
+    <p className="text-muted-foreground">
+      店舗が特定できませんでした。店舗公式サイトの予約ボタンからお進みください。
+    </p>
+  );
+}
+
+/** 公式サイトの予約ボタンから来たとき。引き継いだドメインをサーバ側の公開照会に突き合わせる。 */
+function StoreFromDomain({ domain }: { domain: string }) {
+  const { data, isLoading, failure, reload } = useResource(
+    () => adminStoreApi.lookupByDomain(domain),
+    [domain]
+  );
+  if (isLoading) return <Loading />;
+  if (failure === 'error') {
+    // 「そのドメインの店舗が無い」（404）と照会自体の失敗を区別する。後者は再試行で
+    // 復帰しうるので、案内と同じ行き止まりに見せない。
+    return <RegionError message="店舗情報を取得できませんでした" onRetry={() => void reload()} />;
+  }
+  if (!data?.id) return <Guidance />;
+  return (
+    <MemberReservationForm key={data.id} storeId={Number(data.id)} storeName={data.name ?? ''} />
+  );
+}
+
+/** 過去の予約申請に現れた店舗を、新しい申請の順に重複なく集める。 */
+async function loadPastStores(): Promise<PastStore[]> {
+  const stores = new Map<number, string>();
+  for (let page = 0, pageCount = 1; page < pageCount; page++) {
+    const result = await memberOrderApplicationApi.list(page);
+    pageCount = result.pageCount;
+    for (const row of result.rows) {
+      if (row.store_id != null && !stores.has(row.store_id)) {
+        stores.set(row.store_id, row.store_name ?? '');
+      }
+    }
+  }
+  return [...stores].map(([id, name]) => ({ id, name }));
 }
 
 /**
- * 会員ポータルの予約申請。
- *
- * <p>店舗は公式サイトから引き継いだドメイン（?store=）をサーバ側の公開照会に突き合わせて解決する — 画面はブラウザから渡された値を店舗 ID
- * として信用せず、照会の結果だけを使う。指名候補はその日の確定シフトから引く。
+ * 一覧の「新しく予約」から来たとき。会員は現在店舗を持たないので、過去に予約した店舗から選ばせる。
+ * 店舗の ID は本人の予約申請の応答から取り、URL では受け取らない。
+ */
+function StoreFromHistory() {
+  const { data, isLoading, failure, reload } = useResource(loadPastStores, []);
+  const [pickedId, setPickedId] = useState<number | null>(null);
+
+  if (isLoading) return <Loading />;
+  if (failure !== null) {
+    return (
+      <RegionError message="予約した店舗を取得できませんでした" onRetry={() => void reload()} />
+    );
+  }
+  const stores = data ?? [];
+  if (stores.length === 0) return <Guidance />;
+  if (stores.length === 1) {
+    return <MemberReservationForm storeId={stores[0].id} storeName={stores[0].name} />;
+  }
+
+  const picked = stores.find(store => store.id === pickedId);
+  if (picked) {
+    return (
+      <MemberReservationForm
+        key={picked.id}
+        storeId={picked.id}
+        storeName={picked.name}
+        onChangeStore={() => setPickedId(null)}
+      />
+    );
+  }
+  return (
+    <section aria-labelledby="pick-store" className="space-y-4">
+      <h2 id="pick-store" className="text-xl font-semibold">
+        予約する店舗
+      </h2>
+      <p className="text-muted-foreground">
+        これまでに予約した店舗から選んでください。初めての店舗は店舗公式サイトの予約ボタンからお進みください。
+      </p>
+      <div className="grid gap-3">
+        {stores.map(store => (
+          <Button
+            key={store.id}
+            type="button"
+            variant="outline"
+            className="h-auto min-h-12 justify-start py-3 text-left text-lg whitespace-normal wrap-anywhere"
+            onClick={() => setPickedId(store.id)}
+          >
+            {store.name}
+          </Button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * 会員ポータルの予約申請。宛先の店舗は公式サイトから引き継いだドメイン（?store=）か、本人の過去の
+ * 予約から決める。どちらもブラウザから渡された値を店舗 ID として信用せず、サーバの応答だけを使う。
  */
 export function MemberReservationNewPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const domain = searchParams.get('store');
-
-  const [submitting, setSubmitting] = useState(false);
-
-  const {
-    data: storeData,
-    isLoading: storeLoading,
-    failure: storeFailure,
-    reload: reloadStore,
-  } = useResource(domain ? () => adminStoreApi.lookupByDomain(domain) : null, [domain]);
-  // フックが持つのは「最後に取れた店舗」であって「今の ?store= の店舗」ではない。取りに行く
-  // 理由が無くなっても値は残る（フックの既定 — 開き直した区画に生の id を出さないため）ので、
-  // この頁では捨てる。残すと ?store= の外れた URL で前の店舗宛のフォームが送信できてしまう。
-  // ドメインが別の値へ変わる場合は取得中の相（読み込み中）が引き取る。
-  const store = domain ? storeData : null;
-  const storeId = store?.id ? Number(store.id) : null;
-
-  const form = useForm<ReservationFormValues>({
-    defaultValues: {
-      declared_name: '',
-      business_date: '',
-      arrival_scheduled_start_time: '',
-      pax: 1,
-      cast_id: '',
-      remarks: '',
-    },
-  });
-  const { register, handleSubmit, setValue, control } = form;
-
-  const businessDate = useWatch({ control, name: 'business_date' });
-
-  const castsRequested = storeId !== null && businessDate !== '';
-  const {
-    data: castsData,
-    isLoading: castsLoading,
-    failure: castsFailure,
-    reload: reloadCasts,
-  } = useResource(
-    castsRequested
-      ? () => shiftApi.confirmedCasts({ store_id: storeId, date: businessDate })
-      : null,
-    [storeId, businessDate]
-  );
-  // 候補はその日その店舗の確定シフトに紐づく。日付は頁に留まったまま何度でも変わり、フックは
-  // 次が届くまで前の値を持ち続けるので、取得中も読み込み表示だけで済ませると、選択肢には前の
-  // 日付のキャストが並び続ける（選べてしまう）。取りに行っていない間・待っている間は空にする。
-  const casts: ConfirmedShiftCast[] = castsRequested && !castsLoading ? (castsData ?? []) : [];
-
-  useEffect(() => {
-    // 候補が入れ替わる契機では選択も捨てる。残すと、その日に出勤しないキャストの指名が通る。
-    setValue('cast_id', '');
-  }, [storeId, businessDate, setValue]);
-
-  const submit = async (values: ReservationFormValues) => {
-    if (storeId === null) return;
-    setSubmitting(true);
-    try {
-      await memberOrderApplicationApi.create({
-        store_id: storeId,
-        declared_name: values.declared_name,
-        business_date: values.business_date,
-        pax: Number(values.pax),
-        arrival_scheduled_start_time: values.arrival_scheduled_start_time || undefined,
-        cast_id: values.cast_id || undefined,
-        remarks: values.remarks || undefined,
-      });
-      notify.success('予約を申請しました');
-      router.push('/member/reservations/');
-    } catch {
-      notify.error('予約の申請に失敗しました');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div>
-      <Card>
-        <CardHeader>
-          <CardTitle role="heading" aria-level={2}>
-            {store ? store.name : '店舗'}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {storeLoading ? (
-            <p className="text-sm text-muted-foreground">読み込み中...</p>
-          ) : storeFailure === 'error' ? (
-            // 「そのドメインの店舗が無い」（404）と照会自体の失敗を区別する。後者は再試行で
-            // 復帰しうるので、下の案内と同じ行き止まりに見せない。
-            <RegionError
-              message="店舗情報を取得できませんでした"
-              onRetry={() => void reloadStore()}
-            />
-          ) : !store ? (
-            <p className="text-sm text-muted-foreground">
-              店舗が特定できませんでした。店舗公式サイトの予約ボタンからお進みください。
-            </p>
-          ) : (
-            <Form {...form}>
-              {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
-                  我々の文言は永久に描かれない。人数の min={1} は下の min 規則が引き継ぐ */}
-              <form onSubmit={handleSubmit(submit)} className="space-y-4" noValidate>
-                {/* 店舗が知る名前はここで名乗る名前だけ。ご登録の表示名・メールは店舗へ渡らない */}
-                <FormField
-                  control={control}
-                  name="declared_name"
-                  rules={{
-                    required: '店舗へ名乗るお名前を入力してください',
-                    maxLength: { value: 255, message: 'お名前は 255 文字以内で入力してください' },
-                    // required は空白だけの入力を「入っている」と見る。サーバ側の @NotBlank が
-                    // 弾く形をそのまま通すと、欄の傍ではなく送信失敗の通知として返ってくる。
-                    validate: value =>
-                      value.trim().length > 0 || '店舗へ名乗るお名前を入力してください',
-                  }}
-                  render={({ field }) => (
-                    <FormItem className="gap-1">
-                      <FormLabel>店舗へ名乗るお名前</FormLabel>
-                      <FormControl>
-                        <Input required {...field} />
-                      </FormControl>
-                      {/* 名乗りが台帳に載るのは、その店舗に自分の記録がまだ無いときだけ（既にあれば
-                          店舗が持つ記録の氏名がそのまま使われる）。「必ず店舗に伝わる」と読める文言は
-                          置かない */}
-                      <FormDescription>
-                        初めてのご利用なら、このお名前で店舗の台帳に登録されます。ご登録の表示名・メールアドレスは店舗に伝わりません。
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={control}
-                  name="business_date"
-                  rules={{ required: '利用日を選択してください' }}
-                  render={({ field }) => (
-                    <FormItem className="gap-1">
-                      <FormLabel>利用日</FormLabel>
-                      <FormControl>
-                        <Input type="date" required {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <div>
-                  <Label htmlFor="arrival_scheduled_start_time">希望時刻</Label>
-                  <Input
-                    id="arrival_scheduled_start_time"
-                    type="time"
-                    {...register('arrival_scheduled_start_time')}
-                  />
-                </div>
-                <FormField
-                  control={control}
-                  name="pax"
-                  rules={{
-                    required: '人数を入力してください',
-                    min: { value: 1, message: '人数は 1 以上です' },
-                    // noValidate は type="number" の暗黙の step=1 も止める。これが無いと 1.5 が
-                    // Integer の pax へ届く
-                    validate: integerRule('人数'),
-                  }}
-                  render={({ field }) => (
-                    <FormItem className="gap-1">
-                      <FormLabel>人数</FormLabel>
-                      <FormControl>
-                        <Input type="number" min={1} required {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <div>
-                  <Label htmlFor="cast_id">指名（任意）</Label>
-                  {/* 指名候補はその日の確定シフトに限る。ネイティブ select を使うのは、フォーム値をそのまま扱えるため。 */}
-                  <select
-                    id="cast_id"
-                    className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs"
-                    {...register('cast_id')}
-                  >
-                    <option value="">指名なし</option>
-                    {casts.map(cast => (
-                      <option key={cast.cast_id} value={cast.cast_id}>
-                        {cast.cast_name}
-                        {cast.start_time ? `（${cast.start_time.slice(0, 5)}〜）` : ''}
-                      </option>
-                    ))}
-                  </select>
-                  {businessDate && castsLoading && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      出勤情報を確認しています...
-                    </p>
-                  )}
-                  {businessDate && !castsLoading && castsFailure !== null && (
-                    <RegionError
-                      message="出勤情報を取得できませんでした"
-                      onRetry={() => void reloadCasts()}
-                      className="mt-1"
-                    />
-                  )}
-                  {/* 取得が終わるまで「出勤なし」と言い切らない — 未解決の間に空表示を出すと、
-                    指名するつもりの会員が誤った空き情報のまま指名なしで申請してしまう。 */}
-                  {businessDate && !castsLoading && castsFailure === null && casts.length === 0 && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      この日に出勤予定のキャストはいません。
-                    </p>
-                  )}
-                </div>
-                <FormField
-                  control={control}
-                  name="remarks"
-                  rules={{
-                    maxLength: { value: 500, message: 'ご要望は 500 文字以内で入力してください' },
-                  }}
-                  render={({ field }) => (
-                    <FormItem className="gap-1">
-                      <FormLabel>ご要望（任意）</FormLabel>
-                      <FormControl>
-                        <Textarea rows={3} {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                {/* 候補が確定するまで送信させない。取得中も失敗中も「その日に誰が出勤するか」は
-                  未確定であり、指名を選ぶ機会が無いまま「指名なし」で申請が通ってしまう。
-                  失敗のときは再読み込みが復帰の手段になる。 */}
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={submitting || castsLoading || castsFailure !== null}
-                >
-                  この内容で申請する
-                </Button>
-              </form>
-            </Form>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
+  const domain = useSearchParams().get('store');
+  return domain ? <StoreFromDomain domain={domain} /> : <StoreFromHistory />;
 }
