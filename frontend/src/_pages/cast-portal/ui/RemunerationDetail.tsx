@@ -176,7 +176,7 @@ function Change({ change, today }: { change: SelfRemunerationChange; today: stri
                 {diff.item === undefined
                   ? diff.label
                   : diff.kind === 'added' || diff.kind === 'removed'
-                    ? `${diff.item}（${diff.label}）`
+                    ? `${diff.item}（${diff.kind === 'added' ? '追加' : '削除'}）の${diff.label}`
                     : `${diff.item}の${diff.label}`}
               </span>
             }
