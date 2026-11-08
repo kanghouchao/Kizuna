@@ -33,15 +33,24 @@ function dayTotal(day: Day): number | undefined {
     : day.order_amount + day.guarantee_amount + day.bonus_amount;
 }
 
-function headline(entry: StatementDay): string {
+// 項目の途中では折り返さず、項目の間で折り返す（狭い幅で「ボーナスあ／り」と割らない）
+function Headline({ entry }: { entry: StatementDay }) {
   const minutes = closedMinutes(entry.day.closed_duration);
-  return [
+  const parts = [
     minutes > 0 && `出勤 ${formatDuration(minutes)}`,
     `受注${entry.orders.length}件`,
     entry.bonuses.length > 0 && 'ボーナスあり',
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  ].filter((part): part is string => typeof part === 'string');
+  return (
+    <span className="min-w-0 text-sm text-muted-foreground">
+      {parts.map((part, index) => (
+        <span key={part}>
+          {index > 0 && ' · '}
+          <span className="whitespace-nowrap">{part}</span>
+        </span>
+      ))}
+    </span>
+  );
 }
 
 /** 承諾した後に変わった額。三項が同じでも根拠が変われば「変更あり」になるので、その旨を出す。 */
@@ -127,7 +136,7 @@ export function StatementDayFold({
               )}
             />
           </span>
-          <span className="min-w-0 text-sm text-muted-foreground">{headline(entry)}</span>
+          <Headline entry={entry} />
           <span className="justify-self-end">{status && <StatusBadge status={status} />}</span>
         </button>
       </h3>
