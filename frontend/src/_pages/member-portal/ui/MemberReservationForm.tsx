@@ -134,6 +134,8 @@ export function MemberReservationForm({
             variant="outline"
             className="min-h-12 text-lg"
             onClick={onChangeStore}
+            // 送信中に捨てさせると、届いた応答が選び直した先の入力を遷移で消す
+            disabled={submitting}
           >
             店舗を選び直す
           </Button>
