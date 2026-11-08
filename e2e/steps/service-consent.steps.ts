@@ -69,32 +69,36 @@ async function pageToService(page: Page) {
     await expect(heading.or(next).first()).toBeVisible();
   }
 }
-Then("特殊サービスの顧客価格と固定報酬が表示される", async ({ page }) => {
-  const card = page
-    .getByRole("heading", { name: serviceName, exact: true })
-    .locator("..");
-  await expect(card).toContainText("顧客価格: 2,000 円");
-  await expect(card).toContainText("固定報酬: 1,500 円");
+const serviceCard = (page: Page) =>
+  page.getByRole("region", { name: serviceName, exact: true });
+Then("特殊サービスのお客様料金とあなたの報酬が表示される", async ({ page }) => {
+  const card = serviceCard(page);
+  await expect(card).toContainText("お客様料金¥2,000");
+  await expect(card).toContainText("あなたの報酬¥1,500");
 });
+// 確定の前に下部シートが店舗・サービス・金額を復唱することも確かめる
+async function decide(page: Page, verb: "受諾する" | "拒否する") {
+  await serviceCard(page)
+    .getByRole("button", { name: verb, exact: true })
+    .click();
+  const sheet = page.getByRole("dialog", { name: `サービス条件を${verb}` });
+  await expect(sheet).toContainText(serviceName);
+  await expect(sheet).toContainText("あなたの報酬¥");
+  await sheet
+    .getByRole("button", { name: `確認して${verb}`, exact: true })
+    .click();
+  await expect(sheet).toBeHidden();
+}
 When("表示条件を確認して特殊サービスを受諾する", async ({ page }) => {
-  await page
-    .getByRole("heading", { name: serviceName, exact: true })
-    .locator("..")
-    .getByRole("button", { name: "受諾する", exact: true })
-    .click();
-  await page
-    .getByRole("button", { name: "確認して受諾する", exact: true })
-    .click();
+  await decide(page, "受諾する");
 });
 Then(
   "特殊サービスが「{word}」と表示される",
   async ({ page }, status: string) => {
-    await expect(
-      page
-        .getByRole("heading", { name: serviceName, exact: true })
-        .locator(".."),
-    ).toContainText(status);
-    if (status === "本人が拒否") {
+    await expect(serviceCard(page)).toContainText(status);
+    if (status === "受諾待ち")
+      await expect(serviceCard(page)).toContainText("条件が変わりました");
+    if (status === "拒否済み") {
       await page.screenshot({
         animations: "disabled",
         path: test.info().outputPath("service-consent-light.png"),
@@ -127,14 +131,7 @@ When(
   },
 );
 When("本人が特殊サービスを拒否する", async ({ page }) => {
-  await page
-    .getByRole("heading", { name: serviceName, exact: true })
-    .locator("..")
-    .getByRole("button", { name: "拒否する", exact: true })
-    .click();
-  await page
-    .getByRole("button", { name: "確認して拒否する", exact: true })
-    .click();
+  await decide(page, "拒否する");
 });
 
 When(
