@@ -71,15 +71,13 @@ export default function AuthLayout({ children, title, subtitle }: AuthLayoutProp
               height={28}
               className="mr-3"
             />
-            <span className="auth-brand__name text-[#1a1040] text-lg">KIZUNA</span>
+            <span className="auth-brand__name auth-ink text-lg">KIZUNA</span>
           </div>
 
           {/* ページタイトル */}
           <div className="mb-8 sm:mb-10">
-            <h2 className="text-[26px] font-semibold text-[#1a1040] tracking-tight leading-tight">
-              {title}
-            </h2>
-            <p className="mt-2.5 text-sm text-[#9a958e] leading-relaxed">{subtitle}</p>
+            <h2 className="auth-heading">{title}</h2>
+            <p className="auth-subtitle">{subtitle}</p>
           </div>
 
           {/* フォームコンテンツ（スタガードアニメーション） */}

@@ -537,6 +537,26 @@
 
 /* ========== 本文 ========== */
 
+.auth-ink {
+  color: #1a1040;
+}
+
+.auth-heading {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+  color: #1a1040;
+}
+
+/* 見出しの補足。14px でも 4.5:1 を満たす色にする */
+.auth-subtitle {
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 1.625;
+  color: #6b6660;
+}
+
 .auth-text {
   font-size: 14px;
   line-height: 1.6;
