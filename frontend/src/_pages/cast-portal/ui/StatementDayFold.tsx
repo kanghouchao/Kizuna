@@ -175,11 +175,14 @@ export function StatementDayFold({
               </ul>
             )}
           </div>
-          {(pendingGuarantee || (day.guarantee_amount ?? 0) > 0) && (
+          {/* 日額と保証の判定は不足分が 0 円でも承諾の対象（訂正されれば再承諾になる）なので、対象外の日以外は出す */}
+          {(day.guarantee_status !== 'NOT_ELIGIBLE' || (day.guarantee_amount ?? 0) > 0) && (
             <div>
               <SubHeading>日額保証</SubHeading>
               {pendingGuarantee ? (
                 <Line label="日額保証の不足分">{`計算待ち（${pendingGuarantee}）`}</Line>
+              ) : day.guarantee_status === 'STOPPED' ? (
+                <Line label="日額保証の不足分">保証停止</Line>
               ) : (
                 <Line
                   label={
