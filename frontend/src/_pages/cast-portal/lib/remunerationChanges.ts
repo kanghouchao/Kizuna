@@ -1,4 +1,21 @@
 import type { SelfRemunerationItem, SelfRemunerationSnapshot } from '@/entities/order';
+import { formatMinutes, formatRevision } from '@/shared/lib';
+
+const BASES = {
+  CURRENT_SETTING: '店舗の設定',
+  ACCEPTED_TERMS: '受諾した条件',
+  HISTORICAL_CORRECTION: '過去の版による訂正',
+};
+
+/** 明細の約定条件の根拠。受諾した条件は受諾した版を添える。 */
+export function itemTerms(item: SelfRemunerationItem): string | undefined {
+  if (!item.adoption_basis) return undefined;
+  const version =
+    item.adoption_basis === 'ACCEPTED_TERMS' && item.consent_version !== undefined
+      ? `（${formatRevision(item.consent_version)}）`
+      : '';
+  return `${BASES[item.adoption_basis]}${version}`;
+}
 
 /** 変更前後の差の 1 行。明細の差は item に明細名を持ち、label は短い項目名だけにする。 */
 export type RemunerationChange = { item?: string } & (
@@ -20,6 +37,18 @@ export function itemKeys(items: readonly SelfRemunerationItem[]): string[] {
     return `${base}#${nth}`;
   });
 }
+
+const text = <T>(
+  label: string,
+  before: T | undefined,
+  after: T | undefined,
+  item: string,
+  format: (value: T) => string = String
+): RemunerationChange[] => {
+  if (before === after) return [];
+  const show = (value: T | undefined) => (value === undefined ? 'なし' : format(value));
+  return [{ kind: 'text', item, label, text: `${show(before)} → ${show(after)}` }];
+};
 
 const money = (
   label: string,
@@ -54,6 +83,13 @@ export function remunerationChanges(
       rows.push({ kind: 'removed', item: old.name, label: '削除', amount: old.remuneration });
       return;
     }
+    // 別の版への訂正は金額が同じでも名称・時間・条件が変わる。金額だけを比べると何が変わったか読めない
+    rows.push(...text('名称', old.name, next.name, next.name));
+    rows.push(
+      ...text('時間', old.duration_minutes, next.duration_minutes, next.name, formatMinutes)
+    );
+    rows.push(...text('条件', itemTerms(old), itemTerms(next), next.name));
+    rows.push(...text('版', old.revision_number, next.revision_number, next.name, formatRevision));
     rows.push(...money('お客様料金', old.price, next.price, next.name));
     rows.push(...money('固定報酬', old.remuneration, next.remuneration, next.name));
   });

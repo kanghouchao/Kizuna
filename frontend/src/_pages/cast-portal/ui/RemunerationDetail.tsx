@@ -11,7 +11,6 @@ import {
   formatDate,
   formatDateTime,
   formatMinutes,
-  formatRevision,
   isForbidden,
   isNotFound,
   tokyoDate,
@@ -28,7 +27,7 @@ import {
   RegionError,
   Skeleton,
 } from '@/shared/ui';
-import { itemKeys, remunerationChanges } from '../lib/remunerationChanges';
+import { itemKeys, itemTerms, remunerationChanges } from '../lib/remunerationChanges';
 
 const STATUSES = {
   CONFIRMED: '予定',
@@ -41,11 +40,6 @@ const KINDS = {
   SPECIAL_SERVICE: '特殊サービス',
   EXTENSION: '延長',
   SURCHARGE: '加算',
-};
-const BASES = {
-  CURRENT_SETTING: '店舗の設定',
-  ACCEPTED_TERMS: '受諾した条件',
-  HISTORICAL_CORRECTION: '過去の版による訂正',
 };
 
 export function remunerationStatus(row: SelfRemunerationSummary): string {
@@ -91,14 +85,7 @@ function Item({ item }: { item: SelfRemunerationItem }) {
         <KeyValueRow label="固定報酬" money>
           <Money amount={item.remuneration} />
         </KeyValueRow>
-        {item.adoption_basis && (
-          <KeyValueRow label="条件">
-            {BASES[item.adoption_basis]}
-            {item.adoption_basis === 'ACCEPTED_TERMS' && item.consent_version !== undefined
-              ? `（${formatRevision(item.consent_version)}）`
-              : ''}
-          </KeyValueRow>
-        )}
+        {itemTerms(item) && <KeyValueRow label="条件">{itemTerms(item)}</KeyValueRow>}
       </KeyValueList>
     </Panel>
   );
@@ -187,9 +174,9 @@ function Change({ change, today }: { change: SelfRemunerationChange; today: stri
             label={
               diff.item === undefined
                 ? diff.label
-                : diff.kind === 'changed'
-                  ? `${diff.item}の${diff.label}`
-                  : `${diff.item}（${diff.label}）`
+                : diff.kind === 'added' || diff.kind === 'removed'
+                  ? `${diff.item}（${diff.label}）`
+                  : `${diff.item}の${diff.label}`
             }
             long={diff.item !== undefined}
             money={diff.kind !== 'text'}
