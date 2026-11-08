@@ -56,12 +56,7 @@ jest.mock('@/widgets/order-correction-history', () => ({
   ),
 }));
 jest.mock('@/_pages/cast-portal/ui/RemunerationDetail', () => ({
-  RemunerationDetail: ({ id, onBack }: { id: string; onBack: () => void }) => (
-    <div role="dialog">
-      {id}
-      <button onClick={onBack}>一覧へ戻る</button>
-    </div>
-  ),
+  RemunerationDetail: ({ id }: { id: string }) => <div role="dialog">{id}</div>,
 }));
 jest.mock('@/_pages/store-monthly-remunerations/ui/PersonPicker', () => ({
   PersonPicker: ({ onChange }: { onChange: (value: unknown) => void }) => (

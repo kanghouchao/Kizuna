@@ -24,7 +24,7 @@ export interface PortalTab {
 /** タブの画面は属するタブの href を、下位画面は戻り先を持つ。 */
 export type PortalScreen = { title: string; tab: string } | { title: string; back: string };
 
-/** 末尾の / を除いたパス → 画面。 */
+/** 末尾の / を除いたパス → 画面。動的な区切りは app のルートと同じ `[名前]` で書く。 */
 export type PortalScreens = Readonly<Record<string, PortalScreen>>;
 
 interface PortalShellProps {
@@ -48,6 +48,20 @@ function normalize(path: string | null): string {
   return path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
 }
 
+/** 表をパスで引く。完全一致を先に見て、無ければ `[名前]` を一つの区切りに当てる。 */
+function findScreen(screens: PortalScreens, pathname: string): PortalScreen | undefined {
+  if (screens[pathname]) return screens[pathname];
+  const parts = pathname.split('/');
+  const key = Object.keys(screens).find(candidate => {
+    const pattern = candidate.split('/');
+    return (
+      pattern.length === parts.length &&
+      pattern.every((part, i) => part === parts[i] || /^\[[^\]]+\]$/.test(part))
+    );
+  });
+  return key === undefined ? undefined : screens[key];
+}
+
 /**
  * 本人ポータル（キャスト・会員）の共通の外枠。画面名・戻り先・所属タブは screens の表で引き、
  * 下位画面は戻る導線を出して下部タブを出さない。PC 幅でもスマートフォンの幅の列に収める。
@@ -55,7 +69,7 @@ function normalize(path: string | null): string {
  */
 export function PortalShell({ tier, tabs, screens, badges, notice, children }: PortalShellProps) {
   const pathname = normalize(usePathname());
-  const current = screens[pathname];
+  const current = findScreen(screens, pathname);
   const back = current && 'back' in current ? current.back : null;
   const activeTab = current && 'tab' in current ? current.tab : null;
   const segments = tabs.find(tab => tab.href === activeTab)?.segments;

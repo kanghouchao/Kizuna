@@ -79,7 +79,6 @@ it('本人詳細と履歴から戻っても店舗と月と合計を維持する'
   render(<CastMonthlyRemunerationsPage />);
   await search();
   fireEvent.click(screen.getByRole('button', { name: '詳細・変更履歴を確認' }));
-  fireEvent.click(await screen.findByRole('button', { name: '変更履歴を確認' }));
   await screen.findByText('変更履歴はありません');
   expect(selfRemunerationApi.detail).toHaveBeenCalledWith('old-order');
   expect(selfRemunerationApi.changes).toHaveBeenCalledWith('old-order', 0);

@@ -33,6 +33,7 @@ export const CAST_SCREENS: PortalScreens = {
   '/cast/requests': { title: 'スケジュール', tab: '/cast/schedule' },
   '/cast/remunerations': { title: '報酬', tab: '/cast/remunerations' },
   '/cast/remunerations/monthly': { title: '報酬', tab: '/cast/remunerations' },
+  '/cast/remunerations/[orderId]': { title: '報酬明細', back: '/cast/remunerations' },
   '/cast/account': { title: 'アカウント', tab: '/cast/account' },
   '/cast/service-conditions': { title: 'サービス条件', back: '/cast/account' },
 };

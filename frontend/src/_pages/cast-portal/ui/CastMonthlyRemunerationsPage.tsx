@@ -104,7 +104,10 @@ export function CastMonthlyRemunerationsPage() {
       {orderId ? (
         <>
           <h2 className="text-lg font-semibold">報酬明細</h2>
-          <RemunerationDetail key={orderId} id={orderId} onBack={() => setOrderId(null)} />
+          <Button variant="outline" onClick={() => setOrderId(null)}>
+            一覧へ戻る
+          </Button>
+          <RemunerationDetail key={orderId} id={orderId} />
         </>
       ) : (
         <Form {...form}>
