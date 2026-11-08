@@ -83,6 +83,7 @@ async function decide(page: Page, verb: "受諾する" | "拒否する") {
     .click();
   const sheet = page.getByRole("dialog", { name: `サービス条件を${verb}` });
   await expect(sheet).toContainText(serviceName);
+  await expect(sheet).toContainText("お客様料金");
   await expect(sheet).toContainText("あなたの報酬¥");
   await sheet
     .getByRole("button", { name: `確認して${verb}`, exact: true })

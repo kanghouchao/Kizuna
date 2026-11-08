@@ -34,6 +34,9 @@ import {
 } from '@/shared/ui';
 import { PANEL } from './RemunerationDetail';
 
+/** 再試行では直らない案内（権限・対象の消失・競合）。 */
+const NOTICE = 'rounded-xl border bg-card p-3 text-foreground';
+
 const STATUS_WORDS: Record<ConsentStatus, StatusWord> = {
   NOT_ACCEPTED: '受諾待ち',
   RECONFIRMATION_REQUIRED: '受諾待ち',
@@ -61,7 +64,6 @@ function summary(item: OwnServiceConditionSummary): string {
   return [
     serviceKindLabels[item.kind],
     item.duration_minutes !== undefined && formatMinutes(item.duration_minutes),
-    item.charge_type && (item.charge_type === 'FREE' ? '無料' : '有料'),
   ]
     .filter(Boolean)
     .join(' · ');
@@ -86,7 +88,12 @@ export function CastServiceConditionsPage() {
   const current = chips.find(store => store.id === picked) ?? chips[0];
 
   if (stores.isLoading) return <ListRowsSkeleton />;
-  if (storesDenied) return <p role="alert">サービス条件を確認する権限がありません。</p>;
+  if (storesDenied)
+    return (
+      <p role="alert" className={NOTICE}>
+        サービス条件を確認する権限がありません。
+      </p>
+    );
   if (stores.failure)
     return (
       <RegionError message="所属店舗の取得に失敗しました" onRetry={() => void stores.reload()} />
@@ -116,14 +123,16 @@ function Conditions({ storeId, storeName }: { storeId: string; storeName: string
   };
 
   const save = async () => {
-    if (!target || target.item.consent_version === undefined) return;
+    if (!target) return;
     const { item, decision } = target;
+    const consentVersion = item.consent_version;
+    if (consentVersion === undefined) return;
     setMessage('');
     const outcome = await write(
       () =>
         ownServiceApi.decide(storeId, item.id, {
           terms_version: item.terms_version,
-          consent_version: item.consent_version!,
+          consent_version: consentVersion,
           decision,
         }),
       {
@@ -132,6 +141,7 @@ function Conditions({ storeId, storeName }: { storeId: string; storeName: string
       }
     );
     if (outcome === 'refused') return;
+    // 409 でもシートは閉じる。シートは表示時の条件を復唱しており、開いたままでは古い条件に同意させる
     setSheetOpen(false);
     if (outcome === 'success') await reload();
     else if (outcome === 'notFound')
@@ -146,14 +156,18 @@ function Conditions({ storeId, storeName }: { storeId: string; storeName: string
   return (
     <>
       {message && (
-        <p role="alert" className="rounded-xl border p-3 text-foreground">
+        <p role="alert" className={NOTICE}>
           {message}
         </p>
       )}
       {failure !== null && isForbidden(failure) ? (
-        <p role="alert">サービス条件を確認する権限がありません。</p>
+        <p role="alert" className={NOTICE}>
+          サービス条件を確認する権限がありません。
+        </p>
       ) : failure !== null && isNotFound(failure) ? (
-        <p role="alert">有効な在籍またはサービスが見つかりません。店舗を選び直してください。</p>
+        <p role="alert" className={NOTICE}>
+          有効な在籍またはサービスが見つかりません。店舗を選び直してください。
+        </p>
       ) : list.failed ? (
         <RegionError message="サービス条件の取得に失敗しました" onRetry={() => void reload()} />
       ) : list.isLoading ? (
@@ -190,11 +204,7 @@ function Conditions({ storeId, storeName }: { storeId: string; storeName: string
         footer={
           <>
             <Button type="button" onClick={() => void save()} disabled={busy}>
-              {busy
-                ? '保存中...'
-                : target?.decision === 'REJECTED'
-                  ? '確認して拒否する'
-                  : '確認して受諾する'}
+              {busy ? '保存中...' : target && `確認して${DECISIONS[target.decision].verb}`}
             </Button>
             <BottomSheetClose render={<Button type="button" variant="outline" />}>
               やめる
