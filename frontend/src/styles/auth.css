@@ -250,6 +250,16 @@
   font-weight: 300;
 }
 
+/* 欄の見出し。入力欄の上に小さく置く */
+.auth-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #8a8580;
+  letter-spacing: 0.05em;
+}
+
 /* フォーカス時のグラデーションアンダーライン */
 .auth-field__accent {
   position: absolute;
@@ -326,6 +336,44 @@
 .auth-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* 主操作と並ぶ別の選択肢。地の紙に溶ける枠線だけで主操作より弱く見せる */
+.auth-btn--secondary {
+  color: #4a4540;
+  background: transparent;
+  border: 1.5px solid #d4d0cc;
+}
+
+.auth-btn--secondary::before {
+  content: none;
+}
+
+.auth-btn--secondary:hover:not(:disabled) {
+  border-color: #7c3aed;
+  box-shadow: none;
+}
+
+/* 主操作の下に添える小さな文字のボタン（「戻る」など） */
+.auth-text-btn {
+  display: block;
+  width: 100%;
+  font-size: 12px;
+  text-align: center;
+  color: #6b6660;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.auth-text-btn:hover {
+  color: #7c3aed;
+}
+
+.auth-text-btn:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
 }
 
 /* LINE ログイン。ブランドガイドラインの指定色を用いる */
@@ -485,6 +533,21 @@
   background: #f2f0ec;
   border: 1px solid #e0dcd6;
   color: #4a4640;
+}
+
+/* ========== 本文 ========== */
+
+.auth-text {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #4a4540;
+}
+
+/* 注記。#6b6660 on #faf9f7 は 5.4 で、小さい文字（12px）でも 4.5 を上回る */
+.auth-note {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #6b6660;
 }
 
 /* ========== ローディングスピナー ========== */

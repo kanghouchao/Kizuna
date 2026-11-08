@@ -42,10 +42,7 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
           伸びた入れ物の底へ移り、文言を貫いて描かれる */}
       <div>
         <div className="auth-field">
-          <label
-            htmlFor="invite-login-email"
-            className="block text-xs font-medium text-[#8a8580] uppercase tracking-wider mb-1.5"
-          >
+          <label htmlFor="invite-login-email" className="auth-label">
             メールアドレス
           </label>
           <input
@@ -73,10 +70,7 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
 
       <div>
         <div className="auth-field">
-          <label
-            htmlFor="invite-login-password"
-            className="block text-xs font-medium text-[#8a8580] uppercase tracking-wider mb-1.5"
-          >
+          <label htmlFor="invite-login-password" className="auth-label">
             パスワード
           </label>
           <input
@@ -110,11 +104,7 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
             'ログインして受諾する'
           )}
         </button>
-        <button
-          type="button"
-          onClick={onBack}
-          className="w-full text-center text-xs text-[#9a958e] hover:text-[#7c3aed] focus:outline-none focus:underline"
-        >
+        <button type="button" onClick={onBack} className="auth-text-btn">
           戻る
         </button>
       </div>

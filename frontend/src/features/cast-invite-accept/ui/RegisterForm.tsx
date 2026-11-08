@@ -46,10 +46,7 @@ export function RegisterForm({ token, initialDisplayName, onSuccess, onBack }: R
           伸びた入れ物の底へ移り、文言を貫いて描かれる */}
       <div>
         <div className="auth-field">
-          <label
-            htmlFor="invite-email"
-            className="block text-xs font-medium text-[#8a8580] uppercase tracking-wider mb-1.5"
-          >
+          <label htmlFor="invite-email" className="auth-label">
             メールアドレス
           </label>
           <input
@@ -78,10 +75,7 @@ export function RegisterForm({ token, initialDisplayName, onSuccess, onBack }: R
 
       <div>
         <div className="auth-field">
-          <label
-            htmlFor="invite-password"
-            className="block text-xs font-medium text-[#8a8580] uppercase tracking-wider mb-1.5"
-          >
+          <label htmlFor="invite-password" className="auth-label">
             パスワード
           </label>
           <input
@@ -106,10 +100,7 @@ export function RegisterForm({ token, initialDisplayName, onSuccess, onBack }: R
 
       <div>
         <div className="auth-field">
-          <label
-            htmlFor="invite-display-name"
-            className="block text-xs font-medium text-[#8a8580] uppercase tracking-wider mb-1.5"
-          >
+          <label htmlFor="invite-display-name" className="auth-label">
             表示名
           </label>
           <input
@@ -141,11 +132,7 @@ export function RegisterForm({ token, initialDisplayName, onSuccess, onBack }: R
             '登録して受諾する'
           )}
         </button>
-        <button
-          type="button"
-          onClick={onBack}
-          className="w-full text-center text-xs text-[#9a958e] hover:text-[#7c3aed] focus:outline-none focus:underline"
-        >
+        <button type="button" onClick={onBack} className="auth-text-btn">
           戻る
         </button>
       </div>
