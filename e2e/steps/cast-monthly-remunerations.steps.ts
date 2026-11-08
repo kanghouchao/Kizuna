@@ -549,6 +549,10 @@ Then(
     await expect(oldDay(page)).toContainText(
       `この日の合計¥${(initialTotal + 2000).toLocaleString("ja-JP")}`,
     );
+    for (const order of [firstOrder, secondOrder])
+      await expect(
+        oldDay(page).locator(`a[href="/cast/remunerations/${order}"]`),
+      ).toHaveCount(1);
     await invalidateOrder(
       request,
       manager,
