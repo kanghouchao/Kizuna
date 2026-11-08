@@ -14,7 +14,7 @@ import {
   Skeleton,
   StoreChips,
 } from '@/shared/ui';
-import { remunerationApi, type Statement } from '@/widgets/remuneration-statement';
+import { remunerationApi } from '@/widgets/remuneration-statement';
 import { Failure, PANEL, remunerationStatus, shownRemuneration } from './RemunerationDetail';
 
 // 在籍の数は本人の在籍・退店の回数で、ページを辿り切っても小さい
@@ -79,14 +79,6 @@ export function CastRemunerationsPage() {
   );
 }
 
-/** 保証の計算待ちの日があると total は無い。そのときは計算できる分までを足して出す。 */
-function shownTotal(statement: Statement): number {
-  return (
-    statement.total ??
-    statement.order_total + statement.known_guarantee_total + statement.bonus_total
-  );
-}
-
 function MonthTotal({ storeId, today }: { storeId: number; today: string }) {
   const total = useResource(() =>
     remunerationApi.statement({ scope: 'self', storeId }, today.slice(0, 7), 0, 0)
@@ -103,11 +95,11 @@ function MonthTotal({ storeId, today }: { storeId: number; today: string }) {
       ) : (
         total.data && (
           <>
-            <Money amount={shownTotal(total.data)} className="block text-3xl font-bold" />
-            {total.data.total === undefined && (
-              <p className="text-sm">
-                日額未設定または退勤記録待ちの日があります。計算できる分までの合計です。
-              </p>
+            {/* 日額未設定・退勤記録待ちの日があると後端は total を返さない。部分の和は出さない（ホームと同じ） */}
+            {total.data.total === undefined ? (
+              <p className="text-3xl font-bold text-muted-foreground">計算待ち</p>
+            ) : (
+              <Money amount={total.data.total} className="block text-3xl font-bold" />
             )}
           </>
         )

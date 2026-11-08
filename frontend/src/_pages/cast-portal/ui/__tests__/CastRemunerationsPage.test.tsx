@@ -68,7 +68,7 @@ it('上部に選んだ店舗の今月の累計（受注報酬・保証の不足�
   );
 });
 
-it('保証の計算待ちの日があれば、計算できる分までの合計と断りを出す', async () => {
+it('保証の計算待ちの日があれば、合計を出さずに計算待ちと出す（ホームと同じ）', async () => {
   jest
     .mocked(remunerationApi.statement)
     .mockResolvedValue(
@@ -76,8 +76,8 @@ it('保証の計算待ちの日があれば、計算できる分までの合計�
     );
   render(<CastRemunerationsPage />);
   const total = await screen.findByRole('region', { name: '今月の累計' });
-  expect(await within(total).findByText('¥123,000')).toBeInTheDocument();
-  expect(within(total).getByText(/日額未設定または退勤記録待ちの日があります/)).toBeInTheDocument();
+  expect(await within(total).findByText('計算待ち')).toBeInTheDocument();
+  expect(within(total).queryByText(/¥/)).not.toBeInTheDocument();
 });
 
 it('行に営業日・店舗名・状態・金額を出し、行から詳細の画面へ進める', async () => {
