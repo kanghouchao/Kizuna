@@ -520,6 +520,29 @@ describe('MemberReservationNewPage', () => {
       expect(screen.queryByRole('button', { name: 'この内容で申請する' })).not.toBeInTheDocument();
     });
 
+    it('申請の応答を待つ間は店舗を選び直させない（送信中のフォームを捨てさせない）', async () => {
+      mockedHistory.mockImplementation(
+        historyServer([
+          { store_id: 1, store_name: '店舗A' },
+          { store_id: 2, store_name: '店舗B' },
+        ])
+      );
+      mockedCreate.mockReturnValue(new Promise(() => {}));
+
+      render(<MemberReservationNewPage />);
+
+      fireEvent.click(await screen.findByRole('button', { name: '店舗B' }));
+      fireEvent.change(await screen.findByLabelText('利用日'), {
+        target: { value: '2026-08-10' },
+      });
+      fillDeclaredName();
+      await waitFor(() => expect(submitButton()).toBeEnabled());
+      fireEvent.click(submitButton());
+
+      await waitFor(() => expect(mockedCreate).toHaveBeenCalled());
+      expect(screen.getByRole('button', { name: '店舗を選び直す' })).toBeDisabled();
+    });
+
     it('過去の予約が 1 店舗だけなら選ばせずにその店舗で進める', async () => {
       mockedHistory.mockImplementation(historyServer([{ store_id: 3, store_name: '店舗C' }]));
 
