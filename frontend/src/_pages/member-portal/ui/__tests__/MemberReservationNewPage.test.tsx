@@ -13,7 +13,7 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('@/entities/order', () => ({
-  memberOrderApplicationApi: { create: jest.fn() },
+  memberOrderApplicationApi: { create: jest.fn(), list: jest.fn() },
 }));
 jest.mock('@/entities/shift', () => ({
   shiftApi: { confirmedCasts: jest.fn() },
@@ -25,6 +25,23 @@ jest.mock('@/entities/store', () => ({
 const mockedLookup = adminStoreApi.lookupByDomain as jest.Mock;
 const mockedCasts = shiftApi.confirmedCasts as jest.Mock;
 const mockedCreate = memberOrderApplicationApi.create as jest.Mock;
+const mockedHistory = memberOrderApplicationApi.list as jest.Mock;
+
+const GUIDANCE = '店舗が特定できませんでした。店舗公式サイトの予約ボタンからお進みください。';
+
+/** 過去の予約申請を 20 件ずつ返すサーバの代役。 */
+const historyServer = (rows: Array<{ store_id?: number; store_name?: string }>) => (page: number) =>
+  Promise.resolve({
+    rows: rows.slice(page * 20, page * 20 + 20).map((row, i) => ({
+      id: `a${page}-${i}`,
+      status: 'CONFIRMED',
+      expired: false,
+      ...row,
+    })),
+    page,
+    pageCount: Math.max(1, Math.ceil(rows.length / 20)),
+    total: rows.length,
+  });
 
 const submitButton = () => screen.getByRole('button', { name: 'この内容で申請する' });
 
@@ -32,11 +49,20 @@ const submitButton = () => screen.getByRole('button', { name: 'この内容で�
 const fillDeclaredName = (value = '名乗り太郎') =>
   fireEvent.change(screen.getByLabelText('店舗へ名乗るお名前'), { target: { value } });
 
+const castSelect = () => screen.getByRole('combobox', { name: '指名（任意）' });
+
+/** 指名の Select を開いて候補を引く。候補は開いている間だけ描かれる。 */
+const findCastOption = async (name: string) => {
+  fireEvent.click(castSelect());
+  return screen.findByRole('option', { name });
+};
+
 describe('MemberReservationNewPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     searchParams = new URLSearchParams('store=store1.kizuna.test');
     mockedCasts.mockResolvedValue([]);
+    mockedHistory.mockImplementation(historyServer([]));
   });
 
   it('公式サイトから引き継いだドメインを照会して店舗をプリセレクトする', async () => {
@@ -44,7 +70,10 @@ describe('MemberReservationNewPage', () => {
 
     render(<MemberReservationNewPage />);
 
-    expect(await screen.findByText('サンプル店舗')).toBeInTheDocument();
+    // 店舗名は題名帯（h1「予約申請」）ではなく、フォームの見出しとして出す
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'サンプル店舗' })
+    ).toBeInTheDocument();
     expect(mockedLookup).toHaveBeenCalledWith('store1.kizuna.test');
   });
 
@@ -94,7 +123,7 @@ describe('MemberReservationNewPage', () => {
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: 'この内容で申請する' })).not.toBeInTheDocument()
     );
-    expect(screen.getByText('読み込み中...')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: '読み込み中' })).toBeInTheDocument();
   });
 
   it('店舗パラメータが外れたら前の店舗のフォームを残さない', async () => {
@@ -141,7 +170,50 @@ describe('MemberReservationNewPage', () => {
     await waitFor(() =>
       expect(mockedCasts).toHaveBeenCalledWith({ store_id: 1, date: '2026-08-10' })
     );
-    expect(await screen.findByRole('option', { name: 'さくら（18:00〜）' })).toBeInTheDocument();
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+    // 指名は共通の Select（端末標準の select は会員の段の大きさに揃えられない）
+    expect(castSelect()).not.toBeInstanceOf(HTMLSelectElement);
+    expect(await findCastOption('さくら（18:00〜）')).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '指名なし' })).toBeInTheDocument();
+  });
+
+  it('指名の Select で選んだキャストを添えて申請する', async () => {
+    mockedLookup.mockResolvedValue({ id: '1', name: 'サンプル店舗' });
+    mockedCasts.mockResolvedValue([{ cast_id: 'c1', cast_name: 'さくら', start_time: '18:00:00' }]);
+    mockedCreate.mockResolvedValue({});
+
+    render(<MemberReservationNewPage />);
+
+    fireEvent.change(await screen.findByLabelText('利用日'), { target: { value: '2026-08-10' } });
+    fillDeclaredName();
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+    // Base UI の Item は pointerdown を経ていない click を無視する
+    const option = await findCastOption('さくら（18:00〜）');
+    fireEvent.pointerDown(option);
+    fireEvent.click(option);
+    await waitFor(() => expect(castSelect()).toHaveTextContent('さくら（18:00〜）'));
+    fireEvent.click(submitButton());
+
+    await waitFor(() =>
+      expect(mockedCreate).toHaveBeenCalledWith(expect.objectContaining({ cast_id: 'c1' }))
+    );
+  });
+
+  it('指名を選ばなければ指名なしで申請する', async () => {
+    mockedLookup.mockResolvedValue({ id: '1', name: 'サンプル店舗' });
+    mockedCasts.mockResolvedValue([{ cast_id: 'c1', cast_name: 'さくら', start_time: '18:00:00' }]);
+    mockedCreate.mockResolvedValue({});
+
+    render(<MemberReservationNewPage />);
+
+    fireEvent.change(await screen.findByLabelText('利用日'), { target: { value: '2026-08-10' } });
+    fillDeclaredName();
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+    expect(castSelect()).toHaveTextContent('指名なし');
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(1));
+    expect(mockedCreate.mock.calls[0][0].cast_id).toBeUndefined();
   });
 
   it('照会で得た店舗 ID・名乗る名前・人数を添えて申請する', async () => {
@@ -237,10 +309,9 @@ describe('MemberReservationNewPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '再試行' }));
 
-    expect(await screen.findByRole('option', { name: 'さくら（18:00〜）' })).toBeInTheDocument();
+    await waitFor(() => expect(submitButton()).toBeEnabled());
     expect(screen.queryByText('出勤情報を取得できませんでした')).not.toBeInTheDocument();
-    // 再読み込みが通れば送信できる（失敗が行き止まりにならない）
-    expect(submitButton()).toBeEnabled();
+    expect(await findCastOption('さくら（18:00〜）')).toBeInTheDocument();
   });
 
   it('利用日を変えたら、次の候補が届くまで前の日のキャストを残さない', async () => {
@@ -254,16 +325,22 @@ describe('MemberReservationNewPage', () => {
 
     const date = await screen.findByLabelText('利用日');
     fireEvent.change(date, { target: { value: '2026-08-10' } });
-    expect(await screen.findByRole('option', { name: 'さくら（18:00〜）' })).toBeInTheDocument();
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+    const option = await findCastOption('さくら（18:00〜）');
+    fireEvent.pointerDown(option);
+    fireEvent.click(option);
+    await waitFor(() => expect(castSelect()).toHaveTextContent('さくら（18:00〜）'));
 
     // 次の日の取得は解決させない（取得中の相を保ったまま観測する）
     mockedCasts.mockReturnValue(new Promise(() => {}));
     fireEvent.change(date, { target: { value: '2026-08-11' } });
 
-    await waitFor(() =>
-      expect(screen.queryByRole('option', { name: 'さくら（18:00〜）' })).not.toBeInTheDocument()
-    );
-    expect(screen.getByText('出勤情報を確認しています...')).toBeInTheDocument();
+    expect(await screen.findByText('出勤情報を確認しています...')).toBeInTheDocument();
+    // 前の日の選択も候補も残さない
+    await waitFor(() => expect(castSelect()).toHaveTextContent('指名なし'));
+    fireEvent.click(castSelect());
+    expect(await screen.findByRole('option', { name: '指名なし' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'さくら（18:00〜）' })).not.toBeInTheDocument();
   });
 
   it('利用日を消したら、前の日の取得失敗が送信を塞いだままにならない', async () => {
@@ -375,5 +452,111 @@ describe('MemberReservationNewPage', () => {
 
     await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(1));
     expect(mockedCreate.mock.calls[0][0].pax).toBe(2);
+  });
+  describe('?store= が無いとき（一覧の「新しく予約」から来たとき）', () => {
+    beforeEach(() => {
+      searchParams = new URLSearchParams();
+    });
+
+    it('過去に予約した店舗を重複なく並べ、選んだ店舗宛に申請する', async () => {
+      mockedHistory.mockImplementation(
+        historyServer([
+          { store_id: 1, store_name: '店舗A' },
+          { store_id: 2, store_name: '店舗B' },
+          { store_id: 1, store_name: '店舗A' },
+        ])
+      );
+      mockedCreate.mockResolvedValue({});
+
+      render(<MemberReservationNewPage />);
+
+      expect(await screen.findByRole('button', { name: '店舗A' })).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: /店舗[AB]/ })).toHaveLength(2);
+      expect(screen.queryByRole('button', { name: 'この内容で申請する' })).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: '店舗B' }));
+
+      expect(await screen.findByRole('heading', { level: 2, name: '店舗B' })).toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText('利用日'), { target: { value: '2026-08-10' } });
+      fillDeclaredName();
+      await waitFor(() => expect(submitButton()).toBeEnabled());
+      fireEvent.click(submitButton());
+
+      await waitFor(() =>
+        expect(mockedCreate).toHaveBeenCalledWith(expect.objectContaining({ store_id: 2 }))
+      );
+      expect(mockedLookup).not.toHaveBeenCalled();
+    });
+
+    it('選んだ後でも店舗を選び直せる', async () => {
+      mockedHistory.mockImplementation(
+        historyServer([
+          { store_id: 1, store_name: '店舗A' },
+          { store_id: 2, store_name: '店舗B' },
+        ])
+      );
+
+      render(<MemberReservationNewPage />);
+
+      fireEvent.click(await screen.findByRole('button', { name: '店舗B' }));
+      fireEvent.click(await screen.findByRole('button', { name: '店舗を選び直す' }));
+
+      expect(await screen.findByRole('button', { name: '店舗A' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'この内容で申請する' })).not.toBeInTheDocument();
+    });
+
+    it('過去の予約が 1 店舗だけなら選ばせずにその店舗で進める', async () => {
+      mockedHistory.mockImplementation(historyServer([{ store_id: 3, store_name: '店舗C' }]));
+
+      render(<MemberReservationNewPage />);
+
+      expect(await screen.findByRole('heading', { level: 2, name: '店舗C' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'この内容で申請する' })).toBeInTheDocument();
+      // 選ぶ相手が居ないので、選び直しも出さない
+      expect(screen.queryByRole('button', { name: '店舗を選び直す' })).not.toBeInTheDocument();
+    });
+
+    it('2 ページ目以降の予約の店舗も選択肢に入れる', async () => {
+      const rows = [
+        ...Array.from({ length: 20 }, () => ({ store_id: 1, store_name: '店舗A' })),
+        { store_id: 2, store_name: '店舗B' },
+      ];
+      mockedHistory.mockImplementation(historyServer(rows));
+
+      render(<MemberReservationNewPage />);
+
+      expect(await screen.findByRole('button', { name: '店舗B' })).toBeInTheDocument();
+      expect(mockedHistory.mock.calls.map(([page]) => page)).toEqual([0, 1]);
+    });
+
+    it('過去の予約が無ければ店舗公式サイトからの案内だけを出す', async () => {
+      render(<MemberReservationNewPage />);
+
+      expect(await screen.findByText(GUIDANCE)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'この内容で申請する' })).not.toBeInTheDocument();
+    });
+
+    it('過去の予約を読めなければ案内と取り違えず、再試行で復帰できる', async () => {
+      mockedHistory.mockRejectedValueOnce(new Error('network'));
+      mockedHistory.mockImplementation(historyServer([{ store_id: 3, store_name: '店舗C' }]));
+
+      render(<MemberReservationNewPage />);
+
+      expect(await screen.findByText('予約した店舗を取得できませんでした')).toBeInTheDocument();
+      expect(screen.queryByText(GUIDANCE)).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+
+      expect(await screen.findByRole('heading', { level: 2, name: '店舗C' })).toBeInTheDocument();
+    });
+  });
+
+  it('?store= があるときは過去の予約を引かない', async () => {
+    mockedLookup.mockResolvedValue({ id: '1', name: 'サンプル店舗' });
+
+    render(<MemberReservationNewPage />);
+
+    expect(await screen.findByRole('button', { name: 'この内容で申請する' })).toBeInTheDocument();
+    expect(mockedHistory).not.toHaveBeenCalled();
   });
 });

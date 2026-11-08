@@ -97,14 +97,6 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 // 予約申請のステータス。PENDING 以外はすべて終端で、申請行は以後動かない（失効は状態ではなく expired の導出）。
 export type OrderApplicationStatus = 'PENDING' | 'CONFIRMED' | 'DECLINED' | 'WITHDRAWN';
 
-/** 予約申請ステータスの日本語表示。店舗の受付箱と会員ポータルが同じ呼び名を使う。 */
-export const ORDER_APPLICATION_STATUS_LABELS: Record<OrderApplicationStatus, string> = {
-  PENDING: '申請中',
-  CONFIRMED: '確定',
-  DECLINED: '謝絶',
-  WITHDRAWN: '取り下げ',
-};
-
 /**
  * 受注明細の種別（閉集合）。ホテル代・交通費・釣銭は受注金額外の回収・精算項目なので含まない。
  *

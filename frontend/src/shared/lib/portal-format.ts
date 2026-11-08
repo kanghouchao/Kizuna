@@ -31,8 +31,8 @@ export function formatDate(date: string, today: string): string {
   return `${prefix}${m}/${d}（${weekday}）`;
 }
 
-/** 'HH:mm[:ss]' を「9:30」に（時は 0 埋めしない）。 */
-function formatClock(time: string): string {
+/** 時刻 'HH:mm[:ss]' を「9:30」に（時は 0 埋めしない）。 */
+export function formatTime(time: string): string {
   const [h, m] = time.split(':');
   return `${Number(h)}:${m}`;
 }
@@ -40,7 +40,7 @@ function formatClock(time: string): string {
 /** 'HH:mm[:ss]' の時間帯を「19:00〜21:00」に。終了が開始以前なら日をまたぐとみなし「19:00〜翌2:00」。 */
 export function formatTimeRange(start: string, end: string): string {
   const crossesMidnight = end.slice(0, 5) <= start.slice(0, 5);
-  return `${formatClock(start)}〜${crossesMidnight ? '翌' : ''}${formatClock(end)}`;
+  return `${formatTime(start)}〜${crossesMidnight ? '翌' : ''}${formatTime(end)}`;
 }
 
 /**
@@ -50,7 +50,7 @@ export function formatTimeRange(start: string, end: string): string {
 export function formatDateTime(value: string, today: string): string {
   const hasZone = /(Z|[+-]\d{2}:?\d{2})$/.test(value);
   const local = hasZone ? toTokyoLocal(new Date(value)) : value;
-  return `${formatDate(local, today)}${formatClock(local.slice(11, 16))}`;
+  return `${formatDate(local, today)}${formatTime(local.slice(11, 16))}`;
 }
 
 /** サービスの長さ（コース等）。「90分」。 */

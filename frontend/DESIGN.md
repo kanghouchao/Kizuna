@@ -203,6 +203,7 @@ ListPage（`@/widgets/list-page`）が見出し・検索 form・表枠・読み�
 | 絞り込みの切替 | Segmented                      | 常にどれか一つが選ばれた button の組（ToggleGroup）。URL が変わる画面の切替は外枠の区分で行い、これを使わない                                          |
 | 店舗の切替     | StoreChips                     | 複数店舗に在籍するときだけ横スクロールのチップ（ToggleGroup）。1 店舗ならチップを出さず、その店舗を自動で選ぶ                                          |
 | 下部シート     | BottomSheet + BottomSheetClose | キャストのみ。Base UI の Drawer。題名帯と操作帯（全幅・主操作が先頭）を固定し本文だけをスクロール。背景幕は `bg-background/80`。会員の画面では使わない |
+| 確認           | ConfirmDialog                  | 取り消しの確認。会員の画面は `size="large"`（題 20px・本文 18px・ボタン 48px）で、取り消しのボタンは「やめる」                                         |
 
 ### 書式
 
@@ -227,12 +228,12 @@ ListPage（`@/widgets/list-page`）が見出し・検索 form・表枠・読み�
 
 両ポータル共通。API の状態からこの語への写しは各画面が持ち、同じ意味の状態に別の語を使わない（変更申請の「謝絶」も「却下」）。
 
-| 語                                          | 見た目                                          |
-| ------------------------------------------- | ----------------------------------------------- |
-| 申請中 / 受諾待ち / 承諾待ち / 再承諾が必要 | warning（`bg-warning/10 text-warning-strong`）  |
-| 承認 / 受諾済み / 承諾済み                  | success（`bg-success/10 text-success-strong`）  |
-| 却下                                        | destructive（店舗による否定）                   |
-| 取り下げ / 拒否済み                         | 中立 `bg-muted text-foreground`（本人が閉じた） |
+| 語                                          | 見た目                                                        |
+| ------------------------------------------- | ------------------------------------------------------------- |
+| 申請中 / 受諾待ち / 承諾待ち / 再承諾が必要 | warning（`bg-warning/10 text-warning-strong`）                |
+| 承認 / 受諾済み / 承諾済み                  | success（`bg-success/10 text-success-strong`）                |
+| 却下                                        | destructive（店舗による否定）                                 |
+| 取り下げ / 拒否済み / 失効                  | 中立 `bg-muted text-foreground`（本人が閉じた・期限で閉じた） |
 
 ### ホームの告知・お知らせ区画
 

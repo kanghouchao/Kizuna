@@ -1,55 +1,72 @@
 'use client';
 
+import Link from 'next/link';
 import { useState } from 'react';
 import { notify } from '@/shared/notify';
+import { MemberOrderApplication, memberOrderApplicationApi } from '@/entities/order';
 import {
-  MemberOrderApplication,
-  ORDER_APPLICATION_STATUS_LABELS,
-  memberOrderApplicationApi,
-} from '@/entities/order';
-import { getApiErrorMessage, useListPage } from '@/shared/lib';
+  formatDate,
+  formatDateTime,
+  getApiErrorMessage,
+  tokyoDate,
+  useListPage,
+} from '@/shared/lib';
 import {
-  Badge,
   Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
+  ConfirmDialog,
+  EmptyState,
+  ListRow,
+  ListRows,
+  ListRowsSkeleton,
   Pager,
   RegionError,
+  StatusBadge,
+  type StatusWord,
 } from '@/shared/ui';
 
+const STATUS_WORDS: Record<NonNullable<MemberOrderApplication['status']>, StatusWord> = {
+  PENDING: '申請中',
+  CONFIRMED: '承認',
+  DECLINED: '却下',
+  WITHDRAWN: '取り下げ',
+};
+
 /**
- * 予約申請の状態バッジ。行の状態は PENDING のままでも、希望日を過ぎた申請はサーバの導出（expired）に
- * 従って失効と表示する — 画面が日時を比べると、営業日の区切り（日付変更時刻）とずれる。
+ * 行の状態は PENDING のままでも、希望日を過ぎた申請はサーバの導出（expired）に従って失効と出す
+ * — 画面が日時を比べると、営業日の区切り（日付変更時刻）とずれる。
  */
-function StatusBadge({ application }: { application: MemberOrderApplication }) {
+function statusWord(application: MemberOrderApplication): StatusWord | null {
   if (!application.status) return null;
-  if (application.status === 'PENDING' && application.expired) {
-    return (
-      <Badge variant="outline" className="border-transparent bg-muted text-muted-foreground">
-        失効
-      </Badge>
-    );
-  }
-  const styles: Record<MemberOrderApplication['status'] & string, string> = {
-    PENDING: 'border-transparent bg-warning/10 text-warning-strong',
-    CONFIRMED: 'border-transparent bg-success/10 text-success-strong',
-    DECLINED: 'border-transparent bg-destructive/10 text-destructive-strong',
-    WITHDRAWN: 'border-transparent bg-muted text-foreground',
-  };
+  if (application.status === 'PENDING' && application.expired) return '失効';
+  return STATUS_WORDS[application.status];
+}
+
+function when(application: MemberOrderApplication, today: string): string {
+  if (!application.business_date) return '';
+  return application.arrival_scheduled_start_time
+    ? formatDateTime(
+        `${application.business_date}T${application.arrival_scheduled_start_time}`,
+        today
+      )
+    : formatDate(application.business_date, today);
+}
+
+function NewReservationButton() {
   return (
-    <Badge variant="outline" className={styles[application.status]}>
-      {ORDER_APPLICATION_STATUS_LABELS[application.status]}
-    </Badge>
+    <Button className="min-h-12 w-full text-lg" render={<Link href="/member/reservations/new" />}>
+      新しく予約
+    </Button>
   );
 }
 
-/** 会員ポータルの予約申請一覧。全店舗を集約し、未処理のものは本人が取り下げられる。 */
+/** 会員ポータルの予約申請一覧。全店舗を集約し、未処理のものは本人が確認のうえ取り下げられる。 */
 export function MemberReservationsPage() {
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [withdrawTarget, setWithdrawTarget] = useState<MemberOrderApplication | null>(null);
   const list = useListPage<MemberOrderApplication>(page => memberOrderApplicationApi.list(page));
   const { rows: reservations, isLoading: loading, failed } = list;
+  const today = tokyoDate(new Date());
+  const empty = !failed && !loading && reservations.length === 0;
 
   const withdraw = async (reservation: MemberOrderApplication) => {
     setProcessingId(reservation.id ?? null);
@@ -65,70 +82,77 @@ export function MemberReservationsPage() {
   };
 
   return (
-    <div>
-      <Card>
-        <CardHeader>
-          <CardTitle role="heading" aria-level={2}>
-            予約一覧
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {failed ? (
-            <RegionError
-              message="予約を取得できませんでした。"
-              onRetry={() => void list.reload()}
-            />
-          ) : loading && reservations.length === 0 ? (
-            <p className="text-sm text-muted-foreground">読み込み中...</p>
-          ) : reservations.length === 0 ? (
-            <p className="text-sm text-muted-foreground">予約はまだありません。</p>
-          ) : (
-            <ul className="space-y-3">
-              {reservations.map(reservation => (
-                <li key={reservation.id} className="rounded-[10px] border bg-card p-4 shadow-sm">
-                  <p className="flex items-center gap-2 text-sm font-medium text-foreground">
-                    {reservation.store_name}
-                    <StatusBadge application={reservation} />
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {reservation.business_date}
-                    {reservation.arrival_scheduled_start_time
-                      ? ` ${reservation.arrival_scheduled_start_time.slice(0, 5)}`
-                      : ''}
-                    {reservation.pax ? ` / ${reservation.pax} 名` : ''}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    指名: {reservation.cast_name ?? 'なし'}
-                  </p>
-                  {reservation.status === 'PENDING' && (
-                    // 取り下げの結果が返るまで同じ行を押せると、済んだ取り下げをもう一度投げてしまう。
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="mt-3"
-                      onClick={() => withdraw(reservation)}
-                      disabled={loading || processingId === reservation.id}
-                    >
-                      取り下げる
-                    </Button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-          <div className="mt-4">
-            <Pager
-              page={list.page}
-              pageCount={list.pageCount}
-              total={list.total}
-              rowCount={list.rows.length}
-              disabled={loading}
-              onPageChange={page => void list.onPageChange(page)}
-            />
-          </div>
-        </CardContent>
-      </Card>
+    <div className="space-y-4">
+      {/* 空のときは空の表示が同じ入口を持つので、上部には重ねない */}
+      {!empty && <NewReservationButton />}
+      {failed ? (
+        <RegionError message="予約を取得できませんでした。" onRetry={() => void list.reload()} />
+      ) : loading && reservations.length === 0 ? (
+        <ListRowsSkeleton />
+      ) : empty ? (
+        <EmptyState message="まだ予約はありません" action={<NewReservationButton />} />
+      ) : (
+        <ListRows label="予約">
+          {reservations.map(reservation => {
+            const status = statusWord(reservation);
+            return (
+              <ListRow
+                key={reservation.id}
+                title={<span className="font-medium">{reservation.store_name}</span>}
+                meta={
+                  <>
+                    <span className="block tabular-nums">
+                      {when(reservation, today)}
+                      {reservation.pax ? ` · ${reservation.pax}名` : ''}
+                    </span>
+                    <span className="block">
+                      {reservation.cast_name ? `指名: ${reservation.cast_name}` : '指名なし'}
+                    </span>
+                    {/* 右の列に置くと長い店舗名が細く折り返されるので、詳細の下に全幅で置く */}
+                    {reservation.status === 'PENDING' && !reservation.expired && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="mt-2 min-h-12 w-full text-lg text-foreground"
+                        onClick={() => setWithdrawTarget(reservation)}
+                        // 結果が返るまで同じ行を押せると、済んだ取り下げをもう一度投げてしまう
+                        disabled={loading || processingId === reservation.id}
+                      >
+                        取り下げる
+                      </Button>
+                    )}
+                  </>
+                }
+                trailing={status && <StatusBadge status={status} />}
+              />
+            );
+          })}
+        </ListRows>
+      )}
+      <Pager
+        page={list.page}
+        pageCount={list.pageCount}
+        total={list.total}
+        rowCount={list.rows.length}
+        disabled={loading}
+        onPageChange={page => void list.onPageChange(page)}
+      />
+      <ConfirmDialog
+        open={withdrawTarget !== null}
+        title="予約を取り下げますか"
+        description={
+          withdrawTarget
+            ? `${[withdrawTarget.store_name, when(withdrawTarget, today)].filter(Boolean).join(' ')} の予約を取り下げます。`
+            : undefined
+        }
+        confirmLabel="取り下げる"
+        cancelLabel="やめる"
+        size="large"
+        onConfirm={() => {
+          if (withdrawTarget) void withdraw(withdrawTarget);
+        }}
+        onClose={() => setWithdrawTarget(null)}
+      />
     </div>
   );
 }

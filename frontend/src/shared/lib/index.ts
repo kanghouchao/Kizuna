@@ -56,6 +56,7 @@ export {
   formatPointChange,
   formatPoints,
   formatRevision,
+  formatTime,
   formatTimeRange,
   tokyoDate,
 } from './portal-format';
