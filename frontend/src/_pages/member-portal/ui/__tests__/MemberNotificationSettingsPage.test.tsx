@@ -95,6 +95,6 @@ describe('MemberNotificationSettingsPage', () => {
 
     render(<MemberNotificationSettingsPage />);
 
-    expect(screen.getByText('読み込み中...')).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: '読み込み中' })).toBeInTheDocument();
   });
 });

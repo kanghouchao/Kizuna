@@ -8,9 +8,13 @@ const LINE_SCOPE = 'profile openid';
 const STORAGE_KEY = 'kizuna-line-oauth';
 
 /** 連携の完了・失敗後に戻る画面。戻り先は閉じた集合とし、保存値から任意の URL へ飛ばない。 */
-export type LineLinkReturn = 'account-settings' | 'cast-account';
+export type LineLinkReturn = 'account-settings' | 'cast-account' | 'member-account';
 
-const LINE_LINK_RETURNS: readonly LineLinkReturn[] = ['account-settings', 'cast-account'];
+const LINE_LINK_RETURNS: readonly LineLinkReturn[] = [
+  'account-settings',
+  'cast-account',
+  'member-account',
+];
 
 /**
  * LINE 認可を開始した入口。ログイン（未登録なら会員登録へ分岐）と既存アカウントへの連携。

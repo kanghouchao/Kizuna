@@ -12,29 +12,28 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  Checkbox,
   Form,
   FormControl,
   FormField,
   FormItem,
   FormLabel,
   FormMessage,
-  Input,
+  Label,
   Textarea,
 } from '@/shared/ui';
 
-/** 実行ボタンを開くために確認欄へ入力してもらう文字。送信はしない。 */
-const CONFIRMATION_WORD = '退会';
-
 interface WithdrawalFormValues {
   reason: string;
-  confirmation: string;
+  /** 影響を読んだことの印。実行ボタンを開くためだけに使い、送信はしない。 */
+  understood: boolean;
 }
 
 /**
- * 会員ポータルの退会画面。退会で起きることを先に読ませ、理由を必須で受け、確認欄に「退会」と打つまで実行ボタンを開かない。
+ * 会員ポータルの退会画面。退会で起きることを先に読ませ、理由を必須で受け、「理解しました」に印を付けるまで実行ボタンを開かない。
  *
  * 実行ボタンの無効化は DESIGN.md の「validation 未完了を理由に submit を disabled にしない」の例外で、取り消せない終端操作の
- * 誤操作防止として issue が定めた形。理由の必須検証は通常どおり押してから入力横に出す。
+ * 誤操作防止のため。理由の必須検証は通常どおり押してから入力横に出す。
  * 成功後は旧トークンが失効しているため、通知は出さずログアウトしてログイン画面に理由コードで名乗らせる。
  */
 export function MemberWithdrawalPage() {
@@ -44,7 +43,7 @@ export function MemberWithdrawalPage() {
   // 開いた時点の本人を名乗るとタブ間で食い違いうる。
   useResource(() => memberApi.home());
   const form = useForm<WithdrawalFormValues>({
-    defaultValues: { reason: '', confirmation: '' },
+    defaultValues: { reason: '', understood: false },
   });
   const {
     control,
@@ -53,7 +52,7 @@ export function MemberWithdrawalPage() {
   } = form;
   // 成功後はログアウトの遷移が進行中でこの画面はまだ立っている。isSubmitting だけでは遷移の間だけ再び押せてしまう。
   const [withdrawn, setWithdrawn] = useState(false);
-  const confirmed = useWatch({ control, name: 'confirmation' }) === CONFIRMATION_WORD;
+  const understood = useWatch({ control, name: 'understood' });
   const pending = isSubmitting || withdrawn;
 
   const submit = async (values: WithdrawalFormValues) => {
@@ -75,7 +74,7 @@ export function MemberWithdrawalPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <ul className="list-disc space-y-2 pl-5 text-sm text-foreground">
+          <ul className="list-disc space-y-2 pl-5 text-foreground">
             <li>保有しているポイントはすべて消去され、元に戻せません。</li>
             <li>店舗との紐づけは解除され、申請中の予約は取り下げられます。</li>
             <li>退会の取り消しや再入会はできません。</li>
@@ -104,9 +103,9 @@ export function MemberWithdrawalPage() {
                 }}
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>退会理由</FormLabel>
+                    <FormLabel className="text-lg">退会理由</FormLabel>
                     <FormControl>
-                      <Textarea rows={3} required {...field} />
+                      <Textarea rows={3} required className="text-lg md:text-lg" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -114,21 +113,23 @@ export function MemberWithdrawalPage() {
               />
               <FormField
                 control={control}
-                name="confirmation"
+                name="understood"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>確認のため「{CONFIRMATION_WORD}」と入力</FormLabel>
-                    <FormControl>
-                      <Input autoComplete="off" {...field} />
-                    </FormControl>
-                  </FormItem>
+                  <Label className="flex min-h-12 items-center gap-3 text-lg font-normal">
+                    <Checkbox
+                      className="size-6"
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                    上記の内容を理解しました
+                  </Label>
                 )}
               />
               <Button
                 type="submit"
                 variant="destructive"
-                className="w-full"
-                disabled={!confirmed || pending}
+                className="h-12 w-full text-lg"
+                disabled={!understood || pending}
               >
                 {pending ? '手続き中...' : '退会する'}
               </Button>

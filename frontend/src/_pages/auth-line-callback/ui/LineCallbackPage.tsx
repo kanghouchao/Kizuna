@@ -25,6 +25,7 @@ const BACK_LINKS: Record<BackTo, { href: string; label: string }> = {
   login: { href: '/auth/login', label: 'ログイン画面へ戻る' },
   'account-settings': { href: '/admin/settings/account', label: 'アカウント設定へ戻る' },
   'cast-account': { href: '/cast/account/line', label: 'LINE連携へ戻る' },
+  'member-account': { href: '/member/account/line', label: 'LINE連携へ戻る' },
 };
 
 /**

@@ -18,6 +18,7 @@ import {
   RadioGroup,
   RadioGroupItem,
   RegionError,
+  Skeleton,
 } from '@/shared/ui';
 
 const PURPOSES: {
@@ -40,6 +41,13 @@ const PURPOSES: {
   },
 ];
 
+const CHOICES = [
+  { value: 'ALLOWED', label: '受け取る' },
+  { value: 'DENIED', label: '受け取らない' },
+] as const;
+
+type Choice = (typeof CHOICES)[number]['value'];
+
 /**
  * 会員ポータルの通知設定。用途ごとに受け取る・受け取らないを選び、選んだ時点で保存する。
  * 未確認の用途にはどちらの選択も付けない。選ぶまでの扱い（業務はメールアドレスの確認後に送る、販促は送らない）を本文で示す。
@@ -51,7 +59,7 @@ export function MemberNotificationSettingsPage() {
   );
   const [saving, setSaving] = useState(false);
 
-  const choose = async (purpose: MemberNotificationPurpose, status: 'ALLOWED' | 'DENIED') => {
+  const choose = async (purpose: MemberNotificationPurpose, status: Choice) => {
     setSaving(true);
     try {
       setData(await memberApi.chooseNotification(purpose, status));
@@ -65,11 +73,15 @@ export function MemberNotificationSettingsPage() {
 
   return (
     <div>
-      <p className="mt-2 text-sm text-muted-foreground">
+      <p className="text-muted-foreground">
         ログインに使うメールアドレスへ届くお知らせを選べます。選ぶまでは、ご利用に関するお知らせはメールアドレスの確認が済んでからお送りし、キャンペーン・おすすめのご案内はお送りしません。
       </p>
       {isLoading ? (
-        <p className="mt-4 text-sm text-muted-foreground">読み込み中...</p>
+        <div role="status" aria-label="読み込み中" className="mt-4 space-y-4">
+          {PURPOSES.map(({ purpose }) => (
+            <Skeleton key={purpose} className="h-48 w-full rounded-xl" />
+          ))}
+        </div>
       ) : failure !== null || data === null ? (
         <RegionError
           className="mt-4"
@@ -83,29 +95,29 @@ export function MemberNotificationSettingsPage() {
           return (
             <Card key={purpose} className="mt-4">
               <CardHeader>
-                <CardTitle id={titleId} role="heading" aria-level={2}>
+                <CardTitle id={titleId} role="heading" aria-level={2} className="text-lg">
                   {title}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">{description}</p>
-                {current === 'UNKNOWN' && (
-                  <p className="text-sm text-foreground">まだ選択されていません。</p>
-                )}
+                <p className="text-muted-foreground">{description}</p>
+                {current === 'UNKNOWN' && <p>まだ選択されていません。</p>}
                 <RadioGroup
                   aria-labelledby={titleId}
                   value={current === 'UNKNOWN' ? '' : current}
-                  onValueChange={value => void choose(purpose, value as 'ALLOWED' | 'DENIED')}
+                  onValueChange={value => void choose(purpose, value as Choice)}
                   disabled={saving}
+                  className="gap-0"
                 >
-                  <Label className="flex items-center gap-2 font-normal">
-                    <RadioGroupItem value="ALLOWED" />
-                    受け取る
-                  </Label>
-                  <Label className="flex items-center gap-2 font-normal">
-                    <RadioGroupItem value="DENIED" />
-                    受け取らない
-                  </Label>
+                  {CHOICES.map(({ value, label }) => (
+                    <Label
+                      key={value}
+                      className="flex min-h-12 items-center gap-3 text-lg font-normal"
+                    >
+                      <RadioGroupItem value={value} className="size-6 [&_svg]:size-3" />
+                      {label}
+                    </Label>
+                  ))}
                 </RadioGroup>
               </CardContent>
             </Card>
