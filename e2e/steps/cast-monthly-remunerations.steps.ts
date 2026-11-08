@@ -288,8 +288,9 @@ Then(
       .getByRole("button", { name: "詳細・変更履歴を確認" })
       .last()
       .click();
-    await expect(page.getByText("無効化（有効報酬 0 円）")).toBeVisible();
-    await page.getByRole("button", { name: "変更履歴を確認" }).click();
+    await expect(page.getByRole("region", { name: "概要" })).toContainText(
+      "無効化",
+    );
     await expect(page.getByText("本人の原月の延長を訂正")).toBeVisible();
     await expect(page.getByText("本人の原月の未提供を無効化")).toBeVisible();
     await page.getByRole("button", { name: "一覧へ戻る" }).click();
@@ -593,9 +594,6 @@ Then(
     await page
       .getByRole("button", { name: "詳細・変更履歴を確認" })
       .first()
-      .click();
-    await page
-      .getByRole("button", { name: "変更履歴を確認", exact: true })
       .click();
     await expect(page.getByText("変更履歴はありません")).toBeVisible();
     await page.getByRole("button", { name: "一覧へ戻る", exact: true }).click();

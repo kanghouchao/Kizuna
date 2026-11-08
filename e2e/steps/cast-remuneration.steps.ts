@@ -40,16 +40,24 @@ When('退店した本人がログインして報酬明細を開く', async ({ pa
 });
 
 Then('本人の報酬明細から原条件と無効化履歴を確認できる', async ({ page }) => {
-  await expect(page.getByRole('heading', { name: '報酬明細', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: /・退店/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: '詳細を確認' })).toHaveCount(1);
-  await page.getByRole('button', { name: '詳細を確認' }).click();
-  await expect(page.getByText('無効化（有効報酬 0 円）')).toBeVisible();
-  await expect(page.getByText('顧客費用: 12,000 円 / 固定報酬: 7,000 円')).toBeVisible();
-  await page.getByRole('button', { name: '変更履歴を確認' }).click();
-  await expect(page.getByText('未提供のため無効化')).toBeVisible();
-  await expect(page.getByText('約定報酬: 7,000 円 / 発生済み報酬: 7,000 円')).toBeVisible();
-  await expect(page.getByText('約定報酬: 7,000 円 / 発生済み報酬: 0 円')).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: '報酬', exact: true })).toBeVisible();
+  // 退店後も店舗の月次明細から今月の累計を取れる（失敗表示ではなく金額が出る）
+  await expect(page.getByRole('region', { name: '今月の累計' })).toContainText(/¥[\d,]+/);
+  const rows = page.getByRole('list', { name: '報酬明細' }).getByRole('link');
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText('無効化');
+  await rows.first().click();
+  await expect(page.getByRole('heading', { level: 1, name: '報酬明細', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: '戻る' })).toBeVisible();
+  const summary = page.getByRole('region', { name: '概要' });
+  await expect(summary).toContainText('無効化');
+  await expect(summary).not.toContainText(ownId);
+  const item = page.getByRole('region', { name: /^報酬コース-/ });
+  await expect(item.getByRole('definition').filter({ hasText: '¥12,000' })).toBeVisible();
+  await expect(item.getByRole('definition').filter({ hasText: '¥7,000' })).toBeVisible();
+  const change = page.getByRole('region', { name: '変更履歴' }).getByRole('article', { name: /無効化/ });
+  await expect(change).toContainText('未提供のため無効化');
+  await expect(change).toContainText('¥7,000 → ¥0');
   await expect(page.getByText(privateName)).toHaveCount(0);
 });
 

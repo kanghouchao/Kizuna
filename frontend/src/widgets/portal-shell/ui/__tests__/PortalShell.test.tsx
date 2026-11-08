@@ -27,6 +27,7 @@ const SCREENS: PortalScreens = {
   '/p/requests': { title: 'スケジュール', tab: '/p/schedule' },
   '/p/account': { title: 'アカウント', tab: '/p/account' },
   '/p/terms': { title: 'サービス条件', back: '/p/account' },
+  '/p/schedule/[day]': { title: '一日の予定', back: '/p/schedule' },
 };
 
 function renderShell(props: Partial<Parameters<typeof PortalShell>[0]> = {}) {
@@ -72,6 +73,22 @@ describe('PortalShell', () => {
     expect(screen.getByRole('link', { name: '戻る' })).toHaveAttribute('href', '/p/account');
     expect(screen.queryByRole('navigation', { name: 'メニュー' })).not.toBeInTheDocument();
     expect(screen.getByText('子要素')).toBeInTheDocument();
+  });
+
+  it('[名前] のキーは URL の一つの区切りに当て、下位画面として戻り先を出す', () => {
+    mockPathname = '/p/schedule/2026-11-05/';
+    renderShell();
+
+    expect(screen.getByRole('heading', { level: 1, name: '一日の予定' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '戻る' })).toHaveAttribute('href', '/p/schedule');
+    expect(screen.queryByRole('navigation', { name: 'メニュー' })).not.toBeInTheDocument();
+  });
+
+  it('[名前] のキーは区切りの数が違う URL には当てない', () => {
+    mockPathname = '/p/schedule/2026-11-05/extra';
+    renderShell();
+
+    expect(screen.queryByRole('heading', { level: 1, name: '一日の予定' })).not.toBeInTheDocument();
   });
 
   it('ホームのタブは前方一致させず、ホームの画面でだけ選択状態にする', () => {

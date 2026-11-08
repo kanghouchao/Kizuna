@@ -3,19 +3,61 @@
 import { useState } from 'react';
 import {
   selfRemunerationApi,
+  SelfRemunerationChange,
   SelfRemunerationItem,
   SelfRemunerationSummary,
 } from '@/entities/order';
-import { isForbidden, isNotFound, useListPage, useResource } from '@/shared/lib';
-import { Button, Card, CardContent, Pager, RegionError } from '@/shared/ui';
+import {
+  formatDate,
+  formatDateTime,
+  formatMinutes,
+  formatRevision,
+  isForbidden,
+  isNotFound,
+  tokyoDate,
+  useListPage,
+  useResource,
+} from '@/shared/lib';
+import {
+  EmptyState,
+  KeyValueList,
+  KeyValueRow,
+  ListRowsSkeleton,
+  Money,
+  Pager,
+  RegionError,
+  Skeleton,
+} from '@/shared/ui';
+import { itemKeys, remunerationChanges } from '../lib/remunerationChanges';
 
-const money = (amount: number) => `${amount.toLocaleString('ja-JP')} 円`;
-const statuses = {
-  CONFIRMED: '確定',
+const STATUSES = {
+  CONFIRMED: '予定',
   IN_SERVICE: 'サービス中',
   COMPLETED: '完了',
-  CANCELLED: '取消（報酬発生なし）',
+  CANCELLED: '取消',
 };
+const KINDS = {
+  COURSE: 'コース',
+  SPECIAL_SERVICE: '特殊サービス',
+  EXTENSION: '延長',
+  SURCHARGE: '加算',
+};
+const BASES = {
+  CURRENT_SETTING: '店舗の設定',
+  ACCEPTED_TERMS: '受諾した条件',
+  HISTORICAL_CORRECTION: '過去の版による訂正',
+};
+
+export function remunerationStatus(row: SelfRemunerationSummary): string {
+  return row.completion_invalidated ? '無効化' : STATUSES[row.status];
+}
+
+/** 一覧の行に出す額。終わった受注は発生済み、これからの受注は予定の報酬。 */
+export function shownRemuneration(row: SelfRemunerationSummary): number {
+  return row.status === 'CONFIRMED' || row.status === 'IN_SERVICE'
+    ? row.planned_remuneration
+    : row.accrued_remuneration;
+}
 
 export function Failure({ error, onRetry }: { error: unknown; onRetry: () => void }) {
   if (isForbidden(error)) return <p role="alert">報酬明細を確認する権限がありません。</p>;
@@ -23,72 +65,47 @@ export function Failure({ error, onRetry }: { error: unknown; onRetry: () => voi
   return <RegionError message="報酬明細の取得に失敗しました" onRetry={onRetry} />;
 }
 
-export function Amounts({ row }: { row: SelfRemunerationSummary }) {
+/** 報酬の画面のカード 1 枚の面。 */
+export const PANEL = 'space-y-2 rounded-xl border bg-card p-4 text-card-foreground';
+
+function Panel({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <>
-      <h2 className="font-semibold">
-        {row.store_name}・{row.business_date}
-      </h2>
-      <p>{row.completion_invalidated ? '無効化（有効報酬 0 円）' : statuses[row.status]}</p>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-        <dt>原営業日</dt>
-        <dd>{row.business_date}</dd>
-        {row.completed_at && (
-          <>
-            <dt>原完了日時</dt>
-            <dd className="break-all">{row.completed_at}</dd>
-          </>
+    <section aria-label={label} className={PANEL}>
+      {children}
+    </section>
+  );
+}
+
+function Item({ item }: { item: SelfRemunerationItem }) {
+  return (
+    <Panel label={item.name}>
+      <h3 className="font-semibold wrap-anywhere">{item.name}</h3>
+      <KeyValueList className="text-base">
+        <KeyValueRow label="種類">{KINDS[item.kind]}</KeyValueRow>
+        {item.duration_minutes !== undefined && (
+          <KeyValueRow label="時間">{formatMinutes(item.duration_minutes)}</KeyValueRow>
         )}
-        <dt>約定報酬</dt>
-        <dd>{money(row.agreed_remuneration)}</dd>
-        <dt>予定報酬</dt>
-        <dd>{money(row.planned_remuneration)}</dd>
-        <dt>発生済み報酬</dt>
-        <dd>{money(row.accrued_remuneration)}</dd>
-      </dl>
-    </>
+        <KeyValueRow label="お客様料金" money>
+          <Money amount={item.price} />
+        </KeyValueRow>
+        <KeyValueRow label="固定報酬" money>
+          <Money amount={item.remuneration} />
+        </KeyValueRow>
+        {item.adoption_basis && (
+          <KeyValueRow label="条件">
+            {BASES[item.adoption_basis]}
+            {item.adoption_basis === 'ACCEPTED_TERMS' && item.consent_version !== undefined
+              ? `（${formatRevision(item.consent_version)}）`
+              : ''}
+          </KeyValueRow>
+        )}
+      </KeyValueList>
+    </Panel>
   );
 }
 
-function Items({ items }: { items: SelfRemunerationItem[] }) {
-  return (
-    <ul className="space-y-3">
-      {items.map((item, index) => (
-        <li
-          key={item.line_id ?? `${item.kind}-${item.service_id ?? index}`}
-          className="space-y-1 rounded-lg border p-3 text-sm"
-        >
-          <p className="font-semibold">{item.name}</p>
-          <p>
-            顧客費用: {money(item.price)} / 固定報酬: {money(item.remuneration)}
-          </p>
-          {item.duration_minutes !== undefined && <p>{item.duration_minutes} 分</p>}
-          {item.revision_number !== undefined && <p>採用版本: {item.revision_number}</p>}
-          {item.adoption_basis && (
-            <p>
-              採用根拠:{' '}
-              {
-                {
-                  CURRENT_SETTING: '店舗設定',
-                  ACCEPTED_TERMS: '本人受諾',
-                  HISTORICAL_CORRECTION: '歴史版本による訂正',
-                }[item.adoption_basis]
-              }
-            </p>
-          )}
-          {item.adopted_at && <p className="break-all">採用日時: {item.adopted_at}</p>}
-          {item.consent_event_id && (
-            <p className="break-all">
-              受諾記録: {item.consent_event_id}（版 {item.consent_version}）
-            </p>
-          )}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-export function RemunerationDetail({ id, onBack }: { id: string; onBack: () => void }) {
+/** 受注 1 件の報酬明細（概要・内訳・変更履歴）。 */
+export function RemunerationDetail({ id }: { id: string }) {
   const [error, setError] = useState<unknown>();
   const resource = useResource(async () => {
     try {
@@ -98,35 +115,100 @@ export function RemunerationDetail({ id, onBack }: { id: string; onBack: () => v
       throw failure;
     }
   });
-  const [history, setHistory] = useState(false);
+  if (resource.isLoading)
+    return (
+      <div role="status" aria-label="読み込み中" className="space-y-3">
+        <Skeleton className="h-40 w-full rounded-xl" />
+        <Skeleton className="h-32 w-full rounded-xl" />
+      </div>
+    );
+  if (resource.failure) return <Failure error={error} onRetry={() => void resource.reload()} />;
+  const row = resource.data;
+  if (!row) return null;
+  const today = tokyoDate(new Date());
   return (
-    <>
-      <Button variant="outline" onClick={onBack}>
-        一覧へ戻る
-      </Button>
-      {resource.isLoading ? (
-        <p>明細を読み込み中...</p>
-      ) : resource.failure ? (
-        <Failure error={error} onRetry={() => void resource.reload()} />
-      ) : (
-        resource.data && (
-          <>
-            <Amounts row={resource.data} />
-            <p>支払済み額ではありません。</p>
-            <h2 className="text-lg font-semibold">項目別約定条件</h2>
-            <Items items={resource.data.items} />
-            <Button variant="outline" onClick={() => setHistory(!history)}>
-              {history ? '変更履歴を閉じる' : '変更履歴を確認'}
-            </Button>
-            {history && <Changes id={id} />}
-          </>
-        )
-      )}
-    </>
+    <div className="space-y-4">
+      <Panel label="概要">
+        <KeyValueList className="text-base">
+          <KeyValueRow label="店舗">{row.store_name}</KeyValueRow>
+          <KeyValueRow label="営業日">{formatDate(row.business_date, today)}</KeyValueRow>
+          {row.completed_at && (
+            <KeyValueRow label="完了">{formatDateTime(row.completed_at, today)}</KeyValueRow>
+          )}
+          <KeyValueRow label="状態">{remunerationStatus(row)}</KeyValueRow>
+          <KeyValueRow label="約定報酬" money>
+            <Money amount={row.agreed_remuneration} />
+          </KeyValueRow>
+          <KeyValueRow label="予定報酬" money>
+            <Money amount={row.planned_remuneration} />
+          </KeyValueRow>
+          <KeyValueRow label="発生済み報酬" money>
+            <Money amount={row.accrued_remuneration} className="font-semibold" />
+          </KeyValueRow>
+        </KeyValueList>
+        <p className="text-sm text-muted-foreground">
+          予定・発生済みの固定報酬です。支払済み額ではありません。
+        </p>
+      </Panel>
+      <section aria-labelledby="remuneration-items" className="space-y-3">
+        <h2 id="remuneration-items" className="font-semibold">
+          内訳
+        </h2>
+        {itemKeys(row.items).map((key, i) => (
+          <Item key={key} item={row.items[i]} />
+        ))}
+      </section>
+      <Changes id={id} today={today} />
+    </div>
   );
 }
 
-function Changes({ id }: { id: string }) {
+function Change({ change, today }: { change: SelfRemunerationChange; today: string }) {
+  const title = change.change_type === 'COMPLETION_INVALIDATION' ? '無効化' : '訂正';
+  const headingId = `change-${change.change_id}`;
+  return (
+    <article aria-labelledby={headingId} className={PANEL}>
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 id={headingId} className="font-semibold">
+          {title}
+        </h3>
+        <span className="text-sm text-muted-foreground">
+          {formatDateTime(change.changed_at, today)}
+        </span>
+      </div>
+      <KeyValueList className="text-base">
+        <KeyValueRow label="理由" long>
+          {change.reason}
+        </KeyValueRow>
+        {remunerationChanges(change.before, change.after).map((diff, i) => (
+          <KeyValueRow
+            key={i}
+            // 明細名は長くなり得るので、明細の差はラベルを上に積んで折り返す
+            label={
+              diff.item === undefined
+                ? diff.label
+                : diff.kind === 'changed'
+                  ? `${diff.item}の${diff.label}`
+                  : `${diff.item}（${diff.label}）`
+            }
+            long={diff.item !== undefined}
+            money={diff.kind !== 'text'}
+          >
+            {diff.kind === 'text' ? (
+              diff.text
+            ) : diff.kind === 'changed' ? (
+              <Money before={diff.before} amount={diff.after} />
+            ) : (
+              <Money amount={diff.amount} />
+            )}
+          </KeyValueRow>
+        ))}
+      </KeyValueList>
+    </article>
+  );
+}
+
+function Changes({ id, today }: { id: string; today: string }) {
   const [error, setError] = useState<unknown>();
   const history = useListPage(async page => {
     try {
@@ -136,41 +218,20 @@ function Changes({ id }: { id: string }) {
       throw failure;
     }
   });
-  if (history.failed) return <Failure error={error} onRetry={() => void history.reload()} />;
   return (
-    <section aria-label="変更履歴" className="space-y-4">
-      <h2 className="text-lg font-semibold">変更履歴</h2>
-      {!history.isLoading && !history.rows.length && <p>変更履歴はありません</p>}
-      {history.rows.map(change => (
-        <Card key={change.change_id}>
-          <CardContent className="space-y-3 break-words pt-4">
-            <h3 className="font-semibold">
-              {change.change_type === 'COMPLETION_INVALIDATION' ? '無効化' : '訂正'}
-            </h3>
-            <p>{change.reason}</p>
-            <p>{change.changed_at}</p>
-            <p className="break-all text-sm">変更 ID: {change.change_id}</p>
-            <p className="text-sm">
-              原営業日: {change.business_date} / 原完了日時: {change.completed_at}
-            </p>
-            {(['before', 'after'] as const).map(side => (
-              <section key={side} className="space-y-2">
-                <h4 className="font-semibold">
-                  {side === 'before' ? '変更前' : '変更後'}（版{' '}
-                  {side === 'before' ? change.before_version : change.after_version}）
-                </h4>
-                {change[side].completion_invalidated && <p>無効化済み</p>}
-                <p>
-                  約定報酬: {money(change[side].agreed_remuneration)} / 発生済み報酬:{' '}
-                  {money(change[side].accrued_remuneration)}
-                </p>
-                <Items items={change[side].items} />
-              </section>
-            ))}
-          </CardContent>
-        </Card>
-      ))}
-      {history.isLoading && <p>履歴を読み込み中...</p>}
+    <section aria-labelledby="remuneration-changes" className="space-y-3">
+      <h2 id="remuneration-changes" className="font-semibold">
+        変更履歴
+      </h2>
+      {history.failed ? (
+        <Failure error={error} onRetry={() => void history.reload()} />
+      ) : history.isLoading ? (
+        <ListRowsSkeleton rows={1} />
+      ) : history.rows.length === 0 ? (
+        <EmptyState message="変更履歴はありません" />
+      ) : (
+        history.rows.map(change => <Change key={change.change_id} change={change} today={today} />)
+      )}
       <Pager
         page={history.page}
         pageCount={history.pageCount}
