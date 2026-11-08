@@ -3,6 +3,7 @@ import { CastPortalLayout } from '../CastPortalLayout';
 import { CastHomePage } from '../CastHomePage';
 import { shiftApi } from '@/entities/shift';
 import { ownServiceApi } from '@/entities/service';
+import { selfMonthlyRemunerationApi } from '@/entities/order';
 import { remunerationApi } from '@/widgets/remuneration-statement';
 
 jest.mock('next/navigation', () => ({ usePathname: () => '/cast' }));
@@ -10,6 +11,7 @@ jest.mock('@/entities/shift', () => ({
   shiftApi: { mySchedule: jest.fn(), myStores: jest.fn(), myShiftRequests: jest.fn() },
 }));
 jest.mock('@/entities/service', () => ({ ownServiceApi: { list: jest.fn() } }));
+jest.mock('@/entities/order', () => ({ selfMonthlyRemunerationApi: { stores: jest.fn() } }));
 jest.mock('@/widgets/remuneration-statement', () => ({
   remunerationApi: { statement: jest.fn() },
 }));
@@ -19,6 +21,7 @@ const myStores = shiftApi.myStores as jest.Mock;
 const myShiftRequests = shiftApi.myShiftRequests as jest.Mock;
 const listConditions = ownServiceApi.list as jest.Mock;
 const statement = remunerationApi.statement as jest.Mock;
+const remunerationStores = selfMonthlyRemunerationApi.stores as jest.Mock;
 
 // 東京 2026-11-08（日）12:00
 const NOW = new Date('2026-11-08T03:00:00Z');
@@ -61,6 +64,7 @@ beforeEach(() => {
   jest.useFakeTimers({ now: NOW, doNotFake: ['setTimeout', 'setInterval', 'queueMicrotask'] });
   mySchedule.mockResolvedValue([]);
   myStores.mockResolvedValue([{ store_id: 1, store_name: '店舗A' }]);
+  remunerationStores.mockResolvedValue(page([{ store_id: 1, store_name: '店舗A' }]));
   myShiftRequests.mockResolvedValue(page([]));
   listConditions.mockResolvedValue(page([]));
   statement.mockImplementation((scope: { storeId: number }) =>
@@ -186,6 +190,40 @@ describe('CastHomePage', () => {
     expect(within(totals).queryByText('¥99,000')).not.toBeInTheDocument();
   });
 
+  it('退店した店舗の承諾待ちの日も残し、今月の動きが無ければ累計には出さない', async () => {
+    remunerationStores.mockResolvedValue(
+      page([
+        { store_id: 1, store_name: '店舗A' },
+        { store_id: 2, store_name: '退店した店舗' },
+        { store_id: 3, store_name: '昔の店舗' },
+      ])
+    );
+    statement.mockImplementation((scope: { storeId: number }, month: string) => {
+      if (scope.storeId === 2)
+        return Promise.resolve(
+          statementOf(2, '退店した店舗', {
+            month,
+            days: month === '2026-10' ? [] : [day('2026-11-01', 'NOT_ACCEPTED')],
+          })
+        );
+      if (scope.storeId === 3) return Promise.resolve(statementOf(3, '昔の店舗', { month }));
+      return Promise.resolve(statementOf(1, '店舗A', { month }));
+    });
+
+    renderHome();
+
+    const todo = await screen.findByRole('list', { name: 'やること' });
+    expect(within(todo).getByRole('link', { name: /11\/1（日）/ })).toHaveTextContent(
+      '退店した店舗'
+    );
+    expect(screen.getByRole('link', { name: 'ホーム 1件' })).toBeInTheDocument();
+    expect(listConditions).toHaveBeenCalledTimes(1);
+    const totals = screen.getByRole('list', { name: '今月の累計報酬' });
+    expect(within(totals).getByText('店舗A')).toBeInTheDocument();
+    expect(within(totals).getByText('退店した店舗')).toBeInTheDocument();
+    expect(within(totals).queryByText('昔の店舗')).not.toBeInTheDocument();
+  });
+
   it('1 月は前年の 12 月を先月として読む', async () => {
     jest.setSystemTime(new Date('2027-01-05T03:00:00Z'));
 
@@ -197,10 +235,12 @@ describe('CastHomePage', () => {
   });
 
   it('今月の累計報酬を店舗ごとに金額の書式で出し、計算できない店舗は計算待ちとする', async () => {
-    myStores.mockResolvedValue([
+    const stores = [
       { store_id: 1, store_name: '店舗A' },
       { store_id: 2, store_name: '店舗B' },
-    ]);
+    ];
+    myStores.mockResolvedValue(stores);
+    remunerationStores.mockResolvedValue(page(stores));
     statement.mockImplementation((scope: { storeId: number }) =>
       Promise.resolve(
         scope.storeId === 1
