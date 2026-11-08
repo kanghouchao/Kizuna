@@ -183,6 +183,16 @@ When(
   },
 );
 
+// 希望提出の店舗チップ。1 店舗だけのときはチップを出さずその店舗を自動で選ぶ。
+const storeChips = (page: Page) =>
+  page.getByRole("group", { name: "店舗", exact: true }).getByRole("button");
+
+// 提出の入口は所属店舗の読み込みが済むまで押せないので、押せることをもって読み込みの完了とみなす。
+const expectPortalStoresLoaded = (page: Page) =>
+  expect(
+    page.getByRole("button", { name: "出勤希望を出す", exact: true }),
+  ).toBeEnabled();
+
 async function portalStores(page: Page) {
   await page.context().clearCookies();
   await openLoginForm(page);
@@ -198,27 +208,21 @@ async function portalStores(page: Page) {
     .locator("nav")
     .getByRole("link", { name: "希望提出", exact: true })
     .click();
-  const select = page.getByRole("combobox", { name: "店舗", exact: true });
-  await expect(select).not.toHaveAttribute("data-placeholder");
-  await select.click();
+  await expectPortalStoresLoaded(page);
 }
 
 Then(
   "退店後はポータルの店舗選択からその店舗が消える",
   async ({ page, request }) => {
     await portalStores(page);
-    await expect(page.getByRole("option")).toHaveCount(2);
+    await expect(storeChips(page)).toHaveCount(2);
     await withdrawCast(request, adminToken, castId, firstStoreId);
     activeEnrollments.delete(castId);
     await page.reload();
-    await expect(
-      page.getByRole("combobox", { name: "店舗", exact: true }),
-    ).not.toHaveAttribute("data-placeholder");
-    await page.getByRole("combobox", { name: "店舗", exact: true }).click();
-    await expect(page.getByRole("option")).toHaveCount(1);
-    await expect(
-      page.getByRole("option", { name: firstStoreName, exact: true }),
-    ).toHaveCount(0);
+    await expectPortalStoresLoaded(page);
+    // 在籍が 1 店舗になるとチップは出ず、退店した店舗はどこにも選べない。
+    await expect(storeChips(page)).toHaveCount(0);
+    await expect(page.getByText(firstStoreName, { exact: true })).toHaveCount(0);
   },
 );
 
@@ -243,11 +247,10 @@ Then(
 
 Then("ポータルで二店舗を選択できる", async ({ page }) => {
   await portalStores(page);
-  await expect(page.getByRole("option")).toHaveCount(2);
-  await page
-    .getByRole("option", { name: firstStoreName, exact: true })
-    .click();
-  await expect(
-    page.getByRole("combobox", { name: "店舗", exact: true }),
-  ).toContainText(firstStoreName);
+  await expect(storeChips(page)).toHaveCount(2);
+  const first = page
+    .getByRole("group", { name: "店舗", exact: true })
+    .getByRole("button", { name: firstStoreName, exact: true });
+  await first.click();
+  await expect(first).toHaveAttribute("aria-pressed", "true");
 });
