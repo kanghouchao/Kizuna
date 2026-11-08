@@ -75,7 +75,8 @@ beforeEach(() => {
 
 /** ラベルの dt に対応する dd の文字。 */
 function valueOf(region: HTMLElement, label: string) {
-  const term = within(region).getByText(label, { selector: 'dt' });
+  const term = [...region.querySelectorAll('dt')].find(dt => dt.textContent === label);
+  if (!term) throw new Error(`ラベル「${label}」が見つからない`);
   return term.nextElementSibling?.textContent;
 }
 
@@ -106,7 +107,7 @@ it('変更履歴を変更前後の差で出す', async () => {
   expect(valueOf(change, '理由')).toBe('未提供のため無効化');
   expect(valueOf(change, '状態')).toBe('有効 → 無効化');
   expect(valueOf(change, '発生済み報酬')).toBe('¥7,000 → ¥0');
-  expect(within(change).queryByText('約定報酬', { selector: 'dt' })).not.toBeInTheDocument();
+  expect([...change.querySelectorAll('dt')].map(dt => dt.textContent)).not.toContain('約定報酬');
 });
 
 it('内部 ID と ISO 形式の日時を画面に出さない', async () => {
