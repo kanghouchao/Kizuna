@@ -53,13 +53,30 @@ function recentRequests(since: Date): Promise<CastShiftRequestItem[]> {
   });
 }
 
-// 承諾待ちの日と今月の累計は同じ当月の明細から読む。前月以前の承諾待ちは月次の画面で扱う。
-function monthStatements(stores: Store[], month: string): Promise<Statement[]> {
+/** 'yyyy-MM' の前の月。 */
+function previousMonth(month: string): string {
+  const [year, m] = month.split('-').map(Number);
+  return m === 1 ? `${year - 1}-12` : `${year}-${String(m - 1).padStart(2, '0')}`;
+}
+
+function statementsOf(stores: Store[], month: string): Promise<Statement[]> {
   return Promise.all(
     stores.map(store =>
       remunerationApi.statement({ scope: 'self', storeId: store.store_id }, month, 0, 0)
     )
   );
+}
+
+/**
+ * 承諾待ちの日は先月と今月の明細から拾う（月初に前月末の日が消えないように）。それより前の月は
+ * 月次の画面で扱う。今月の累計は同じ今月の明細から読む。
+ */
+async function recentStatements(stores: Store[], month: string) {
+  const [previous, current] = await Promise.all([
+    statementsOf(stores, previousMonth(month)),
+    statementsOf(stores, month),
+  ]);
+  return { previous, current };
 }
 
 interface Region<T> {
@@ -111,13 +128,15 @@ export function useCastHomeSource(): CastHome {
   const stores = useResource(myStores, [pathname]);
   const storeList = stores.data;
   const consents = useResource(storeList ? () => pendingConsents(storeList) : null, [storeList]);
-  const statements = useResource(storeList ? () => monthStatements(storeList, month) : null, [
+  const statements = useResource(storeList ? () => recentStatements(storeList, month) : null, [
     storeList,
     month,
   ]);
   const requests = useResource(() => recentRequests(since), [pathname]);
 
-  const acceptances = statements.data ? acceptanceTodos(statements.data, today) : null;
+  const acceptances = statements.data
+    ? acceptanceTodos([...statements.data.previous, ...statements.data.current], today)
+    : null;
   const todos =
     consents.data && acceptances && requests.data
       ? [...consents.data, ...acceptances, ...requestResultTodos(requests.data, since, today)]
@@ -125,7 +144,7 @@ export function useCastHomeSource(): CastHome {
   return {
     todos: region(todos, [stores, consents, statements, requests]),
     monthTotals: region(
-      statements.data?.map(s => ({
+      statements.data?.current.map(s => ({
         storeId: s.store_id,
         storeName: s.store_name,
         total: s.total,
