@@ -239,6 +239,19 @@ describe('CastHomePage', () => {
     expect(screen.getByRole('link', { name: 'ホーム' })).toBeInTheDocument();
   });
 
+  it('明細が取れないときはやることを失敗として出し、受諾待ちだけの欠けた件数をタブに出さない', async () => {
+    listConditions.mockResolvedValue(
+      page([{ id: 'c1', name: '延長', consent_status: 'NOT_ACCEPTED' }])
+    );
+    statement.mockRejectedValue(new Error('network error'));
+
+    renderHome();
+
+    expect(await screen.findByText('やることの取得に失敗しました')).toBeInTheDocument();
+    expect(screen.getByText('今月の報酬の取得に失敗しました')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'ホーム' })).toBeInTheDocument();
+  });
+
   it('やることが無いときは空の表示を出し、タブに件数を出さない', async () => {
     renderHome();
 
