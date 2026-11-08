@@ -170,13 +170,15 @@ function Change({ change, today }: { change: SelfRemunerationChange; today: stri
         {remunerationChanges(change.before, change.after).map((diff, i) => (
           <KeyValueRow
             key={i}
-            // 明細名は長くなり得るので、明細の差はラベルを上に積んで折り返す
+            // 明細名は長くなり得るので、明細の差はラベルを上に積み、空白の無い名前も途中で折り返す
             label={
-              diff.item === undefined
-                ? diff.label
-                : diff.kind === 'added' || diff.kind === 'removed'
-                  ? `${diff.item}（${diff.label}）`
-                  : `${diff.item}の${diff.label}`
+              <span className="wrap-anywhere">
+                {diff.item === undefined
+                  ? diff.label
+                  : diff.kind === 'added' || diff.kind === 'removed'
+                    ? `${diff.item}（${diff.label}）`
+                    : `${diff.item}の${diff.label}`}
+              </span>
             }
             long={diff.item !== undefined}
             money={diff.kind !== 'text'}
