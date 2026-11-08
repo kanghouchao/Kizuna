@@ -19,13 +19,10 @@ const todayInTokyo = () =>
 
 const CAST_PASSWORD = 'pass12345';
 
-// 所属店舗セレクタはボタンで、選択肢は開いている間だけ描かれる。
-const storeSelect = (page: Page) => page.getByRole('combobox', { name: '店舗', exact: true });
-
-// セレクタへ店舗が流し込まれるまで待つ。未選択の間だけ data-placeholder が付くため、
-// その消失をもって「マウント時の非同期読み込みが解決した」と判定する。
-const expectStoreSelected = (page: Page) =>
-  expect(storeSelect(page)).not.toHaveAttribute('data-placeholder');
+// 提出の入口。所属店舗の読み込みが済むまで押せないので、押せることをもって読み込みの完了とみなす。
+const openSheetButton = (page: Page) =>
+  page.getByRole('button', { name: '出勤希望を出す', exact: true });
+const expectStoresLoaded = (page: Page) => expect(openSheetButton(page)).toBeEnabled();
 
 // 播種した実体の id / 認証情報。CAST User には削除 API が無いためタイムスタンプ付き
 // メールアドレスで隔離し残留を許容する（cast_id/shift_id/shift_request_id は明示削除 + FK CASCADE で片付ける）。
@@ -91,13 +88,13 @@ Then(
 
 When('希望提出タブを開く', async ({ page }) => {
   await page.locator('nav').getByRole('link', { name: '希望提出', exact: true }).click();
-  await expectStoreSelected(page);
+  await expectStoresLoaded(page);
 });
 
 Then('希望提出タブを開き直す', async ({ page }) => {
   // 承認結果の反映には再取得が要る。同一ルートの再入場は remount しないため明示リロードする。
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await expectStoreSelected(page);
+  await expectStoresLoaded(page);
 });
 
 When('スケジュールタブを開く', async ({ page }) => {
@@ -107,21 +104,23 @@ When('スケジュールタブを開く', async ({ page }) => {
 When(
   '店舗 {string}・開始 {string}・終了 {string}・備考 {string} で出勤希望を提出する',
   async ({ page }, storeName: string, startTime: string, endTime: string, note: string) => {
-    await storeSelect(page).click();
-    await page.getByRole('option', { name: storeName, exact: true }).click();
+    // 在籍 1 店舗なので店舗チップは出ず、提出先は下部シートの説明が名乗る。
+    await openSheetButton(page).click();
+    const sheet = page.getByRole('dialog', { name: '出勤希望を出す' });
+    await expect(sheet).toContainText(storeName);
     // 勤務日は本日を明示指定する。フォーム既定の明日だと週末実行時に翌週へ落ち、
     // 承認後のスケジュール断言（当週ビュー）が曜日依存で失敗するため。
-    await page.getByLabel('日付').fill(todayInTokyo());
-    await page.getByLabel('開始').fill(startTime);
-    await page.getByLabel('終了').fill(endTime);
-    await page.getByLabel('備考').fill(note);
+    await sheet.getByLabel('日付').fill(todayInTokyo());
+    await sheet.getByLabel('開始').fill(startTime);
+    await sheet.getByLabel('終了').fill(endTime);
+    await sheet.getByLabel('備考').fill(note);
     const [response] = await Promise.all([
       page.waitForResponse(
         resp =>
           resp.url().includes('/me/shift-requests') && resp.request().method() === 'POST',
         { timeout: 15000 }
       ),
-      page.getByRole('button', { name: '提出する' }).click(),
+      sheet.getByRole('button', { name: '提出する' }).click(),
     ]);
     const body = await response.json();
     createdShiftRequestId = body.id as string;
