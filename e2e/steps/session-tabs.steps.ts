@@ -153,7 +153,12 @@ When('その会員でログインする', async ({ page }) => {
 
 Then('会員ポータルへ遷移する', async ({ page }) => {
   await expect(page).toHaveURL(/\/member\/?$/, { timeout: 15000 });
-  await expect(page.getByRole('heading', { name: '会員コード', level: 2 })).toBeVisible({ timeout: 15000 });
+  // 次の手順で資格情報を失効させる。在途の取得が 401 になると再ログインのダイアログが先に開くため、
+  // ホームの 3 区画と /me（未検証の案内）の取得が済むまで待つ。
+  await expect(page.getByRole('img', { name: '会員コードQR' })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(/^\d[\d,]*\s*pt$/)).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText('まだ予約はありません')).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText('メールアドレスの確認が済んでいません')).toBeVisible({ timeout: 15000 });
 });
 
 When('その会員のパスワードを API で変更する', async ({ request }) => {
