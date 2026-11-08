@@ -27,6 +27,7 @@ import {
   loginUser,
   getAuthorizedStores,
   openLoginForm,
+  dayLabel,
 } from "./store-api";
 const { Given, When, Then, After } = createBdd();
 let token = "",
@@ -65,14 +66,23 @@ async function openSelfStatement(page: Page) {
   await page.getByLabel("パスワード", { exact: true }).fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();
   await page.waitForURL(/\/cast\/?$/);
-  await page.goto(APP_URL + "/cast/remunerations/monthly");
-  await page.getByRole("combobox", { name: "店舗" }).click();
-  await page.getByRole("option").first().click();
-  await page.getByLabel("対象月").fill(month);
-  await page.getByRole("button", { name: "照会", exact: true }).click();
-  await page
-    .getByRole("button", { name: "保証・ボーナスを含む月次明細" })
-    .click();
+  await page.goto(
+    `${APP_URL}/cast/remunerations/monthly?store_id=${STORE1_ID}&month=${month}`,
+  );
+  await expect(selfSummary(page)).toBeVisible();
+}
+const selfSummary = (page: Page) =>
+  page.getByRole("region", { name: `${Number(month.slice(5, 7))}月の合計` });
+// 承諾の操作ボタンも同じ日付で始まるので、見出しの開閉ボタン（先に並ぶ方）に絞る。
+const selfDayHeader = (page: Page) =>
+  page.getByRole("button", { name: new RegExp(`^${dayLabel(date)}`) }).first();
+const selfDay = (page: Page) =>
+  page.getByRole("region", { name: `${dayLabel(date)}の明細` });
+/** 月を一度動かして戻し、原月の明細を取り直す。 */
+async function refetchSelfMonth(page: Page) {
+  await page.getByRole("button", { name: "次の月", exact: true }).click();
+  await page.getByRole("button", { name: "前の月", exact: true }).click();
+  await expect(selfSummary(page)).toBeVisible();
 }
 Given(
   "保証検証の本人に重複する歴史在籍の四時間実績と受注がある",
@@ -366,12 +376,14 @@ Then(
     });
     const page = await context.newPage();
     await openSelfStatement(page);
-    await expect(
-      page.getByText("¥10,000", { exact: true }).first(),
-    ).toBeVisible();
-    await page
-      .getByRole("heading", { name: "受注報酬・保証・ボーナス", exact: true })
-      .scrollIntoViewIfNeeded();
+    const summary = selfSummary(page);
+    await expect(summary).toContainText("¥10,000");
+    await expect(summary).toContainText("受注報酬¥7,000");
+    await expect(summary).toContainText("日額保証の不足分¥3,000");
+    await expect(summary).toContainText("ボーナス¥0");
+    await expect(selfDay(page)).toContainText("日額 ¥10,000 に対する不足分¥3,000");
+    await expect(page.getByRole("main")).not.toContainText("転記訂正");
+    await expect(page.getByRole("main")).not.toContainText("誤記取消");
     await page.screenshot({
       animations: "disabled",
       path: $testInfo.outputPath("remuneration-self.png"),
@@ -695,11 +707,6 @@ Then(
   },
 );
 
-// 受注・ボーナスの根拠表にも同じ営業日の行があるので、承諾状態を持つ日別行だけに絞る。
-const acceptanceRow = () =>
-  castPage!
-    .getByRole("row", { name: new RegExp(date) })
-    .filter({ hasText: /未承諾|承諾済み|承諾後に変更あり|承諾不可/ });
 async function awardBonus(request: APIRequestContext, amount: number) {
   const response = await request.post("/api/bonus-awards", {
     headers: headers(),
@@ -736,12 +743,14 @@ When(
     });
     castPage = await castContext.newPage();
     await openSelfStatement(castPage);
-    await expect(acceptanceRow()).toContainText("未承諾");
-    await castPage.getByRole("button", { name: `${date} を承諾` }).click();
-    await expect(acceptanceRow()).toContainText("承諾済み");
-    await expect(acceptanceRow()).toContainText("最新の承諾");
-    await expect(castPage.getByText(/承諾済み 1 日/)).toBeVisible();
-    await acceptanceRow().scrollIntoViewIfNeeded();
+    await expect(selfDayHeader(castPage)).toContainText("承諾待ち");
+    await selfDay(castPage)
+      .getByRole("button", { name: `${dayLabel(date)}を承諾する`, exact: true })
+      .click();
+    await expect(selfDayHeader(castPage)).toContainText("承諾済み");
+    await expect(selfDay(castPage)).toContainText("に承諾しました");
+    await expect(selfSummary(castPage)).toContainText("承諾 1 / 1 日");
+    await selfDay(castPage).scrollIntoViewIfNeeded();
     await castPage.screenshot({
       animations: "disabled",
       path: $testInfo.outputPath("acceptance-self-light.png"),
@@ -763,10 +772,11 @@ When("承諾後に担当がボーナスを付与する", async ({ request }) => 
   await awardBonus(request, 500);
 });
 Then("本人の画面は承諾後に変更ありと差分を示す", async ({ $testInfo }) => {
-  await castPage!.getByRole("button", { name: "内訳を再照会" }).click();
-  await expect(acceptanceRow()).toContainText("承諾後に変更あり");
-  await expect(acceptanceRow()).toContainText("ボーナス ¥0 → ¥500");
-  await acceptanceRow().scrollIntoViewIfNeeded();
+  await refetchSelfMonth(castPage!);
+  await expect(selfDayHeader(castPage!)).toContainText("再承諾が必要");
+  await expect(selfDay(castPage!)).toContainText("承諾した後に変わりました");
+  await expect(selfDay(castPage!)).toContainText("ボーナス¥0 → ¥500");
+  await selfDay(castPage!).scrollIntoViewIfNeeded();
   await castPage!.evaluate(() =>
     document.documentElement.classList.add("dark"),
   );
@@ -782,7 +792,9 @@ When(
   "本人が古い明細のまま再承諾する間に担当がさらにボーナスを付与する",
   async ({ request }) => {
     await awardBonus(request, 300);
-    await castPage!.getByRole("button", { name: `${date} を再承諾` }).click();
+    await selfDay(castPage!)
+      .getByRole("button", { name: `${dayLabel(date)}を再承諾する`, exact: true })
+      .click();
   },
 );
 Then("承諾は差し戻され明細が最新の差分へ取り直される", async () => {
@@ -791,12 +803,14 @@ Then("承諾は差し戻され明細が最新の差分へ取り直される", as
       "警告：明細の内容が変わっていたため、最新の明細を表示しました。内容を確かめてから承諾してください",
     ),
   ).toBeVisible();
-  await expect(acceptanceRow()).toContainText("ボーナス ¥0 → ¥800");
-  await expect(acceptanceRow()).toContainText("承諾後に変更あり");
+  await expect(selfDay(castPage!)).toContainText("ボーナス¥0 → ¥800");
+  await expect(selfDayHeader(castPage!)).toContainText("再承諾が必要");
 });
 When("本人が最新の内容を再承諾する", async () => {
-  await castPage!.getByRole("button", { name: `${date} を再承諾` }).click();
-  await expect(acceptanceRow()).toContainText("承諾済み");
+  await selfDay(castPage!)
+    .getByRole("button", { name: `${dayLabel(date)}を再承諾する`, exact: true })
+    .click();
+  await expect(selfDayHeader(castPage!)).toContainText("承諾済み");
 });
 Then("承諾済みに戻り本人以外の承諾は拒まれる", async ({ request }) => {
   const data = await statement(request);

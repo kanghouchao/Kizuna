@@ -21,6 +21,7 @@ import {
   withdrawCast,
   openLoginForm,
   monthInTokyo,
+  dayLabel,
 } from "./store-api";
 
 const { Given, When, Then } = createBdd();
@@ -42,17 +43,6 @@ let secondStore = "";
 let storeName = "";
 let secondStoreName = "";
 let initialTotal = 14000;
-
-const WEEKDAYS = "日月火水木金土";
-/** ポータルの日付の書式「9/30（火）」（今年でなければ「2025/9/30（火）」）。 */
-function dayLabel(date: string): string {
-  const [y, m, d] = date.split("-").map(Number);
-  const thisYear = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo" })
-    .format(new Date())
-    .slice(0, 4);
-  const weekday = WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
-  return `${String(y) === thisYear ? "" : `${y}/`}${m}/${d}（${weekday}）`;
-}
 
 const summary = (page: Page) =>
   page.getByRole("region", { name: `${Number(month.slice(5, 7))}月の合計` });
