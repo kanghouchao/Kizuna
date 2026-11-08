@@ -59,6 +59,12 @@ describe('statementDays', () => {
     expect(shown.map(entry => entry.day.business_date)).not.toContain('2026-10-01');
   });
 
+  it('取り消したボーナスだけの日は出さない', () => {
+    const cancelled = { ...bonus('2026-10-01', 'y'), effective_amount: 0, cancelled: true };
+    const dates = statementDays(days, orders, [cancelled]).map(entry => entry.day.business_date);
+    expect(dates).not.toContain('2026-10-01');
+  });
+
   it('承諾待ち・再承諾が必要な日を先頭に、それぞれ日付の順に並べる', () => {
     expect(shown.map(entry => entry.day.business_date)).toEqual([
       '2026-10-04',

@@ -54,7 +54,7 @@ const isAwaiting = (day: Day) =>
   day.acceptance_state === 'NOT_ACCEPTED' || day.acceptance_state === 'CHANGED_AFTER_ACCEPTANCE';
 
 /**
- * 月次明細を 1 日 1 件にまとめる。明細は暦の全日を返すので、出勤・受注・ボーナス・承諾のどれも無い日は除く。
+ * 月次明細を 1 日 1 件にまとめる。明細は暦の全日を返すので、出勤・受注・ボーナス・承諾のどれも無い日は除く（取り消したボーナスだけの日も除く）。
  * 承諾待ちの日を先頭に、それ以外を後ろに、それぞれ日付の順で並べる。
  */
 export function statementDays(
@@ -69,11 +69,10 @@ export function statementDays(
     awaiting: isAwaiting(day),
   }));
   const active = entries.filter(
-    ({ day, orders, bonuses }) =>
+    ({ day, orders }) =>
       closedMinutes(day.closed_duration) > 0 ||
       day.attendance_incomplete ||
       orders.length > 0 ||
-      bonuses.length > 0 ||
       day.order_amount !== 0 ||
       day.bonus_amount !== 0 ||
       day.acceptance_state !== 'NOT_ACCEPTABLE' ||
