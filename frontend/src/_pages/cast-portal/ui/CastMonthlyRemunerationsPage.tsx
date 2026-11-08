@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { selfMonthlyRemunerationApi, type SelfMonthlyRemunerationStore } from '@/entities/order';
+import { selfMonthlyRemunerationApi } from '@/entities/order';
 import { MonthlyPdfActions } from '@/features/monthly-remuneration-pdf';
 import { formatDate, getApiErrorMessage, isConflict, tokyoDate, useResource } from '@/shared/lib';
 import { notify } from '@/shared/notify';
@@ -18,20 +18,10 @@ import {
   StoreChips,
 } from '@/shared/ui';
 import { remunerationApi, type Day, type Statement } from '@/widgets/remuneration-statement';
+import { collectPages } from '../lib/collectPages';
 import { statementDays, type StatementBonus, type StatementOrder } from '../lib/monthlyStatement';
 import { PANEL } from './RemunerationDetail';
 import { StatementDayFold } from './StatementDayFold';
-
-// 店舗の数は本人が在籍したことのある店舗の数で、ページを辿り切っても小さい
-async function allStores(): Promise<SelfMonthlyRemunerationStore[]> {
-  const first = await selfMonthlyRemunerationApi.stores(0);
-  const rest = await Promise.all(
-    Array.from({ length: Math.max(first.pageCount - 1, 0) }, (_, i) =>
-      selfMonthlyRemunerationApi.stores(i + 1)
-    )
-  );
-  return [first, ...rest].flatMap(result => result.rows);
-}
 
 const PAGE_SIZE = 100;
 
@@ -65,7 +55,7 @@ async function fullStatement(storeId: number, month: string): Promise<FullStatem
 export function CastMonthlyRemunerationsPage() {
   const today = tokyoDate(new Date());
   const thisMonth = today.slice(0, 7);
-  const stores = useResource(allStores);
+  const stores = useResource(() => collectPages(selfMonthlyRemunerationApi.stores));
   const [selected, setSelected] = useState<string | null>(null);
   const [month, setMonth] = useState(thisMonth);
 
@@ -202,7 +192,7 @@ function MonthlyStatement({
             </ul>
           )}
           <p className="text-center text-sm text-muted-foreground">
-            出勤の無い日は表示していません
+            出勤も受注も無い日は表示していません
           </p>
         </section>
       )}
@@ -225,7 +215,6 @@ function MonthSummary({
       <h2 id="month-summary" className="text-sm text-muted-foreground">
         {monthNumber}月の合計
       </h2>
-      {/* 日額未設定・退勤記録待ちの日があると後端は total を返さない。部分の和は出さない */}
       {statement.total === undefined ? (
         <p className="text-3xl font-bold text-muted-foreground">計算待ち</p>
       ) : (

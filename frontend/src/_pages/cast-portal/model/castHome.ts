@@ -5,9 +5,9 @@ import { usePathname } from 'next/navigation';
 import { selfMonthlyRemunerationApi } from '@/entities/order';
 import { ownServiceApi } from '@/entities/service';
 import { shiftApi, type CastShiftRequestItem, type CastStoreItem } from '@/entities/shift';
-import type { PageResult } from '@/shared/api';
 import { tokyoDate, useResource } from '@/shared/lib';
 import { remunerationApi, type Statement } from '@/widgets/remuneration-statement';
+import { collectPages } from '../lib/collectPages';
 import {
   acceptanceTodos,
   consentTodos,
@@ -22,19 +22,6 @@ async function myStores(): Promise<Store[]> {
   return (await shiftApi.myStores()).filter(
     (store): store is Store => store.store_id !== undefined && store.store_name !== undefined
   );
-}
-
-/** 最後のページまで、または読み進める必要が無くなるまでページを読む。 */
-async function collectPages<T>(
-  fetchPage: (page: number) => Promise<PageResult<T>>,
-  needsMore: (pageRows: T[]) => boolean = () => true
-): Promise<T[]> {
-  const rows: T[] = [];
-  for (let page = 0; ; page++) {
-    const result = await fetchPage(page);
-    rows.push(...result.rows);
-    if (page + 1 >= result.pageCount || !needsMore(result.rows)) return rows;
-  }
 }
 
 async function pendingConsents(stores: Store[]): Promise<TodoItem[]> {

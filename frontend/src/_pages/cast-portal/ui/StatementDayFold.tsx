@@ -226,7 +226,11 @@ export function StatementDayFold({
                   diff.map(([name, before, after]) => (
                     <p key={name} className="flex flex-wrap justify-between gap-x-3">
                       <span>{name}</span>
-                      <Money amount={after ?? 0} before={before} />
+                      {after === undefined ? (
+                        <span className="tabular-nums">{`${formatMoney(before)} → 計算待ち`}</span>
+                      ) : (
+                        <Money amount={after} before={before} />
+                      )}
                     </p>
                   ))
                 )}
@@ -242,8 +246,7 @@ export function StatementDayFold({
                 {NOT_ACCEPTABLE[day.not_acceptable_reason]}
               </p>
             )}
-            {(day.acceptance_state === 'NOT_ACCEPTED' ||
-              day.acceptance_state === 'CHANGED_AFTER_ACCEPTANCE') && (
+            {entry.awaiting && (
               <Button
                 type="button"
                 className="h-11 w-full"
