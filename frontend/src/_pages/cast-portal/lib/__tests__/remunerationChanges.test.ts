@@ -44,7 +44,7 @@ describe('remunerationChanges', () => {
     ]);
   });
 
-  it('増えた明細と消えた明細を固定報酬の額で出す', () => {
+  it('増えた明細と消えた明細をお客様料金と固定報酬に分けて出す', () => {
     const extension: SelfRemunerationItem = {
       kind: 'EXTENSION',
       name: '延長30分',
@@ -54,10 +54,16 @@ describe('remunerationChanges', () => {
     };
     expect(
       remunerationChanges(snapshot({ items: [course, extension] }), snapshot({ items: [course] }))
-    ).toEqual([{ kind: 'removed', item: '延長30分', label: '削除', amount: 3000 }]);
+    ).toEqual([
+      { kind: 'removed', item: '延長30分', label: 'お客様料金', amount: 5000 },
+      { kind: 'removed', item: '延長30分', label: '固定報酬', amount: 3000 },
+    ]);
     expect(
       remunerationChanges(snapshot({ items: [course] }), snapshot({ items: [course, extension] }))
-    ).toEqual([{ kind: 'added', item: '延長30分', label: '追加', amount: 3000 }]);
+    ).toEqual([
+      { kind: 'added', item: '延長30分', label: 'お客様料金', amount: 5000 },
+      { kind: 'added', item: '延長30分', label: '固定報酬', amount: 3000 },
+    ]);
   });
 
   it('行 ID の無い明細は種別とサービスで突き合わせる', () => {

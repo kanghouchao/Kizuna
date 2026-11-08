@@ -60,6 +60,12 @@ const money = (
     ? []
     : [{ kind: 'changed', label, before, after, ...(item === undefined ? {} : { item }) }];
 
+/** 増えた・消えた明細は、お客様料金と固定報酬を分けてそれぞれの額を出す。 */
+const amounts = (kind: 'added' | 'removed', item: SelfRemunerationItem): RemunerationChange[] => [
+  { kind, item: item.name, label: 'お客様料金', amount: item.price },
+  { kind, item: item.name, label: '固定報酬', amount: item.remuneration },
+];
+
 /** 変更前後で値が変わった所だけを、利用者が読む順（状態 → 合計 → 明細）に並べる。 */
 export function remunerationChanges(
   before: SelfRemunerationSnapshot,
@@ -80,7 +86,7 @@ export function remunerationChanges(
   before.items.forEach((old, i) => {
     const next = afterItems.get(beforeKeys[i]);
     if (!next) {
-      rows.push({ kind: 'removed', item: old.name, label: '削除', amount: old.remuneration });
+      rows.push(...amounts('removed', old));
       return;
     }
     // 別の版への訂正は金額が同じでも名称・時間・条件が変わる。金額だけを比べると何が変わったか読めない
@@ -95,8 +101,7 @@ export function remunerationChanges(
   });
   const kept = new Set(beforeKeys);
   after.items.forEach((item, i) => {
-    if (!kept.has(afterKeys[i]))
-      rows.push({ kind: 'added', item: item.name, label: '追加', amount: item.remuneration });
+    if (!kept.has(afterKeys[i])) rows.push(...amounts('added', item));
   });
   return rows;
 }

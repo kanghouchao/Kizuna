@@ -167,7 +167,7 @@ it('変更履歴の失敗を再試行し、ページを送れる', async () => {
   expect(selfRemunerationApi.changes).toHaveBeenLastCalledWith('order-7f3a', 1);
 });
 
-it('訂正で増えた明細は明細名に（追加）を添え、その固定報酬を出す', async () => {
+it('訂正で増えた明細は明細名に（追加）を添え、お客様料金と固定報酬を分けて出す', async () => {
   const extension = {
     kind: 'EXTENSION' as const,
     name: '追加延長',
@@ -186,5 +186,6 @@ it('訂正で増えた明細は明細名に（追加）を添え、その固定�
   );
   render(<CastRemunerationDetailPage />);
   const change = await screen.findByRole('article', { name: /訂正/ });
-  expect(valueOf(change, '追加延長（追加）')).toBe('¥2,000');
+  expect(valueOf(change, '追加延長（追加）のお客様料金')).toBe('¥4,000');
+  expect(valueOf(change, '追加延長（追加）の固定報酬')).toBe('¥2,000');
 });
