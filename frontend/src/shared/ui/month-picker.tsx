@@ -1,15 +1,9 @@
 'use client';
 
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
+import { recentMonths, shiftMonth } from '@/shared/lib/portal-format';
 import { Button } from './button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './select';
-
-/** 'YYYY-MM' を n か月ずらす。 */
-function shiftMonth(month: string, n: number): string {
-  const [y, m] = month.split('-').map(Number);
-  const index = y * 12 + (m - 1) + n;
-  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}`;
-}
 
 function monthLabel(month: string): string {
   const [y, m] = month.split('-').map(Number);
@@ -26,7 +20,7 @@ interface MonthPickerProps {
 
 /** 「‹ 2026年11月 ›」。中央を押すと直近 12 か月の一覧から選ぶ。年月を手で打たせない。 */
 export function MonthPicker({ value, currentMonth, onValueChange }: MonthPickerProps) {
-  const months = Array.from({ length: 12 }, (_, i) => shiftMonth(currentMonth, -i));
+  const months = recentMonths(currentMonth);
   const items = months.map(month => ({ value: month, label: monthLabel(month) }));
   const oldest = months[months.length - 1];
   // 移動先が範囲内のときだけ押せる。範囲外の value からは一覧で選び直させる。

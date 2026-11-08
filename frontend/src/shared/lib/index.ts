@@ -58,5 +58,7 @@ export {
   formatRevision,
   formatTime,
   formatTimeRange,
+  recentMonths,
+  shiftMonth,
   tokyoDate,
 } from './portal-format';

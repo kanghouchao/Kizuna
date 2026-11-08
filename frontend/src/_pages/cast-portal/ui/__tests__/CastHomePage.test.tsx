@@ -169,7 +169,7 @@ describe('CastHomePage', () => {
 
     const todo = await screen.findByRole('list', { name: 'やること' });
     const waiting = within(todo).getByRole('link', { name: /11\/3（火）/ });
-    expect(waiting).toHaveAttribute('href', '/cast/remunerations/monthly');
+    expect(waiting).toHaveAttribute('href', '/cast/remunerations/monthly?store_id=1&month=2026-11');
     expect(waiting).toHaveTextContent('店舗A');
     expect(waiting).toHaveTextContent('承諾待ち');
     expect(within(todo).getByRole('link', { name: /11\/4（水）/ })).toHaveTextContent(
@@ -181,7 +181,7 @@ describe('CastHomePage', () => {
     expect(statement).toHaveBeenCalledWith({ scope: 'self', storeId: 1 }, '2026-11', 0, 0);
   });
 
-  it('先月の承諾待ちの日も残し、累計報酬は今月の明細だけで出す', async () => {
+  it('先月の承諾待ちの日も残して先月の明細へ導き、累計報酬は今月の明細だけで出す', async () => {
     statement.mockImplementation((_scope: unknown, month: string) =>
       Promise.resolve(
         month === '2026-10'
@@ -197,7 +197,12 @@ describe('CastHomePage', () => {
     renderHome();
 
     const todo = await screen.findByRole('list', { name: 'やること' });
-    expect(within(todo).getByRole('link', { name: /10\/31（土）/ })).toHaveTextContent('承諾待ち');
+    const lastMonth = within(todo).getByRole('link', { name: /10\/31（土）/ });
+    expect(lastMonth).toHaveTextContent('承諾待ち');
+    expect(lastMonth).toHaveAttribute(
+      'href',
+      '/cast/remunerations/monthly?store_id=1&month=2026-10'
+    );
     expect(screen.getByRole('link', { name: 'ホーム 1件' })).toBeInTheDocument();
     const totals = screen.getByRole('list', { name: '今月の累計報酬' });
     expect(within(totals).getByText('¥12,000')).toBeInTheDocument();

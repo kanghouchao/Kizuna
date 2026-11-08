@@ -67,6 +67,25 @@ async function openOldMonth(page: Page) {
   await expect(summary(page)).toBeVisible();
 }
 
+/** 退店店舗の原月の明細が出ていること。URL に月を持つので、詳細から戻っても選び直さずに出る。 */
+async function expectOldMonth(page: Page) {
+  await expect(page).toHaveURL(
+    new RegExp(`/cast/remunerations/monthly\\?.*month=${month}`),
+  );
+  await expect(
+    page.getByRole("button", { name: storeName, exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(summary(page)).toBeVisible();
+}
+
+async function loginAsSelf(page: Page) {
+  await openLoginForm(page);
+  await page.getByLabel("メールアドレス").fill(email);
+  await page.getByLabel("パスワード", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "ログイン", exact: true }).click();
+  await expect(page).toHaveURL(/\/cast\/?$/);
+}
+
 /** 月を一度動かして戻し、原月の明細を取り直す。 */
 async function refetchMonth(page: Page) {
   await page.getByRole("button", { name: "次の月", exact: true }).click();
@@ -227,11 +246,7 @@ Given(
 );
 
 When("本人が月次給与明細で退店店舗と原月を選ぶ", async ({ page }) => {
-  await openLoginForm(page);
-  await page.getByLabel("メールアドレス").fill(email);
-  await page.getByLabel("パスワード", { exact: true }).fill(password);
-  await page.getByRole("button", { name: "ログイン", exact: true }).click();
-  await expect(page).toHaveURL(/\/cast\/?$/);
+  await loginAsSelf(page);
   await page
     .getByRole("navigation", { name: "メニュー" })
     .getByRole("link", { name: "報酬", exact: true })
@@ -242,6 +257,25 @@ When("本人が月次給与明細で退店店舗と原月を選ぶ", async ({ pa
     .click();
   await openOldMonth(page);
 });
+
+When(
+  "本人がホームのやることから退店店舗の原月の承諾待ちを開く",
+  async ({ page }) => {
+    await loginAsSelf(page);
+    // 先月の承諾待ちでも、その店舗とその月の明細を開く
+    const todo = page
+      .getByRole("list", { name: "やること" })
+      .getByRole("link", { name: new RegExp(`^${dayLabel(oldDate)}の報酬`) })
+      .filter({ has: page.getByText(storeName, { exact: true }) });
+    await expect(todo).toHaveAttribute(
+      "href",
+      `/cast/remunerations/monthly?store_id=${STORE1_ID}&month=${month}`,
+    );
+    await todo.click();
+    await expectOldMonth(page);
+    await expect(oldDay(page)).toBeVisible();
+  },
+);
 
 Then(
   "本人の同店の完了受注だけが月合計と全ページに含まれる",
@@ -343,8 +377,7 @@ Then(
     await expect(page.getByText("本人の原月の延長を訂正")).toBeVisible();
     await expect(page.getByText("本人の原月の未提供を無効化")).toBeVisible();
     await page.goBack();
-    await expect(page).toHaveURL(/\/cast\/remunerations\/monthly$/);
-    await openOldMonth(page);
+    await expectOldMonth(page);
     const history = await request.get(
       `/api/me/remunerations/${firstOrder}/changes`,
       { headers: { Authorization: `Bearer ${token}` }, params: { size: 1 } },
@@ -638,7 +671,7 @@ Then(
     await day.getByRole("link").first().click();
     await expect(page.getByText("変更履歴はありません")).toBeVisible();
     await page.goBack();
-    await openOldMonth(page);
+    await expectOldMonth(page);
     await correctOrderExtension(
       request,
       manager,

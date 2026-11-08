@@ -22,6 +22,18 @@ export function tokyoDate(instant: Date): string {
   return toTokyoLocal(instant).slice(0, 10);
 }
 
+/** 'yyyy-MM' を n か月ずらす。 */
+export function shiftMonth(month: string, n: number): string {
+  const [y, m] = month.split('-').map(Number);
+  const index = y * 12 + (m - 1) + n;
+  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}`;
+}
+
+/** 今月 'yyyy-MM' から遡る直近 12 か月（新しい順）。本人が月を選べる範囲。 */
+export function recentMonths(currentMonth: string): string[] {
+  return Array.from({ length: 12 }, (_, i) => shiftMonth(currentMonth, -i));
+}
+
 /** 'yyyy-MM-dd' を「11/5（水）」に。today と年が違えば「2025/11/5（水）」。 */
 export function formatDate(date: string, today: string): string {
   const [y, m, d] = date.slice(0, 10).split('-').map(Number);
