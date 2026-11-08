@@ -153,7 +153,7 @@ When('その会員でログインする', async ({ page }) => {
 
 Then('会員ポータルへ遷移する', async ({ page }) => {
   await expect(page).toHaveURL(/\/member\/?$/, { timeout: 15000 });
-  await expect(page.getByRole('link', { name: 'ポイントを見る' })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole('heading', { name: '会員コード', level: 2 })).toBeVisible({ timeout: 15000 });
 });
 
 When('その会員のパスワードを API で変更する', async ({ request }) => {

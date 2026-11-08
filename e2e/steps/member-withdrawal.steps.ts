@@ -87,7 +87,8 @@ When("退会検証用の会員でログインする", async ({ page }) => {
   await expect(page).toHaveURL(/\/member\/?$/, { timeout: 15000 });
 });
 
-Then("会員ポータルのホームに退会の導線がある", async ({ page }) => {
+Then("会員ポータルのアカウントに退会の導線がある", async ({ page }) => {
+  await page.getByRole("navigation", { name: "メニュー" }).getByRole("link", { name: "アカウント" }).click();
   await expect(page.getByRole("link", { name: "退会する" })).toBeVisible({
     timeout: 15000,
   });
