@@ -91,6 +91,9 @@ export default function CastInvitePage() {
           <Link href="/cast" className="auth-btn block text-center">
             ポータルへ
           </Link>
+          <p className="auth-note">
+            別のアカウントでログイン中の場合は、ログアウトしてから招待を受諾したアカウントでログインしてください。
+          </p>
         </div>
       </AuthLayout>
     );
