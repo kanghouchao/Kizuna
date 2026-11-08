@@ -283,38 +283,49 @@ describe('LineCallbackPage', () => {
       expect(mockReplace).not.toHaveBeenCalled();
     });
 
-    it('キャストのLINE連携から始めた連携は、完了後にキャストのLINE連携へ戻す', async () => {
-      arriveAt('?code=auth-code&state=s2', {
-        state: 's2',
-        verifier: 'v2',
-        intent: 'link',
-        subject: 'me@kizuna.test',
-        returnTo: 'cast-account',
-      });
-      mockedMe.mockResolvedValue({ email: 'me@kizuna.test' });
-      mockedLineApi.link.mockResolvedValue(undefined);
+    const PORTAL_RETURNS = [
+      ['cast-account', '/cast/account/line'],
+      ['member-account', '/member/account/line'],
+    ] as const;
 
-      render(<LineCallbackPage />);
+    it.each(PORTAL_RETURNS)(
+      '本人ポータルのLINE連携（%s）から始めた連携は、完了後に %s へ戻す',
+      async (returnTo, path) => {
+        arriveAt('?code=auth-code&state=s2', {
+          state: 's2',
+          verifier: 'v2',
+          intent: 'link',
+          subject: 'me@kizuna.test',
+          returnTo,
+        });
+        mockedMe.mockResolvedValue({ email: 'me@kizuna.test' });
+        mockedLineApi.link.mockResolvedValue(undefined);
 
-      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/cast/account/line'));
-    });
+        render(<LineCallbackPage />);
 
-    it('キャストのLINE連携から始めた連携の失敗は、キャストのLINE連携への戻り導線を示す', async () => {
-      arriveAt('?error=access_denied&state=s2', {
-        state: 's2',
-        verifier: 'v2',
-        intent: 'link',
-        subject: 'me@kizuna.test',
-        returnTo: 'cast-account',
-      });
+        await waitFor(() => expect(mockReplace).toHaveBeenCalledWith(path));
+      }
+    );
 
-      render(<LineCallbackPage />);
+    it.each(PORTAL_RETURNS)(
+      '本人ポータルのLINE連携（%s）から始めた連携の失敗は、%s への戻り導線を示す',
+      async (returnTo, path) => {
+        arriveAt('?error=access_denied&state=s2', {
+          state: 's2',
+          verifier: 'v2',
+          intent: 'link',
+          subject: 'me@kizuna.test',
+          returnTo,
+        });
 
-      expect(await screen.findByRole('link', { name: 'LINE連携へ戻る' })).toHaveAttribute(
-        'href',
-        '/cast/account/line'
-      );
-    });
+        render(<LineCallbackPage />);
+
+        expect(await screen.findByRole('link', { name: 'LINE連携へ戻る' })).toHaveAttribute(
+          'href',
+          path
+        );
+      }
+    );
 
     it('戻り先の無い連携の保存値は改竄とみなし、連携を送らない', async () => {
       arriveAt('?code=auth-code&state=s2', {

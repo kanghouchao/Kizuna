@@ -8,3 +8,4 @@ export { MemberReservationNewPage } from './ui/MemberReservationNewPage';
 export { MemberReceiptClaimPage } from './ui/MemberReceiptClaimPage';
 export { MemberWithdrawalPage } from './ui/MemberWithdrawalPage';
 export { MemberNotificationSettingsPage } from './ui/MemberNotificationSettingsPage';
+export { MemberLineLinkPage } from './ui/MemberLineLinkPage';

@@ -21,6 +21,7 @@ export const MEMBER_SCREENS: PortalScreens = {
   '/member/receipts': { title: '伝票の取り込み', back: '/member/points' },
   '/member/account': { title: 'アカウント', tab: '/member/account' },
   '/member/notification-settings': { title: '通知の設定', back: '/member/account' },
+  '/member/account/line': { title: 'LINE連携', back: '/member/account' },
   '/member/withdrawal': { title: '退会', back: '/member/account' },
 };
 

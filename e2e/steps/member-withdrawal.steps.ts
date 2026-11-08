@@ -87,8 +87,9 @@ When("退会検証用の会員でログインする", async ({ page }) => {
   await expect(page).toHaveURL(/\/member\/?$/, { timeout: 15000 });
 });
 
-Then("会員ポータルのアカウントに退会の導線がある", async ({ page }) => {
+Then("アカウントのタブの最下部に退会の導線がある", async ({ page }) => {
   await page.getByRole("navigation", { name: "メニュー" }).getByRole("link", { name: "アカウント" }).click();
+  await expect(page).toHaveURL(/\/member\/account\/?$/, { timeout: 15000 });
   await expect(page.getByRole("link", { name: "退会する" })).toBeVisible({
     timeout: 15000,
   });
@@ -102,18 +103,19 @@ When("退会画面を開く", async ({ page }) => {
   ).toBeVisible();
 });
 
-Then("確認欄に「退会」と入力するまで退会ボタンは押せない", async ({ page }) => {
+Then("「理解しました」に印を付けるまで退会ボタンは押せない", async ({ page }) => {
   const button = page.getByRole("button", { name: "退会する" });
+  await expect(page.getByRole("checkbox", { name: "上記の内容を理解しました" })).not.toBeChecked();
   await expect(button).toBeDisabled();
-  await page.getByLabel("確認のため「退会」と入力").fill("退");
+  await page.getByLabel("退会理由").fill("入力だけでは開かない");
   await expect(button).toBeDisabled();
 });
 
 When(
-  "理由 {string} と確認語を入力して退会する",
+  "理由 {string} を入力し「理解しました」に印を付けて退会する",
   async ({ page }, reason: string) => {
     await page.getByLabel("退会理由").fill(reason);
-    await page.getByLabel("確認のため「退会」と入力").fill("退会");
+    await page.getByRole("checkbox", { name: "上記の内容を理解しました" }).click();
     const button = page.getByRole("button", { name: "退会する" });
     await expect(button).toBeEnabled();
     await Promise.all([

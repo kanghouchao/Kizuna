@@ -19,8 +19,8 @@ jest.mock('@/shared/notify', () => ({
 const mockedWithdraw = memberApi.withdraw as jest.Mock;
 
 const submitButton = () => screen.getByRole('button', { name: '退会する' });
-const typeConfirmation = (value: string) =>
-  fireEvent.change(screen.getByLabelText('確認のため「退会」と入力'), { target: { value } });
+const understood = () => screen.getByRole('checkbox', { name: '上記の内容を理解しました' });
+const acknowledge = () => fireEvent.click(understood());
 const typeReason = (value: string) =>
   fireEvent.change(screen.getByLabelText('退会理由'), { target: { value } });
 
@@ -38,24 +38,26 @@ describe('MemberWithdrawalPage', () => {
     expect(memberApi.home).toHaveBeenCalledTimes(1);
   });
 
-  it('退会で起きることを説明し、確認欄に「退会」と打つまで実行ボタンを開かない', () => {
+  it('退会で起きることを説明し、「理解しました」に印を付けるまで実行ボタンを開かない', () => {
     render(<MemberWithdrawalPage />);
 
     expect(screen.getByRole('heading', { name: '退会すると', level: 2 })).toBeInTheDocument();
     expect(screen.getByText(/ポイントはすべて消去され/)).toBeInTheDocument();
     expect(screen.getByText(/新しい会員として始まります/)).toBeInTheDocument();
+    expect(understood()).not.toBeChecked();
     expect(submitButton()).toBeDisabled();
 
-    typeConfirmation('退 会');
-    expect(submitButton()).toBeDisabled();
-
-    typeConfirmation('退会');
+    acknowledge();
+    expect(understood()).toBeChecked();
     expect(submitButton()).toBeEnabled();
+
+    acknowledge();
+    expect(submitButton()).toBeDisabled();
   });
 
   it('理由が空なら送信せず、入力横に文言を出す', async () => {
     render(<MemberWithdrawalPage />);
-    typeConfirmation('退会');
+    acknowledge();
 
     fireEvent.click(submitButton());
 
@@ -68,7 +70,7 @@ describe('MemberWithdrawalPage', () => {
     mockedWithdraw.mockResolvedValue(undefined);
     render(<MemberWithdrawalPage />);
     typeReason('引っ越しのため');
-    typeConfirmation('退会');
+    acknowledge();
 
     fireEvent.click(submitButton());
 
@@ -85,7 +87,7 @@ describe('MemberWithdrawalPage', () => {
     });
     render(<MemberWithdrawalPage />);
     typeReason('やめる');
-    typeConfirmation('退会');
+    acknowledge();
 
     fireEvent.click(submitButton());
 
