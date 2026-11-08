@@ -15,38 +15,49 @@ import {
   type TodoItem,
 } from '../lib/todo';
 
-async function allRows<T>(fetchPage: (page: number) => Promise<PageResult<T>>): Promise<T[]> {
-  const first = await fetchPage(0);
-  const rows = [...first.rows];
-  for (let page = 1; page < first.pageCount; page++) rows.push(...(await fetchPage(page)).rows);
-  return rows;
+type Store = Required<CastStoreItem>;
+
+async function myStores(): Promise<Store[]> {
+  return (await shiftApi.myStores()).filter(
+    (store): store is Store => store.store_id !== undefined && store.store_name !== undefined
+  );
 }
 
-async function pendingConsents(stores: CastStoreItem[]): Promise<TodoItem[]> {
+/** 最後のページまで、または読み進める必要が無くなるまでページを読む。 */
+async function collectPages<T>(
+  fetchPage: (page: number) => Promise<PageResult<T>>,
+  needsMore: (pageRows: T[]) => boolean = () => true
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let page = 0; ; page++) {
+    const result = await fetchPage(page);
+    rows.push(...result.rows);
+    if (page + 1 >= result.pageCount || !needsMore(result.rows)) return rows;
+  }
+}
+
+async function pendingConsents(stores: Store[]): Promise<TodoItem[]> {
   const perStore = await Promise.all(
     stores.map(async store => ({
-      storeName: store.store_name ?? '',
-      conditions: await allRows(page => ownServiceApi.list(String(store.store_id), page)),
+      storeName: store.store_name,
+      conditions: await collectPages(page => ownServiceApi.list(String(store.store_id), page)),
     }))
   );
   return consentTodos(perStore);
 }
 
-async function recentRequests(since: Date) {
-  const rows: CastShiftRequestItem[] = [];
-  for (let page = 0; ; page++) {
-    const result = await shiftApi.myShiftRequests(page);
-    rows.push(...result.rows);
-    const last = result.rows.at(-1)?.created_at;
-    if (page + 1 >= result.pageCount || !last || new Date(last) < since) return rows;
-  }
+function recentRequests(since: Date): Promise<CastShiftRequestItem[]> {
+  return collectPages(shiftApi.myShiftRequests, pageRows => {
+    const last = pageRows.at(-1)?.created_at;
+    return last !== undefined && new Date(last) >= since;
+  });
 }
 
 // 承諾待ちの日と今月の累計は同じ当月の明細から読む。前月以前の承諾待ちは月次の画面で扱う。
-function monthStatements(stores: CastStoreItem[], month: string): Promise<Statement[]> {
+function monthStatements(stores: Store[], month: string): Promise<Statement[]> {
   return Promise.all(
     stores.map(store =>
-      remunerationApi.statement({ scope: 'self', storeId: store.store_id ?? 0 }, month, 0, 0)
+      remunerationApi.statement({ scope: 'self', storeId: store.store_id }, month, 0, 0)
     )
   );
 }
@@ -97,7 +108,7 @@ export function useCastHomeSource(): CastHome {
   const today = tokyoDate(now);
   const since = resultSince(now);
   const month = today.slice(0, 7);
-  const stores = useResource(() => shiftApi.myStores(), [pathname]);
+  const stores = useResource(myStores, [pathname]);
   const storeList = stores.data;
   const consents = useResource(storeList ? () => pendingConsents(storeList) : null, [storeList]);
   const statements = useResource(storeList ? () => monthStatements(storeList, month) : null, [
@@ -121,7 +132,8 @@ export function useCastHomeSource(): CastHome {
       })) ?? null,
       [stores, statements]
     ),
-    pendingCount: (consents.data?.length ?? 0) + (acceptances?.length ?? 0),
+    // 片方だけで数えると欠けた件数を正しい件数のように見せるので、両方そろうまで出さない。
+    pendingCount: consents.data && acceptances ? consents.data.length + acceptances.length : 0,
   };
 }
 

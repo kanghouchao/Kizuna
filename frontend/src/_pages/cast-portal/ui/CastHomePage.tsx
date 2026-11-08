@@ -1,5 +1,6 @@
 'use client';
 
+import { useId } from 'react';
 import Link from 'next/link';
 import { shiftApi } from '@/entities/shift';
 import { formatTimeRange, tokyoDate, useResource } from '@/shared/lib';
@@ -16,7 +17,7 @@ import {
 import { useCastHome } from '../model/castHome';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  const id = `cast-home-${title}`;
+  const id = useId();
   return (
     <section aria-labelledby={id} className="space-y-2">
       <h2 id={id} className="font-semibold">

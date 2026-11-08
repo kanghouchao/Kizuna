@@ -64,7 +64,7 @@ async function openSelfStatement(page: Page) {
   await page.getByLabel("メールアドレス", { exact: true }).fill(castEmail);
   await page.getByLabel("パスワード", { exact: true }).fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();
-  await page.waitForURL(/\/cast\//);
+  await page.waitForURL(/\/cast\/?$/);
   await page.goto(APP_URL + "/cast/remunerations/monthly");
   await page.getByRole("combobox", { name: "店舗" }).click();
   await page.getByRole("option").first().click();
