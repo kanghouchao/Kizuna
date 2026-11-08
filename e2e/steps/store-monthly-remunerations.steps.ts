@@ -3,7 +3,6 @@ import { APP_URL } from "../base-url";
 import { expectChange } from "./change-table";
 import { createBdd } from "playwright-bdd";
 import {
-  getSelfDailyRemunerations,
   acceptCastInvitation,
   createAgreedOrder,
   completeAgreedOrder,
@@ -679,27 +678,5 @@ Then(
       number: 0,
       size: 20,
     });
-    const selfParams = { store_id: STORE1_ID, business_date: "2026-09-30" };
-    expect(
-      (
-        await getSelfDailyRemunerations(request, { params: selfParams })
-      ).status(),
-    ).toBe(401);
-    expect(
-      (
-        await getSelfDailyRemunerations(request, {
-          headers: { Authorization: `Bearer ${staffToken}` },
-          params: selfParams,
-        })
-      ).status(),
-    ).toBe(403);
-    expect(
-      (
-        await getSelfDailyRemunerations(request, {
-          headers: { Authorization: `Bearer ${castToken}` },
-          params: { ...selfParams, person_id: staffPersonId },
-        })
-      ).status(),
-    ).toBe(404);
   },
 );

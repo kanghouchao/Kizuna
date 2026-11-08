@@ -232,6 +232,12 @@ class MonthlyPdfControllerTest {
   }
 
   @Test
+  void castWithoutIdentityIsNotFound() throws Exception {
+    when(people.findByUserId(12L)).thenReturn(Optional.empty());
+    mvc.perform(request("self")).andExpect(status().isNotFound());
+  }
+
+  @Test
   void extraIdentityCannotImpersonateAnotherCast() throws Exception {
     rows(1);
     var response =

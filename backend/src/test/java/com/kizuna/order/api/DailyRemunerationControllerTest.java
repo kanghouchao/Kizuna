@@ -9,22 +9,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.kizuna.cast.domain.Cast;
-import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.order.api.dto.OrderMapperImpl;
-import com.kizuna.order.api.me.SelfDailyRemunerationController;
 import com.kizuna.order.application.DailyRemunerationService;
 import com.kizuna.order.domain.RemunerationOrderRow;
 import com.kizuna.order.infrastructure.RemunerationQuery;
-import com.kizuna.order.infrastructure.SelfMonthlyRemunerationQuery;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.util.List;
-import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -42,16 +36,14 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.PlatformTransactionManager;
 
-@WebMvcTest({DailyRemunerationController.class, SelfDailyRemunerationController.class})
+@WebMvcTest(DailyRemunerationController.class)
 @Import({
   DailyRemunerationControllerTest.Security.class,
   DailyRemunerationService.class,
   OrderMapperImpl.class,
   StoreScopeHolder.class
 })
-@WithMockUser(
-    username = "cast@example.test",
-    authorities = {"PERM_ORDER_MANAGE", "ROLE_CAST"})
+@WithMockUser(authorities = "PERM_ORDER_MANAGE")
 class DailyRemunerationControllerTest {
   @TestConfiguration
   @EnableMethodSecurity
@@ -59,9 +51,6 @@ class DailyRemunerationControllerTest {
 
   @Autowired private MockMvc mvc;
   @MockitoBean private RemunerationQuery query;
-  @MockitoBean private SelfMonthlyRemunerationQuery selfQuery;
-  @MockitoBean private ActorIdentityService actors;
-  @MockitoBean private CastRepository people;
   @MockitoBean private SystemConfigService settings;
   @MockitoBean private StoreExistenceCheck storeExistence;
   @MockitoBean StoreScopeResolver storeScopeResolver;
@@ -70,12 +59,7 @@ class DailyRemunerationControllerTest {
   @BeforeEach
   void fixture() {
     when(storeExistence.exists(anyLong())).thenReturn(true);
-    var person = Cast.builder().userId(12L).build();
-    person.setId(34L);
-    when(actors.requireUserId("cast@example.test")).thenReturn(12L);
-    when(people.findByUserId(12L)).thenReturn(Optional.of(person));
     when(query.personName(1L, 34L)).thenReturn("本人");
-    when(selfQuery.storeName(34L, 1L)).thenReturn("退店店舗");
     when(query.dailyTotal(eq(1L), eq(34L), any())).thenReturn(14000L);
     when(query.dailyOrders(eq(1L), eq(34L), any(), any()))
         .thenAnswer(
@@ -88,19 +72,16 @@ class DailyRemunerationControllerTest {
                     2));
   }
 
-  private MockHttpServletRequestBuilder request(String scope, String date) {
-    return get(scope.equals("store") ? "/daily-remunerations" : "/me/daily-remunerations")
-        .principal(() -> "cast@example.test")
+  private MockHttpServletRequestBuilder request(String date) {
+    return get("/daily-remunerations")
         .header("X-Store-ID", "1")
         .param("person_id", "34")
-        .param("store_id", "1")
         .param("business_date", date);
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = {"store", "self"})
-  void returnsFullTotalAndSafePagedRows(String scope) throws Exception {
-    mvc.perform(request(scope, "2026-09-30").param("size", "1"))
+  @Test
+  void returnsFullTotalAndSafePagedRows() throws Exception {
+    mvc.perform(request("2026-09-30").param("size", "1"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.business_date").value("2026-09-30"))
         .andExpect(jsonPath("$.total_remuneration").value(14000))
@@ -133,37 +114,28 @@ class DailyRemunerationControllerTest {
 
   @ParameterizedTest
   @ValueSource(strings = {"2026-02-30", "2026-2-01", "0000-01-01", "2026-13-01", "bad", ""})
-  void invalidDayIs400OnBothSurfaces(String day) throws Exception {
-    for (String scope : List.of("store", "self"))
-      mvc.perform(request(scope, day))
-          .andExpect(status().isBadRequest())
-          .andExpect(jsonPath("$.error").isString());
+  void invalidDayIs400(String day) throws Exception {
+    mvc.perform(request(day))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error").isString());
   }
 
   @Test
   void offsetBeyondIntIs400AndNegativePageIsNormalized() throws Exception {
-    for (String scope : List.of("store", "self")) {
-      mvc.perform(request(scope, "2026-09-30").param("page", "2147483647").param("size", "20"))
-          .andExpect(status().isBadRequest());
-      mvc.perform(request(scope, "2026-09-30").param("page", "-1"))
-          .andExpect(status().isOk())
-          .andExpect(jsonPath("$.orders.number").value(0));
-    }
+    mvc.perform(request("2026-09-30").param("page", "2147483647").param("size", "20"))
+        .andExpect(status().isBadRequest());
+    mvc.perform(request("2026-09-30").param("page", "-1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.orders.number").value(0));
   }
 
   @ParameterizedTest
   @ValueSource(strings = {"0", "-1"})
-  void invalidIdsAre400(String id) throws Exception {
+  void invalidPersonIdIs400(String id) throws Exception {
     mvc.perform(
             get("/daily-remunerations")
                 .header("X-Store-ID", "1")
                 .param("person_id", id)
-                .param("business_date", "2026-09-30"))
-        .andExpect(status().isBadRequest());
-    mvc.perform(
-            get("/me/daily-remunerations")
-                .principal(() -> "cast@example.test")
-                .param("store_id", id)
                 .param("business_date", "2026-09-30"))
         .andExpect(status().isBadRequest());
   }
@@ -171,7 +143,7 @@ class DailyRemunerationControllerTest {
   @ParameterizedTest
   @ValueSource(strings = {"0001-01-01", "2024-02-29", "9999-12-31"})
   void validDateBounds(String day) throws Exception {
-    mvc.perform(request("store", day))
+    mvc.perform(request(day))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.business_date").value(day));
   }
@@ -179,7 +151,7 @@ class DailyRemunerationControllerTest {
   @ParameterizedTest
   @CsvSource({"0,20", "-2,20", "101,100"})
   void normalizesPageSize(int requested, int expected) throws Exception {
-    mvc.perform(request("store", "2026-09-30").param("size", Integer.toString(requested)))
+    mvc.perform(request("2026-09-30").param("size", Integer.toString(requested)))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.orders.size").value(expected));
   }
@@ -187,21 +159,12 @@ class DailyRemunerationControllerTest {
   @Test
   void invisibleHistoryIs404() throws Exception {
     when(query.personName(1L, 34L)).thenThrow(new NotFoundException("キャスト本人が見つかりません"));
-    when(selfQuery.storeName(34L, 1L)).thenThrow(new NotFoundException("報酬明細の店舗が見つかりません"));
-    for (String scope : List.of("store", "self"))
-      mvc.perform(request(scope, "2026-09-30")).andExpect(status().isNotFound());
-  }
-
-  @Test
-  void castWithoutIdentityCannotReadHistory() throws Exception {
-    when(people.findByUserId(12L)).thenReturn(Optional.empty());
-    mvc.perform(request("self", "2026-09-30")).andExpect(status().isNotFound());
+    mvc.perform(request("2026-09-30")).andExpect(status().isNotFound());
   }
 
   @Test
   @WithMockUser(authorities = "PERM_CAST_MANAGE")
-  void unrelatedPermissionDoesNotGrantEitherRead() throws Exception {
-    for (String scope : List.of("store", "self"))
-      mvc.perform(request(scope, "2026-09-30")).andExpect(status().isForbidden());
+  void unrelatedPermissionDoesNotGrantRead() throws Exception {
+    mvc.perform(request("2026-09-30")).andExpect(status().isForbidden());
   }
 }

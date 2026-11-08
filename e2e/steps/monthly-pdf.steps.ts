@@ -51,24 +51,31 @@ Then('月次画面から全月PDFを保存し同じ形式を開いて印刷で�
   expect(compact).toContain('生成日時点の報酬集計');
   expect(compact).toContain('支払済み額ではありません');
   expect(compact).toContain('源氏名:');
+  // 本人は月次明細の受注根拠と order_total（受注報酬だけの合計）、店舗は月次一覧と PDF を突き合わせる
   const query = new URL(response.url());
-  query.pathname = query.pathname.replace(/\/pdf$/, '');
-  query.searchParams.set('size', '2000');
+  const self = query.pathname.includes('/me/');
+  query.pathname = self
+    ? query.pathname.replace(/monthly-remunerations\/pdf$/, 'remuneration-statements')
+    : query.pathname.replace(/\/pdf$/, '');
+  const [pageKey, sizeKey, totalKey] = self
+    ? ['order_page', 'order_size', 'order_total']
+    : ['page', 'size', 'total_remuneration'];
+  query.searchParams.set(sizeKey, '100');
   const headers = await response.request().allHeaders();
   let total = 0;
   let count = 0;
   for (let number = 0; ; number++) {
-    query.searchParams.set('page', String(number));
+    query.searchParams.set(pageKey, String(number));
     const statement = await page.request.get(query.toString(), { headers });
-    expect(statement.status()).toBe(200);
+    expect(statement.status(), await statement.text()).toBe(200);
     const body = await statement.json();
-    expect(compact).toContain(`月次報酬合計:${body.total_remuneration.toLocaleString('ja-JP')}円`);
+    expect(compact).toContain(`月次報酬合計:${body[totalKey].toLocaleString('ja-JP')}円`);
     for (const row of body.orders.content) {
       expect(compact).toContain(row.order_id);
       total += row.accrued_remuneration;
       count++;
     }
-    if (body.orders.last) { expect(total).toBe(body.total_remuneration); break; }
+    if (body.orders.last) { expect(total).toBe(body[totalKey]); break; }
   }
   expect(compact).toContain(`全${count}件`);
   await testInfo.attach('月次PDF', { path: output, contentType: 'application/pdf' });
