@@ -243,6 +243,21 @@ describe('MemberReservationNewPage', () => {
     expect(mockPush).toHaveBeenCalledWith('/member/reservations/');
   });
 
+  it('申請が通った後は画面が移るまで送信ボタンを戻さない（二重申請を防ぐ）', async () => {
+    mockedLookup.mockResolvedValue({ id: '7', name: 'サンプル店舗' });
+    mockedCreate.mockResolvedValue({});
+
+    render(<MemberReservationNewPage />);
+
+    fireEvent.change(await screen.findByLabelText('利用日'), { target: { value: '2026-08-10' } });
+    fillDeclaredName();
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/member/reservations/'));
+    expect(submitButton()).toBeDisabled();
+  });
+
   // 名乗る名前は確定時に店舗の顧客台帳行の氏名になる。空で通すとサーバ側の 400 として
   // 返ってきて、どの欄が足りないのか画面に現れない。
   it('名乗る名前が未入力なら申請せずに検証エラーを出す', async () => {

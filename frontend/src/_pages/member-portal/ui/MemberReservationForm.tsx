@@ -112,10 +112,10 @@ export function MemberReservationForm({
         remarks: values.remarks || undefined,
       });
       notify.success('予約を申請しました');
+      // 成功時は送信中のまま残す。遷移が終わるまでフォームは見えていて、戻すと同じ申請を二度送れる
       router.push('/member/reservations/');
     } catch {
       notify.error('予約の申請に失敗しました');
-    } finally {
       setSubmitting(false);
     }
   };
