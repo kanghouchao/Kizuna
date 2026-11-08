@@ -19,7 +19,8 @@ export const remunerationApi = {
     scope: StatementScope,
     month: string,
     orderPage: number,
-    bonusPage: number
+    bonusPage: number,
+    size = 20
   ): Promise<Statement> {
     const path =
       scope.scope === 'store' ? '/remuneration-statements' : '/me/remuneration-statements';
@@ -28,9 +29,9 @@ export const remunerationApi = {
         params: {
           month,
           order_page: orderPage,
-          order_size: 20,
+          order_size: size,
           bonus_page: bonusPage,
-          bonus_size: 20,
+          bonus_size: size,
           ...('personId' in scope ? { person_id: scope.personId } : {}),
           ...('storeId' in scope ? { store_id: scope.storeId } : {}),
         },

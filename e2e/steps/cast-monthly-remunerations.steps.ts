@@ -1,4 +1,4 @@
-import { expect, type APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
 import { APP_URL } from "../base-url";
 import {
@@ -43,6 +43,36 @@ let secondStore = "";
 let storeName = "";
 let secondStoreName = "";
 let initialTotal = 14000;
+
+const WEEKDAYS = "日月火水木金土";
+/** ポータルの日付の書式「9/30（火）」（今年でなければ「2025/9/30（火）」）。 */
+function dayLabel(date: string): string {
+  const [y, m, d] = date.split("-").map(Number);
+  const thisYear = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo" })
+    .format(new Date())
+    .slice(0, 4);
+  const weekday = WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  return `${String(y) === thisYear ? "" : `${y}/`}${m}/${d}（${weekday}）`;
+}
+
+const summary = (page: Page) =>
+  page.getByRole("region", { name: `${Number(month.slice(5, 7))}月の合計` });
+const oldDay = (page: Page) =>
+  page.getByRole("region", { name: `${dayLabel(oldDate)}の明細` });
+
+/** 開いた直後の月次明細（今月・最初の店舗）から、退店店舗の原月へ移る。 */
+async function openOldMonth(page: Page) {
+  await page.getByRole("button", { name: storeName, exact: true }).click();
+  await page.getByRole("button", { name: "前の月", exact: true }).click();
+  await expect(summary(page)).toBeVisible();
+}
+
+/** 月を一度動かして戻し、原月の明細を取り直す。 */
+async function refetchMonth(page: Page) {
+  await page.getByRole("button", { name: "次の月", exact: true }).click();
+  await page.getByRole("button", { name: "前の月", exact: true }).click();
+  await expect(summary(page)).toBeVisible();
+}
 
 async function monthly(
   request: APIRequestContext,
@@ -210,19 +240,20 @@ When("本人が月次給与明細で退店店舗と原月を選ぶ", async ({ pa
     .getByRole("navigation", { name: "報酬の切替" })
     .getByRole("link", { name: "月次", exact: true })
     .click();
-  await page.getByRole("combobox", { name: "店舗", exact: true }).click();
-  await page.getByRole("option", { name: storeName, exact: true }).click();
-  await page.getByLabel("対象月").fill(month);
-  await page.getByRole("button", { name: "照会", exact: true }).click();
+  await openOldMonth(page);
 });
 
 Then(
   "本人の同店の完了受注だけが月合計と全ページに含まれる",
   async ({ request, page }) => {
-    await expect(page.getByLabel("月次報酬合計")).toHaveText("¥14,000");
-    await expect(
-      page.getByRole("button", { name: "詳細・変更履歴を確認" }),
-    ).toHaveCount(2);
+    await expect(summary(page)).toContainText("受注報酬¥14,000");
+    await expect(page.getByRole("table")).toHaveCount(0);
+    // 承諾待ちの日は最初から開き、受注番号を出さずにサービス名と金額を出す
+    await expect(oldDay(page).getByRole("link")).toHaveCount(2);
+    await expect(oldDay(page)).not.toContainText(firstOrder);
+    await expect(oldDay(page)).toContainText(
+      "本人月次の長いサービス名で折り返しを確認する特別コース",
+    );
     const pages = [
       await monthly(request, { size: 1 }),
       await monthly(request, { page: 1, size: 1 }),
@@ -252,6 +283,17 @@ Then(
   },
 );
 
+Then("本人は原営業日を日付を名乗るボタンで承諾できる", async ({ page }) => {
+  const accept = oldDay(page).getByRole("button");
+  await expect(accept).toHaveCount(1);
+  await expect(accept).toHaveText(`${dayLabel(oldDate)}を承諾する`);
+  await accept.click();
+  await expect(
+    page.getByRole("button", { name: new RegExp(`^${dayLabel(oldDate)}`) }).first(),
+  ).toContainText("承諾済み");
+  await expect(summary(page)).toContainText("承諾 1 / 1 日");
+});
+
 When(
   "本人の原月の受注を翌月に完了し訂正して無効化する",
   async ({ request }) => {
@@ -279,23 +321,30 @@ When(
 Then(
   "本人は月合計を再照会し退店後の詳細と変更履歴を辿れる",
   async ({ request, page }) => {
-    await page.getByRole("button", { name: "照会", exact: true }).click();
-    await expect(page.getByLabel("月次報酬合計")).toHaveText("¥14,000");
+    await refetchMonth(page);
+    await expect(summary(page)).toContainText("受注報酬¥14,000");
+    // 承諾した後に変わった日は先頭で開き、変更前後の差と再承諾のボタンを出す
+    await expect(oldDay(page)).toContainText("承諾した後に変わりました");
+    await expect(oldDay(page).getByRole("link")).toHaveCount(3);
     await expect(
-      page.getByText("全 3 件の合計。", { exact: false }),
+      oldDay(page).getByRole("button", {
+        name: `${dayLabel(oldDate)}を再承諾する`,
+        exact: true,
+      }),
     ).toBeVisible();
-    await page
-      .getByRole("button", { name: "詳細・変更履歴を確認" })
-      .last()
+    await oldDay(page)
+      .getByRole("link")
+      .filter({ hasText: "（無効化）" })
       .click();
+    await expect(page).toHaveURL(new RegExp(`/cast/remunerations/${firstOrder}$`));
     await expect(page.getByRole("region", { name: "概要" })).toContainText(
       "無効化",
     );
     await expect(page.getByText("本人の原月の延長を訂正")).toBeVisible();
     await expect(page.getByText("本人の原月の未提供を無効化")).toBeVisible();
-    await page.getByRole("button", { name: "一覧へ戻る" }).click();
-    await expect(page.getByLabel("対象月")).toHaveValue(month);
-    await expect(page.getByLabel("月次報酬合計")).toHaveText("¥14,000");
+    await page.goBack();
+    await expect(page).toHaveURL(/\/cast\/remunerations\/monthly$/);
+    await openOldMonth(page);
     const history = await request.get(
       `/api/me/remunerations/${firstOrder}/changes`,
       { headers: { Authorization: `Bearer ${token}` }, params: { size: 1 } },
@@ -328,50 +377,48 @@ Then(
   "本人の月次画面は取得失敗から再試行でき狭い画面でも操作できる",
   async ({ page }) => {
     await page.route(
-      "**/api/me/monthly-remunerations?*",
+      "**/api/me/remuneration-statements?*",
       (route) =>
         route.fulfill({
           status: 500,
           contentType: "application/json",
-          body: JSON.stringify({ error: "月次照会を実行できませんでした" }),
+          body: JSON.stringify({ error: "明細を取得できませんでした" }),
         }),
       { times: 1 },
     );
-    await page.getByRole("button", { name: "照会", exact: true }).click();
+    await page.getByRole("button", { name: "次の月", exact: true }).click();
     await expect(page.getByRole("main").getByRole("alert")).toContainText(
-      "月次給与明細を取得できませんでした",
+      "月次明細の取得に失敗しました",
     );
-    await expect(page.getByLabel("月次報酬合計")).toHaveCount(0);
     await page.getByRole("button", { name: /再試行/ }).click();
-    await expect(page.getByLabel("月次報酬合計")).toHaveText("¥14,000");
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.getByLabel("対象月").focus();
-    await page.keyboard.press("Tab");
-    await expect(
-      page.getByRole("button", { name: "照会", exact: true }),
-    ).toBeFocused();
-    for (const theme of ["light", "dark"]) {
-      await page.evaluate((mode) => {
-        document.documentElement.classList.toggle("dark", mode === "dark");
-      }, theme);
-      const foreground = await page
-        .locator("body")
-        .evaluate((element) => getComputedStyle(element).color);
-      await expect(page.getByLabel("対象月")).toHaveCSS("color", foreground);
-      await expect(
-        page.getByRole("combobox", { name: "店舗", exact: true }),
-      ).toHaveCSS("color", foreground);
-      await page.screenshot({
-        path: `test-results/cast-monthly-${theme}.png`,
-        fullPage: true,
-        animations: "disabled",
-      });
+    await page.getByRole("button", { name: "前の月", exact: true }).click();
+    await expect(summary(page)).toContainText("受注報酬¥14,000");
+    for (const width of [375, 430]) {
+      await page.setViewportSize({ width, height: 844 });
+      const header = page
+        .getByRole("button", { name: new RegExp(`^${dayLabel(oldDate)}`) })
+        .first();
+      await header.focus();
+      await page.keyboard.press("Enter");
+      await expect(header).toHaveAttribute("aria-expanded", "false");
+      await page.keyboard.press("Enter");
+      await expect(header).toHaveAttribute("aria-expanded", "true");
+      for (const theme of ["light", "dark"]) {
+        await page.evaluate((mode) => {
+          document.documentElement.classList.toggle("dark", mode === "dark");
+        }, theme);
+        await page.screenshot({
+          path: `test-results/cast-monthly-${width}-${theme}.png`,
+          fullPage: true,
+          animations: "disabled",
+        });
+      }
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth,
+        ),
+      ).toBe(true);
     }
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= window.innerWidth,
-      ),
-    ).toBe(true);
   },
 );
 
@@ -541,7 +588,7 @@ Then(
 );
 
 Then(
-  "本人の日別照会は歴史在籍と専用項目を守り月別へ戻れる",
+  "本人の日別照会は歴史在籍と専用項目を守り月次明細の日ごとに同じ受注が出る",
   async ({ request, page, $testInfo: testInfo }) => {
     const headers = { Authorization: `Bearer ${token}` };
     const params = { store_id: STORE1_ID, business_date: oldDate };
@@ -582,21 +629,16 @@ Then(
         (r: { order_id: string }) => r.order_id,
       ),
     ).not.toContain(firstOrder);
-    await page.getByRole("button", { name: "日別", exact: true }).click();
-    await page.getByLabel("営業日", { exact: true }).fill(oldDate);
-    await page.getByRole("button", { name: "照会", exact: true }).click();
-    await expect(page.getByLabel("日別報酬合計")).toHaveText(
-      `¥${initialTotal.toLocaleString("ja-JP")}`,
+    const day = oldDay(page);
+    await expect(day.getByRole("link")).toHaveCount(2);
+    await expect(day).toContainText("受注 2件");
+    await expect(day).toContainText(
+      `この日の合計¥${initialTotal.toLocaleString("ja-JP")}`,
     );
-    await expect(
-      page.getByRole("button", { name: "PDF ダウンロード" }),
-    ).toHaveCount(0);
-    await page
-      .getByRole("button", { name: "詳細・変更履歴を確認" })
-      .first()
-      .click();
+    await day.getByRole("link").first().click();
     await expect(page.getByText("変更履歴はありません")).toBeVisible();
-    await page.getByRole("button", { name: "一覧へ戻る", exact: true }).click();
+    await page.goBack();
+    await openOldMonth(page);
     await correctOrderExtension(
       request,
       manager,
@@ -616,26 +658,27 @@ Then(
       firstOrder,
       "本人の日別未提供を無効化",
     );
-    await page.getByRole("button", { name: "照会", exact: true }).click();
-    await expect(page.getByLabel("日別報酬合計")).toHaveText(
-      `¥${(initialTotal - 7000).toLocaleString("ja-JP")}`,
+    await refetchMonth(page);
+    await expect(oldDay(page)).toContainText(
+      `この日の合計¥${(initialTotal - 7000).toLocaleString("ja-JP")}`,
     );
-    await page.route("**/api/me/daily-remunerations?*", (route) =>
+    await expect(
+      oldDay(page).getByRole("link").filter({ hasText: "（無効化）" }),
+    ).toHaveCount(1);
+    await page.route("**/api/me/remuneration-statements?*", (route) =>
       route.fulfill({
         status: 503,
         contentType: "application/json",
         body: JSON.stringify({ error: "一時的に取得できません" }),
       }),
     );
-    await page.getByRole("button", { name: "照会", exact: true }).click();
-    await expect(
-      page.getByText("日別給与明細を取得できませんでした。"),
-    ).toBeVisible();
-    await expect(page.getByLabel("日別報酬合計")).toHaveCount(0);
-    await page.unroute("**/api/me/daily-remunerations?*");
+    await page.getByRole("button", { name: "次の月", exact: true }).click();
+    await expect(page.getByText("月次明細の取得に失敗しました")).toBeVisible();
+    await page.unroute("**/api/me/remuneration-statements?*");
     await page.getByRole("button", { name: "再試行", exact: true }).click();
-    await expect(page.getByLabel("日別報酬合計")).toBeVisible();
-    await page.setViewportSize({ width: 390, height: 844 });
+    await page.getByRole("button", { name: "前の月", exact: true }).click();
+    await expect(oldDay(page)).toBeVisible();
+    await page.setViewportSize({ width: 375, height: 812 });
     for (const theme of ["light", "dark"]) {
       await page.evaluate((theme) => {
         document.documentElement.classList.remove("light", "dark");
@@ -644,16 +687,15 @@ Then(
       }, theme);
       const path = testInfo.outputPath(`daily-self-${theme}.png`);
       await page.screenshot({ path, fullPage: true, animations: "disabled" });
-      await testInfo.attach(`日別本人-${theme}`, {
+      await testInfo.attach(`日ごとの明細-${theme}`, {
         path,
         contentType: "image/png",
       });
     }
-    await page.getByRole("button", { name: "月別", exact: true }).click();
-    await expect(page.getByLabel("日別報酬合計")).toHaveCount(0);
-    await page.getByRole("button", { name: "照会", exact: true }).click();
-    await expect(
-      page.getByRole("button", { name: "PDF ダウンロード" }),
-    ).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
   },
 );
