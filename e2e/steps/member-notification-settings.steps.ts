@@ -29,7 +29,8 @@ When("通知設定検証用の会員でログインする", async ({ page }) => 
   await expect(page).toHaveURL(/\/member\/?$/, { timeout: 15000 });
 });
 
-When("会員ポータルのホームから通知の設定を開く", async ({ page }) => {
+When("会員ポータルのアカウントから通知の設定を開く", async ({ page }) => {
+  await page.getByRole("navigation", { name: "メニュー" }).getByRole("link", { name: "アカウント" }).click();
   await page.getByRole("link", { name: "通知の設定" }).click();
   await expect(page).toHaveURL(/\/member\/notification-settings\/?$/, {
     timeout: 15000,
