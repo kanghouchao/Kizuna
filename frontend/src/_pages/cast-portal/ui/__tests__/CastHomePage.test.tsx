@@ -241,6 +241,20 @@ describe('CastHomePage', () => {
     expect(within(totals).queryByText('昔の店舗')).not.toBeInTheDocument();
   });
 
+  it('先月の明細だけが取れないときも今月の累計報酬は出す', async () => {
+    statement.mockImplementation((_scope: unknown, month: string) =>
+      month === '2026-10'
+        ? Promise.reject(new Error('network error'))
+        : Promise.resolve(statementOf(1, '店舗A', { total: 12000 }))
+    );
+
+    renderHome();
+
+    expect(await screen.findByText('やることの取得に失敗しました')).toBeInTheDocument();
+    const totals = await screen.findByRole('list', { name: '今月の累計報酬' });
+    expect(within(totals).getByText('¥12,000')).toBeInTheDocument();
+  });
+
   it('1 月は前年の 12 月を先月として読む', async () => {
     jest.setSystemTime(new Date('2027-01-05T03:00:00Z'));
 

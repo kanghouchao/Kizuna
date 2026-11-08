@@ -66,18 +66,10 @@ function statementsOf(storeIds: number[], month: string): Promise<Statement[]> {
   );
 }
 
-/**
- * 承諾待ちの日は先月と今月の明細から拾う（月初に前月末の日が消えないように）。それより前の月は
- * 月次の画面で扱う。退店後も明細は照会・承諾できるので、在籍中に限らず在籍したことのある店舗を読む。
- */
-async function recentStatements(month: string) {
+// 退店後も明細は照会・承諾できるので、在籍中に限らず在籍したことのある店舗を読む。
+async function remunerationStoreIds(): Promise<number[]> {
   const stores = await collectPages(page => selfMonthlyRemunerationApi.stores(page));
-  const storeIds = stores.map(store => store.store_id);
-  const [previous, current] = await Promise.all([
-    statementsOf(storeIds, previousMonth(month)),
-    statementsOf(storeIds, month),
-  ]);
-  return { previous, current };
+  return stores.map(store => store.store_id);
 }
 
 interface Region<T> {
@@ -129,27 +121,39 @@ export function useCastHomeSource(): CastHome {
   const stores = useResource(myStores, [pathname]);
   const storeList = stores.data;
   const consents = useResource(storeList ? () => pendingConsents(storeList) : null, [storeList]);
-  const statements = useResource(() => recentStatements(month), [pathname, month]);
+  const remunerationStores = useResource(remunerationStoreIds, [pathname]);
+  const storeIds = remunerationStores.data;
+  // 承諾待ちの日は先月と今月の明細から拾う（月初に前月末の日が消えないように）。それより前の月は
+  // 月次の画面で扱う。今月の累計は今月の明細だけを使うので、先月の失敗に巻き込まないよう別に取る。
+  const current = useResource(storeIds ? () => statementsOf(storeIds, month) : null, [
+    storeIds,
+    month,
+  ]);
+  const previous = useResource(
+    storeIds ? () => statementsOf(storeIds, previousMonth(month)) : null,
+    [storeIds, month]
+  );
   const requests = useResource(() => recentRequests(since), [pathname]);
 
-  const acceptances = statements.data
-    ? acceptanceTodos([...statements.data.previous, ...statements.data.current], today)
-    : null;
+  const acceptances =
+    previous.data && current.data
+      ? acceptanceTodos([...previous.data, ...current.data], today)
+      : null;
   const todos =
     consents.data && acceptances && requests.data
       ? [...consents.data, ...acceptances, ...requestResultTodos(requests.data, since, today)]
       : null;
   return {
-    todos: region(todos, [stores, consents, statements, requests]),
+    todos: region(todos, [stores, consents, remunerationStores, previous, current, requests]),
     monthTotals: region(
-      storeList && statements.data
-        ? statements.data.current
+      storeList && current.data
+        ? current.data
             // 退店した店舗は今月の動きがあるときだけ出す。明細は動きが無くても全日分あるので合計で見る
             // （動きが無い日は ¥0 で確定し、未確定の undefined は出勤があった印）。
             .filter(s => storeList.some(store => store.store_id === s.store_id) || s.total !== 0)
             .map(s => ({ storeId: s.store_id, storeName: s.store_name, total: s.total }))
         : null,
-      [stores, statements]
+      [stores, remunerationStores, current]
     ),
     // 片方だけで数えると欠けた件数を正しい件数のように見せるので、両方そろうまで出さない。
     pendingCount: consents.data && acceptances ? consents.data.length + acceptances.length : 0,
