@@ -34,8 +34,6 @@ import com.kizuna.order.application.OrderPoints;
 import com.kizuna.order.application.OrderPreview;
 import com.kizuna.order.application.OrderReceptionistCandidate;
 import com.kizuna.order.application.OrderUpdateCommand;
-import com.kizuna.order.application.SelfDailyRemuneration;
-import com.kizuna.order.application.SelfMonthlyRemuneration;
 import com.kizuna.order.application.SelfRemunerationChange;
 import com.kizuna.order.application.SelfRemunerationDetail;
 import com.kizuna.order.application.SelfRemunerationEnrollment;
@@ -314,8 +312,6 @@ public interface OrderMapper {
 
   MonthlyRemunerationOrderSummary toMonthlyOrderSummary(RemunerationOrderRow row);
 
-  SelfMonthlyRemunerationOrderSummary toSelfMonthlyOrderSummary(RemunerationOrderRow row);
-
   SelfMonthlyRemunerationStoreSummary toStoreSummary(RemunerationStoreRow row);
 
   default DailyRemunerationResponse toResponse(DailyRemuneration result) {
@@ -334,24 +330,6 @@ public interface OrderMapper {
         result.month(),
         result.totalRemuneration(),
         result.orders().map(this::toMonthlyOrderSummary));
-  }
-
-  default SelfDailyRemunerationResponse toResponse(SelfDailyRemuneration result) {
-    return new SelfDailyRemunerationResponse(
-        result.storeId(),
-        result.storeName(),
-        result.businessDate(),
-        result.totalRemuneration(),
-        result.orders().map(this::toSelfMonthlyOrderSummary));
-  }
-
-  default SelfMonthlyRemunerationResponse toResponse(SelfMonthlyRemuneration result) {
-    return new SelfMonthlyRemunerationResponse(
-        result.storeId(),
-        result.storeName(),
-        result.month(),
-        result.totalRemuneration(),
-        result.orders().map(this::toSelfMonthlyOrderSummary));
   }
 
   SelfRemunerationEnrollmentSummary toEnrollmentSummary(SelfRemunerationEnrollment enrollment);

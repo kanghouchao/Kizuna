@@ -1479,13 +1479,6 @@ export async function cancelAttendance(
   expect(res.status(), await res.text()).toBe(204);
 }
 
-export function getSelfDailyRemunerations(
-  request: APIRequestContext,
-  options: Parameters<APIRequestContext["get"]>[1],
-): Promise<APIResponse> {
-  return request.get("/api/me/daily-remunerations", options);
-}
-
 export async function deleteService(
   request: APIRequestContext,
   token: string,

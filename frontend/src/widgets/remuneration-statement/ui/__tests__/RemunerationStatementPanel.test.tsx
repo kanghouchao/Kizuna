@@ -80,7 +80,7 @@ beforeEach(() => {
 it('未終了時は既知小計を示し完全合計を捏造しない', async () => {
   render(
     <RemunerationStatementPanel
-      scope={{ scope: 'self', storeId: 1 }}
+      scope={{ scope: 'store', personId: 2 }}
       month="2026-09"
       canView
       canManage={false}
@@ -102,7 +102,7 @@ it('停止日の未終了表示はゼロの保証合計と両立する', async (
   });
   render(
     <RemunerationStatementPanel
-      scope={{ scope: 'self', storeId: 1 }}
+      scope={{ scope: 'store', personId: 2 }}
       month="2026-09"
       canView
       canManage={false}
@@ -153,7 +153,7 @@ it.each([[true], [false]])(
 it('取得失敗時は旧合計を残さず領域内で再試行する', async () => {
   render(
     <RemunerationStatementPanel
-      scope={{ scope: 'self', storeId: 1 }}
+      scope={{ scope: 'store', personId: 2 }}
       month="2026-09"
       canView
       canManage={false}

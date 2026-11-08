@@ -1,11 +1,7 @@
 package com.kizuna.order.application;
 
-import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.order.infrastructure.RemunerationQuery;
-import com.kizuna.order.infrastructure.SelfMonthlyRemunerationQuery;
-import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.user.application.ActorIdentityService;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import lombok.RequiredArgsConstructor;
@@ -18,9 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DailyRemunerationService {
   private final RemunerationQuery query;
-  private final ActorIdentityService actors;
-  private final CastRepository people;
-  private final SelfMonthlyRemunerationQuery selfQuery;
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public DailyRemuneration store(
@@ -30,25 +23,6 @@ public class DailyRemunerationService {
     String name = query.personName(storeId, personId);
     return new DailyRemuneration(
         personId,
-        name,
-        target,
-        query.dailyTotal(storeId, personId, target),
-        query.dailyOrders(storeId, personId, target, pageable));
-  }
-
-  @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public SelfDailyRemuneration self(
-      String actor, Long storeId, String businessDate, Pageable pageable) {
-    var target = day(businessDate);
-    if (storeId <= 0) throw new ServiceException("店舗の指定が不正です");
-    var person =
-        people
-            .findByUserId(actors.requireUserId(actor))
-            .orElseThrow(() -> new NotFoundException("報酬明細の店舗が見つかりません"));
-    Long personId = person.getId();
-    String name = selfQuery.storeName(personId, storeId);
-    return new SelfDailyRemuneration(
-        storeId,
         name,
         target,
         query.dailyTotal(storeId, personId, target),

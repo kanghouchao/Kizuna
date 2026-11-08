@@ -1,8 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { remunerationApi, type StatementScope, type Day } from '../api';
-import { getApiErrorMessage, isConflict, useResource } from '@/shared/lib';
-import { notify } from '@/shared/notify';
+import { useResource } from '@/shared/lib';
 import {
   Button,
   RegionError,
@@ -18,6 +17,7 @@ import { DayAcceptanceCell } from './DayAcceptanceCell';
 import { Paging } from './Paging';
 import { yen } from './yen';
 import { RemunerationManagement } from './RemunerationManagement';
+type StoreScope = Extract<StatementScope, { scope: 'store' }>;
 const labels: Record<Day['guarantee_status'], string> = {
   NOT_ELIGIBLE: '4時間未満・実績なし',
   PENDING_ATTENDANCE: '退勤記録待ち',
@@ -26,7 +26,7 @@ const labels: Record<Day['guarantee_status'], string> = {
   CALCULATED: '計算済み',
 };
 /**
- * キャストポータルにも載るため本人情報の seam（管理画面シェル専用）を読まず、出し分けは呼出側が渡す。
+ * 店舗側の月次画面の一人分の明細。出し分けは呼出側が渡す。
  * canManage は受注の担当者（ORDER_MANAGE）— 保証・ボーナスの管理はその端点を読み、横断照会者には明細だけを見せる。
  */
 export function RemunerationStatementPanel({
@@ -35,7 +35,7 @@ export function RemunerationStatementPanel({
   canView,
   canManage,
 }: {
-  scope: StatementScope;
+  scope: StoreScope;
   month: string;
   canView: boolean;
   canManage: boolean;
@@ -63,52 +63,18 @@ function Statement({
   month,
   manages,
 }: {
-  scope: StatementScope;
+  scope: StoreScope;
   month: string;
   manages: boolean;
 }) {
   const [orderPage, setOrderPage] = useState(0),
     [bonusPage, setBonusPage] = useState(0),
-    [revision, setRevision] = useState(0),
-    [sending, setSending] = useState(false);
+    [revision, setRevision] = useState(0);
   const result = useResource(
     () => remunerationApi.statement(scope, month, orderPage, bonusPage),
-    [
-      scope.scope,
-      'personId' in scope ? scope.personId : null,
-      'storeId' in scope ? scope.storeId : null,
-      month,
-      orderPage,
-      bonusPage,
-      revision,
-    ]
+    [scope.personId, month, orderPage, bonusPage, revision]
   );
   const data = !result.isLoading && result.failure === null ? result.data : null;
-  // 409 は見ていた内容が古いことを示す。どの結果でも明細を取り直し、現在の状態と要約を示す。
-  const accept =
-    scope.scope === 'self'
-      ? async (day: Day) => {
-          if (day.content_digest === undefined) return;
-          setSending(true);
-          try {
-            await remunerationApi.accept({
-              store_id: scope.storeId,
-              business_date: day.business_date,
-              content_digest: day.content_digest,
-            });
-            notify.success(`${day.business_date} の明細を承諾しました`);
-          } catch (error) {
-            if (isConflict(error))
-              notify.warning(
-                '明細の内容が変わっていたため、最新の明細を表示しました。内容を確かめてから承諾してください'
-              );
-            else notify.error(getApiErrorMessage(error, '明細を承諾できませんでした'));
-          } finally {
-            setSending(false);
-            setRevision(v => v + 1);
-          }
-        }
-      : undefined;
   return (
     <div className="min-w-0 space-y-6 rounded-lg border p-4 sm:p-6">
       <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
@@ -179,7 +145,7 @@ function Statement({
                   <TableRow key={day.business_date}>
                     <TableCell>{day.business_date}</TableCell>
                     <TableCell className="whitespace-normal">
-                      <DayAcceptanceCell day={day} onAccept={accept} sending={sending} />
+                      <DayAcceptanceCell day={day} />
                     </TableCell>
                     <TableCell>{yen(day.order_amount)}</TableCell>
                     <TableCell>
@@ -272,7 +238,7 @@ function Statement({
           />
         </>
       )}
-      {scope.scope === 'store' && manages && (
+      {manages && (
         <RemunerationManagement
           personId={scope.personId}
           personName={data?.name ?? `本人 ID ${scope.personId}`}

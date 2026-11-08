@@ -2,7 +2,6 @@ import { expect, type APIRequestContext, type Page } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
 import { APP_URL } from "../base-url";
 import {
-  getSelfDailyRemunerations,
   acceptCastInvitation,
   acceptExistingCastInvitation,
   cancelOrder,
@@ -93,17 +92,16 @@ async function refetchMonth(page: Page) {
   await expect(summary(page)).toBeVisible();
 }
 
-async function monthly(
-  request: APIRequestContext,
-  params: Record<string, string | number> = {},
-  actor = token,
-) {
-  const response = await request.get(base, {
-    headers: { Authorization: `Bearer ${actor}` },
-    params: { store_id: STORE1_ID, month, ...params },
+/** 本人の月次明細の受注報酬の合計（保証の不足分とボーナスを含まない order_total）。 */
+async function orderTotal(request: APIRequestContext, storeId = STORE1_ID) {
+  const response = await request.get("/api/me/remuneration-statements", {
+    headers: { Authorization: `Bearer ${token}` },
+    params: { store_id: storeId, month },
   });
-  expect(response.status(), await response.text()).toBe(200);
-  return response.json();
+  const body = await response.text();
+  expect(response.status(), body).toBe(200);
+  expect(body).not.toContain(privateName);
+  return JSON.parse(body).order_total;
 }
 
 Given(
@@ -278,7 +276,7 @@ When(
 );
 
 Then(
-  "本人の同店の完了受注だけが月合計と全ページに含まれる",
+  "本人の同店の完了受注だけが月合計と日ごとの明細に含まれる",
   async ({ request, page }) => {
     await expect(summary(page)).toContainText("受注報酬¥14,000");
     await expect(page.getByRole("table")).toHaveCount(0);
@@ -288,32 +286,8 @@ Then(
     await expect(oldDay(page)).toContainText(
       "本人月次の長いサービス名で折り返しを確認する特別コース",
     );
-    const pages = [
-      await monthly(request, { size: 1 }),
-      await monthly(request, { page: 1, size: 1 }),
-    ];
-    expect(
-      pages.flatMap((p) =>
-        p.orders.content.map((r: { order_id: string }) => r.order_id),
-      ),
-    ).toEqual([secondOrder, firstOrder]);
-    for (const p of pages) {
-      expect(p.total_remuneration).toBe(initialTotal);
-      expect(p.orders.total_elements).toBe(2);
-      expect(p.orders.content[0].business_date).toBe(oldDate);
-    }
-    expect(
-      (await monthly(request, { store_id: secondStore })).total_remuneration,
-    ).toBe(7000);
-    const beyond = await monthly(request, { page: 7, size: 1 });
-    expect(beyond.orders.content).toEqual([]);
-    expect(beyond.total_remuneration).toBe(initialTotal);
-    expect(beyond.orders.total_elements).toBe(2);
-    for (const emptyMonth of ["0001-01", "9999-12"]) {
-      const empty = await monthly(request, { month: emptyMonth });
-      expect(empty.total_remuneration).toBe(0);
-      expect(empty.orders.content).toEqual([]);
-    }
+    expect(await orderTotal(request)).toBe(initialTotal);
+    expect(await orderTotal(request, secondStore)).toBe(7000);
   },
 );
 
@@ -332,14 +306,14 @@ When(
   "本人の原月の受注を翌月に完了し訂正して無効化する",
   async ({ request }) => {
     await completeAgreedOrder(request, manager, pendingOrder);
-    expect((await monthly(request)).total_remuneration).toBe(21000);
+    expect(await orderTotal(request)).toBe(21000);
     await correctOrderExtension(
       request,
       manager,
       firstOrder,
       "本人の原月の延長を訂正",
     );
-    expect((await monthly(request)).total_remuneration).toBe(23000);
+    expect(await orderTotal(request)).toBe(23000);
     await invalidateOrder(
       request,
       manager,
@@ -484,78 +458,31 @@ Then(
     expect((await request.get(`${base}/pdf`, { params: pdfParams })).status()).toBe(401);
     expect((await request.get(`${base}/pdf`, { params: pdfParams, headers: { Authorization: `Bearer ${manager}` } })).status()).toBe(403);
     expect((await request.get(`${base}/pdf`, { params: { store_id: secondStore, month }, headers: { Authorization: `Bearer ${otherToken}` } })).status()).toBe(404);
-    for (const suffix of ["", "/stores"]) {
-      const params = { store_id: STORE1_ID, month };
-      expect((await request.get(`${base}${suffix}`, { params })).status()).toBe(
-        401,
-      );
-      expect(
-        (
-          await request.get(`${base}${suffix}`, {
-            params,
-            headers: { Authorization: `Bearer ${manager}` },
-          })
-        ).status(),
-      ).toBe(403);
-      expect(
-        (
-          await request.get(`${base}${suffix}`, {
-            params: { ...params, page: 2147483647 },
-            headers,
-          })
-        ).status(),
-      ).toBe(400);
-    }
-    for (const params of [
-      { month: "0000-01" },
-      { month: "2026-13" },
-      { month: "2026-9" },
-      { store_id: 0 },
-    ] as Record<string, string | number>[]) {
-      expect(
-        (
-          await request.get(base, {
-            params: { store_id: STORE1_ID, month, ...params },
-            headers,
-          })
-        ).status(),
-      ).toBe(400);
-    }
-    const normalized = await request.get(base, {
-      params: { store_id: STORE1_ID, month, page: -1 },
-      headers,
-    });
-    expect(normalized.status()).toBe(200);
-    expect((await normalized.json()).orders.number).toBe(0);
+    const stores = `${base}/stores`;
+    expect((await request.get(stores)).status()).toBe(401);
     expect(
       (
-        await request.get(base, { params: { store_id: STORE1_ID }, headers })
+        await request.get(stores, {
+          headers: { Authorization: `Bearer ${manager}` },
+        })
+      ).status(),
+    ).toBe(403);
+    expect(
+      (
+        await request.get(stores, { params: { page: 2147483647 }, headers })
       ).status(),
     ).toBe(400);
-    expect(
-      (
-        await request.get(base, {
-          params: { store_id: secondStore, month },
-          headers: { Authorization: `Bearer ${otherToken}` },
-        })
-      ).status(),
-    ).toBe(404);
-    expect(
-      (
-        await request.get(base, {
-          params: { store_id: 9223372036854775807n.toString(), month },
-          headers,
-        })
-      ).status(),
-    ).toBe(404);
-    const forged = await monthly(request, {
-      person_id: 999999,
-      cast_id: otherEnrollment,
-      enrollment_id: otherEnrollment,
+    // 本人の月次一覧と日別の口は無い。本人でも経路が無いので 404 になる
+    for (const [path, params] of [
+      [base, { store_id: STORE1_ID, month }],
+      ["/api/me/daily-remunerations", { store_id: STORE1_ID, business_date: oldDate }],
+    ] as const)
+      expect((await request.get(path, { params, headers })).status()).toBe(404);
+    const foreign = await request.get("/api/me/remuneration-statements", {
+      params: { store_id: STORE1_ID, month },
+      headers: { Authorization: `Bearer ${otherToken}` },
     });
-    expect(
-      forged.orders.content.map((r: { order_id: string }) => r.order_id),
-    ).toEqual([secondOrder, firstOrder]);
+    expect(await foreign.text()).not.toContain(firstOrder);
     const filtered = await request.get("/api/me/remunerations", {
       params: { enrollment_id: otherEnrollment },
       headers,
@@ -570,37 +497,12 @@ Then(
           )
         ).status(),
       ).toBe(404);
-    for (const size of [0, -3, 3000]) {
-      const result = await monthly(request, { size });
-      expect(result.orders.size).toBe(size > 100 ? 100 : 20);
-      expect(result.total_remuneration).toBe(initialTotal);
-    }
   },
 );
 
 Then(
-  "月次明細と本人詳細と変更履歴は専用の応答項目だけを返す",
+  "本人詳細と変更履歴は専用の応答項目だけを返す",
   async ({ request }) => {
-    const result = await monthly(request);
-    expect(Object.keys(result).sort()).toEqual(
-      [
-        "store_id",
-        "store_name",
-        "month",
-        "total_remuneration",
-        "orders",
-      ].sort(),
-    );
-    for (const row of result.orders.content)
-      expect(Object.keys(row).sort()).toEqual(
-        [
-          "order_id",
-          "business_date",
-          "service_summary",
-          "accrued_remuneration",
-          "completion_invalidated",
-        ].sort(),
-      );
     await correctOrderExtension(
       request,
       manager,
@@ -621,47 +523,8 @@ Then(
 );
 
 Then(
-  "本人の日別照会は歴史在籍と専用項目を守り月次明細の日ごとに同じ受注が出る",
+  "本人の月次明細の日ごとに退店後の原営業日の受注と訂正後の合計が出る",
   async ({ request, page, $testInfo: testInfo }) => {
-    const headers = { Authorization: `Bearer ${token}` };
-    const params = { store_id: STORE1_ID, business_date: oldDate };
-    const response = await getSelfDailyRemunerations(request, {
-      headers,
-      params: { ...params, size: 1 },
-    });
-    expect(response.status()).toBe(200);
-    const result = await response.json();
-    expect(result.total_remuneration).toBe(initialTotal);
-    expect(Object.keys(result).sort()).toEqual([
-      "business_date",
-      "orders",
-      "store_id",
-      "store_name",
-      "total_remuneration",
-    ]);
-    expect(Object.keys(result.orders.content[0]).sort()).toEqual([
-      "accrued_remuneration",
-      "business_date",
-      "completion_invalidated",
-      "order_id",
-      "service_summary",
-    ]);
-    expect(JSON.stringify(result)).not.toContain(privateName);
-    const suspended = await getSelfDailyRemunerations(request, {
-      headers,
-      params: { ...params, store_id: secondStore },
-    });
-    expect(suspended.status()).toBe(200);
-    expect((await suspended.json()).total_remuneration).toBe(7000);
-    const foreign = await getSelfDailyRemunerations(request, {
-      headers: { Authorization: `Bearer ${otherToken}` },
-      params,
-    });
-    expect(
-      (await foreign.json()).orders.content.map(
-        (r: { order_id: string }) => r.order_id,
-      ),
-    ).not.toContain(firstOrder);
     const day = oldDay(page);
     await expect(day.getByRole("link")).toHaveCount(2);
     await expect(day).toContainText("受注 2件");
@@ -678,13 +541,10 @@ Then(
       firstOrder,
       "本人の日別延長を訂正",
     );
-    expect(
-      (
-        await (
-          await getSelfDailyRemunerations(request, { headers, params })
-        ).json()
-      ).total_remuneration,
-    ).toBe(initialTotal + 2000);
+    await refetchMonth(page);
+    await expect(oldDay(page)).toContainText(
+      `この日の合計¥${(initialTotal + 2000).toLocaleString("ja-JP")}`,
+    );
     await invalidateOrder(
       request,
       manager,

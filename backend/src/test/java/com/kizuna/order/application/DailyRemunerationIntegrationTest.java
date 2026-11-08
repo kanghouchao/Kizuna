@@ -11,12 +11,10 @@ import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.order.api.DailyRemunerationController;
 import com.kizuna.order.api.dto.OrderMapperImpl;
-import com.kizuna.order.api.me.SelfDailyRemunerationController;
 import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderCourse;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.infrastructure.RemunerationQuery;
-import com.kizuna.order.infrastructure.SelfMonthlyRemunerationQuery;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
@@ -24,7 +22,6 @@ import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shared.web.WebBindingConfig;
 import com.kizuna.store.StoreShortNames;
 import com.kizuna.store.domain.Store;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -47,8 +44,6 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -84,7 +79,6 @@ class DailyRemunerationIntegrationTest {
   private DailyRemunerationService service;
   private Long storeId;
   private Long personId;
-  private String email;
   private String orderId;
   private static final LocalDate DAY = LocalDate.of(2026, 9, 30);
 
@@ -110,7 +104,7 @@ class DailyRemunerationIntegrationTest {
               new Store("日別検証店", StoreShortNames.next(), UUID.randomUUID() + ".example.test");
           em.persist(store);
           storeId = store.getId();
-          email = UUID.randomUUID() + "@example.test";
+          String email = UUID.randomUUID() + "@example.test";
           var actor =
               User.builder()
                   .email(email)
@@ -181,11 +175,9 @@ class DailyRemunerationIntegrationTest {
   }
 
   @Test
-  void bothReadsAggregateHistoricalEnrollmentsAndKeepInvalidatedRows() {
+  void storeReadAggregatesHistoricalEnrollmentsAndKeepsInvalidatedRows() {
     var store = service.store(storeId, personId, DAY.toString(), PageRequest.of(0, 1));
-    var self = service.self(email, storeId, DAY.toString(), PageRequest.of(0, 1));
     assertThat(store.totalRemuneration()).isEqualTo(16000);
-    assertThat(self.totalRemuneration()).isEqualTo(16000);
     assertThat(store.orders().getTotalElements()).isEqualTo(3);
     assertThat(store.orders().getContent()).hasSize(1);
     var all = service.store(storeId, personId, DAY.toString(), PageRequest.of(0, 20));
@@ -208,16 +200,13 @@ class DailyRemunerationIntegrationTest {
         .isEqualTo(3000);
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void httpResponseKeepsOneSnapshotAcrossConcurrentChange(boolean self) throws Exception {
+  @Test
+  void httpResponseKeepsOneSnapshotAcrossConcurrentChange() throws Exception {
     var probe = context.getBean(SnapshotQuery.class);
     probe.reached = new CountDownLatch(1);
     probe.resume = new CountDownLatch(1);
     var http =
-        standaloneSetup(
-                new DailyRemunerationController(service, new OrderMapperImpl()),
-                new SelfDailyRemunerationController(service, new OrderMapperImpl()))
+        standaloneSetup(new DailyRemunerationController(service, new OrderMapperImpl()))
             .setMessageConverters(
                 new JacksonJsonHttpMessageConverter(
                     JsonMapper.builder()
@@ -230,11 +219,9 @@ class DailyRemunerationIntegrationTest {
           executor.submit(
               () ->
                   http.perform(
-                          get(self ? "/me/daily-remunerations" : "/daily-remunerations")
-                              .principal(() -> email)
+                          get("/daily-remunerations")
                               .header("X-Store-ID", storeId.toString())
                               .param("person_id", personId.toString())
-                              .param("store_id", storeId.toString())
                               .param("business_date", DAY.toString()))
                       .andReturn()
                       .getResponse());
@@ -267,9 +254,6 @@ class DailyRemunerationIntegrationTest {
             service
                 .store(storeId, personId, DAY.toString(), PageRequest.of(0, 20))
                 .totalRemuneration())
-        .isEqualTo(20000);
-    assertThat(
-            service.self(email, storeId, DAY.toString(), PageRequest.of(0, 20)).totalRemuneration())
         .isEqualTo(20000);
   }
 
@@ -319,11 +303,7 @@ class DailyRemunerationIntegrationTest {
 
   @Configuration
   @EnableTransactionManagement
-  @Import({
-    DailyRemunerationService.class,
-    SelfMonthlyRemunerationQuery.class,
-    ActorIdentityService.class
-  })
+  @Import(DailyRemunerationService.class)
   static class Config {
     @Bean
     DataSource dataSource() {

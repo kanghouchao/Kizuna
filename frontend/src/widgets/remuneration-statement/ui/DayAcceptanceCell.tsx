@@ -1,6 +1,6 @@
 'use client';
 import type { Day } from '../api';
-import { Badge, Button } from '@/shared/ui';
+import { Badge } from '@/shared/ui';
 import { yen } from './yen';
 const states: Record<Day['acceptance_state'], { label: string; className: string }> = {
   NOT_ACCEPTABLE: { label: '承諾不可', className: 'bg-muted text-foreground' },
@@ -19,18 +19,10 @@ const reasons: Record<NonNullable<Day['not_acceptable_reason']>, string> = {
 const acceptedAt = (value: string) =>
   new Date(value).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' });
 /**
- * 日の承諾状態。onAccept は本人の画面だけが渡す — 店舗側は読むだけで書く口を持たない。
+ * 店舗側の日の承諾状態。読むだけで、承諾する口は持たない。
  * 差分は最新の承諾と現在の三項を比べる。額が同じでも根拠が変われば「変更あり」になるので、その旨を書く。
  */
-export function DayAcceptanceCell({
-  day,
-  onAccept,
-  sending,
-}: {
-  day: Day;
-  onAccept?: (day: Day) => void;
-  sending: boolean;
-}) {
+export function DayAcceptanceCell({ day }: { day: Day }) {
   const state = states[day.acceptance_state];
   const latest = day.latest_acceptance;
   const changes =
@@ -43,8 +35,6 @@ export function DayAcceptanceCell({
           ] as const
         ).filter(([, before, after]) => before !== after)
       : [];
-  const acceptable =
-    day.acceptance_state === 'NOT_ACCEPTED' || day.acceptance_state === 'CHANGED_AFTER_ACCEPTANCE';
   return (
     <div className="flex flex-col items-start gap-1">
       <Badge variant="outline" className={`border-transparent ${state.className}`}>
@@ -65,17 +55,6 @@ export function DayAcceptanceCell({
         <p className="text-sm text-muted-foreground">
           最新の承諾：{acceptedAt(latest.accepted_at)}
         </p>
-      )}
-      {onAccept && acceptable && (
-        <Button
-          type="button"
-          size="sm"
-          disabled={sending}
-          aria-label={`${day.business_date} を${latest ? '再承諾' : '承諾'}`}
-          onClick={() => onAccept(day)}
-        >
-          {latest ? '再承諾' : '承諾'}
-        </Button>
       )}
     </div>
   );
