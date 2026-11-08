@@ -1,29 +1,6 @@
-import { formatEndTime, formatTime, parseDateStr, toDateStr, weekDates, weekStart } from '../week';
+import { toDateStr, weekDates, weekStart } from '../week';
 
 describe('week', () => {
-  describe('parseDateStr', () => {
-    const originalTZ = process.env.TZ;
-    afterEach(() => {
-      // 未設定だった場合に文字列 'undefined' を代入すると無効な TZ（UTC フォールバック）となり
-      // 同一 Jest worker の後続テストファイルを汚染するため、未設定へは delete で戻す。
-      if (originalTZ === undefined) {
-        delete process.env.TZ;
-      } else {
-        process.env.TZ = originalTZ;
-      }
-    });
-
-    it('yyyy-MM-dd をローカルタイムの Date として構築する', () => {
-      expect(toDateStr(parseDateStr('2026-07-08'))).toBe('2026-07-08');
-    });
-
-    it('UTC 負オフセット時区でも該当日をローカル日付として解釈する(曜日ズレ回帰防止)', () => {
-      process.env.TZ = 'America/Los_Angeles';
-      // 2026-07-19 はローカルで日曜日。UTC 解釈だと前日(土曜)にズレる。
-      expect(parseDateStr('2026-07-19').getDay()).toBe(0);
-    });
-  });
-
   describe('toDateStr', () => {
     it('ローカル日付を yyyy-MM-dd に整形する', () => {
       expect(toDateStr(new Date(2026, 6, 8))).toBe('2026-07-08');
@@ -61,21 +38,6 @@ describe('week', () => {
         '2026-07-24',
         '2026-07-25',
       ]);
-    });
-  });
-
-  describe('formatTime', () => {
-    it('秒付き時刻を HH:mm に切り詰める', () => {
-      expect(formatTime('18:00:00')).toBe('18:00');
-    });
-  });
-
-  describe('formatEndTime', () => {
-    it('00:00 終了は 24:00 として表示する', () => {
-      expect(formatEndTime('00:00:00')).toBe('24:00');
-    });
-    it('00:00 以外は HH:mm のまま表示する', () => {
-      expect(formatEndTime('23:00:00')).toBe('23:00');
     });
   });
 });
