@@ -18,7 +18,7 @@ export const MEMBER_SCREENS: PortalScreens = {
   '/member/reservations/new': { title: '予約申請', back: '/member/reservations' },
   '/member/points': { title: 'ポイント', tab: '/member/points' },
   '/member/visits': { title: '来店履歴', back: '/member/points' },
-  '/member/receipts': { title: '伝票の取り込み', back: '/member' },
+  '/member/receipts': { title: '伝票の取り込み', back: '/member/points' },
   '/member/account': { title: 'アカウント', tab: '/member/account' },
   '/member/notification-settings': { title: '通知の設定', back: '/member/account' },
   '/member/withdrawal': { title: '退会', back: '/member/account' },

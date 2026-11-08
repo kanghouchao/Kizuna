@@ -1,77 +1,41 @@
 'use client';
 
 import { MemberVisit, memberVisitApi } from '@/entities/order';
-import { useListPage } from '@/shared/lib';
-import { Card, CardContent, CardHeader, CardTitle, Pager, RegionError } from '@/shared/ui';
-
-/** 来店 1 件。人数と担当は記録の無い来店があるため、無い場合はその項目だけ落として行は残す。 */
-function VisitRow({ visit }: { visit: MemberVisit }) {
-  return (
-    <li className="rounded-[10px] border bg-card p-4 shadow-sm">
-      <p className="flex items-center justify-between gap-2 text-sm font-medium text-foreground">
-        <span>{visit.visited_on}</span>
-        <span className="text-primary-strong">
-          +{visit.granted_points.toLocaleString('ja-JP')} pt
-        </span>
-      </p>
-      <p className="text-sm text-muted-foreground">{visit.store_name}</p>
-      <p className="text-xs text-muted-foreground">
-        {visit.pax != null && <span>{visit.pax} 名</span>}
-        {visit.cast_name && <span className="ml-2">担当: {visit.cast_name}</span>}
-      </p>
-    </li>
-  );
-}
+import { tokyoDate, useListPage } from '@/shared/lib';
+import { EmptyState, ListRowsSkeleton, Pager, RegionError } from '@/shared/ui';
+import { MEMBER_PAGER } from './memberPager';
+import { VisitRows } from './VisitRows';
 
 /**
- * 会員ポータルの来店履歴。全店舗の来店を新しい順に並べる。
+ * 会員ポータルの来店履歴のすべて。全店舗の来店を新しい順に並べる。
  *
  * 出るのは会計の済んだ来店だけで、申請中の予約は「予約」の画面が別に追う。店舗との関連を解除しても
  * 過去の来店は残る（来店は確定した記録であって、現在の関連の写しではない）。
  */
 export function MemberVisitsPage() {
   const list = useListPage<MemberVisit>(page => memberVisitApi.list(page));
-  const { rows: visits, isLoading, failed } = list;
+  const today = tokyoDate(new Date());
 
   return (
-    <div>
-      <Card>
-        <CardHeader>
-          <CardTitle role="heading" aria-level={2}>
-            これまでの来店
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {failed ? (
-            <RegionError
-              message="来店履歴を取得できませんでした。"
-              onRetry={() => void list.reload()}
-            />
-          ) : isLoading && visits.length === 0 ? (
-            <p className="text-sm text-muted-foreground">読み込み中...</p>
-          ) : visits.length === 0 ? (
-            <p className="text-sm text-muted-foreground">来店の記録はまだありません。</p>
-          ) : (
-            <ul className="space-y-3">
-              {/* 来店は台帳内部の ID を持たない（応答に出さない）。1 ページの中で並べ替えも削除も
-                  起きないため、ページ内の位置がそのまま識別子になる。 */}
-              {visits.map((visit, index) => (
-                <VisitRow key={index} visit={visit} />
-              ))}
-            </ul>
-          )}
-          <div className="mt-4">
-            <Pager
-              page={list.page}
-              pageCount={list.pageCount}
-              total={list.total}
-              rowCount={list.rows.length}
-              disabled={isLoading}
-              onPageChange={page => void list.onPageChange(page)}
-            />
-          </div>
-        </CardContent>
-      </Card>
+    <div className="space-y-4">
+      {list.failed ? (
+        <RegionError message="来店履歴を取得できませんでした" onRetry={() => void list.reload()} />
+      ) : list.isLoading && list.rows.length === 0 ? (
+        <ListRowsSkeleton rows={5} />
+      ) : list.rows.length === 0 ? (
+        <EmptyState message="まだ来店の記録はありません" />
+      ) : (
+        <VisitRows visits={list.rows} today={today} />
+      )}
+      <Pager
+        className={MEMBER_PAGER}
+        page={list.page}
+        pageCount={list.pageCount}
+        total={list.total}
+        rowCount={list.rows.length}
+        disabled={list.isLoading}
+        onPageChange={page => void list.onPageChange(page)}
+      />
     </div>
   );
 }
