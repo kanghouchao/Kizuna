@@ -14,6 +14,39 @@ jest.mock('@/widgets/remuneration-statement', () => ({
 jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), warning: jest.fn(), error: jest.fn() },
 }));
+// URL の正本は jsdom の履歴。Next は history.pushState を取り込んで useSearchParams を後の描画で
+// 合わせるので、代役も通知を遅らせる（URL と描画済みの条件がずれる間の操作を再現するため）
+const MONTHLY_PATH = '/cast/remunerations/monthly';
+const mockQueryListeners = new Set<() => void>();
+const notifyQuery = () => mockQueryListeners.forEach(listener => listener());
+const originalPushState = window.history.pushState.bind(window.history);
+window.history.pushState = (...args: Parameters<History['pushState']>) => {
+  originalPushState(...args);
+  setTimeout(notifyQuery, 0);
+};
+/** 直接開く・戻るの代役。URL を差し替えて購読中の描画へ知らせる。 */
+const visit = (href: string) => {
+  window.history.replaceState(null, '', href);
+  notifyQuery();
+};
+const currentQuery = () => new URLSearchParams(window.location.search);
+
+jest.mock('next/navigation', () => {
+  const React = jest.requireActual('react');
+  return {
+    useSearchParams: () => {
+      const query = React.useSyncExternalStore(
+        (listener: () => void) => {
+          mockQueryListeners.add(listener);
+          return () => mockQueryListeners.delete(listener);
+        },
+        () => window.location.search.slice(1)
+      );
+      return React.useMemo(() => new URLSearchParams(query), [query]);
+    },
+    usePathname: () => MONTHLY_PATH,
+  };
+});
 jest.mock('@/features/monthly-remuneration-pdf', () => ({
   MonthlyPdfActions: ({ criteria }: { criteria: unknown }) => (
     <p data-testid="pdf">{JSON.stringify(criteria)}</p>
@@ -148,6 +181,7 @@ const dayRegion = (d: number) => screen.getByRole('region', { name: `${label(d)}
 
 beforeEach(() => {
   jest.resetAllMocks();
+  visit(MONTHLY_PATH);
   jest.mocked(selfMonthlyRemunerationApi.stores).mockResolvedValue({
     rows: [{ store_id: 1, store_name: '銀座本店' }],
     page: 0,
@@ -465,6 +499,7 @@ it('月を ‹ で前の月へ切り替えると、その月の明細と PDF に
       JSON.stringify({ scope: 'self', storeId: 1, month: previousMonth })
     )
   );
+  expect(currentQuery().get('month')).toBe(previousMonth);
 });
 
 it('複数の店舗の明細があればチップで店舗を切り替える', async () => {
@@ -483,6 +518,79 @@ it('複数の店舗の明細があればチップで店舗を切り替える', a
     expect(remunerationApi.statement).toHaveBeenLastCalledWith(
       { scope: 'self', storeId: 2 },
       thisMonth,
+      0,
+      0,
+      100
+    )
+  );
+  expect(currentQuery().get('store_id')).toBe('2');
+});
+
+const twoStores = () =>
+  jest.mocked(selfMonthlyRemunerationApi.stores).mockResolvedValue({
+    rows: [
+      { store_id: 1, store_name: '銀座本店' },
+      { store_id: 2, store_name: '新宿東口店' },
+    ],
+    page: 0,
+    pageCount: 1,
+    total: 2,
+  });
+
+it('URL の店舗と月で開く（詳細から戻ったときや「やること」から開いたとき）', async () => {
+  twoStores();
+  visit(`${MONTHLY_PATH}?store_id=2&month=${previousMonth}`);
+  await renderPage();
+  expect(remunerationApi.statement).toHaveBeenCalledWith(
+    { scope: 'self', storeId: 2 },
+    previousMonth,
+    0,
+    0,
+    100
+  );
+  expect(remunerationApi.statement).not.toHaveBeenCalledWith(
+    expect.anything(),
+    thisMonth,
+    expect.anything(),
+    expect.anything(),
+    expect.anything()
+  );
+  expect(screen.getByRole('button', { name: '新宿東口店' })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+});
+
+it.each([
+  ['書式違いの月', 'store_id=1&month=2026-1'],
+  ['12 か月より前の月', 'store_id=1&month=2000-01'],
+  ['来月より先の月', 'store_id=1&month=9999-12'],
+  ['本人に無い店舗', 'store_id=99&month='],
+])('%s の URL は今月・最初の店舗で開く', async (_case, query) => {
+  twoStores();
+  visit(`${MONTHLY_PATH}?${query}`);
+  await renderPage();
+  expect(remunerationApi.statement).toHaveBeenCalledTimes(1);
+  expect(remunerationApi.statement).toHaveBeenCalledWith(
+    { scope: 'self', storeId: 1 },
+    thisMonth,
+    0,
+    0,
+    100
+  );
+});
+
+it('描画が URL に追いつく前に店舗と月を続けて切り替えても、両方を URL に残す', async () => {
+  twoStores();
+  await renderPage();
+  fireEvent.click(screen.getByRole('button', { name: '新宿東口店' }));
+  fireEvent.click(screen.getByRole('button', { name: '前の月' }));
+  expect(currentQuery().get('store_id')).toBe('2');
+  expect(currentQuery().get('month')).toBe(previousMonth);
+  await waitFor(() =>
+    expect(remunerationApi.statement).toHaveBeenLastCalledWith(
+      { scope: 'self', storeId: 2 },
+      previousMonth,
       0,
       0,
       100

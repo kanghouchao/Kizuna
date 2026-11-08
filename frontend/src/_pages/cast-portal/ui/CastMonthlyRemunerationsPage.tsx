@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { selfMonthlyRemunerationApi } from '@/entities/order';
 import { MonthlyPdfActions } from '@/features/monthly-remuneration-pdf';
 import { formatDate, getApiErrorMessage, isConflict, tokyoDate, useResource } from '@/shared/lib';
@@ -25,6 +26,7 @@ import {
   type StatementBonus,
   type StatementOrder,
 } from '../lib/monthlyStatement';
+import { queryMonth } from '../lib/monthlyQuery';
 import { PANEL } from './RemunerationDetail';
 import { StatementDayFold } from './StatementDayFold';
 
@@ -69,34 +71,59 @@ async function fullStatement(storeId: number, month: string): Promise<FullStatem
   throw new Error('明細のページの間で内容が変わり続けたため、読み切れませんでした');
 }
 
+function PageSkeleton() {
+  return (
+    <div className="space-y-4">
+      <Skeleton className="h-11 w-full" />
+      <Skeleton className="h-48 w-full rounded-xl" />
+      <ListRowsSkeleton />
+    </div>
+  );
+}
+
+// 検索パラメータを読む部分を Suspense で囲み、静的に描ける外側をクライアント描画へ落とさない
 export function CastMonthlyRemunerationsPage() {
+  return (
+    <Suspense fallback={<PageSkeleton />}>
+      <MonthlyRemunerations />
+    </Suspense>
+  );
+}
+
+/** 店舗と月は URL に持ち、詳細から戻ったときや「やること」から開いたときに同じ明細を出す。 */
+function MonthlyRemunerations() {
   const today = tokyoDate(new Date());
   const thisMonth = today.slice(0, 7);
+  const pathname = usePathname();
+  const query = useSearchParams();
   const stores = useResource(() => collectPages(selfMonthlyRemunerationApi.stores));
-  const [selected, setSelected] = useState<string | null>(null);
-  const [month, setMonth] = useState(thisMonth);
+  const month = queryMonth(query.get('month'), thisMonth);
 
-  if (stores.isLoading)
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-11 w-full" />
-        <Skeleton className="h-48 w-full rounded-xl" />
-        <ListRowsSkeleton />
-      </div>
-    );
+  // 次の URL は描画済みの値ではなく今の URL から組む。描画が追いつく前に続けて切り替えても前の切替を消さない
+  const select = (key: 'store_id' | 'month', value: string) => {
+    const next = new URLSearchParams(window.location.search);
+    next.set(key, value);
+    window.history.pushState(null, '', `${pathname}?${next}`);
+  };
+
+  if (stores.isLoading) return <PageSkeleton />;
   if (stores.failure)
     return <RegionError message="店舗の取得に失敗しました" onRetry={() => void stores.reload()} />;
   const rows = stores.data ?? [];
   if (rows.length === 0) return <EmptyState message="まだ報酬明細はありません" />;
-  const current = rows.find(row => String(row.store_id) === selected) ?? rows[0];
+  const current = rows.find(row => String(row.store_id) === query.get('store_id')) ?? rows[0];
   return (
     <div className="space-y-4">
       <StoreChips
         stores={rows.map(row => ({ id: String(row.store_id), name: row.store_name }))}
         value={String(current.store_id)}
-        onValueChange={setSelected}
+        onValueChange={id => select('store_id', id)}
       />
-      <MonthPicker value={month} currentMonth={thisMonth} onValueChange={setMonth} />
+      <MonthPicker
+        value={month}
+        currentMonth={thisMonth}
+        onValueChange={next => select('month', next)}
+      />
       <MonthlyStatement
         key={`${current.store_id}-${month}`}
         storeId={current.store_id}

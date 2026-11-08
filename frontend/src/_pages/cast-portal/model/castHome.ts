@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { selfMonthlyRemunerationApi } from '@/entities/order';
 import { ownServiceApi } from '@/entities/service';
 import { shiftApi, type CastShiftRequestItem, type CastStoreItem } from '@/entities/shift';
-import { tokyoDate, useResource } from '@/shared/lib';
+import { shiftMonth, tokyoDate, useResource } from '@/shared/lib';
 import { remunerationApi, type Statement } from '@/widgets/remuneration-statement';
 import { collectPages } from '../lib/collectPages';
 import {
@@ -39,12 +39,6 @@ function recentRequests(since: Date): Promise<CastShiftRequestItem[]> {
     const last = pageRows.at(-1)?.created_at;
     return last !== undefined && new Date(last) >= since;
   });
-}
-
-/** 'yyyy-MM' の前の月。 */
-function previousMonth(month: string): string {
-  const [year, m] = month.split('-').map(Number);
-  return m === 1 ? `${year - 1}-12` : `${year}-${String(m - 1).padStart(2, '0')}`;
 }
 
 function statementsOf(storeIds: number[], month: string): Promise<Statement[]> {
@@ -117,7 +111,7 @@ export function useCastHomeSource(): CastHome {
     month,
   ]);
   const previous = useResource(
-    storeIds ? () => statementsOf(storeIds, previousMonth(month)) : null,
+    storeIds ? () => statementsOf(storeIds, shiftMonth(month, -1)) : null,
     [storeIds, month]
   );
   const requests = useResource(() => recentRequests(since), [pathname]);

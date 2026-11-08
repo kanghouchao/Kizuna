@@ -11,6 +11,30 @@ import {
 import { tokyoDate } from '@/shared/lib';
 import { remunerationApi, type Statement } from '@/widgets/remuneration-statement';
 
+// 本人の月次は店舗と月を URL に持つ。jsdom の履歴を URL の正本にし、pushState を描画へ知らせる
+const mockQueryListeners = new Set<() => void>();
+const originalPushState = window.history.pushState.bind(window.history);
+window.history.pushState = (...args: Parameters<History['pushState']>) => {
+  originalPushState(...args);
+  mockQueryListeners.forEach(listener => listener());
+};
+jest.mock('next/navigation', () => {
+  const React = jest.requireActual('react');
+  return {
+    ...jest.requireActual('next/navigation'),
+    useSearchParams: () => {
+      const query = React.useSyncExternalStore(
+        (listener: () => void) => {
+          mockQueryListeners.add(listener);
+          return () => mockQueryListeners.delete(listener);
+        },
+        () => window.location.search.slice(1)
+      );
+      return React.useMemo(() => new URLSearchParams(query), [query]);
+    },
+    usePathname: () => '/cast/remunerations/monthly',
+  };
+});
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
   useStoreContext: () => ({
@@ -110,6 +134,7 @@ const scopes = [
 ] as const;
 beforeEach(() => {
   jest.resetAllMocks();
+  window.history.replaceState(null, '', '/');
   grantMe();
   URL.createObjectURL = jest.fn(() => 'blob:statement');
   URL.revokeObjectURL = jest.fn();

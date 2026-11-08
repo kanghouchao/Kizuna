@@ -3,6 +3,7 @@ import type { CastShiftRequestItem } from '@/entities/shift';
 import { formatDate } from '@/shared/lib';
 import type { StatusWord } from '@/shared/ui';
 import type { Day, Statement } from '@/widgets/remuneration-statement';
+import { monthlyHref } from './monthlyQuery';
 
 export interface StoreConditions {
   storeName: string;
@@ -51,7 +52,7 @@ export function acceptanceTodos(statements: Statement[], today: string): TodoIte
           title: `${formatDate(day.business_date, today)}の報酬`,
           storeName: statement.store_name,
           status,
-          href: '/cast/remunerations/monthly',
+          href: monthlyHref(statement.store_id, statement.month),
         },
       ];
     })
