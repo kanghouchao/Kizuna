@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import {
   CastAcceptanceResponse,
@@ -69,7 +70,7 @@ export default function CastInvitePage() {
   if (stage === 'loading') {
     return (
       <AuthLayout title="招待を確認しています" subtitle="しばらくお待ちください">
-        <p className="text-center text-sm text-[#9a958e]">読み込み中...</p>
+        <p className="auth-text text-center">読み込み中...</p>
       </AuthLayout>
     );
   }
@@ -87,9 +88,9 @@ export default function CastInvitePage() {
       <AuthLayout title="連携が完了しました" subtitle="ご登録ありがとうございます">
         <div className="space-y-4">
           <div className="auth-alert auth-alert--success">{storeName}との連携が完了しました</div>
-          <p className="text-xs text-[#9a958e]">
-            キャスト用ポータルは準備中です。開通までしばらくお待ちください。
-          </p>
+          <Link href="/cast" className="auth-btn block text-center">
+            ポータルへ
+          </Link>
         </div>
       </AuthLayout>
     );
@@ -132,8 +133,8 @@ export default function CastInvitePage() {
       subtitle="招待を受諾する方法を選択してください"
     >
       <div className="space-y-6">
-        <p className="text-sm text-[#4a4540]">出勤希望の提出とスケジュールの確認ができます。</p>
-        <p className="text-xs text-[#9a958e]">
+        <p className="auth-text">出勤希望の提出とスケジュールの確認ができます。</p>
+        <p className="auth-note">
           有効期限:{' '}
           {detail.expires_at ? new Date(detail.expires_at).toLocaleString('ja-JP') : '不明'}
         </p>
@@ -144,12 +145,12 @@ export default function CastInvitePage() {
           <button
             type="button"
             onClick={() => setStage('login')}
-            className="w-full rounded-[10px] border border-gray-300 px-8 py-3.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+            className="auth-btn auth-btn--secondary"
           >
             既存アカウントでログイン
           </button>
         </div>
-        <p className="text-xs text-[#9a958e]">
+        <p className="auth-note">
           既に他店舗のキャストとして登録済みの場合は、既存アカウントでログインすると本店舗の権限が追加されます。
         </p>
       </div>

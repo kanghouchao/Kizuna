@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import CastInvitePage from '../ui/CastInvitePage';
 import { castInvitationAcceptanceApi } from '@/entities/cast';
 
@@ -9,11 +9,13 @@ jest.mock('@/entities/cast', () => {
     castInvitationAcceptanceApi: {
       ...actual.castInvitationAcceptanceApi,
       view: jest.fn(),
+      acceptAsExistingUser: jest.fn(),
     },
   };
 });
 
 const mockedView = castInvitationAcceptanceApi.view as jest.Mock;
+const mockedAcceptExisting = castInvitationAcceptanceApi.acceptAsExistingUser as jest.Mock;
 
 const NOT_FOUND = '招待リンクが見つかりません。URLをご確認ください。';
 
@@ -72,5 +74,24 @@ describe('CastInvitePage', () => {
 
     await screen.findByText(NOT_FOUND);
     expect(mockedView).not.toHaveBeenCalled();
+  });
+
+  it('受諾が済んだら完了画面からキャストのポータルへ進める', async () => {
+    window.location.hash = '#raw-invitation-token';
+    mockedView.mockResolvedValue({ status: 'VALID', store_name: '銀座店', cast_name: '花子' });
+    mockedAcceptExisting.mockResolvedValue({ store_name: '銀座店' });
+
+    render(<CastInvitePage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '既存アカウントでログイン' }));
+    fireEvent.change(screen.getByLabelText('メールアドレス'), {
+      target: { value: 'cast@kizuna.test' },
+    });
+    fireEvent.change(screen.getByLabelText('パスワード'), { target: { value: 'pass' } });
+    fireEvent.click(screen.getByRole('button', { name: 'ログインして受諾する' }));
+
+    expect(await screen.findByText('銀座店との連携が完了しました')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'ポータルへ' })).toHaveAttribute('href', '/cast');
+    expect(screen.queryByText(/準備中/)).not.toBeInTheDocument();
   });
 });
