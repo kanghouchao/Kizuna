@@ -91,7 +91,7 @@ describe('MemberHomePage', () => {
         {
           id: 'expired',
           store_name: '失効した店',
-          business_date: '2026-11-06',
+          business_date: '2026-11-09',
           status: 'PENDING',
           expired: true,
         },
@@ -106,6 +106,7 @@ describe('MemberHomePage', () => {
     expect(within(link).getByText('11/10（火）19:30')).toBeInTheDocument();
     expect(within(link).getByText('申請中')).toBeInTheDocument();
     expect(within(next).queryByText('遠い店')).not.toBeInTheDocument();
+    expect(within(next).queryByText('失効した店')).not.toBeInTheDocument();
   });
 
   it('次の予約が無ければ空の表示と「新しく予約」を出す', async () => {
