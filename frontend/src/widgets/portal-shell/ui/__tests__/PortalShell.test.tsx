@@ -1,5 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
 import { HomeIcon, CalendarDaysIcon, CircleUserRoundIcon } from 'lucide-react';
+import { RegionError } from '@/shared/ui';
 import { PortalShell, type PortalScreens, type PortalTab } from '../PortalShell';
 
 let mockPathname = '/p';
@@ -143,5 +144,19 @@ describe('PortalShell', () => {
     expect(
       notice.compareDocumentPosition(screen.getByText('子要素')) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy();
+  });
+
+  it('内容の中の共有部品へ段を伝え、領域内エラーを段の大きさで出す', () => {
+    render(
+      <PortalShell tier="member" tabs={TABS} screens={SCREENS}>
+        <RegionError message="読めませんでした。" onRetry={() => {}} />
+      </PortalShell>
+    );
+
+    const region = within(screen.getByRole('main')).getByRole('alert');
+    expect(within(region).getByRole('button', { name: '再試行' })).toHaveClass(
+      'min-h-12',
+      'text-lg'
+    );
   });
 });
