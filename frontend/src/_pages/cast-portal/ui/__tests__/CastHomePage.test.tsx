@@ -132,15 +132,19 @@ describe('CastHomePage', () => {
   });
 
   it('今月の承諾待ち・再承諾が必要な日を月次の画面へ導き、件数に数える', async () => {
-    statement.mockResolvedValue(
-      statementOf(1, '店舗A', {
-        days: [
-          day('2026-11-02', 'ACCEPTED'),
-          day('2026-11-03', 'NOT_ACCEPTED'),
-          day('2026-11-04', 'CHANGED_AFTER_ACCEPTANCE'),
-          day('2026-11-08', 'NOT_ACCEPTABLE'),
-        ],
-      })
+    statement.mockImplementation((_scope: unknown, month: string) =>
+      Promise.resolve(
+        month === '2026-11'
+          ? statementOf(1, '店舗A', {
+              days: [
+                day('2026-11-02', 'ACCEPTED'),
+                day('2026-11-03', 'NOT_ACCEPTED'),
+                day('2026-11-04', 'CHANGED_AFTER_ACCEPTANCE'),
+                day('2026-11-08', 'NOT_ACCEPTABLE'),
+              ],
+            })
+          : statementOf(1, '店舗A', { month })
+      )
     );
 
     renderHome();
@@ -157,6 +161,39 @@ describe('CastHomePage', () => {
     expect(within(todo).queryByText(/11\/8/)).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'ホーム 2件' })).toBeInTheDocument();
     expect(statement).toHaveBeenCalledWith({ scope: 'self', storeId: 1 }, '2026-11', 0, 0);
+  });
+
+  it('先月の承諾待ちの日も残し、累計報酬は今月の明細だけで出す', async () => {
+    statement.mockImplementation((_scope: unknown, month: string) =>
+      Promise.resolve(
+        month === '2026-10'
+          ? statementOf(1, '店舗A', {
+              month,
+              total: 99000,
+              days: [day('2026-10-31', 'NOT_ACCEPTED')],
+            })
+          : statementOf(1, '店舗A', { total: 12000 })
+      )
+    );
+
+    renderHome();
+
+    const todo = await screen.findByRole('list', { name: 'やること' });
+    expect(within(todo).getByRole('link', { name: /10\/31（土）/ })).toHaveTextContent('承諾待ち');
+    expect(screen.getByRole('link', { name: 'ホーム 1件' })).toBeInTheDocument();
+    const totals = screen.getByRole('list', { name: '今月の累計報酬' });
+    expect(within(totals).getByText('¥12,000')).toBeInTheDocument();
+    expect(within(totals).queryByText('¥99,000')).not.toBeInTheDocument();
+  });
+
+  it('1 月は前年の 12 月を先月として読む', async () => {
+    jest.setSystemTime(new Date('2027-01-05T03:00:00Z'));
+
+    renderHome();
+
+    await screen.findByRole('list', { name: '今月の累計報酬' });
+    expect(statement).toHaveBeenCalledWith({ scope: 'self', storeId: 1 }, '2027-01', 0, 0);
+    expect(statement).toHaveBeenCalledWith({ scope: 'self', storeId: 1 }, '2026-12', 0, 0);
   });
 
   it('今月の累計報酬を店舗ごとに金額の書式で出し、計算できない店舗は計算待ちとする', async () => {
