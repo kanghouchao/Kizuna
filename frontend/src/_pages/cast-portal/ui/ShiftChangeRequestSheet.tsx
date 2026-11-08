@@ -1,14 +1,14 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useId } from 'react';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
-import { getApiErrorMessage } from '@/shared/lib';
+import { formatDate, formatTimeRange, getApiErrorMessage, tokyoDate } from '@/shared/lib';
 import { CastScheduleItem, ShiftChangeRequestCreateRequest, shiftApi } from '@/entities/shift';
 import {
+  BottomSheet,
+  BottomSheetClose,
   Button,
-  Dialog,
-  DialogFrame,
   Form,
   FormControl,
   FormField,
@@ -18,7 +18,6 @@ import {
   Input,
   Textarea,
 } from '@/shared/ui';
-import { formatEndTime, formatTime } from '../lib/week';
 
 interface ChangeFormValues {
   work_date: string;
@@ -27,14 +26,22 @@ interface ChangeFormValues {
   note: string;
 }
 
-interface ShiftChangeRequestModalProps {
+interface ShiftChangeRequestSheetProps {
   open: boolean;
   item: CastScheduleItem | null;
   onClose: () => void;
 }
 
-/** 確定シフトへの変更申請モーダル。現行の日時を初期値に、希望する日時・備考を提出する。 */
-export function ShiftChangeRequestModal({ open, item, onClose }: ShiftChangeRequestModalProps) {
+function currentLabel(item: CastScheduleItem | null): string | undefined {
+  if (!item?.work_date) return undefined;
+  const date = formatDate(item.work_date, tokyoDate(new Date()));
+  const range = formatTimeRange(item.start_time ?? '', item.end_time ?? '');
+  return `現在: ${date}${range}・${item.store_name ?? ''}`;
+}
+
+/** 確定シフトへの変更申請の下部シート。現行の日時を初期値に、希望する日時・備考を提出する。 */
+export function ShiftChangeRequestSheet({ open, item, onClose }: ShiftChangeRequestSheetProps) {
+  const formId = useId();
   const form = useForm<ChangeFormValues>({
     defaultValues: { work_date: '', start_time: '', end_time: '', note: '' },
   });
@@ -77,34 +84,29 @@ export function ShiftChangeRequestModal({ open, item, onClose }: ShiftChangeRequ
   };
 
   return (
-    <Dialog
+    <BottomSheet
       open={open}
       onOpenChange={next => {
         if (!next) onClose();
       }}
+      title="シフトの変更申請"
+      description={currentLabel(item)}
+      footer={
+        <>
+          {/* 操作帯は form の外に描かれるため、form 属性で本文の form を送信する */}
+          <Button type="submit" form={formId} disabled={isSubmitting}>
+            {isSubmitting ? '提出中...' : '変更を申請する'}
+          </Button>
+          <BottomSheetClose render={<Button type="button" variant="outline" />}>
+            やめる
+          </BottomSheetClose>
+        </>
+      }
     >
       <Form {...form}>
-        <DialogFrame
-          size="sm"
-          title="シフトの変更申請"
-          // noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
-          // 我々の文言は永久に描かれない。執行は各 rules が担う
-          form={{ onSubmit: handleSubmit(submit), noValidate: true }}
-          footer={
-            <>
-              <Button type="button" variant="outline" onClick={onClose}>
-                キャンセル
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? '提出中...' : '変更を申請する'}
-              </Button>
-            </>
-          }
-        >
-          <p className="text-xs text-muted-foreground">
-            現行: {item?.work_date} {formatTime(item?.start_time)}–{formatEndTime(item?.end_time)}（
-            {item?.store_name}）
-          </p>
+        {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
+            我々の文言は永久に描かれない。執行は各 rules が担う */}
+        <form id={formId} onSubmit={handleSubmit(submit)} noValidate className="space-y-4">
           <FormField
             control={control}
             name="work_date"
@@ -113,7 +115,7 @@ export function ShiftChangeRequestModal({ open, item, onClose }: ShiftChangeRequ
               <FormItem>
                 <FormLabel>日付</FormLabel>
                 <FormControl>
-                  <Input type="date" required {...field} />
+                  <Input type="date" required className="h-11" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -128,7 +130,7 @@ export function ShiftChangeRequestModal({ open, item, onClose }: ShiftChangeRequ
                 <FormItem>
                   <FormLabel>開始</FormLabel>
                   <FormControl>
-                    <Input type="time" required {...field} />
+                    <Input type="time" required className="h-11" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -142,7 +144,7 @@ export function ShiftChangeRequestModal({ open, item, onClose }: ShiftChangeRequ
                 <FormItem>
                   <FormLabel>終了</FormLabel>
                   <FormControl>
-                    <Input type="time" required {...field} />
+                    <Input type="time" required className="h-11" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -165,8 +167,8 @@ export function ShiftChangeRequestModal({ open, item, onClose }: ShiftChangeRequ
               </FormItem>
             )}
           />
-        </DialogFrame>
+        </form>
       </Form>
-    </Dialog>
+    </BottomSheet>
   );
 }
