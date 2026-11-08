@@ -2,6 +2,7 @@
 
 import { createContext, useContext } from 'react';
 import { usePathname } from 'next/navigation';
+import { selfMonthlyRemunerationApi } from '@/entities/order';
 import { ownServiceApi } from '@/entities/service';
 import { shiftApi, type CastShiftRequestItem, type CastStoreItem } from '@/entities/shift';
 import type { PageResult } from '@/shared/api';
@@ -59,22 +60,22 @@ function previousMonth(month: string): string {
   return m === 1 ? `${year - 1}-12` : `${year}-${String(m - 1).padStart(2, '0')}`;
 }
 
-function statementsOf(stores: Store[], month: string): Promise<Statement[]> {
+function statementsOf(storeIds: number[], month: string): Promise<Statement[]> {
   return Promise.all(
-    stores.map(store =>
-      remunerationApi.statement({ scope: 'self', storeId: store.store_id }, month, 0, 0)
-    )
+    storeIds.map(storeId => remunerationApi.statement({ scope: 'self', storeId }, month, 0, 0))
   );
 }
 
 /**
  * 承諾待ちの日は先月と今月の明細から拾う（月初に前月末の日が消えないように）。それより前の月は
- * 月次の画面で扱う。今月の累計は同じ今月の明細から読む。
+ * 月次の画面で扱う。退店後も明細は照会・承諾できるので、在籍中に限らず在籍したことのある店舗を読む。
  */
-async function recentStatements(stores: Store[], month: string) {
+async function recentStatements(month: string) {
+  const stores = await collectPages(page => selfMonthlyRemunerationApi.stores(page));
+  const storeIds = stores.map(store => store.store_id);
   const [previous, current] = await Promise.all([
-    statementsOf(stores, previousMonth(month)),
-    statementsOf(stores, month),
+    statementsOf(storeIds, previousMonth(month)),
+    statementsOf(storeIds, month),
   ]);
   return { previous, current };
 }
@@ -128,10 +129,7 @@ export function useCastHomeSource(): CastHome {
   const stores = useResource(myStores, [pathname]);
   const storeList = stores.data;
   const consents = useResource(storeList ? () => pendingConsents(storeList) : null, [storeList]);
-  const statements = useResource(storeList ? () => recentStatements(storeList, month) : null, [
-    storeList,
-    month,
-  ]);
+  const statements = useResource(() => recentStatements(month), [pathname, month]);
   const requests = useResource(() => recentRequests(since), [pathname]);
 
   const acceptances = statements.data
@@ -144,11 +142,14 @@ export function useCastHomeSource(): CastHome {
   return {
     todos: region(todos, [stores, consents, statements, requests]),
     monthTotals: region(
-      statements.data?.current.map(s => ({
-        storeId: s.store_id,
-        storeName: s.store_name,
-        total: s.total,
-      })) ?? null,
+      storeList && statements.data
+        ? statements.data.current
+            // 退店した店舗は今月の動きがあるときだけ出す。昔の店舗の ¥0 を並べ続けない。
+            .filter(
+              s => storeList.some(store => store.store_id === s.store_id) || s.days.length > 0
+            )
+            .map(s => ({ storeId: s.store_id, storeName: s.store_name, total: s.total }))
+        : null,
       [stores, statements]
     ),
     // 片方だけで数えると欠けた件数を正しい件数のように見せるので、両方そろうまで出さない。
