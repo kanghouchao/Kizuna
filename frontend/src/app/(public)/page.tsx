@@ -31,7 +31,7 @@ export default async function Home() {
       redirect('/admin/dashboard/');
     }
     if (sessionKind === 'cast') {
-      redirect('/cast/schedule/');
+      redirect('/cast/');
     }
     if (sessionKind === 'member') {
       redirect('/member/');

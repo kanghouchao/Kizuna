@@ -68,9 +68,18 @@ When('作成したキャストのメールとパスワードでログインす�
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();
 });
 
-Then('キャストポータルのスケジュール画面へ遷移する', async ({ page }) => {
-  await expect(page).toHaveURL(/\/cast\/schedule\/?$/, { timeout: 15000 });
+Then('キャストポータルのホームへ遷移する', async ({ page }) => {
+  await expect(page).toHaveURL(/\/cast\/?$/, { timeout: 15000 });
 });
+
+Then(
+  'ホームの今日の出勤に {string} と時間帯 {string} が表示される',
+  async ({ page }, storeName: string, timeRange: string) => {
+    const today = page.getByRole('region', { name: '今日の出勤' });
+    const item = today.getByRole('listitem').filter({ hasText: storeName }).filter({ hasText: timeRange });
+    await expect(item).toBeVisible({ timeout: 15000 });
+  }
+);
 
 Then(
   'スケジュールに {string} と時間帯 {string} が表示される',

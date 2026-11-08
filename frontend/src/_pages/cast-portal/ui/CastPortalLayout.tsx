@@ -2,6 +2,7 @@
 
 import { CalendarDaysIcon, CircleUserRoundIcon, HomeIcon, ReceiptTextIcon } from 'lucide-react';
 import { PortalShell, type PortalScreens, type PortalTab } from '@/widgets/portal-shell';
+import { CastHomeProvider, useCastHomeSource } from '../model/castHome';
 
 const TABS: readonly PortalTab[] = [
   { href: '/cast', label: 'ホーム', icon: HomeIcon },
@@ -38,9 +39,17 @@ export const CAST_SCREENS: PortalScreens = {
 
 /** キャストポータルの外枠。MeProvider を持たない（共有 widget は能力を props で受ける）。 */
 export function CastPortalLayout({ children }: { children: React.ReactNode }) {
+  const home = useCastHomeSource();
   return (
-    <PortalShell tier="cast" tabs={TABS} screens={CAST_SCREENS}>
-      {children}
-    </PortalShell>
+    <CastHomeProvider value={home}>
+      <PortalShell
+        tier="cast"
+        tabs={TABS}
+        screens={CAST_SCREENS}
+        badges={{ '/cast': home.pendingCount }}
+      >
+        {children}
+      </PortalShell>
+    </CastHomeProvider>
   );
 }

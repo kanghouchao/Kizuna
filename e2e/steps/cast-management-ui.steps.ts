@@ -189,7 +189,11 @@ async function portalStores(page: Page) {
   await page.getByLabel("メールアドレス").fill(email);
   await page.getByLabel("パスワード").fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();
-  await expect(page).toHaveURL(/\/cast\/schedule\/?$/);
+  await expect(page).toHaveURL(/\/cast\/?$/);
+  await page
+    .getByRole("navigation", { name: "メニュー" })
+    .getByRole("link", { name: "スケジュール", exact: true })
+    .click();
   await page
     .locator("nav")
     .getByRole("link", { name: "希望提出", exact: true })
