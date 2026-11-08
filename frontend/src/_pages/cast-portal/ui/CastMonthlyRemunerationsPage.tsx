@@ -1,276 +1,256 @@
 'use client';
 
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import {
-  selfMonthlyRemunerationApi,
-  SelfMonthlyRemunerationStore,
-  dailyRemunerationApi,
-  validateRemunerationPeriod,
-} from '@/entities/order';
-import { RemunerationStatementPanel } from '@/widgets/remuneration-statement';
+import { selfMonthlyRemunerationApi, type SelfMonthlyRemunerationStore } from '@/entities/order';
 import { MonthlyPdfActions } from '@/features/monthly-remuneration-pdf';
-import { fromSpringPage } from '@/shared/api';
-import { useResource } from '@/shared/lib';
+import { formatDate, getApiErrorMessage, isConflict, tokyoDate, useResource } from '@/shared/lib';
+import { notify } from '@/shared/notify';
 import {
-  Button,
-  Card,
-  CardContent,
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-  Input,
+  EmptyState,
+  KeyValueList,
+  KeyValueRow,
+  ListRowsSkeleton,
+  Money,
+  MonthPicker,
   RegionError,
+  Segmented,
+  Skeleton,
+  StoreChips,
 } from '@/shared/ui';
-import { ListPage } from '@/widgets/list-page';
-import { RemunerationDetail } from './RemunerationDetail';
-import { RemunerationStorePicker } from './RemunerationStorePicker';
+import { remunerationApi, type Day, type Statement } from '@/widgets/remuneration-statement';
+import { statementDays, type StatementBonus, type StatementOrder } from '../lib/monthlyStatement';
+import { PANEL } from './RemunerationDetail';
+import { StatementDayFold } from './StatementDayFold';
 
-interface Criteria {
-  store: SelfMonthlyRemunerationStore | null;
-  month: string;
-  businessDate: string;
+// 店舗の数は本人が在籍したことのある店舗の数で、ページを辿り切っても小さい
+async function allStores(): Promise<SelfMonthlyRemunerationStore[]> {
+  const first = await selfMonthlyRemunerationApi.stores(0);
+  const rest = await Promise.all(
+    Array.from({ length: Math.max(first.pageCount - 1, 0) }, (_, i) =>
+      selfMonthlyRemunerationApi.stores(i + 1)
+    )
+  );
+  return [first, ...rest].flatMap(result => result.rows);
 }
-interface Query {
-  storeId: number;
-  period: string;
-  mode: 'month' | 'day';
-  page: number;
+
+const PAGE_SIZE = 100;
+
+interface FullStatement {
+  statement: Statement;
+  orders: StatementOrder[];
+  bonuses: StatementBonus[];
+}
+
+/**
+ * 受注とボーナスを各日へ割り振るため、両方のページを最後まで読む。合計と日ごとの額は最初の応答のもの。
+ * 後のページの取得の間に訂正が入ると根拠の行と額がずれ得るが、承諾は内容の要約で照合され 409 になる。
+ */
+async function fullStatement(storeId: number, month: string): Promise<FullStatement> {
+  const scope = { scope: 'self', storeId } as const;
+  const first = await remunerationApi.statement(scope, month, 0, 0, PAGE_SIZE);
+  const pages = Math.max(first.orders.total_pages, first.bonus_awards.total_pages);
+  const rest = await Promise.all(
+    Array.from({ length: Math.max(pages - 1, 0) }, (_, i) =>
+      remunerationApi.statement(scope, month, i + 1, i + 1, PAGE_SIZE)
+    )
+  );
+  const all = [first, ...rest];
+  return {
+    statement: first,
+    orders: all.flatMap(result => result.orders.content),
+    bonuses: all.flatMap(result => result.bonus_awards.content),
+  };
 }
 
 export function CastMonthlyRemunerationsPage() {
-  const form = useForm<Criteria>({
-    defaultValues: {
-      store: null,
-      businessDate: '',
-      month: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' })
-        .format(new Date())
-        .slice(0, 7),
-    },
-  });
-  const [query, setQuery] = useState<Query | null>(null);
-  const [orderId, setOrderId] = useState<string | null>(null);
-  const [mode, setMode] = useState<'month' | 'day'>('month');
-  const clearResult = () => {
-    setQuery(null);
-    setOrderId(null);
-  };
-  const statement = useResource(
-    query
-      ? async () => ({
-          query,
-          result:
-            query.mode === 'day'
-              ? await dailyRemunerationApi.self(query.storeId, query.period, query.page)
-              : await selfMonthlyRemunerationApi.monthly(query.storeId, query.period, query.page),
-        })
-      : null,
-    [query]
-  );
-  const result =
-    query && statement.data?.query === query && !statement.isLoading && statement.failure === null
-      ? statement.data.result
-      : null;
-  const previous = statement.data?.result;
-  const pdfResult =
-    query?.mode === 'month' &&
-    statement.failure === null &&
-    previous &&
-    'month' in previous &&
-    previous.month === query.period &&
-    previous.store_id === query.storeId
-      ? previous
-      : null;
-  const periodLabel = mode === 'day' ? '営業日' : '対象月';
-  const title = mode === 'day' ? '日別給与明細' : '月次給与明細';
-  const totalLabel = mode === 'day' ? '日別報酬合計' : '月次報酬合計';
-  const paging = result
-    ? fromSpringPage(result.orders)
-    : { rows: [], page: 0, pageCount: 0, total: 0 };
-  const submit = form.handleSubmit(values => {
-    if (values.store)
-      setQuery({
-        storeId: values.store.store_id,
-        mode,
-        period: mode === 'day' ? values.businessDate : values.month,
-        page: 0,
-      });
-  });
+  const today = tokyoDate(new Date());
+  const thisMonth = today.slice(0, 7);
+  const stores = useResource(allStores);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [month, setMonth] = useState(thisMonth);
+
+  if (stores.isLoading)
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-11 w-full" />
+        <Skeleton className="h-48 w-full rounded-xl" />
+        <ListRowsSkeleton />
+      </div>
+    );
+  if (stores.failure)
+    return <RegionError message="店舗の取得に失敗しました" onRetry={() => void stores.reload()} />;
+  const rows = stores.data ?? [];
+  if (rows.length === 0) return <EmptyState message="まだ報酬明細はありません" />;
+  const current = rows.find(row => String(row.store_id) === selected) ?? rows[0];
   return (
     <div className="space-y-4">
-      {orderId ? (
-        <>
-          <h2 className="text-lg font-semibold">報酬明細</h2>
-          <Button variant="outline" onClick={() => setOrderId(null)}>
-            一覧へ戻る
-          </Button>
-          <RemunerationDetail key={orderId} id={orderId} />
-        </>
-      ) : (
-        <Form {...form}>
-          <ListPage
-            title={title}
-            description="原営業日の日別・月別に発生済み固定報酬を確認します。"
-            search={{
-              onSearch: () => void submit(),
-              content: (
-                <div className="w-full space-y-6">
-                  <div role="group" aria-label="集計単位" className="flex gap-3">
-                    {(['month', 'day'] as const).map(value => (
-                      <Button
-                        key={value}
-                        type="button"
-                        variant={mode === value ? 'default' : 'outline'}
-                        aria-pressed={mode === value}
-                        onClick={() => {
-                          clearResult();
-                          setMode(value);
-                        }}
-                      >
-                        {value === 'day' ? '日別' : '月別'}
-                      </Button>
-                    ))}
-                  </div>
-                  <div className="flex flex-wrap items-start gap-6">
-                    <FormField
-                      control={form.control}
-                      name="store"
-                      rules={{ required: '店舗を選択してください' }}
-                      render={({ field }) => (
-                        <FormItem className="w-full min-w-0 sm:w-72">
-                          <FormLabel>店舗</FormLabel>
-                          <FormControl>
-                            <RemunerationStorePicker
-                              value={field.value}
-                              onChange={value => {
-                                clearResult();
-                                field.onChange(value);
-                              }}
-                              triggerRef={field.ref}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      key={mode}
-                      name={mode === 'day' ? 'businessDate' : 'month'}
-                      rules={{
-                        required: `${periodLabel}を入力してください`,
-                        validate: value => validateRemunerationPeriod(mode, value),
-                      }}
-                      render={({ field }) => (
-                        <FormItem className="w-44">
-                          <FormLabel>{periodLabel}</FormLabel>
-                          <FormControl>
-                            <Input
-                              {...field}
-                              onChange={event => {
-                                clearResult();
-                                field.onChange(event);
-                              }}
-                              aria-required="true"
-                              placeholder={mode === 'day' ? 'YYYY-MM-DD' : 'YYYY-MM'}
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <Button type="submit" className="sm:mt-7">
-                      照会
-                    </Button>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    退店・再入店を含む同じ店舗の報酬をまとめます。支払済み額ではありません。
-                  </p>
-
-                  {pdfResult && (
-                    <MonthlyPdfActions
-                      criteria={{
-                        scope: 'self',
-                        storeId: pdfResult.store_id,
-                        month: pdfResult.month,
-                      }}
-                    />
-                  )}
-                  {result && (
-                    <section aria-label="集計結果" className="space-y-2">
-                      <p className="break-words">
-                        {result.store_name} /{' '}
-                        {'month' in result ? result.month : result.business_date}
-                      </p>
-                      <p className="text-sm text-muted-foreground">{totalLabel}</p>
-                      <p aria-label={totalLabel} className="text-3xl font-bold">
-                        ¥{result.total_remuneration.toLocaleString('ja-JP')}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        全 {result.orders.total_elements}{' '}
-                        件の合計。完了・訂正・無効化後は再照会すると反映されます。
-                      </p>
-                    </section>
-                  )}
-                </div>
-              ),
-            }}
-            state={{
-              ...paging,
-              isLoading: statement.isLoading,
-              failed: statement.failure !== null && statement.failure !== 'notFound',
-              onPageChange: result
-                ? page => {
-                    setOrderId(null);
-                    setQuery(current => current && { ...current, page });
-                  }
-                : undefined,
-            }}
-            emptyMessage={
-              statement.failure === 'notFound' ? (
-                <RegionError
-                  message="対象の店舗が見つからないか、閲覧範囲外です。"
-                  fallback={{ href: '/cast/remunerations', label: '報酬一覧へ戻る' }}
-                />
-              ) : query ? (
-                `${periodLabel}の完了受注はありません`
-              ) : (
-                `店舗と${periodLabel}を選択してください`
-              )
-            }
-            errorMessage={`${title}を取得できませんでした。`}
-            onRetry={statement.reload}
-          >
-            <div className="space-y-3">
-              {paging.rows.map(row => (
-                <Card key={row.order_id}>
-                  <CardContent className="space-y-3 break-words p-4">
-                    <h2 className="font-semibold">{row.business_date}</h2>
-                    <p className="text-sm">受注番号: {row.order_id}</p>
-                    <p>{row.service_summary}</p>
-                    {row.completion_invalidated && <p>無効化済み（有効報酬 0 円）</p>}
-                    <p>発生済み報酬: ¥{row.accrued_remuneration.toLocaleString('ja-JP')}</p>
-                    <Button variant="outline" onClick={() => setOrderId(row.order_id)}>
-                      詳細・変更履歴を確認
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </ListPage>
-          {query?.mode === 'month' && (
-            <RemunerationStatementPanel
-              scope={{ scope: 'self', storeId: query.storeId }}
-              month={query.period}
-              canView
-              canManage={false}
-            />
-          )}
-        </Form>
-      )}
+      <StoreChips
+        stores={rows.map(row => ({ id: String(row.store_id), name: row.store_name }))}
+        value={String(current.store_id)}
+        onValueChange={setSelected}
+      />
+      <MonthPicker value={month} currentMonth={thisMonth} onValueChange={setMonth} />
+      <MonthlyStatement
+        key={`${current.store_id}-${month}`}
+        storeId={current.store_id}
+        month={month}
+        today={today}
+      />
     </div>
+  );
+}
+
+type Filter = 'all' | 'awaiting';
+
+function MonthlyStatement({
+  storeId,
+  month,
+  today,
+}: {
+  storeId: number;
+  month: string;
+  today: string;
+}) {
+  const result = useResource(() => fullStatement(storeId, month));
+  const [filter, setFilter] = useState<Filter>('all');
+  // 未操作の間は承諾待ちの日を開く。承諾で取り直しても開閉が変わらないよう、操作の時点で固定する。
+  const [opened, setOpened] = useState<ReadonlySet<string> | null>(null);
+  const [sending, setSending] = useState(false);
+
+  if (result.failure)
+    return (
+      <RegionError message="月次明細の取得に失敗しました" onRetry={() => void result.reload()} />
+    );
+  if (!result.data)
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-48 w-full rounded-xl" />
+        <ListRowsSkeleton />
+      </div>
+    );
+  const { statement, orders, bonuses } = result.data;
+  const days = statementDays(statement.days, orders, bonuses);
+  const open =
+    opened ?? new Set(days.filter(entry => entry.awaiting).map(entry => entry.day.business_date));
+  const awaiting = days.filter(entry => entry.awaiting).length;
+  const shown = filter === 'awaiting' ? days.filter(entry => entry.awaiting) : days;
+
+  const toggle = (date: string) => {
+    const next = new Set(open);
+    if (!next.delete(date)) next.add(date);
+    setOpened(next);
+  };
+  // 409 は見ていた内容が古いことを示す。どの結果でも明細を取り直し、今の状態を見せる。
+  const accept = async (day: Day) => {
+    if (day.content_digest === undefined) return;
+    setOpened(open);
+    setSending(true);
+    try {
+      await remunerationApi.accept({
+        store_id: storeId,
+        business_date: day.business_date,
+        content_digest: day.content_digest,
+      });
+      notify.success(`${formatDate(day.business_date, today)}の明細を承諾しました`);
+    } catch (error) {
+      if (isConflict(error))
+        notify.warning(
+          '明細の内容が変わっていたため、最新の明細を表示しました。内容を確かめてから承諾してください'
+        );
+      else notify.error(getApiErrorMessage(error, '明細を承諾できませんでした'));
+    } finally {
+      setSending(false);
+      void result.reload();
+    }
+  };
+
+  return (
+    <>
+      <MonthSummary statement={statement} storeId={storeId} month={month} />
+      {days.length === 0 ? (
+        <EmptyState message="この月の出勤はありません" />
+      ) : (
+        <section aria-labelledby="statement-days" className="space-y-3">
+          <h2 id="statement-days" className="sr-only">
+            日ごとの明細
+          </h2>
+          <Segmented<Filter>
+            label="表示する日"
+            options={[
+              { value: 'all', label: '出勤日すべて' },
+              { value: 'awaiting', label: `承諾待ち ${awaiting}` },
+            ]}
+            value={filter}
+            onValueChange={setFilter}
+          />
+          {shown.length === 0 ? (
+            <EmptyState message="承諾待ちの日はありません" />
+          ) : (
+            <ul className="space-y-2">
+              {shown.map(entry => (
+                <li key={entry.day.business_date}>
+                  <StatementDayFold
+                    entry={entry}
+                    today={today}
+                    open={open.has(entry.day.business_date)}
+                    onToggle={() => toggle(entry.day.business_date)}
+                    onAccept={accept}
+                    sending={sending}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="text-center text-sm text-muted-foreground">
+            出勤の無い日は表示していません
+          </p>
+        </section>
+      )}
+    </>
+  );
+}
+
+function MonthSummary({
+  statement,
+  storeId,
+  month,
+}: {
+  statement: Statement;
+  storeId: number;
+  month: string;
+}) {
+  const monthNumber = Number(month.slice(5, 7));
+  return (
+    <section aria-labelledby="month-summary" className={PANEL}>
+      <h2 id="month-summary" className="text-sm text-muted-foreground">
+        {monthNumber}月の合計
+      </h2>
+      {/* 日額未設定・退勤記録待ちの日があると後端は total を返さない。部分の和は出さない */}
+      {statement.total === undefined ? (
+        <p className="text-3xl font-bold text-muted-foreground">計算待ち</p>
+      ) : (
+        <Money amount={statement.total} className="block text-3xl font-bold" />
+      )}
+      <KeyValueList className="text-base">
+        <KeyValueRow label="受注報酬" money>
+          <Money amount={statement.order_total} />
+        </KeyValueRow>
+        <KeyValueRow label="日額保証の不足分" money>
+          {statement.guarantee_total === undefined ? (
+            '計算待ち'
+          ) : (
+            <Money amount={statement.guarantee_total} />
+          )}
+        </KeyValueRow>
+        <KeyValueRow label="ボーナス" money>
+          <Money amount={statement.bonus_total} />
+        </KeyValueRow>
+      </KeyValueList>
+      <p>
+        承諾 {statement.accepted_days} / {statement.acceptable_days} 日
+      </p>
+      <p className="text-sm text-muted-foreground">支払済み額ではありません。</p>
+      <MonthlyPdfActions criteria={{ scope: 'self', storeId, month }} />
+    </section>
   );
 }

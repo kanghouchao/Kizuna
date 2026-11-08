@@ -21,6 +21,12 @@ it('本人照会には本人IDを送らず店と月と各ページを指定す�
     },
   });
 });
+it('受注とボーナスのページの大きさを指定できる', async () => {
+  await remunerationApi.statement({ scope: 'self', storeId: 7 }, '2026-09', 1, 1, 100);
+  expect(get.mock.lastCall?.[1]?.params).toEqual(
+    expect.objectContaining({ order_size: 100, bonus_size: 100 })
+  );
+});
 it('店舗の明細は現在店舗の境界で本人を指定し、店舗はクエリに載せない', async () => {
   await remunerationApi.statement({ scope: 'store', personId: 4 }, '2026-09', 0, 0);
   expect(get).toHaveBeenLastCalledWith(
