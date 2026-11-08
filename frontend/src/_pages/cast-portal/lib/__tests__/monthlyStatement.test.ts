@@ -1,5 +1,5 @@
 import type { Day } from '@/widgets/remuneration-statement';
-import { closedMinutes, statementDays } from '../monthlyStatement';
+import { closedMinutes, pagesAgree, statementDays } from '../monthlyStatement';
 
 const day = (over: Partial<Day>): Day => ({
   business_date: '2026-10-01',
@@ -82,5 +82,39 @@ describe('statementDays', () => {
       '2026-10-04',
       '2026-10-05',
     ]);
+  });
+});
+
+describe('pagesAgree', () => {
+  const days = [
+    day({ business_date: '2026-10-02', order_amount: 14000, bonus_amount: 3000 }),
+    day({ business_date: '2026-10-03', order_amount: 7000 }),
+  ];
+  const orders = [order('2026-10-03', 'c'), order('2026-10-02', 'b'), order('2026-10-02', 'a')];
+  const bonuses = [bonus('2026-10-02', 'x')];
+  const totals = { orders: 3, bonuses: 1 };
+
+  it('件数・重複・日ごとの額が最初の応答と合えば真', () => {
+    expect(pagesAgree(days, totals, orders, bonuses)).toBe(true);
+  });
+
+  it('ページの間で行が増えて境界の行が重複したら偽', () => {
+    expect(pagesAgree(days, totals, [orders[0], orders[1], orders[1]], bonuses)).toBe(false);
+  });
+
+  it('件数が合わなければ偽', () => {
+    expect(pagesAgree(days, totals, orders.slice(1), bonuses)).toBe(false);
+  });
+
+  it('ある日の受注の和がその日の受注報酬と合わなければ偽', () => {
+    expect(pagesAgree(days, totals, [order('2026-10-02', 'c'), ...orders.slice(1)], bonuses)).toBe(
+      false
+    );
+  });
+
+  it('ある日のボーナスの和がその日のボーナスと合わなければ偽', () => {
+    expect(pagesAgree(days, { ...totals, bonuses: 1 }, orders, [bonus('2026-10-03', 'x')])).toBe(
+      false
+    );
   });
 });
