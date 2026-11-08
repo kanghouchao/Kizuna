@@ -149,8 +149,9 @@ function MonthlyStatement({
         );
       else notify.error(getApiErrorMessage(error, '明細を承諾できませんでした'));
     } finally {
+      // 取り直す間は古い明細のボタンが残るので、押せないままにして同じ要約の再送を防ぐ
+      await result.reload();
       setSending(false);
-      void result.reload();
     }
   };
 

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { CastMonthlyRemunerationsPage } from '../CastMonthlyRemunerationsPage';
 import { selfMonthlyRemunerationApi } from '@/entities/order';
 import { formatDate, formatDateTime, tokyoDate } from '@/shared/lib';
@@ -278,6 +278,26 @@ it('承諾すると内容の要約を送り、明細を取り直す。開いて�
   });
   expect(notify.success).toHaveBeenCalledWith(`${label(3)}の明細を承諾しました`);
   expect(dayButton(3)).toHaveAttribute('aria-expanded', 'true');
+});
+
+it('承諾の後、明細を取り直し終えるまで承諾のボタンを押せないままにする', async () => {
+  jest.mocked(remunerationApi.accept).mockResolvedValue({
+    id: 'acc',
+    accepted_at: `${date(20)}T01:00:00Z`,
+    order_amount: 21000,
+    guarantee_amount: 0,
+    bonus_amount: 3000,
+  });
+  let finish!: (value: Statement) => void;
+  await renderPage();
+  jest
+    .mocked(remunerationApi.statement)
+    .mockImplementationOnce(() => new Promise<Statement>(resolve => (finish = resolve)));
+  fireEvent.click(screen.getByRole('button', { name: `${label(3)}を承諾する` }));
+  await waitFor(() => expect(remunerationApi.statement).toHaveBeenCalledTimes(2));
+  expect(screen.getByRole('button', { name: `${label(3)}を承諾する` })).toBeDisabled();
+  await act(async () => finish(statement()));
+  expect(screen.getByRole('button', { name: `${label(3)}を承諾する` })).toBeEnabled();
 });
 
 it('承諾が 409 なら最新の明細を取り直して確かめるよう促す', async () => {
