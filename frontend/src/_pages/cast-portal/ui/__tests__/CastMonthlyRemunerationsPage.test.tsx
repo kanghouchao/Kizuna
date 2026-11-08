@@ -260,6 +260,38 @@ it('承諾できない日は理由を出し、ボタンを出さない', async (
   expect(within(fifth).queryByRole('button')).toBeNull();
 });
 
+it('承諾した後に承諾できなくなった日・再承諾が必要な日にも、前に承諾した日時を出す', async () => {
+  const base = statement();
+  jest.mocked(remunerationApi.statement).mockResolvedValue(
+    statement({
+      days: [
+        ...base.days,
+        day(6, {
+          closed_duration: 'PT1H',
+          not_acceptable_reason: 'ALL_ZERO',
+          latest_acceptance: {
+            id: 'acc-6',
+            accepted_at: `${date(7)}T02:00:00Z`,
+            order_amount: 6000,
+            guarantee_amount: 0,
+            bonus_amount: 0,
+          },
+        }),
+      ],
+    })
+  );
+  await renderPage();
+  fireEvent.click(dayButton(6));
+  const sixth = dayRegion(6);
+  expect(within(sixth).getByText('報酬が無いため承諾はありません')).toBeInTheDocument();
+  expect(
+    within(sixth).getByText(`${formatDateTime(`${date(7)}T02:00:00Z`, today)}に承諾しました`)
+  ).toBeInTheDocument();
+  expect(
+    within(dayRegion(4)).getByText(`${formatDateTime(`${date(5)}T01:00:00Z`, today)}に承諾しました`)
+  ).toBeInTheDocument();
+});
+
 it('承諾すると内容の要約を送り、明細を取り直す。開いていた日は開いたままにする', async () => {
   jest.mocked(remunerationApi.accept).mockResolvedValue({
     id: 'acc',
