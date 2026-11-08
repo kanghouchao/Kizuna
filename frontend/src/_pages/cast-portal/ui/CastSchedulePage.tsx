@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
-import { CastScheduleItem, shiftApi } from '@/entities/shift';
+import { CastScheduleItem, CastStoreItem, shiftApi } from '@/entities/shift';
 import { formatDate, formatTimeRange, tokyoDate, useResource } from '@/shared/lib';
 import {
   Button,
@@ -18,7 +18,19 @@ import { groupByWorkDate } from '../lib/groupSchedule';
 import { toDateStr, weekDates, weekStart } from '../lib/week';
 import { ShiftChangeRequestSheet } from './ShiftChangeRequestSheet';
 
-/** 確定シフトを週ごとに見せる（cast_id 単層自限）。日曜起点の週送り付き。複数店舗に在籍するときは店舗で絞る。 */
+function withScheduledStores(
+  enrolled: CastStoreItem[],
+  items: CastScheduleItem[]
+): { id: string; name: string }[] {
+  const stores = new Map(enrolled.map(s => [String(s.store_id), s.store_name ?? '']));
+  for (const item of items) {
+    const id = String(item.store_id);
+    if (!stores.has(id)) stores.set(id, item.store_name ?? '');
+  }
+  return [...stores].map(([id, name]) => ({ id, name }));
+}
+
+/** 確定シフトを週ごとに見せる（cast_id 単層自限）。日曜起点の週送り付き。店舗が複数あるときはチップで絞る。 */
 export function CastSchedulePage() {
   const today = tokyoDate(new Date());
   const [currentWeekStart, setCurrentWeekStart] = useState(() => weekStart(new Date()));
@@ -33,14 +45,6 @@ export function CastSchedulePage() {
     failure: storesFailure,
     reload: reloadStores,
   } = useResource(() => shiftApi.myStores());
-  const stores = (storesData ?? []).map(s => ({
-    id: String(s.store_id),
-    name: s.store_name ?? '',
-  }));
-  const selectedStoreId = stores.some(s => s.id === pickedStoreId)
-    ? pickedStoreId
-    : (stores[0]?.id ?? null);
-
   const {
     data: items,
     isLoading,
@@ -53,8 +57,12 @@ export function CastSchedulePage() {
 
   const dates = weekDates(currentWeekStart);
   const rangeLabel = `${formatDate(toDateStr(dates[0]), today)}〜${formatDate(toDateStr(dates[6]), today)}`;
-  // 在籍店舗（/me/stores）は退店済みを含まないので、絞るのはチップを出す複数店舗のときだけ。
-  // 1 店舗なら返った予定をすべて出し、退店済みの店舗の予定を隠さない
+  // 在籍店舗（/me/stores）は退店済みを含まないが、予定は退店前に確定した分も返る。チップは在籍店舗に
+  // その週の予定の店舗を足して作り、退店済みの店舗の予定も隠さない。店舗が読めないときは絞らない
+  const stores = storesData ? withScheduledStores(storesData, items ?? []) : [];
+  const selectedStoreId = stores.some(s => s.id === pickedStoreId)
+    ? pickedStoreId
+    : (stores[0]?.id ?? null);
   const visibleItems =
     stores.length >= 2
       ? (items ?? []).filter(item => String(item.store_id) === selectedStoreId)

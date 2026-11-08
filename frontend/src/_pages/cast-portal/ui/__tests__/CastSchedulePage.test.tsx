@@ -101,14 +101,14 @@ describe('CastSchedulePage', () => {
         start_time: '10:00:00',
         end_time: '12:00:00',
         status: 'CONFIRMED',
-        store_id: 2,
-        store_name: '店舗B',
+        store_id: 1,
+        store_name: '店舗A',
       },
     ]);
 
     render(<CastSchedulePage />);
 
-    expect(await screen.findByText('店舗A')).toBeInTheDocument();
+    expect(await screen.findByText('18:00〜20:00')).toBeInTheDocument();
     // 年は実行日の年と比べて付くかが決まるため、月日と曜日だけを断言する
     const headings = screen.getAllByRole('heading', { level: 2 }).map(h => h.textContent);
     expect(headings).toEqual([
@@ -118,7 +118,7 @@ describe('CastSchedulePage', () => {
     const rows = screen.getAllByRole('listitem').map(li => li.textContent);
     expect(rows).toEqual([
       expect.stringMatching(/18:00〜20:00.*店舗A/),
-      expect.stringMatching(/10:00〜12:00.*店舗B/),
+      expect.stringMatching(/10:00〜12:00.*店舗A/),
     ]);
   });
 
@@ -180,13 +180,53 @@ describe('CastSchedulePage', () => {
       expect(screen.queryByText('18:00〜20:00')).not.toBeInTheDocument();
     });
 
-    it('1 店舗ならチップを出さず、返った予定をすべて出すこと', async () => {
-      mockedMySchedule.mockResolvedValue(twoStoreWeek);
+    it('在籍店舗に無い店舗（退店済み）の予定もその週のチップから見られること', async () => {
+      // 在籍店舗の一覧は退店済みを含まないが、予定は退店前に確定した分も返る
+      mockedMyStores.mockResolvedValue([
+        { store_id: 1, store_name: '店舗A' },
+        { store_id: 2, store_name: '店舗B' },
+      ]);
+      mockedMySchedule.mockResolvedValue([
+        ...twoStoreWeek,
+        {
+          id: 'sh3',
+          work_date: '2999-07-22',
+          start_time: '13:00:00',
+          end_time: '15:00:00',
+          status: 'CONFIRMED',
+          store_id: 3,
+          store_name: '旧店舗C',
+        },
+      ]);
+
+      render(<CastSchedulePage />);
+      expect(await screen.findByText('18:00〜20:00')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: '旧店舗C' }));
+
+      expect(await screen.findByText('13:00〜15:00')).toBeInTheDocument();
+      expect(screen.queryByText('18:00〜20:00')).not.toBeInTheDocument();
+    });
+
+    it('在籍 1 店舗でも、その週に退店済みの店舗の予定があればチップで分けること', async () => {
+      mockedMySchedule.mockResolvedValue([
+        twoStoreWeek[0],
+        { ...twoStoreWeek[1], store_id: 3, store_name: '旧店舗C' },
+      ]);
+
+      render(<CastSchedulePage />);
+
+      expect(await screen.findByRole('group', { name: '店舗' })).toBeInTheDocument();
+      expect(screen.getByText('18:00〜20:00')).toBeInTheDocument();
+      expect(screen.queryByText('10:00〜12:00')).not.toBeInTheDocument();
+    });
+
+    it('1 店舗でその週の予定もその店舗だけならチップを出さないこと', async () => {
+      mockedMySchedule.mockResolvedValue([twoStoreWeek[0]]);
 
       render(<CastSchedulePage />);
 
       expect(await screen.findByText('18:00〜20:00')).toBeInTheDocument();
-      expect(screen.getByText('10:00〜12:00')).toBeInTheDocument();
       expect(screen.queryByRole('group', { name: '店舗' })).not.toBeInTheDocument();
     });
 
