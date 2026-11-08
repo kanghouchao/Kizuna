@@ -250,13 +250,13 @@
   font-weight: 300;
 }
 
-/* 欄の見出し。入力欄の上に小さく置く */
+/* 欄の見出し。12px でも 4.5:1 を満たす色（#6b6660 on #faf9f7 は 5.4）にする */
 .auth-label {
   display: block;
   margin-bottom: 6px;
   font-size: 12px;
   font-weight: 500;
-  color: #8a8580;
+  color: #6b6660;
   letter-spacing: 0.05em;
 }
 
