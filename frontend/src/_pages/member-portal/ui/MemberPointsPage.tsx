@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { MemberVisit, memberVisitApi } from '@/entities/order';
 import { MemberPointEntry, POINT_ENTRY_TYPE_LABELS, memberPointApi } from '@/entities/point';
-import { formatDate, tokyoDate, useListPage, useResource } from '@/shared/lib';
+import { formatDate, formatPointChange, tokyoDate, useListPage, useResource } from '@/shared/lib';
 import {
   Button,
   EmptyState,
@@ -12,49 +12,27 @@ import {
   ListRowsSkeleton,
   Pager,
   RegionError,
-  Skeleton,
 } from '@/shared/ui';
-import { formatPointChange, formatPoints } from '../lib/points';
-import { MEMBER_PAGER } from './memberPager';
-import { VisitRows } from './VisitRows';
+import { MEMBER_ACTION, MEMBER_PAGER } from './memberPager';
+import { PointBalance } from './PointBalance';
+import { ReceiptHint, VisitRows } from './VisitRows';
 
 const RECENT_VISITS = 5;
 
 /**
  * 会員ポータルのポイント。残高 → 明細 → 最近の来店を縦に並べる。
  *
- * 3 つの区画は別々に取る。片方が読めなくてもほかは読めてよく、失敗はそれぞれの区画が自分で名乗る。
+ * 区画は別々に取る。片方が読めなくてもほかは読めてよく、失敗はそれぞれの区画が自分で名乗る。
  * 残高は明細の増減の総和ではない — 有効期限切れは仕訳を積まずに残高だけを減らすため、足し上げても一致しない。
  */
 export function MemberPointsPage() {
   const today = tokyoDate(new Date());
   return (
     <div className="space-y-6">
-      <Balance />
+      <PointBalance />
       <Entries today={today} />
       <RecentVisits today={today} />
     </div>
-  );
-}
-
-function Balance() {
-  const balance = useResource(() => memberPointApi.balance());
-  return (
-    <section
-      aria-labelledby="points-balance"
-      className="space-y-1 rounded-xl border bg-card p-4 text-card-foreground"
-    >
-      <h2 id="points-balance" className="text-muted-foreground">
-        現在の残高
-      </h2>
-      {balance.failure ? (
-        <RegionError message="残高を取得できませんでした" onRetry={() => void balance.reload()} />
-      ) : balance.isLoading || balance.data === null ? (
-        <Skeleton role="status" aria-label="読み込み中" className="h-10 w-48" />
-      ) : (
-        <p className="text-4xl font-bold tabular-nums">{formatPoints(balance.data.balance)}</p>
-      )}
-    </section>
   );
 }
 
@@ -95,7 +73,7 @@ function Entries({ today }: { today: string }) {
       ) : list.isLoading && list.rows.length === 0 ? (
         <ListRowsSkeleton />
       ) : list.rows.length === 0 ? (
-        <EmptyState message="まだポイントの増減はありません" />
+        <EmptyState message="まだポイントの増減はありません" action={<ReceiptHint />} />
       ) : (
         <ListRows label="ポイントの明細">
           {/* 明細は台帳内部の ID を持たない（応答に出さない）。ページ内の行は並べ替えも削除も起きない
@@ -134,17 +112,20 @@ function RecentVisits({ today }: { today: string }) {
       ) : visits.isLoading ? (
         <ListRowsSkeleton />
       ) : recent.length === 0 ? (
-        <EmptyState message="まだ来店の記録はありません" />
+        <EmptyState message="まだ来店の記録はありません" action={<ReceiptHint />} />
       ) : (
         <>
           <VisitRows visits={recent} today={today} />
-          <Button
-            render={<Link href="/member/visits/" />}
-            variant="outline"
-            className="h-12 w-full text-base"
-          >
-            すべて見る
-          </Button>
+          {/* 最近の分で全件が見えているなら、同じ行しか無い画面へ送らない */}
+          {(visits.data?.total ?? 0) > RECENT_VISITS && (
+            <Button
+              render={<Link href="/member/visits/" />}
+              variant="outline"
+              className={MEMBER_ACTION}
+            >
+              すべて見る
+            </Button>
+          )}
         </>
       )}
     </section>

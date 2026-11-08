@@ -3,17 +3,17 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { memberReceiptApi } from '@/entities/order';
-import { memberPointApi } from '@/entities/point';
 import {
   getApiErrorMessage,
   isForbidden,
   isNotFound,
   redirectToLogin,
+  formatPointChange,
   rememberMemberReturnPath,
-  useResource,
 } from '@/shared/lib';
 import { Button, RegionError, Skeleton } from '@/shared/ui';
-import { formatPointChange, formatPoints } from '../lib/points';
+import { MEMBER_ACTION } from './memberPager';
+import { PointBalance } from './PointBalance';
 
 /**
  * 申領の失敗。理由が変わらない失敗（＝サーバが同形で返す申領不能）だけは再試行を出さない。
@@ -130,9 +130,8 @@ export function MemberReceiptClaimPage() {
   );
 }
 
-/** 申領の成立後。残高は申領の成立を待って取る — 並べて取ると付与前の残高を出しうる。 */
+/** 申領の成立後。残高の区画は申領の成立後にマウントして取る — 並べて取ると付与前の残高を出しうる。 */
 function Claimed({ grantedPoints }: { grantedPoints: number }) {
-  const balance = useResource(() => memberPointApi.balance());
   return (
     <>
       <section className="flex flex-col items-center gap-2 rounded-xl border bg-card p-6 text-center text-card-foreground">
@@ -147,24 +146,8 @@ function Claimed({ grantedPoints }: { grantedPoints: number }) {
           <p className="text-muted-foreground">この伝票にポイントの付与はありません。</p>
         )}
       </section>
-      <section
-        aria-labelledby="claimed-balance"
-        className="flex min-h-12 items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3 text-card-foreground"
-      >
-        <h2 id="claimed-balance" className="text-muted-foreground">
-          現在の残高
-        </h2>
-        {balance.isLoading ? (
-          <Skeleton className="h-6 w-28" />
-        ) : balance.failure ? (
-          <RegionError message="残高を取得できませんでした" onRetry={() => void balance.reload()} />
-        ) : (
-          balance.data && (
-            <p className="text-xl font-bold tabular-nums">{formatPoints(balance.data.balance)}</p>
-          )
-        )}
-      </section>
-      <Button render={<Link href="/member/points/" />} className="h-12 w-full text-base">
+      <PointBalance />
+      <Button render={<Link href="/member/points/" />} className={MEMBER_ACTION}>
         ポイントを見る
       </Button>
     </>

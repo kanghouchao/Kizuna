@@ -53,6 +53,8 @@ export {
   formatMinutes,
   formatMoney,
   formatMoneyChange,
+  formatPointChange,
+  formatPoints,
   formatRevision,
   formatTimeRange,
   tokyoDate,

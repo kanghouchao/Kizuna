@@ -4,7 +4,7 @@ import { MemberVisit, memberVisitApi } from '@/entities/order';
 import { tokyoDate, useListPage } from '@/shared/lib';
 import { EmptyState, ListRowsSkeleton, Pager, RegionError } from '@/shared/ui';
 import { MEMBER_PAGER } from './memberPager';
-import { VisitRows } from './VisitRows';
+import { ReceiptHint, VisitRows } from './VisitRows';
 
 /**
  * 会員ポータルの来店履歴のすべて。全店舗の来店を新しい順に並べる。
@@ -23,7 +23,7 @@ export function MemberVisitsPage() {
       ) : list.isLoading && list.rows.length === 0 ? (
         <ListRowsSkeleton rows={5} />
       ) : list.rows.length === 0 ? (
-        <EmptyState message="まだ来店の記録はありません" />
+        <EmptyState message="まだ来店の記録はありません" action={<ReceiptHint />} />
       ) : (
         <VisitRows visits={list.rows} today={today} />
       )}

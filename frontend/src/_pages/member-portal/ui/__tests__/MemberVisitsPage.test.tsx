@@ -74,7 +74,7 @@ describe('MemberVisitsPage', () => {
     expect(within(rows[1]).getByText('+1,080 ポイント')).toBeInTheDocument();
   });
 
-  it('付与の無い来店も行として出し、「+0」は出さない', async () => {
+  it('付与の無い来店も行として出し、符号なしの 0 を出す', async () => {
     mockedList.mockResolvedValue(
       page([{ visited_on: '2026-08-11', store_name: '店舗A', pax: 1, granted_points: 0 }])
     );
@@ -83,7 +83,7 @@ describe('MemberVisitsPage', () => {
 
     const row = await screen.findByRole('listitem');
     expect(within(row).getByText('店舗A')).toBeInTheDocument();
-    expect(within(row).queryByText(/ポイント/)).not.toBeInTheDocument();
+    expect(within(row).getByText('0 ポイント')).toBeInTheDocument();
   });
 
   it('取得完了までは読み込み中を表示する', () => {
@@ -129,5 +129,7 @@ describe('MemberVisitsPage', () => {
     render(<MemberVisitsPage />);
 
     expect(await screen.findByText('まだ来店の記録はありません')).toBeInTheDocument();
+    // 申領の画面への入口は伝票の QR だけなので、来店が並ぶ道筋を空の区画で示す
+    expect(screen.getByText(/伝票の QR を読み取ると/)).toBeInTheDocument();
   });
 });
