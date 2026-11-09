@@ -89,6 +89,9 @@ services:
     # タグは worktree ごとに分ける（root Taskfile が E2E_IMAGE_TAG を export する）。
     # latest 固定だと、別 worktree の task build が同じタグを上書きし、相手のコードを検証してしまう。
     image: kizuna-backend:${E2E_IMAGE_TAG:-latest}
+    # 開発・release と同じ変数で台数を変えられる（例: BACKEND_REPLICAS=2 task e2e grep=...）
+    deploy:
+      replicas: ${BACKEND_REPLICAS:-1}
     networks:
       - network
     environment:
@@ -140,6 +143,8 @@ services:
 
   frontend:
     image: kizuna-frontend:${E2E_IMAGE_TAG:-latest}
+    deploy:
+      replicas: ${FRONTEND_REPLICAS:-1}
     networks:
       - network
     environment:
@@ -166,6 +171,11 @@ services:
       - "--providers.file.filename=/etc/traefik/dynamic.yml"
     volumes:
       - "./traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro"
+    # dynamic.yml が転送先のレプリカ（<プロジェクト名>-<サービス名>-<番号>）を並べるのに使う
+    environment:
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME}
+      BACKEND_REPLICAS: ${BACKEND_REPLICAS:-1}
+      FRONTEND_REPLICAS: ${FRONTEND_REPLICAS:-1}
     # ホストポートは公開しない。テストランナーはこのネットワークの内側から alias で到達するため
     # 不要であり、公開しないことが複数スタック同時起動の前提になっている。
     networks:

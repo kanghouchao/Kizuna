@@ -39,6 +39,15 @@ task e2e grep=order-lifecycle
 
 `shard=1/4` のように渡すと、全体を分割したうちの一つだけを実行します（CI が使う形）。
 
+### レプリカ数を変えて実行
+
+開発・release と同じ環境変数 `BACKEND_REPLICAS` / `FRONTEND_REPLICAS`（既定はどちらも 1）で、使い捨てスタックの
+backend / frontend を複数台にできます。gateway はレプリカの間で要求を振り分けるので、インスタンスをまたぐ状態の扱いを確かめられます。
+
+```bash
+BACKEND_REPLICAS=2 FRONTEND_REPLICAS=2 task e2e grep=order-lifecycle
+```
+
 ### 増分と全量
 
 PR を出す前は、変更に関係する feature だけを `task e2e grep=...` で実行し、選んだ feature と理由を PR に書きます

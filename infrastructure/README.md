@@ -2,6 +2,32 @@
 
 構成の規約は [AGENTS.md](AGENTS.md)、環境ごとの compose は `development/` と `release/` にある。`.env` は [`.env.example`](.env.example) をもとに各環境ディレクトリへ置き、コミットしない。
 
+## backend / frontend のレプリカ数
+
+`.env` の `BACKEND_REPLICAS` / `FRONTEND_REPLICAS`（既定はどちらも 1）で台数を決める。compose の `deploy.replicas` と gateway の
+転送先の両方がこの値を読むので、変えるのはこの二つだけでよい。レプリカのコンテナ名は `kizuna-backend-1`、`kizuna-backend-2` … になる。
+
+```bash
+docker compose -p kizuna up -d --wait
+```
+
+`.env` を書き換えたあと上を環境ディレクトリで実行すると、増減したサービスと gateway が作り直される。
+
+- gateway（Traefik）はレプリカごとにヘルスチェックし（backend は `/actuator/health/readiness`、frontend は `/health`、5 秒間隔）、
+  落ちた・準備のできていないレプリカへは送らない。停止の直後にまだ外れていないレプリカへの接続失敗は、別のレプリカへ送り直す
+  （GET などの冪等な要求だけ。POST は送り直さないので、その瞬間の POST は 502 になりうる）。
+- 振り分けの状況は Traefik の API で見る（development はホストの 8080）。
+
+  ```bash
+  curl -s http://localhost:8080/api/http/services/backend@file
+  ```
+
+- compose にはローリング更新が無い。イメージや環境変数を替えて `up -d` するとそのサービスの全レプリカを同時に作り直すので、
+  backend が healthy に戻るまでの数十秒は応答が止まる。
+- backend の DB 接続は一台あたり最大 `HIKARI_MAXIMUM_POOL_SIZE`（既定 10）本で、台数分だけ増える。
+  `HIKARI_MAXIMUM_POOL_SIZE × BACKEND_REPLICAS` が PostgreSQL の `max_connections`（既定 100）から管理用の余裕を引いた値に収まるようにする。
+- 起動時の Liquibase は DB 上のロックで直列になる。後から起動したレプリカはロックが外れるまで待つ。
+
 ## 応募者添付の非公開ストレージ
 
 決定の経緯は [ADR 0033](../docs/adr/0033-applicant-attachments-use-a-separate-storage-instance-without-backup.md)。

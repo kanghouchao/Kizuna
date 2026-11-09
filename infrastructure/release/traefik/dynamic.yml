@@ -1,4 +1,7 @@
-# traefik のルーティング定義（file provider）。転送先は compose のサービス名で、同じネットワーク内だけで解決する。
+# traefik のルーティング定義（file provider）。転送先は compose のコンテナ名で、同じネットワーク内だけで解決する。
+# backend / frontend はレプリカごとのコンテナ名（<プロジェクト名>-<サービス名>-<番号>）を、gateway に渡した
+# COMPOSE_PROJECT_NAME と *_REPLICAS から Go テンプレートで並べる。サービス名で一つにまとめると Docker の DNS ラウンドロビン
+# 任せになり、保持接続が片方に偏るうえ、レプリカ単位のヘルスチェックができない。
 # TLS 証明書の対象ドメインは gateway に渡した APP_DOMAIN から取る（file provider は compose の変数展開を受けないため）。
 http:
   routers:
@@ -8,6 +11,7 @@ http:
         - websecure
       middlewares:
         - backend-strip
+        - retry
       service: backend
       tls:
         certResolver: letsencrypt
@@ -28,6 +32,8 @@ http:
       rule: "PathPrefix(`/`) && !PathPrefix(`/api`) && !PathPrefix(`/static`)"
       entryPoints:
         - websecure
+      middlewares:
+        - retry
       service: frontend
       tls:
         certResolver: letsencrypt
@@ -35,6 +41,11 @@ http:
           - main: '{{ env "APP_DOMAIN" }}'
 
   middlewares:
+    # 停止直後でまだヘルスチェックが外していないレプリカへの接続失敗を、別のレプリカへ送り直して隠す。
+    # 既定どおり TCP 層の失敗だけを対象にし、POST などの冪等でない要求は送り直さない
+    retry:
+      retry:
+        attempts: 3
     backend-strip:
       stripPrefix:
         prefixes:
@@ -47,13 +58,26 @@ http:
   services:
     backend:
       loadBalancer:
+        # readiness は停止の始まりと DB・Redis の不通で 503 になり、そのレプリカを外す
+        healthCheck:
+          path: /actuator/health/readiness
+          interval: 5s
+          timeout: 3s
         servers:
-          - url: "http://backend:8080"
+          {{- range $i := until (atoi (env "BACKEND_REPLICAS")) }}
+          - url: 'http://{{ env "COMPOSE_PROJECT_NAME" }}-backend-{{ add1 $i }}:8080'
+          {{- end }}
     storage:
       loadBalancer:
         servers:
           - url: "http://storage:8333"
     frontend:
       loadBalancer:
+        healthCheck:
+          path: /health
+          interval: 5s
+          timeout: 3s
         servers:
-          - url: "http://frontend:3000"
+          {{- range $i := until (atoi (env "FRONTEND_REPLICAS")) }}
+          - url: 'http://{{ env "COMPOSE_PROJECT_NAME" }}-frontend-{{ add1 $i }}:3000'
+          {{- end }}
