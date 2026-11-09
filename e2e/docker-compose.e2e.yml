@@ -92,6 +92,10 @@ services:
     # 開発・release と同じ変数で台数を変えられる（例: BACKEND_REPLICAS=2 task e2e grep=...）
     deploy:
       replicas: ${BACKEND_REPLICAS:-1}
+      # ヒープはこの上限の割合で決まる（イメージの JAVA_TOOL_OPTIONS）。tmpfs の添付一時ファイルもこの上限に数えられる
+      resources:
+        limits:
+          memory: ${BACKEND_MEMORY_LIMIT:-1g}
     networks:
       - network
     environment:
@@ -145,6 +149,10 @@ services:
     image: kizuna-frontend:${E2E_IMAGE_TAG:-latest}
     deploy:
       replicas: ${FRONTEND_REPLICAS:-1}
+      # Node は V8 のヒープ上限をこの上限から自動で決める
+      resources:
+        limits:
+          memory: ${FRONTEND_MEMORY_LIMIT:-512m}
     networks:
       - network
     environment:

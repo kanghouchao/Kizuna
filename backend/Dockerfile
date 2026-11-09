@@ -44,9 +44,10 @@ RUN javac -d healthcheck docker/HealthCheck.java && mkdir logs
 FROM dhi.io/eclipse-temurin:25-alpine3.23
 WORKDIR /app
 
-# シェルが無いので $JAVA_OPTS を展開できない。JVM 自身が読む JAVA_TOOL_OPTIONS で渡す
-ARG APP_JAVA_OPTS="-Xms256m -Xmx512m -XX:+UseContainerSupport"
-ENV JAVA_TOOL_OPTIONS=${APP_JAVA_OPTS}
+# シェルが無いので $JAVA_OPTS を展開できない。JVM 自身が読む JAVA_TOOL_OPTIONS で渡す（運用の調整は後に読まれる JDK_JAVA_OPTIONS で上書きする）。
+# ヒープはコンテナのメモリ上限に対する割合で決め、上限だけで大きさが追従するようにする（既定の上限 1GiB で 256MiB〜512MiB）。
+# 残りはメタスペース・スレッド・tmpfs の添付一時ファイルに回る。G1 を明示するのは、2GiB 未満の上限だと JVM が SerialGC を選ぶため
+ENV JAVA_TOOL_OPTIONS="-XX:InitialRAMPercentage=25 -XX:MaxRAMPercentage=50 -XX:+UseG1GC"
 
 COPY --from=build /app/build/libs/kizuna-*.jar app.jar
 COPY --from=build /app/healthcheck healthcheck
