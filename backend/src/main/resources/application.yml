@@ -87,9 +87,10 @@ spring:
           min-idle: ${LETTUCE_POOL_MIN_IDLE:0}
           max-wait: ${LETTUCE_POOL_MAX_WAIT:2000}ms
   servlet:
+    # ファイルアップロードの上限（app.upload.max-file-size）と同じ値にする。別の値だと上限を上げても multipart がその手前で拒む
     multipart:
-      max-file-size: 10MB
-      max-request-size: 10MB
+      max-file-size: ${APP_UPLOAD_MAX_FILE_SIZE:10485760}
+      max-request-size: ${APP_UPLOAD_MAX_FILE_SIZE:10485760}
   task:
     execution:
       pool:
