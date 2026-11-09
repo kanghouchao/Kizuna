@@ -12,6 +12,15 @@ http:
         - backend-strip
         - retry
       service: backend
+    # frontend のサーバ側からの要求。公開の /api と同じ backend サービス（レプリカごとのヘルスチェックと retry）を通す。
+    # パスは backend の端点そのもの（/api を剥がさない）で、compose が frontend に BACKEND_URL=http://gateway:8081 を渡す
+    backend-internal:
+      rule: "PathPrefix(`/`)"
+      entryPoints:
+        - internal
+      middlewares:
+        - retry
+      service: backend
     storage:
       rule: "PathPrefix(`/static`)"
       entryPoints:

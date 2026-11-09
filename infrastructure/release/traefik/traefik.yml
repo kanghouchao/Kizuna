@@ -20,6 +20,9 @@ entryPoints:
           scheme: https
   websecure:
     address: ":443"
+  # frontend のサーバ側から backend への経路（BACKEND_URL）。ホストには公開せず、HTTPS への転送も証明書も付けない
+  internal:
+    address: ":8081"
 
 providers:
   file:

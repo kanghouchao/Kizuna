@@ -23,6 +23,10 @@ entryPoints:
   web:
     address: ":80"
 
+  # frontend のサーバ側から backend への経路（BACKEND_URL）。ホストには公開せず、compose のネットワークの内側だけで使う
+  internal:
+    address: ":8081"
+
 # ルーティングは同じディレクトリの dynamic.yml に静的に書く
 providers:
   file:
