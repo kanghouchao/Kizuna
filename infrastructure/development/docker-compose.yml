@@ -41,7 +41,10 @@ services:
   # Backend: Java Spring Boot
   backend:
     image: kizuna-backend:latest
-    container_name: backend
+    # 台数は BACKEND_REPLICAS で決める。gateway が同じ変数から転送先を並べるため、レプリカ数を変えるのはこの変数だけにする。
+    # 複数台にするので container_name は持たない（compose が <プロジェクト名>-backend-<番号> と名付ける）
+    deploy:
+      replicas: ${BACKEND_REPLICAS:-1}
     tmpfs:
       # backend は非 root（65532）で動くため、所有者を合わせないと mode=0700 で書けない
       - /tmp/kizuna-private-attachments:size=134217728,mode=0700,uid=65532,gid=65532
@@ -137,6 +140,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 3
+    # 停止時は Spring の graceful shutdown（処理中の要求を待つ上限は既定 30 秒）を終えさせる。compose の既定 10 秒では途中で SIGKILL される
+    stop_grace_period: 40s
     restart: on-failure:3
 
   # S3 互換オブジェクトストレージ
@@ -200,7 +205,9 @@ services:
   # Frontend: next.js
   frontend:
     image: kizuna-frontend:latest
-    container_name: frontend
+    # 台数は FRONTEND_REPLICAS で決める（backend と同じく gateway も同じ変数を読む）
+    deploy:
+      replicas: ${FRONTEND_REPLICAS:-1}
     networks:
       - network
     environment:
@@ -221,6 +228,11 @@ services:
   gateway:
     image: dhi.io/traefik:3-alpine3.23
     container_name: traefik
+    environment:
+      # dynamic.yml が転送先のレプリカ（<プロジェクト名>-<サービス名>-<番号>）を並べるのに使う
+      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
+      - BACKEND_REPLICAS=${BACKEND_REPLICAS:-1}
+      - FRONTEND_REPLICAS=${FRONTEND_REPLICAS:-1}
     ports:
       - "80:80"
       - "8080:8080"

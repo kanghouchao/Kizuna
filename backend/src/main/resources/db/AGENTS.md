@@ -29,12 +29,13 @@ decision by the repository owner — do not flip it yourself.
 Editing an applied changeset changes its checksum, so the persistent dev DB (volume
 `kizuna_db-data`) fails startup validation afterwards. Recreate the **database**, never the
 volume (`docker volume rm` / `compose down -v` are guardrail-forbidden). The dev stack pins
-`container_name`s (`database`, `backend`), so this works from any cwd; credentials come from
-the container's own env because `.env` may override the compose defaults:
+the `database` / `redis` container names and its project name `kizuna` (`backend` runs as
+replicas without a fixed name, hence `docker compose -p kizuna`), so this works from any cwd;
+credentials come from the container's own env because `.env` may override the compose defaults:
 
 ```bash
 task build service=backend   # changesets are baked into the image at build time
-docker stop backend
+docker compose -p kizuna stop backend   # every replica
 docker exec database sh -c 'psql -U "$POSTGRES_USER" -d postgres -c "DROP DATABASE $POSTGRES_DB" -c "CREATE DATABASE $POSTGRES_DB OWNER $POSTGRES_USER"'
 docker exec redis redis-cli FLUSHALL   # credential-version keys are keyed by user id and would outlive the recreated rows
 task up
