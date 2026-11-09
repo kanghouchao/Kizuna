@@ -17,7 +17,11 @@ final class HmacSecretKeyFactory {
   private HmacSecretKeyFactory() {}
 
   static SecretKey create(AppProperties appProperties) {
-    byte[] bytes = appProperties.getJwtSecret().getBytes(StandardCharsets.UTF_8);
+    String secret = appProperties.getJwtSecret();
+    if (secret == null) {
+      throw new IllegalStateException("APP_JWT_SECRET が未設定（既定値は持たない）");
+    }
+    byte[] bytes = secret.getBytes(StandardCharsets.UTF_8);
     if (bytes.length < MIN_KEY_BYTES) {
       throw new IllegalStateException(
           "APP_JWT_SECRET は HS256 の要件で 32 バイト以上必要（現在 " + bytes.length + " バイト）");

@@ -24,11 +24,13 @@ docker compose -p kizuna up -d --wait
 
 - compose にはローリング更新が無い。イメージや環境変数を替えて `up -d` するとそのサービスの全レプリカを同時に作り直すので、
   backend が healthy に戻るまでの数十秒は応答が止まる。
-- backend の DB 接続は一台あたり最大 `HIKARI_MAXIMUM_POOL_SIZE`（既定 10）本で、台数分だけ増える。
-  `HIKARI_MAXIMUM_POOL_SIZE × BACKEND_REPLICAS` が PostgreSQL の `max_connections`（既定 100）から管理用の余裕を引いた値に収まるようにする。
+- backend の DB 接続は一台あたり最大 `SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE`（既定 10）本で、台数分だけ増える。
+  `SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE × BACKEND_REPLICAS` が PostgreSQL の `max_connections`（既定 100）から管理用の余裕を引いた値に収まるようにする。
 - メモリはレプリカ一台ごとに `BACKEND_MEMORY_LIMIT`（既定 1g）/ `FRONTEND_MEMORY_LIMIT`（既定 512m）で上限を付ける。backend のヒープは
   上限の 25%〜50%、frontend の V8 ヒープも上限から自動で決まるので、ヒープだけを別に指定しない。台数 × 上限がホストのメモリに収まるようにする。
   CPU には上限を付けない（JVM は見える CPU 数でスレッド数や GC を決めるため、1 CPU 前後に絞ると性質が変わる）。
+- JVM オプションの追加・上書きは `.env` の `JDK_JAVA_OPTIONS` で行う。同じコンテナで動くヘルスチェックの `java` もこれを読むので、
+  ポートを開くもの（JMX・リモートデバッグ）や `-javaagent` を入れるとヘルスチェックの JVM が起動に失敗し、レプリカが unhealthy になる。
 - 起動時の Liquibase は DB 上のロックで直列になる。後から起動したレプリカはロックが外れるまで待つ。
 
 ## 応募者添付の非公開ストレージ

@@ -30,7 +30,7 @@ When("アカウントのタブから LINE 連携を開く", async ({ page }) => 
   await expect(page.getByRole("heading", { name: "LINE連携", level: 1 })).toBeVisible();
 });
 
-// e2e のスタックは LINE のチャネルを設定しない（LINE_CHANNEL_ID が空）ので、公開設定は無効を返す
+// e2e のスタックは LINE のチャネルを設定しない（APP_LINE_CHANNEL_ID が空）ので、公開設定は無効を返す
 Then(
   "LINE 連携が無効な環境では連携の操作が出ず、利用できないと表示される",
   async ({ page }) => {

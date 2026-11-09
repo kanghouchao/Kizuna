@@ -1,43 +1,36 @@
+# 実行環境ごとの値は Spring Boot の環境変数名（SPRING_DATASOURCE_URL、APP_JWT_SECRET など、プロパティ名を大文字・アンダースコアにしたもの）で
+# 上書きする。ここには既定値だけを書き、独自の変数名へのプレースホルダは置かない。
 spring:
-  modulith:
-    events:
-      republish-outstanding-events-on-restart: ${REPUBLISH_OUTSTANDING_EVENTS:false}
-  profiles:
-    active:
-    - ${SPRING_PROFILE:dev}
   application:
-    name: ${APP_NAME:Kizuna}
+    name: Kizuna
   datasource:
-    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:kizuna}?sslmode=${POSTGRES_SSLMODE:disable}
-    username: ${POSTGRES_USER:user}
-    password: ${POSTGRES_PASSWORD}
+    url: jdbc:postgresql://localhost:5432/kizuna?sslmode=disable
+    username: user
     driver-class-name: org.postgresql.Driver
     hikari:
-      minimum-idle: ${HIKARI_MINIMUM_IDLE:2}
-      maximum-pool-size: ${HIKARI_MAXIMUM_POOL_SIZE:10}
-      idle-timeout: ${HIKARI_IDLE_TIMEOUT:600000}
-      max-lifetime: ${HIKARI_MAX_LIFETIME:1800000}
-      connection-timeout: ${HIKARI_CONNECTION_TIMEOUT:30000}
-      leak-detection-threshold: ${HIKARI_LEAK_DETECTION_THRESHOLD:2000}
-      validation-timeout: ${HIKARI_VALIDATION_TIMEOUT:5000}
-      initialization-fail-timeout: ${HIKARI_INITIALIZATION_FAIL_TIMEOUT:-1}
+      minimum-idle: 2
+      maximum-pool-size: 10
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+      leak-detection-threshold: 2000
+      validation-timeout: 5000
+      initialization-fail-timeout: -1
       connection-test-query: SELECT 1
-      data-source-properties:
-        ssl: ${POSTGRES_SSL:false}
   # SMTP の待ちの上限（ミリ秒）。JavaMail の既定は無制限で、検証メールはコミット後・応答前に同期で送るため、
   # 応答の遅い SMTP が要求スレッドと DB 接続を握り続ける。DB の SMTP 設定で組む送信クライアントにも同じ値を使う（MailService）。
   mail:
     properties:
-      "[mail.smtp.connectiontimeout]": ${SMTP_CONNECTION_TIMEOUT_MS:5000}
-      "[mail.smtp.timeout]": ${SMTP_READ_TIMEOUT_MS:10000}
-      "[mail.smtp.writetimeout]": ${SMTP_WRITE_TIMEOUT_MS:10000}
+      "[mail.smtp.connectiontimeout]": 5000
+      "[mail.smtp.timeout]": 10000
+      "[mail.smtp.writetimeout]": 10000
       # SPRING_MAIL_PROTOCOL=smtps のとき JavaMail は mail.smtps.* を読む。DB の SMTP 設定は常に smtp。
-      "[mail.smtps.connectiontimeout]": ${SMTP_CONNECTION_TIMEOUT_MS:5000}
-      "[mail.smtps.timeout]": ${SMTP_READ_TIMEOUT_MS:10000}
-      "[mail.smtps.writetimeout]": ${SMTP_WRITE_TIMEOUT_MS:10000}
+      "[mail.smtps.connectiontimeout]": 5000
+      "[mail.smtps.timeout]": 10000
+      "[mail.smtps.writetimeout]": 10000
   jpa:
-    show-sql: ${SPRING_JPA_SHOW_SQL:true}
-    open-in-view: ${SPRING_JPA_OPEN_IN_VIEW:false}
+    show-sql: true
+    open-in-view: false
   # Jackson 3（Spring Boot 4 の既定）の JsonMapper をカスタマイズする。旧 JacksonConfig の
   # Jackson2ObjectMapperBuilderCustomizer をプロパティへ移設したもの。java.time は Jackson 3 が自動登録するため
   # JavaTimeModule の明示登録は不要。
@@ -61,10 +54,10 @@ spring:
   cache:
     type: redis
     redis:
-      time-to-live: ${SPRING_CACHE_TTL_MS:600000}
-      cache-null-values: ${SPRING_CACHE_NULL_VALUES:false}
-      use-key-prefix: ${SPRING_CACHE_USE_KEY_PREFIX:true}
-      key-prefix: ${SPRING_CACHE_KEY_PREFIX:kizuna:cache:}
+      time-to-live: 600000
+      cache-null-values: false
+      use-key-prefix: true
+      key-prefix: "kizuna:cache:"
 
   data:
     web:
@@ -72,25 +65,21 @@ spring:
         # 全一覧で共通の 1 回の取得件数の上限
         max-page-size: 100
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
-      database: ${REDIS_DATABASE:0}
-      ssl:
-        enabled: ${REDIS_SSL:false}
-      timeout: ${REDIS_TIMEOUT:2000}ms
-      client-type: ${REDIS_CLIENT_TYPE:lettuce}
+      host: localhost
+      port: 6379
+      timeout: 2000ms
+      client-type: lettuce
       lettuce:
         pool:
-          max-active: ${LETTUCE_POOL_MAX_ACTIVE:8}
-          max-idle: ${LETTUCE_POOL_MAX_IDLE:8}
-          min-idle: ${LETTUCE_POOL_MIN_IDLE:0}
-          max-wait: ${LETTUCE_POOL_MAX_WAIT:2000}ms
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: 2000ms
   servlet:
     # ファイルアップロードの上限（app.upload.max-file-size）と同じ値にする。別の値だと上限を上げても multipart がその手前で拒む
     multipart:
-      max-file-size: ${APP_UPLOAD_MAX_FILE_SIZE:10485760}
-      max-request-size: ${APP_UPLOAD_MAX_FILE_SIZE:10485760}
+      max-file-size: ${app.upload.max-file-size}
+      max-request-size: ${app.upload.max-file-size}
   task:
     execution:
       pool:
@@ -123,30 +112,30 @@ management:
       exposure:
         include: health
 app:
-  domain: ${APP_DOMAIN:localhost}
-  scheme: ${APP_SCHEME:http}
-  timezone: ${APP_TIMEZONE:Asia/Tokyo}
+  domain: localhost
+  scheme: http
+  timezone: Asia/Tokyo
   receipt:
     # 操作の受領のキーの助言ロックを待つ上限。超えたら何も確定せず 503 で再送を促す。
-    lock-timeout-seconds: ${APP_RECEIPT_LOCK_TIMEOUT_SECONDS:5}
+    lock-timeout-seconds: 5
+  # secret は既定値を持たない（APP_JWT_SECRET が無ければ起動を拒む）
   jwt:
-    expiration: ${APP_JWT_EXPIRATION_MS:3600000}
-    access-expiration: ${APP_JWT_ACCESS_EXPIRATION_MS:900000}
-    refresh-expiration: ${APP_JWT_REFRESH_EXPIRATION_MS:1209600000}
-    secret: ${APP_JWT_SECRET}
+    expiration: 3600000
+    access-expiration: 900000
+    refresh-expiration: 1209600000
   line:
     # LINE プラットフォーム API の基底 URL。統合テストのスタブ差し替え用の可変点で、運用では既定のまま。
-    api-base-url: ${LINE_API_BASE_URL:https://api.line.me}
+    api-base-url: https://api.line.me
     # チャネル資格情報はシステム設定（t_system_configs）が優先。両方が空なら LINE ログインは無効。
-    channel-id: ${LINE_CHANNEL_ID:}
-    channel-secret: ${LINE_CHANNEL_SECRET:}
+    channel-id: ""
+    channel-secret: ""
   upload:
-    endpoint: ${S3_ENDPOINT:http://localhost:8333}
-    bucket: ${S3_BUCKET:uploads}
-    access-key: ${S3_ACCESS_KEY:kizuna-storage}
-    secret-key: ${S3_SECRET_KEY:changeme}
-    url-prefix: ${APP_UPLOAD_URL_PREFIX:/static/uploads/}
-    max-file-size: ${APP_UPLOAD_MAX_FILE_SIZE:10485760}
+    endpoint: http://localhost:8333
+    bucket: uploads
+    access-key: kizuna-storage
+    secret-key: changeme
+    url-prefix: /static/uploads/
+    max-file-size: 10485760
     allowed-types:
       - image/jpeg
       - image/png
