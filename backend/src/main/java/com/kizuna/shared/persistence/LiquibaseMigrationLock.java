@@ -9,12 +9,13 @@ import liquibase.integration.spring.SpringLiquibase;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.config.BeanPostProcessor;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.springframework.stereotype.Component;
 
 /**
- * 複数の backend が同時に起動しても、Liquibase の実行全体を PostgreSQL のセッション助言ロックで一台ずつにする。 Liquibase は changelog
+ * 複数の backend が同時に起動しても、Liquibase の実行全体を PostgreSQL のセッション助言ロックで一台ずつにする。Liquibase は changelog
  * の解析中、自身のロック（DATABASECHANGELOGLOCK）を取る前に DATABASECHANGELOG を「無ければ作る」ため、空の DB では二台が同時に CREATE TABLE
- * し、一台が {@code relation "databasechangelog" already exists} で起動に失敗する。 プールの接続は close
+ * し、一台が起動に失敗する。ロックを取った接続をそのまま Liquibase に使わせるので、 接続プールが 1 本でも足りる。プールの接続は close
  * してもセッションのロックが残るので、必ず明示的に解く。
  */
 @Log4j2
@@ -23,12 +24,17 @@ class LiquibaseMigrationLock implements BeanPostProcessor, DisposableBean {
 
   static final int LOCK_NAMESPACE = 395;
 
-  private final Map<String, Connection> held = new ConcurrentHashMap<>();
+  private final Map<String, Held> held = new ConcurrentHashMap<>();
+
+  private record Held(SpringLiquibase liquibase, DataSource original, Connection connection) {}
 
   @Override
   public Object postProcessBeforeInitialization(Object bean, String beanName) {
     if (bean instanceof SpringLiquibase liquibase) {
-      held.put(beanName, acquire(liquibase.getDataSource()));
+      DataSource original = liquibase.getDataSource();
+      Connection connection = acquire(original);
+      held.put(beanName, new Held(liquibase, original, connection));
+      liquibase.setDataSource(new SingleConnectionDataSource(connection, true));
     }
     return bean;
   }
@@ -56,22 +62,34 @@ class LiquibaseMigrationLock implements BeanPostProcessor, DisposableBean {
       }
       return connection;
     } catch (SQLException e) {
-      release(connection);
+      close(connection);
       throw new IllegalStateException("マイグレーションのロックを取得できませんでした", e);
     }
   }
 
-  private static void release(Connection connection) {
-    if (connection == null) {
+  private static void release(Held held) {
+    if (held == null) {
       return;
     }
-    try (connection;
-        var statement = connection.prepareStatement("select pg_advisory_unlock(?, 0)")) {
+    held.liquibase().setDataSource(held.original());
+    try (var statement = held.connection().prepareStatement("select pg_advisory_unlock(?, 0)")) {
       statement.setInt(1, LOCK_NAMESPACE);
       statement.execute();
     } catch (SQLException e) {
       // 接続ごと切れていればロックも解けている。残っていればこの接続が閉じるまで他の起動を待たせる
       log.warn("マイグレーションのロックを解けませんでした", e);
+    }
+    close(held.connection());
+  }
+
+  private static void close(Connection connection) {
+    if (connection == null) {
+      return;
+    }
+    try {
+      connection.close();
+    } catch (SQLException e) {
+      log.warn("マイグレーションのロックの接続を閉じられませんでした", e);
     }
   }
 }

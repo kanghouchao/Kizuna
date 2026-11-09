@@ -74,9 +74,26 @@ class LiquibaseMigrationLockIntegrationTest {
         .isPositive();
   }
 
-  // 一回の呼び出しが一台の backend の起動に当たる：自分のプール、自分の後処理、Spring が呼ぶのと同じ順序
+  @Test
+  void 接続プールが_1_本でも_ロックを持ったままマイグレーションできる() {
+    migrate(OneConnectionSchema.class, 1);
+
+    JdbcTemplate jdbc =
+        new JdbcTemplate(IntegrationTestDatabase.dataSource(OneConnectionSchema.class));
+    assertThat(jdbc.queryForObject("select count(*) from databasechangelog", Integer.class))
+        .isPositive();
+  }
+
   private void migrate(Class<?> schema) {
+    migrate(schema, 10);
+  }
+
+  // 一回の呼び出しが一台の backend の起動に当たる：自分のプール、自分の後処理、Spring が呼ぶのと同じ順序
+  private void migrate(Class<?> schema, int poolSize) {
     HikariDataSource pool = IntegrationTestDatabase.pool(schema);
+    pool.setMaximumPoolSize(poolSize);
+    // 足りない接続を待つ失敗を、既定の 30 秒より早く表に出す
+    pool.setConnectionTimeout(5_000);
     synchronized (pools) {
       pools.add(pool);
     }
@@ -127,4 +144,6 @@ class LiquibaseMigrationLockIntegrationTest {
   private static final class SerialSchema {}
 
   private static final class RaceSchema {}
+
+  private static final class OneConnectionSchema {}
 }
