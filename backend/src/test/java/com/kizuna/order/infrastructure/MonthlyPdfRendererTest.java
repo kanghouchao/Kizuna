@@ -36,6 +36,27 @@ class MonthlyPdfRendererTest {
   }
 
   @Test
+  void widestOrderIdStaysOnOneLine() throws Exception {
+    String widest = "00000000-0000-0000-0000-000000000000";
+    var snapshot =
+        new MonthlyPdfSnapshot(
+            "店舗",
+            "源氏名",
+            "2026-09",
+            OffsetDateTime.parse("2026-10-01T15:00:00+09:00"),
+            1000,
+            List.of(
+                new RemunerationOrderRow(widest, LocalDate.of(2026, 9, 30), "サービス", 1000, false)));
+    var bytes =
+        new MonthlyPdfRenderer(new AppProperties())
+            .render(snapshot, new MonthlyPdfBudget(new AppProperties.MonthlyPdf()));
+    try (var doc = Loader.loadPDF(bytes)) {
+      assertThat(new PDFTextStripper().getText(doc).lines())
+          .anyMatch(line -> line.contains(widest));
+    }
+  }
+
+  @Test
   void japaneseLongRowContinuesAcrossPagesWithoutLosingTail() throws Exception {
     var budget = new MonthlyPdfBudget(new AppProperties.MonthlyPdf());
     var bytes =
