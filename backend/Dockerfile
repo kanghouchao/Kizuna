@@ -45,9 +45,9 @@ FROM dhi.io/eclipse-temurin:25-alpine3.23
 WORKDIR /app
 
 # シェルが無いので $JAVA_OPTS を展開できない。JVM 自身が読む JAVA_TOOL_OPTIONS で渡す（運用の調整は後に読まれる JDK_JAVA_OPTIONS で上書きする）。
-# ヒープはコンテナのメモリ上限に対する割合で決め、上限だけで大きさが追従するようにする（既定の上限 1GiB で 256MiB〜512MiB）。
-# 残りはメタスペース・スレッド・tmpfs の添付一時ファイルに回る。G1 を明示するのは、2GiB 未満の上限だと JVM が SerialGC を選ぶため
-ENV JAVA_TOOL_OPTIONS="-XX:InitialRAMPercentage=25 -XX:MaxRAMPercentage=50 -XX:+UseG1GC"
+# ヒープはコンテナのメモリ上限に対する割合で決め、上限だけで大きさが追従するようにする（既定の上限 1536MiB で約 246〜508MiB）。
+# 残りの約 2/3 は実測で約 410MiB のヒープ外（メタスペース・コード・GC）と、tmpfs の添付一時ファイル・ヘルスチェックの JVM に回る。G1 を明示するのは、2GiB 未満の上限だと JVM が SerialGC を選ぶため
+ENV JAVA_TOOL_OPTIONS="-XX:InitialRAMPercentage=16 -XX:MaxRAMPercentage=33 -XX:+UseG1GC"
 
 COPY --from=build /app/build/libs/kizuna-*.jar app.jar
 COPY --from=build /app/healthcheck healthcheck

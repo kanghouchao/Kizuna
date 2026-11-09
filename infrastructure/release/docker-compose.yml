@@ -48,7 +48,7 @@ services:
       # ヒープはこの上限の割合で決まる（イメージの JAVA_TOOL_OPTIONS）。tmpfs の添付一時ファイルもこの上限に数えられる
       resources:
         limits:
-          memory: ${BACKEND_MEMORY_LIMIT:-1g}
+          memory: ${BACKEND_MEMORY_LIMIT:-1536m}
     tmpfs:
       # backend は非 root（65532）で動くため、所有者を合わせないと mode=0700 で書けない
       - /tmp/kizuna-private-attachments:size=134217728,mode=0700,uid=65532,gid=65532

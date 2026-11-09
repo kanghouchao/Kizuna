@@ -26,8 +26,11 @@ docker compose -p kizuna up -d --wait
   backend が healthy に戻るまでの数十秒は応答が止まる。
 - backend の DB 接続は一台あたり最大 `SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE`（既定 10）本で、台数分だけ増える。
   `SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE × BACKEND_REPLICAS` が PostgreSQL の `max_connections`（既定 100）から管理用の余裕を引いた値に収まるようにする。
-- メモリはレプリカ一台ごとに `BACKEND_MEMORY_LIMIT`（既定 1g）/ `FRONTEND_MEMORY_LIMIT`（既定 512m）で上限を付ける。backend のヒープは
-  上限の 25%〜50%、frontend の V8 ヒープも上限から自動で決まるので、ヒープだけを別に指定しない。台数 × 上限がホストのメモリに収まるようにする。
+- メモリはレプリカ一台ごとに `BACKEND_MEMORY_LIMIT`（既定 1536m）/ `FRONTEND_MEMORY_LIMIT`（既定 512m）で上限を付ける。backend のヒープは
+  上限の 16%〜33%（既定で約 246〜508MiB）、frontend の V8 ヒープも上限から自動で決まるので、ヒープだけを別に指定しない。台数 × 上限がホストのメモリに収まるようにする。
+  既定値の根拠（e2e でヒープを最大まで確保して実測）：backend の非解放メモリの最大は 971MiB で、うち JVM が 937MiB（ヒープ 512・メタスペース 165・コード 90・GC 52 ほか）。
+  これに添付の一時ファイル（tmpfs、最大 128MiB）と 5 秒ごとのヘルスチェックの JVM を足した約 1.1GiB に、約 25% の余裕を見た。
+  上限を超えるとカーネルが強制終了し、`restart: on-failure:3` で 3 回続くとそのレプリカは止まったままになるので、1536m 未満にしない。frontend は約 5,000 件の描画で最大 201MiB。
   CPU には上限を付けない（JVM は見える CPU 数でスレッド数や GC を決めるため、1 CPU 前後に絞ると性質が変わる）。
 - JVM オプションの追加・上書きは `.env` の `JDK_JAVA_OPTIONS` で行う。同じコンテナで動くヘルスチェックの `java` もこれを読むので、
   ポートを開くもの（JMX・リモートデバッグ）や `-javaagent` を入れるとヘルスチェックの JVM が起動に失敗し、レプリカが unhealthy になる。

@@ -95,7 +95,7 @@ services:
       # ヒープはこの上限の割合で決まる（イメージの JAVA_TOOL_OPTIONS）。tmpfs の添付一時ファイルもこの上限に数えられる
       resources:
         limits:
-          memory: ${BACKEND_MEMORY_LIMIT:-1g}
+          memory: ${BACKEND_MEMORY_LIMIT:-1536m}
     networks:
       - network
     environment:
