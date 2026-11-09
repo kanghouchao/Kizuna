@@ -142,7 +142,7 @@ When("非公開添付の初回登録と同一操作の再送を行う", async ({
   finally { await verify.end(); }
   const downloaded = page.waitForEvent('download');
   await page.getByRole('button', { name: 'ダウンロード', exact: true }).first().click();
-  expect((await downloaded).suggestedFilename()).toMatch(/^attachment-\d+\.png$/);
+  expect((await downloaded).suggestedFilename()).toMatch(/^attachment-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.png$/);
 });
 Then("添付は認証取得だけに公開され店外と権限不足を拒否する", async ({ request }) => {
   const contentPath = `${path()}/attachments/${attachmentId}/content`;
