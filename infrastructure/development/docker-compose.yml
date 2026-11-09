@@ -136,7 +136,9 @@ services:
     healthcheck:
       # 実行イメージにシェルも curl も無いので、イメージ同梱の HealthCheck クラスで actuator を叩く
       test: ["CMD", "java", "-Xms8m", "-Xmx32m", "-XX:TieredStopAtLevel=1", "-cp", "/app/healthcheck", "HealthCheck"]
-      start_period: 15s
+      # 複数台が同時に起動すると Liquibase のロック待ち（10 秒ごとの再試行）が重なる。start_period 中の失敗は数えないだけなので、
+      # 起動の速いときの待ち時間は増えない
+      start_period: 90s
       interval: 5s
       timeout: 3s
       retries: 3
