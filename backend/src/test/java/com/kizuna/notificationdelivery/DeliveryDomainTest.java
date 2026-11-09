@@ -15,6 +15,8 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
 import java.time.OffsetDateTime;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 class DeliveryDomainTest {
   private DeliveryContent content(String body) {
@@ -169,5 +171,39 @@ class DeliveryDomainTest {
     assertThatThrownBy(
             () -> content("本文").validateNewSchedule(OffsetDateTime.parse("2020-01-01T00:00Z")))
         .isInstanceOf(ServiceException.class);
+  }
+
+  /** 受注・申請の起点は採番 ID、会員の起点は会員 ID なので、起点種別ごとに形が逆になる。 */
+  @ParameterizedTest
+  @CsvSource({
+    "ORDER, 123",
+    "APPLICATION, 123",
+    "ORDER, 0190F5A8-0000-7000-8000-000000000001",
+    "MEMBER, 0190f5a8-0000-7000-8000-000000000001"
+  })
+  void sourceIdMustMatchItsSourceType(DeliverySourceType type, String sourceId) {
+    assertThatThrownBy(() -> source(type, sourceId)).isInstanceOf(ServiceException.class);
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "ORDER, 0190f5a8-0000-7000-8000-000000000001",
+    "APPLICATION, 0190f5a8-0000-7000-8000-000000000001",
+    "MEMBER, 123"
+  })
+  void sourceIdOfItsSourceTypeIsAccepted(DeliverySourceType type, String sourceId) {
+    assertThat(source(type, sourceId).sourceId()).isEqualTo(sourceId);
+  }
+
+  private static DeliveryContent source(DeliverySourceType type, String sourceId) {
+    return new DeliveryContent(
+        type,
+        sourceId,
+        DeliveryChannel.EMAIL,
+        DeliveryPurpose.BUSINESS,
+        "件名",
+        "本文",
+        OffsetDateTime.parse("2026-10-07T09:00:00+09:00"),
+        "k");
   }
 }
