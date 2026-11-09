@@ -26,13 +26,13 @@ import org.hibernate.type.SqlTypes;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class SurveyRevision extends StoreScopedEntity {
 
-  @Column(nullable = false, updatable = false, length = 32)
+  @Column(nullable = false, updatable = false, length = 64)
   private String surveyId;
 
   @Column(nullable = false, updatable = false)
   private Integer revisionNumber;
 
-  @Column(updatable = false, length = 32)
+  @Column(updatable = false, length = 64)
   private String basedOnRevisionId;
 
   @Column(nullable = false, length = 120)

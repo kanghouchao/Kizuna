@@ -18,7 +18,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class SurveySeries extends StoreScopedEntity {
 
-  @Column(length = 32)
+  @Column(length = 64)
   private String latestRevisionId;
 
   @Column(nullable = false, updatable = false)

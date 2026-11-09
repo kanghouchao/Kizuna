@@ -21,10 +21,10 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class SurveyHistory extends StoreScopedEntity {
 
-  @Column(updatable = false, length = 32)
+  @Column(updatable = false, length = 64)
   private String revisionId;
 
-  @Column(updatable = false, length = 32)
+  @Column(updatable = false, length = 64)
   private String responseId;
 
   @Enumerated(EnumType.STRING)
@@ -52,7 +52,7 @@ public class SurveyHistory extends StoreScopedEntity {
   @Column(updatable = false, length = 500)
   private String reason;
 
-  @Column(updatable = false, length = 32)
+  @Column(updatable = false, length = 64)
   private String relatedResponseId;
 
   public record Before(Long version, String status) {}

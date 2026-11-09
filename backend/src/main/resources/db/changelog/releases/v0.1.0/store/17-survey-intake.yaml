@@ -8,7 +8,7 @@ databaseChangeLog:
             columns:
               - column:
                   name: id
-                  type: VARCHAR(32)
+                  type: VARCHAR(64)
                   constraints:
                     nullable: false
                     primaryKey: true
@@ -38,7 +38,7 @@ databaseChangeLog:
                     nullable: false
               - column:
                   name: latest_revision_id
-                  type: VARCHAR(32)
+                  type: VARCHAR(64)
               - column:
                   name: recorded_by
                   type: BIGINT
@@ -72,7 +72,7 @@ databaseChangeLog:
             columns:
               - column:
                   name: id
-                  type: VARCHAR(32)
+                  type: VARCHAR(64)
                   constraints:
                     nullable: false
                     primaryKey: true
@@ -102,7 +102,7 @@ databaseChangeLog:
                     nullable: false
               - column:
                   name: survey_id
-                  type: VARCHAR(32)
+                  type: VARCHAR(64)
                   constraints:
                     nullable: false
               - column:
@@ -112,7 +112,7 @@ databaseChangeLog:
                     nullable: false
               - column:
                   name: based_on_revision_id
-                  type: VARCHAR(32)
+                  type: VARCHAR(64)
               - column:
                   name: title
                   type: VARCHAR(120)
@@ -174,7 +174,7 @@ databaseChangeLog:
             columns:
               - column:
                   name: id
-                  type: VARCHAR(32)
+                  type: VARCHAR(64)
                   constraints:
                     nullable: false
                     primaryKey: true
@@ -204,12 +204,12 @@ databaseChangeLog:
                     nullable: false
               - column:
                   name: survey_id
-                  type: VARCHAR(32)
+                  type: VARCHAR(64)
                   constraints:
                     nullable: false
               - column:
                   name: revision_id
-                  type: VARCHAR(32)
+                  type: VARCHAR(64)
                   constraints:
                     nullable: false
               - column:
@@ -249,10 +249,10 @@ databaseChangeLog:
                     nullable: false
               - column:
                   name: supersedes_id
-                  type: VARCHAR(32)
+                  type: VARCHAR(64)
               - column:
                   name: superseded_by_id
-                  type: VARCHAR(32)
+                  type: VARCHAR(64)
         - addUniqueConstraint:
             tableName: t_survey_responses
             columnNames: id, store_id
@@ -283,7 +283,7 @@ databaseChangeLog:
             columns:
               - column:
                   name: id
-                  type: VARCHAR(32)
+                  type: VARCHAR(64)
                   constraints:
                     nullable: false
                     primaryKey: true
@@ -313,10 +313,10 @@ databaseChangeLog:
                     nullable: false
               - column:
                   name: revision_id
-                  type: VARCHAR(32)
+                  type: VARCHAR(64)
               - column:
                   name: response_id
-                  type: VARCHAR(32)
+                  type: VARCHAR(64)
               - column:
                   name: type
                   type: VARCHAR(32)
@@ -353,7 +353,7 @@ databaseChangeLog:
                   type: VARCHAR(500)
               - column:
                   name: related_response_id
-                  type: VARCHAR(32)
+                  type: VARCHAR(64)
         - addUniqueConstraint:
             tableName: t_survey_history
             columnNames: id, store_id

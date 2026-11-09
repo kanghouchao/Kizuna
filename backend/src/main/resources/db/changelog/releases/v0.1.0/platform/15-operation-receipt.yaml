@@ -8,7 +8,7 @@ databaseChangeLog:
             columns:
               - column:
                   name: id
-                  type: VARCHAR(32)
+                  type: VARCHAR(64)
                   constraints:
                     nullable: false
                     primaryKey: true

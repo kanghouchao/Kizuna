@@ -18,7 +18,7 @@ import lombok.NoArgsConstructor;
 public class DeliveryAttempt extends DeliveryRecord {
   public static final String MANUAL_RESOLUTION = "MANUAL_RESOLUTION";
 
-  @Column(nullable = false, updatable = false, length = 32)
+  @Column(nullable = false, updatable = false, length = 64)
   private String deliveryId;
 
   @Column(nullable = false, updatable = false)

@@ -27,10 +27,10 @@ import org.hibernate.type.SqlTypes;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class SurveyAnswer extends StoreScopedEntity {
 
-  @Column(nullable = false, updatable = false, length = 32)
+  @Column(nullable = false, updatable = false, length = 64)
   private String surveyId;
 
-  @Column(nullable = false, updatable = false, length = 32)
+  @Column(nullable = false, updatable = false, length = 64)
   private String revisionId;
 
   @Column(nullable = false, updatable = false)
@@ -57,10 +57,10 @@ public class SurveyAnswer extends StoreScopedEntity {
   @Column(nullable = false, updatable = false, length = 255)
   private String recorderName;
 
-  @Column(updatable = false, length = 32)
+  @Column(updatable = false, length = 64)
   private String supersedesId;
 
-  @Column(length = 32)
+  @Column(length = 64)
   private String supersededById;
 
   public static SurveyAnswer receive(

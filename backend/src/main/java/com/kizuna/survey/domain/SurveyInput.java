@@ -1,6 +1,7 @@
 package com.kizuna.survey.domain;
 
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.persistence.GeneratedIds;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
@@ -21,7 +22,7 @@ public final class SurveyInput {
   }
 
   public static String id(String value) {
-    if (value == null || !value.matches("[0-9]{1,32}")) throw invalid();
+    if (!GeneratedIds.matches(value)) throw invalid();
     return value;
   }
 

@@ -45,7 +45,7 @@ When('担当者が口コミを受付し公開許可なしで内部承認する',
   await intake.getByLabel('口コミ本文').fill('  受付時の原文をそのまま保存します。\n二行目の長い本文です。  ');
   await intake.getByLabel('表示名（空欄は匿名）').fill('表示名');
   await intake.getByLabel('受け取った日時（この端末の時刻）').fill('2026-01-01T09:00');
-  await intake.getByLabel('関連受注ID（任意）').fill('999');
+  await intake.getByLabel('関連受注ID（任意）').fill('00000000-0000-7000-8000-000000000000');
   const [missingOrigin] = await Promise.all([
     page.waitForResponse(response => response.url().endsWith('/api/reviews') && response.request().method() === 'POST'),
     intake.getByRole('button', { name: '受付を記録', exact: true }).click(),
@@ -132,7 +132,7 @@ Then('訂正先は審査待ちと許可未取得になり旧記録の履歴が�
   await expect(correction.getByText(/公開許可は引き継ぎません/)).toBeVisible();
   await correction.getByLabel('口コミ本文').fill('訂正後の新しい文面');
   await correction.getByLabel('判断・変更の理由').fill('原文の誤記を訂正');
-  await correction.getByLabel('関連受注ID（任意）').fill('999');
+  await correction.getByLabel('関連受注ID（任意）').fill('00000000-0000-7000-8000-000000000000');
   await correction.getByRole('button', { name: '確認へ', exact: true }).click();
   const [missingOrigin] = await Promise.all([
     page.waitForResponse(response => response.url().endsWith(`/${reviewId}/corrections`) && response.request().method() === 'POST'),

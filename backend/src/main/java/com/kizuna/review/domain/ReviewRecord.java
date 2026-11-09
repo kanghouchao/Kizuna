@@ -39,7 +39,7 @@ public class ReviewRecord extends StoreScopedEntity {
   @Column(nullable = false, updatable = false)
   private OffsetDateTime receivedAt;
 
-  @Column(updatable = false, length = 32)
+  @Column(updatable = false, length = 64)
   private String originOrderId;
 
   @Column(updatable = false)
@@ -62,10 +62,10 @@ public class ReviewRecord extends StoreScopedEntity {
   @Column(nullable = false, length = 20)
   private PermissionStatus permissionStatus;
 
-  @Column(updatable = false, length = 32)
+  @Column(updatable = false, length = 64)
   private String supersedesId;
 
-  @Column(length = 32)
+  @Column(length = 64)
   private String supersededById;
 
   @Embedded private Publication publication;

@@ -24,7 +24,7 @@ import org.springframework.data.jpa.domain.Specification;
 
 @ExtendWith(MockitoExtension.class)
 class SurveyReadServicePagingTest {
-  private static final String ID = "42";
+  private static final String ID = "00000000-0000-7000-8000-000000000042";
 
   @Mock SurveySeriesRepository surveys;
   @Mock SurveyRevisionRepository revisions;

@@ -25,7 +25,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ReviewHistory extends StoreScopedEntity {
-  @Column(updatable = false, nullable = false, length = 32)
+  @Column(updatable = false, nullable = false, length = 64)
   private String reviewId;
 
   @Enumerated(EnumType.STRING)
@@ -63,10 +63,10 @@ public class ReviewHistory extends StoreScopedEntity {
   @Column(updatable = false, length = 500)
   private String reason;
 
-  @Column(updatable = false, length = 32)
+  @Column(updatable = false, length = 64)
   private String relatedReviewId;
 
-  @Column(updatable = false, length = 32)
+  @Column(updatable = false, length = 64)
   private String permissionRecordId;
 
   @Embedded

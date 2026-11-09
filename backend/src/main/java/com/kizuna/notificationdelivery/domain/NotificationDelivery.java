@@ -25,7 +25,7 @@ public class NotificationDelivery extends DeliveryRecord {
   @Column(nullable = false, updatable = false, length = 20)
   private DeliverySourceType sourceType;
 
-  @Column(nullable = false, updatable = false, length = 32)
+  @Column(nullable = false, updatable = false, length = 64)
   private String sourceId;
 
   @Enumerated(EnumType.STRING)

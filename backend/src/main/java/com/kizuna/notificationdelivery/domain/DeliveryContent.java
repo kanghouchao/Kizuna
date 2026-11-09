@@ -1,6 +1,7 @@
 package com.kizuna.notificationdelivery.domain;
 
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.persistence.GeneratedIds;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
@@ -15,11 +16,13 @@ public record DeliveryContent(
     OffsetDateTime scheduledAt,
     String dedupeKey) {
   public DeliveryContent {
-    sourceId = clean(sourceId, 32);
+    sourceId = clean(sourceId, 36);
     subject = clean(subject, 200);
     dedupeKey = clean(dedupeKey, 120);
     if (sourceType == null
-        || !sourceId.matches("[0-9]{1,32}")
+        || !(sourceType == DeliverySourceType.MEMBER
+            ? sourceId.matches("[0-9]{1,32}")
+            : GeneratedIds.matches(sourceId))
         || channel == null
         || purpose == null
         || !dedupeKey.matches("[a-zA-Z0-9.:_-]{1,120}")
