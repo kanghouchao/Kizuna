@@ -32,7 +32,12 @@ export {
 } from './session';
 export { isStorePath, storePath } from './store-route';
 export { cn } from './utils';
-export { EMAIL_PATTERN, EMAIL_PATTERN_MESSAGE, integerRule } from './validation';
+export {
+  EMAIL_PATTERN,
+  EMAIL_PATTERN_MESSAGE,
+  GENERATED_ID_PATTERN,
+  integerRule,
+} from './validation';
 export {
   LINE_AUTHORIZE_ENDPOINT,
   consumeLineAuthorization,

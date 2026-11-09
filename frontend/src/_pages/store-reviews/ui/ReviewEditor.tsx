@@ -23,6 +23,7 @@ import {
   fromPublicationFormValues,
   toPublicationFormValues,
 } from '@/features/publication-form';
+import { GENERATED_ID_PATTERN } from '@/shared/lib';
 export type Editor =
   | { action: 'CREATE'; row?: undefined }
   | {
@@ -256,8 +257,8 @@ export function ReviewEditor({
                   rules={{
                     validate: value =>
                       value === '' ||
-                      /^[0-9]{1,32}$/.test(value) ||
-                      '関連受注IDを1〜32桁の数字で入力してください',
+                      GENERATED_ID_PATTERN.test(value) ||
+                      '関連受注IDの形式が正しくありません',
                   }}
                   render={({ field }) => (
                     <FormItem>

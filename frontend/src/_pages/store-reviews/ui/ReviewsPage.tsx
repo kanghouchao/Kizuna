@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
 import { ReviewSearch, reviewApi } from '@/entities/content/review';
-import { storePath, useListPage } from '@/shared/lib';
+import { GENERATED_ID_PATTERN, storePath, useListPage } from '@/shared/lib';
 import { Button, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui';
 import { ListPage } from '@/widgets/list-page';
 import { useReviewWrite } from '../lib/useReviewWrite';
@@ -28,9 +28,9 @@ function Reviews({ canManage }: { canManage: boolean }) {
   const search = () => {
     if (
       (filters.q?.trim().length ?? 0) > 60 ||
-      (filters.review_id && !/^[0-9]{1,32}$/.test(filters.review_id))
+      (filters.review_id && !GENERATED_ID_PATTERN.test(filters.review_id))
     ) {
-      setFilterError('表示名は60文字以内、口コミIDは1〜32桁の数字で指定してください');
+      setFilterError('表示名は60文字以内、口コミIDは正しい形式で指定してください');
       return;
     }
     setFilterError(null);
