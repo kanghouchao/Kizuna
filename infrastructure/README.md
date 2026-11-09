@@ -34,7 +34,8 @@ docker compose -p kizuna up -d --wait
   CPU には上限を付けない（JVM は見える CPU 数でスレッド数や GC を決めるため、1 CPU 前後に絞ると性質が変わる）。
 - JVM オプションの追加・上書きは `.env` の `JDK_JAVA_OPTIONS` で行う。同じコンテナで動くヘルスチェックの `java` もこれを読むので、
   ポートを開くもの（JMX・リモートデバッグ）や `-javaagent` を入れるとヘルスチェックの JVM が起動に失敗し、レプリカが unhealthy になる。
-- 起動時の Liquibase は DB 上のロックで直列になる。後から起動したレプリカはロックが外れるまで待つ。
+- 起動時の Liquibase は backend の `LiquibaseMigrationLock`（PostgreSQL の助言ロック）で一台ずつ実行され、後から起動したレプリカは前の実行が終わるまで待つ。
+  Liquibase 自身のロックは履歴表を作った後にしか効かず、空の DB に同時に起動すると一台が失敗していたため。
 
 ## 応募者添付の非公開ストレージ
 
