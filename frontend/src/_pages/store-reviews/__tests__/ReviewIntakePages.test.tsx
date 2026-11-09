@@ -101,7 +101,9 @@ async function fillReceipt(kind: 'CREATE' | 'CORRECT') {
   fireEvent.change(screen.getByLabelText('受け取った日時（この端末の時刻）'), {
     target: { value: '2026-01-01T09:00' },
   });
-  fireEvent.change(screen.getByLabelText('関連受注ID（任意）'), { target: { value: '999' } });
+  fireEvent.change(screen.getByLabelText('関連受注ID（任意）'), {
+    target: { value: '00000000-0000-7000-8000-000000000999' },
+  });
   if (kind === 'CORRECT')
     fireEvent.change(screen.getByLabelText('判断・変更の理由'), {
       target: { value: '保持する訂正理由' },

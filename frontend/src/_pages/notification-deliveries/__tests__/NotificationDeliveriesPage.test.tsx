@@ -42,7 +42,7 @@ const api = jest.mocked(notificationApi);
 const row: Delivery = {
   id: '10',
   source_type: 'ORDER',
-  source_id: '123',
+  source_id: '00000000-0000-7000-8000-000000000123',
   channel: 'EMAIL',
   purpose: 'BUSINESS',
   subject: '予約の確認',
@@ -265,7 +265,7 @@ async function fillDraft() {
   fireEvent.click(screen.getByRole('button', { name: '通知を作成' }));
   const dialog = await screen.findByRole('dialog');
   fireEvent.change(within(dialog).getByLabelText('受注・ゲスト申請ID'), {
-    target: { value: '123' },
+    target: { value: '00000000-0000-7000-8000-000000000123' },
   });
   fireEvent.change(within(dialog).getByLabelText('件名'), { target: { value: '確認' } });
   fireEvent.change(within(dialog).getByLabelText('本文'), { target: { value: '本文' } });

@@ -18,6 +18,7 @@ import {
   useOperation,
   useResource,
   useVersionedWrite,
+  GENERATED_ID_PATTERN,
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import {
@@ -505,13 +506,13 @@ function Create({ onCreated }: { onCreated: (row: Delivery) => void }) {
             name="source_id"
             rules={{
               required: '起点のIDを入力してください',
-              pattern: { value: /^[0-9]{1,32}$/, message: '32桁以内の数字で入力してください' },
+              pattern: { value: GENERATED_ID_PATTERN, message: 'IDの形式が正しくありません' },
             }}
             render={({ field }) => (
               <FormItem>
                 <FormLabel>受注・ゲスト申請ID</FormLabel>
                 <FormControl>
-                  <Input {...field} required inputMode="numeric" />
+                  <Input {...field} required />
                 </FormControl>
                 <FormMessage />
               </FormItem>

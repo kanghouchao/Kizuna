@@ -25,3 +25,7 @@ export const integerRule = (label: string) => (value: unknown) => {
   if (Number.isNaN(numeric)) return true;
   return Number.isInteger(numeric) || `${label}は整数で入力してください`;
 };
+
+/** 採番された ID（UUID の小文字 36 文字表記）の形。打ち間違いを照会の前に弾く。 */
+export const GENERATED_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
