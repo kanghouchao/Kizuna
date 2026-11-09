@@ -31,4 +31,11 @@ class HmacSecretKeyFactoryTest {
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("32");
   }
+
+  @Test
+  void create_secretMissing_throwsIllegalStateExceptionNamingTheVariable() {
+    assertThatThrownBy(() -> HmacSecretKeyFactory.create(appProperties(null)))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("APP_JWT_SECRET");
+  }
 }

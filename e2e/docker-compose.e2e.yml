@@ -99,23 +99,22 @@ services:
     networks:
       - network
     environment:
-      POSTGRES_HOST: database
-      POSTGRES_PORT: "5432"
-      POSTGRES_DB: kizuna
-      POSTGRES_USER: kizuna
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
-      REDIS_HOST: cache
-      REDIS_PORT: "6379"
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-password}
+      # Spring Boot の環境変数名で渡す（application.yml は既定値だけを持つ）
+      SPRING_DATASOURCE_URL: jdbc:postgresql://database:5432/kizuna?sslmode=disable
+      SPRING_DATASOURCE_USERNAME: kizuna
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      SPRING_DATA_REDIS_HOST: cache
+      SPRING_DATA_REDIS_PORT: "6379"
+      SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-password}
       APP_PRIVATE_ATTACHMENTS_ENABLED: "true"
       APP_PRIVATE_ATTACHMENTS_ENDPOINT: http://private-storage:8333
       APP_PRIVATE_ATTACHMENTS_BUCKET: applicant-images
       APP_PRIVATE_ATTACHMENTS_ACCESS_KEY: ${PRIVATE_S3_ACCESS_KEY:-applicant-test-storage}
       APP_PRIVATE_ATTACHMENTS_SECRET_KEY: ${PRIVATE_S3_SECRET_KEY:-applicant-test-secret}
-      S3_ENDPOINT: http://storage:8333
-      S3_BUCKET: uploads
-      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-kizuna-storage}
-      S3_SECRET_KEY: ${S3_SECRET_KEY:-storage-test-secret}
+      APP_UPLOAD_ENDPOINT: http://storage:8333
+      APP_UPLOAD_BUCKET: uploads
+      APP_UPLOAD_ACCESS_KEY: ${S3_ACCESS_KEY:-kizuna-storage}
+      APP_UPLOAD_SECRET_KEY: ${S3_SECRET_KEY:-storage-test-secret}
       # HMAC-SHA256 の要件（RFC 7518）で 256bit 以上必要（秘密鍵は raw bytes として解釈される）
       APP_JWT_SECRET: ${APP_JWT_SECRET:-e2e-test-secret-0123456789abcdef}
       # gateway の network alias と一致させる。frontend/backend はこの値で アプリドメインと
