@@ -111,7 +111,8 @@ public class MonthlyPdfRenderer {
     private static final float BOTTOM = 48;
     private static final float FONT_SIZE = 9;
     private static final float LINE_HEIGHT = 15;
-    private static final float[] WIDTHS = {75, 115, 235, 90};
+    // 受注番号は UUID 36 文字。IPAex ゴシック 9pt で最も幅の出る並びが約 194pt なので、折り返さない幅を取る。
+    private static final float[] WIDTHS = {65, 205, 155, 90};
     private final PDDocument document;
     private final PDType0Font font;
     private final MonthlyPdfBudget budget;
