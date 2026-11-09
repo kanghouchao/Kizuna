@@ -14,6 +14,9 @@ import com.kizuna.user.domain.PermissionCode;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class ReviewCommandTest {
   private static final OffsetDateTime AT =
@@ -228,5 +231,19 @@ class ReviewCommandTest {
                     "k")
                 .permissions())
         .containsExactly(PermissionCode.REVIEW_MANAGE, PermissionCode.ORDER_MANAGE);
+  }
+
+  @ParameterizedTest
+  @NullSource
+  @ValueSource(
+      strings = {"123", "0190F5A8-0000-7000-8000-000000000001", "0190f5a8000070008000000000000001"})
+  void idRejectsAnythingButALowercaseUuid(String id) {
+    assertThatThrownBy(() -> ReviewInput.id(id)).isInstanceOf(ServiceException.class);
+  }
+
+  @Test
+  void idAcceptsALowercaseUuid() {
+    assertThat(ReviewInput.id("0190f5a8-0000-7000-8000-000000000001"))
+        .isEqualTo("0190f5a8-0000-7000-8000-000000000001");
   }
 }
