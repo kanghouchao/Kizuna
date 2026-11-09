@@ -156,6 +156,8 @@ services:
       - network
     environment:
       APP_DOMAIN: kizuna.test
+      # サーバ側から backend へは gateway の内部入口を通す（開発・release と同じ）
+      BACKEND_URL: http://gateway:8081
     depends_on:
       backend:
         condition: service_healthy
@@ -175,6 +177,7 @@ services:
       - "--global.sendAnonymousUsage=false"
       - "--ping=true"
       - "--entryPoints.web.address=:80"
+      - "--entryPoints.internal.address=:8081"
       - "--providers.file.filename=/etc/traefik/dynamic.yml"
     volumes:
       - "./traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro"

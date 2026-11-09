@@ -180,6 +180,9 @@ services:
       - network
     environment:
       - APP_DOMAIN
+      # サーバ側から backend へは gateway の内部入口を通す。サービス名（http://backend:8080）では DNS ラウンドロビン任せになり、
+      # 止まった・準備のできていないレプリカを外せない
+      - BACKEND_URL=http://gateway:8081
     depends_on:
       backend:
         condition: service_healthy
