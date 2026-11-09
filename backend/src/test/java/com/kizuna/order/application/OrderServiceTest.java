@@ -1183,7 +1183,7 @@ class OrderServiceTest {
     when(businessDateService.currentBusinessDate()).thenReturn(CURRENT_BUSINESS_DATE);
   }
 
-  /** 生成される受注の保存を成功させ、Snowflake 採番の代わりに固定 id を与える。 */
+  /** 生成される受注の保存を成功させ、ID 採番の代わりに固定 id を与える。 */
   private void stubOrderCreation() {
     when(orderRepository.save(any(Order.class)))
         .thenAnswer(

@@ -13,6 +13,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import org.hibernate.annotations.UuidGenerator;
 
 /** 店舗スコープのエンティティ基盤。store_id は ID 参照で保持し、店舗の条件は各クエリが明示する。 */
 @MappedSuperclass
@@ -23,7 +24,9 @@ import lombok.ToString;
 @ToString
 public abstract class StoreScopedEntity {
 
-  @Id @SnowflakeId private String id;
+  @Id
+  @UuidGenerator(style = UuidGenerator.Style.VERSION_7)
+  private String id;
 
   @Column(name = "store_id", updatable = false)
   private Long storeId;

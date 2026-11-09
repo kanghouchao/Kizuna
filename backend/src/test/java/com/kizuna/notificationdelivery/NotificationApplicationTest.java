@@ -80,7 +80,7 @@ class NotificationApplicationTest {
   private static DeliveryContent content() {
     return new DeliveryContent(
         DeliverySourceType.ORDER,
-        "123",
+        "00000000-0000-7000-8000-000000000123",
         DeliveryChannel.EMAIL,
         DeliveryPurpose.BUSINESS,
         "件名",

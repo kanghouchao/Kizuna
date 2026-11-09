@@ -54,7 +54,7 @@ public class ShiftController {
         shiftService.list(storeId, from, to).stream().map(shiftMapper::toResponse).toList());
   }
 
-  /** 1 本のシフトを系列ごと返す。字面の {@code /public} とは値空間が交わらない（シフト id は数字だけの Snowflake）。 */
+  /** 1 本のシフトを系列ごと返す。字面の {@code /public} とは値空間が交わらない（シフト id は UUID）。 */
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
   public ResponseEntity<ShiftDetailResponse> detail(

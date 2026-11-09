@@ -71,7 +71,7 @@ public class ArticleController {
     return articles.listPublic(storeId, pageable).map(ArticlePublicSummaryResponse::of);
   }
 
-  // 記事の ID は数字だけの Snowflake なので、パスの public と衝突しない
+  // 記事の ID は UUID なので、パスの public と衝突しない
   @GetMapping("/public/{id}")
   @PermitAll
   public ArticlePublicResponse getPublic(@CurrentStore Long storeId, @PathVariable String id) {

@@ -12,7 +12,7 @@ databaseChangeLog:
             remarks: 店舗公開サイトの表示設定（店舗ごとに 1 行）
             columns:
               - column:
-                  # 他の store-scoped 表（t_orders.id 等）と同型の VARCHAR(64)（Snowflake）。
+                  # 他の store-scoped 表（t_orders.id 等）と同型の VARCHAR(64)（UUIDv7）。
                   name: id
                   type: VARCHAR(64)
                   constraints:

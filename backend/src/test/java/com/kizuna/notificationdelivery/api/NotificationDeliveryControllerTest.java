@@ -152,7 +152,7 @@ class NotificationDeliveryControllerTest {
                 .contentType("application/json")
                 .content(
                     """
-                    {"source_type":"ORDER","source_id":"1","channel":"EMAIL","purpose":"BUSINESS",
+                    {"source_type":"ORDER","source_id":"00000000-0000-7000-8000-000000000001","channel":"EMAIL","purpose":"BUSINESS",
                      "subject":"件名","body":"本文","scheduled_at":"2026-10-07T00:00:00Z",
                      "dedupe_key":"race"}
                     """))
@@ -178,7 +178,7 @@ class NotificationDeliveryControllerTest {
                 .contentType("application/json")
                 .content(
                     """
-                    {"source_type":"ORDER","source_id":"1","channel":"EMAIL","purpose":"MARKETING",
+                    {"source_type":"ORDER","source_id":"00000000-0000-7000-8000-000000000001","channel":"EMAIL","purpose":"MARKETING",
                      "subject":"件名","body":"本文","scheduled_at":"2026-10-07T00:00:00Z",
                      "dedupe_key":"promo"}
                     """))
@@ -202,7 +202,7 @@ class NotificationDeliveryControllerTest {
                 .contentType("application/json")
                 .content(
                     """
-                    {"source_type":"ORDER","source_id":"1","channel":"SMS","purpose":"BUSINESS",
+                    {"source_type":"ORDER","source_id":"00000000-0000-7000-8000-000000000001","channel":"SMS","purpose":"BUSINESS",
                      "subject":"件名","body":"本文","scheduled_at":"2026-10-07T00:00:00Z",
                      "dedupe_key":"sms"}
                     """))
@@ -438,7 +438,7 @@ class NotificationDeliveryControllerTest {
             STORE_ID,
             new DeliveryContent(
                 DeliverySourceType.ORDER,
-                "1",
+                "00000000-0000-7000-8000-000000000001",
                 DeliveryChannel.EMAIL,
                 DeliveryPurpose.BUSINESS,
                 "件名",

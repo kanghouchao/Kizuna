@@ -86,12 +86,13 @@ class ReviewWriteTest {
     when(actors.require(eq(STORE_ID), anyString(), any()))
         .thenReturn(new AuditActor(1L, "STAFF", "担当者"));
     row = ReviewRecord.receive(STORE_ID, input(null), 1L, "担当者", null, null);
-    row.setId("10");
+    row.setId("00000000-0000-7000-8000-000000000010");
     row.setCreatedAt(AT);
     row.setUpdatedAt(AT);
     ReflectionTestUtils.setField(row, "version", 0L);
-    when(reviews.findByIdAndStoreIdForUpdate("10", STORE_ID)).thenReturn(Optional.of(row));
-    when(reviews.findProjectedByIdAndStoreId("10", STORE_ID))
+    when(reviews.findByIdAndStoreIdForUpdate("00000000-0000-7000-8000-000000000010", STORE_ID))
+        .thenReturn(Optional.of(row));
+    when(reviews.findProjectedByIdAndStoreId("00000000-0000-7000-8000-000000000010", STORE_ID))
         .thenAnswer(
             call -> Optional.of(projections.createProjection(ReviewDetailsView.class, row)));
     when(operations.once(any(), anyString(), any(), any()))
@@ -114,7 +115,8 @@ class ReviewWriteTest {
   }
 
   private static ReviewCommand.Decide approve(String key) {
-    return new ReviewCommand.Decide("10", 0L, Operation.APPROVED, "確認", key);
+    return new ReviewCommand.Decide(
+        "00000000-0000-7000-8000-000000000010", 0L, Operation.APPROVED, "確認", key);
   }
 
   @Test
@@ -155,21 +157,23 @@ class ReviewWriteTest {
             STORE_ID,
             "REVIEW_APPROVED",
             "REVIEW",
-            "10",
+            "00000000-0000-7000-8000-000000000010",
             null,
             null,
             Map.of("status", "PENDING", "permission_status", "NOT_GRANTED", "version", "0"),
             Map.of("status", "APPROVED", "permission_status", "NOT_GRANTED", "version", "0"));
     assertThat(result.operation().replayed()).isFalse();
     assertThat(result.operation().type()).isEqualTo(Operation.APPROVED);
-    assertThat(result.operation().reviewId()).isEqualTo("10");
+    assertThat(result.operation().reviewId()).isEqualTo("00000000-0000-7000-8000-000000000010");
     assertThat(result.operation().committedVersion()).isZero();
     assertThat(result.review().status()).isEqualTo(Status.APPROVED);
   }
 
   @Test
   void staleVersionFailsWithoutRecordingAnOperation() {
-    var stale = new ReviewCommand.Decide("10", 1L, Operation.APPROVED, "確認", "approve");
+    var stale =
+        new ReviewCommand.Decide(
+            "00000000-0000-7000-8000-000000000010", 1L, Operation.APPROVED, "確認", "approve");
 
     assertThatThrownBy(() -> service.write(STORE_ID, "actor", stale))
         .isInstanceOf(ConflictException.class);
@@ -178,7 +182,8 @@ class ReviewWriteTest {
 
   @Test
   void aReplayedKeyNeitherLocksTheReviewNorRevalidatesTheOrigin() {
-    var receipt = new ReviewCommand.Receive(input("90"), "intake");
+    var receipt =
+        new ReviewCommand.Receive(input("00000000-0000-7000-8000-000000000090"), "intake");
     doReturn(null).when(operations).once(any(), anyString(), any(), any());
 
     service.write(STORE_ID, "actor", approve("approve"));
@@ -190,7 +195,8 @@ class ReviewWriteTest {
 
   @Test
   void replayStillRequiresTheOrderAuthorityOfALinkedIntake() {
-    var receipt = new ReviewCommand.Receive(input("90"), "intake");
+    var receipt =
+        new ReviewCommand.Receive(input("00000000-0000-7000-8000-000000000090"), "intake");
     doThrow(new AccessDeniedException("受注の権限なし"))
         .when(actors)
         .require(STORE_ID, "actor", PermissionCode.ORDER_MANAGE);

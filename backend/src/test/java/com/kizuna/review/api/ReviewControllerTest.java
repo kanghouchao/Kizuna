@@ -82,14 +82,17 @@ class ReviewControllerTest {
   @WithMockUser(authorities = "PERM_REVIEW_VIEW")
   void detailPassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(reviews.detail(STORE_ID, "user", "101")).thenReturn(detail());
+    when(reviews.detail(STORE_ID, "user", "00000000-0000-7000-8000-000000000101"))
+        .thenReturn(detail());
 
     mockMvc
         .perform(
-            get("/reviews/101").header("X-Store-ID", STORE_ID.toString()).principal(currentUser()))
+            get("/reviews/00000000-0000-7000-8000-000000000101")
+                .header("X-Store-ID", STORE_ID.toString())
+                .principal(currentUser()))
         .andExpect(status().isOk());
 
-    verify(reviews).detail(STORE_ID, "user", "101");
+    verify(reviews).detail(STORE_ID, "user", "00000000-0000-7000-8000-000000000101");
   }
 
   @Test
@@ -104,13 +107,13 @@ class ReviewControllerTest {
                 new Receipt(
                     "50",
                     Operation.APPROVED.receiptName(),
-                    "101",
+                    "00000000-0000-7000-8000-000000000101",
                     Map.of("committed_version", 1L),
                     false)));
 
     mockMvc
         .perform(
-            post("/reviews/101/decisions")
+            post("/reviews/00000000-0000-7000-8000-000000000101/decisions")
                 .header("X-Store-ID", STORE_ID.toString())
                 .principal(currentUser())
                 .contentType("application/json")
@@ -129,7 +132,7 @@ class ReviewControllerTest {
 
     mockMvc
         .perform(
-            post("/reviews/101/decisions")
+            post("/reviews/00000000-0000-7000-8000-000000000101/decisions")
                 .header("X-Store-ID", STORE_ID.toString())
                 .principal(currentUser())
                 .contentType("application/json")
@@ -146,12 +149,16 @@ class ReviewControllerTest {
   void historyIsAPageNewestFirst() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
-    when(reviews.history(eq(STORE_ID), eq("user"), eq("101"), pageable.capture()))
+    when(reviews.history(
+            eq(STORE_ID),
+            eq("user"),
+            eq("00000000-0000-7000-8000-000000000101"),
+            pageable.capture()))
         .thenReturn(new PageImpl<>(List.of()));
 
     mockMvc
         .perform(
-            get("/reviews/101/history")
+            get("/reviews/00000000-0000-7000-8000-000000000101/history")
                 .header("X-Store-ID", STORE_ID.toString())
                 .principal(currentUser()))
         .andExpect(status().isOk())
@@ -224,7 +231,7 @@ class ReviewControllerTest {
             "担当者",
             null,
             null);
-    row.setId("101");
+    row.setId("00000000-0000-7000-8000-000000000101");
     row.setCreatedAt(OffsetDateTime.parse("2026-01-01T00:00:00Z"));
     ReflectionTestUtils.setField(row, "version", 0L);
     return new ReviewViews.Detail(

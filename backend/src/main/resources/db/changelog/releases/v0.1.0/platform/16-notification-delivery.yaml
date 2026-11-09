@@ -11,7 +11,7 @@ databaseChangeLog:
             columns:
               - column:
                   name: id
-                  type: VARCHAR(32)
+                  type: VARCHAR(64)
                   constraints:
                     nullable: false
                     primaryKey: true
@@ -44,7 +44,7 @@ databaseChangeLog:
                     nullable: false
               - column:
                   name: source_id
-                  type: VARCHAR(32)
+                  type: VARCHAR(64)
                   constraints:
                     nullable: false
               - column:
@@ -95,7 +95,7 @@ databaseChangeLog:
             columns:
               - column:
                   name: id
-                  type: VARCHAR(32)
+                  type: VARCHAR(64)
                   constraints:
                     nullable: false
                     primaryKey: true
@@ -120,7 +120,7 @@ databaseChangeLog:
                     nullable: false
               - column:
                   name: delivery_id
-                  type: VARCHAR(32)
+                  type: VARCHAR(64)
                   constraints:
                     nullable: false
               - column:

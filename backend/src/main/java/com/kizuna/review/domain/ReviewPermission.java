@@ -22,7 +22,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class ReviewPermission extends StoreScopedEntity {
-  @Column(updatable = false, nullable = false, length = 32)
+  @Column(updatable = false, nullable = false, length = 64)
   private String reviewId;
 
   @Enumerated(EnumType.STRING)

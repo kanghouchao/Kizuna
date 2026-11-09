@@ -176,7 +176,7 @@ class SurveyApplicationTest {
   }
 
   private void metadata(StoreScopedEntity row) {
-    row.setId(Long.toString(ids.incrementAndGet()));
+    row.setId("00000000-0000-7000-8000-%012d".formatted(ids.incrementAndGet()));
     row.setCreatedAt(AT);
     row.setUpdatedAt(AT);
     ReflectionTestUtils.setField(row, "version", 0L);
@@ -414,9 +414,15 @@ class SurveyApplicationTest {
                         "stale")))
         .isInstanceOf(ConflictException.class);
     assertThatThrownBy(
-            () -> service.revision(STORE_ID, "actor", "999", revision.revision().getId()))
+            () ->
+                service.revision(
+                    STORE_ID,
+                    "actor",
+                    "00000000-0000-7000-8000-000000000999",
+                    revision.revision().getId()))
         .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> service.answer(STORE_ID, "actor", "999"))
+    assertThatThrownBy(
+            () -> service.answer(STORE_ID, "actor", "00000000-0000-7000-8000-000000000999"))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
             () ->
@@ -424,7 +430,7 @@ class SurveyApplicationTest {
                     STORE_ID,
                     "actor",
                     new SurveyCommand.RevisionAction(
-                        "999",
+                        "00000000-0000-7000-8000-000000000999",
                         revision.revision().getId(),
                         0L,
                         Operation.CLOSED,
@@ -437,7 +443,11 @@ class SurveyApplicationTest {
                     STORE_ID,
                     "actor",
                     new SurveyCommand.Receive(
-                        "999", revision.revision().getId(), 0L, input("原文"), "wrong-series")))
+                        "00000000-0000-7000-8000-000000000999",
+                        revision.revision().getId(),
+                        0L,
+                        input("原文"),
+                        "wrong-series")))
         .isInstanceOf(NotFoundException.class);
     service.write(STORE_ID, "actor", action(revision, Operation.OPENED, "open"));
     assertThatThrownBy(

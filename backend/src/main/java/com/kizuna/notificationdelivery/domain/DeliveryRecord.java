@@ -1,6 +1,5 @@
 package com.kizuna.notificationdelivery.domain;
 
-import com.kizuna.shared.persistence.SnowflakeId;
 import com.kizuna.shared.persistence.Timestamps;
 import jakarta.persistence.Column;
 import jakarta.persistence.Id;
@@ -12,13 +11,16 @@ import java.time.OffsetDateTime;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.UuidGenerator;
 
 /** 送信正本の行の共通土台。店舗は作用域ではなく帰属なので StoreScopedEntity に載せない。 */
 @MappedSuperclass
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public abstract class DeliveryRecord {
-  @Id @SnowflakeId private String id;
+  @Id
+  @UuidGenerator(style = UuidGenerator.Style.VERSION_7)
+  private String id;
 
   @Column(nullable = false)
   private OffsetDateTime createdAt;

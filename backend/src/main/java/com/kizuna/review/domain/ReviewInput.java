@@ -2,6 +2,7 @@ package com.kizuna.review.domain;
 
 import com.kizuna.review.domain.ReviewValues.ReceivedVia;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.persistence.GeneratedIds;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
@@ -30,8 +31,7 @@ public record ReviewInput(
   }
 
   public static String id(String value) {
-    if (value == null || !value.matches("[0-9]{1,32}"))
-      throw new ServiceException("識別子の形式を確認してください");
+    if (!GeneratedIds.matches(value)) throw new ServiceException("識別子の形式を確認してください");
     return value;
   }
 

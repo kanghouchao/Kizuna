@@ -48,9 +48,7 @@ class TimestampSourceTests {
           Paths.get("com/kizuna/auth/infrastructure/RefreshTokenCookies.java"),
               new Allowance(1, "refresh cookie の Max-Age。JWT の exp までの残り秒"),
           Paths.get("com/kizuna/auth/infrastructure/TokenBlacklistService.java"),
-              new Allowance(1, "失効キーの TTL。JWT の exp までの残りミリ秒"),
-          Paths.get("com/kizuna/shared/persistence/SnowflakeIdGenerator.java"),
-              new Allowance(3, "ID の採番に埋める epoch ミリ秒。時刻としては保存も応答もしない"));
+              new Allowance(1, "失効キーの TTL。JWT の exp までの残りミリ秒"));
 
   // 期限・有効期間の判定を名乗るドメインのメソッド。判定の時刻を引数で受け、自分では「今」を読まない。
   private static final Pattern DOMAIN_JUDGEMENT =
