@@ -21,7 +21,6 @@ import com.kizuna.cast.domain.CastRepository;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -101,7 +100,7 @@ class CastInvitationAuditTest {
     when(encoder.encode(any())).thenReturn("encoded-password");
   }
 
-  private User actor(long id, StoreScopeType scope, Set<Long> storeIds) {
+  private User actor(long id, Set<Long> storeIds) {
     var user =
         User.builder()
             .email("cast@example.test")
@@ -109,7 +108,6 @@ class CastInvitationAuditTest {
             .displayName("既存の本人")
             .enabled(true)
             .userType(UserType.CAST)
-            .storeScopeType(scope)
             .storeIds(storeIds)
             .build();
     user.setId(id);
@@ -124,7 +122,6 @@ class CastInvitationAuditTest {
             .displayName("担当")
             .userType(UserType.STAFF)
             .roleIds(Set.of(1L))
-            .storeScopeType(StoreScopeType.ALL_STORES)
             .build();
     staff.setId(9L);
     when(users.findByEmail("staff@example.test")).thenReturn(Optional.of(staff));
@@ -199,7 +196,7 @@ class CastInvitationAuditTest {
 
   @Test
   void existingUserAcceptanceRecordsWhetherMembershipWasAdded() {
-    var actor = actor(7L, StoreScopeType.SPECIFIC_STORES, Set.of(2L));
+    var actor = actor(7L, Set.of(2L));
     when(users.findByEmailForUpdate("cast@example.test")).thenReturn(Optional.of(actor));
     when(users.findById(7L)).thenReturn(Optional.of(actor));
     when(enrollments.findIdsByUserIdAndStoreId(7L, STORE_ID)).thenReturn(List.of());
@@ -214,8 +211,8 @@ class CastInvitationAuditTest {
   }
 
   @Test
-  void allStoresUserAcceptanceAddsNoMembership() {
-    var actor = actor(8L, StoreScopeType.ALL_STORES, Set.of());
+  void acceptanceIntoAStoreAlreadyInTheSetAddsNoMembership() {
+    var actor = actor(8L, Set.of(STORE_ID));
     when(users.findByEmailForUpdate("cast@example.test")).thenReturn(Optional.of(actor));
     when(users.findById(8L)).thenReturn(Optional.of(actor));
     when(enrollments.findIdsByUserIdAndStoreId(8L, STORE_ID)).thenReturn(List.of());
@@ -228,7 +225,7 @@ class CastInvitationAuditTest {
 
   @Test
   void rejectedAcceptancesRecordNothing() {
-    var actor = actor(7L, StoreScopeType.SPECIFIC_STORES, Set.of(2L));
+    var actor = actor(7L, Set.of(2L));
     when(users.findByEmailForUpdate("cast@example.test")).thenReturn(Optional.of(actor));
     when(enrollments.findIdsByUserIdAndStoreId(7L, STORE_ID)).thenReturn(List.of("other"));
     assertThatThrownBy(() -> accepting.acceptAsExistingUser(SECRET, "cast@example.test", "pw"))

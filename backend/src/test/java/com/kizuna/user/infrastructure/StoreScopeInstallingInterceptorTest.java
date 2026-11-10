@@ -48,7 +48,7 @@ class StoreScopeInstallingInterceptorTest {
   @DisplayName("認証済み要求では解決器を差し込み、解決は保持器が最初に読まれるまで遅延する")
   void installsLazyResolverForAuthenticatedRequest() {
     Jwt jwt = authenticate();
-    StoreScope scope = new StoreScope(false, Set.of(1L));
+    StoreScope scope = new StoreScope(Set.of(1L));
     when(resolver.resolve(jwt)).thenReturn(scope);
 
     boolean proceed =
@@ -87,7 +87,7 @@ class StoreScopeInstallingInterceptorTest {
   @DisplayName("afterCompletion は例外の有無によらず保持器を消す（スレッドは再利用される）")
   void afterCompletionClearsHolder() {
     authenticate();
-    when(resolver.resolve(any())).thenReturn(new StoreScope(true, Set.of()));
+    when(resolver.resolve(any())).thenReturn(new StoreScope(Set.of(1L)));
     interceptor.preHandle(
         new MockHttpServletRequest(), new MockHttpServletResponse(), new Object());
     assertThat(holder.current()).isNotNull();

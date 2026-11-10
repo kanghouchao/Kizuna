@@ -32,7 +32,7 @@ import { TemporaryPasswordModal } from './TemporaryPasswordModal';
 const PAGE_SIZE = 10;
 
 /** 店舗で絞り込まないことを表す番兵値（命名は既存の SELECT_NONE に倣う）。 */
-const ALL_STORES = '__all__';
+const ANY_STORE = '__all__';
 
 /** 一覧の絞り込み条件。検索語と店舗のどちらを変えても 1 ページ目から取り直す。 */
 interface StaffCriteria {
@@ -41,13 +41,13 @@ interface StaffCriteria {
 }
 
 /**
- * 従業員管理ページ。行使者の店舗集合と交わる従業員を並べ、授権の編集とアカウント状態の操作を行う。
+ * 従業員管理ページ。行使者の店舗集合と交わる従業員と店舗集合が空の従業員を並べ、授権の編集とアカウント状態の操作を行う。
  * 行ごとの操作可否は応答の editable（サーバの委譲守衛の判定）をそのまま使う。
  */
 export default function StaffPage() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [storeFilter, setStoreFilter] = useState(ALL_STORES);
-  const storeId = storeFilter === ALL_STORES ? undefined : Number(storeFilter);
+  const [storeFilter, setStoreFilter] = useState(ANY_STORE);
+  const storeId = storeFilter === ANY_STORE ? undefined : Number(storeFilter);
 
   const list = useListPage<StaffResponse, StaffCriteria>(
     (page, criteria) =>
@@ -126,7 +126,7 @@ export default function StaffPage() {
 
   // 引き金に出る文言は候補一覧から引かれるので、選べる値はここ一箇所に持つ。
   const storeFilterOptions = [
-    { value: ALL_STORES, label: 'すべての店舗' },
+    { value: ANY_STORE, label: 'すべての店舗' },
     ...(stores ?? [])
       .filter(store => store.id !== undefined)
       .map(store => ({ value: String(store.id), label: store.name ?? String(store.id) })),
@@ -170,7 +170,7 @@ export default function StaffPage() {
                   setStoreFilter(selected);
                   void list.search({
                     search: searchTerm,
-                    storeId: selected === ALL_STORES ? undefined : Number(selected),
+                    storeId: selected === ANY_STORE ? undefined : Number(selected),
                   });
                 }}
               >

@@ -46,7 +46,6 @@ public class TaskOptions {
    */
   public List<UncoveredStore> uncoveredStores(StoreScope caller) {
     var covered = identities.coveredStores();
-    if (covered.allStores()) return List.of();
     return stores.findAll(Sort.by("id")).stream()
         .filter(store -> caller.authorizes(store.getId()))
         .filter(store -> !covered.storeIds().contains(store.getId()))

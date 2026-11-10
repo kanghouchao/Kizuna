@@ -36,7 +36,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class MemberConsoleServiceTest {
 
   private static final OffsetDateTime AT = OffsetDateTime.parse("2026-10-26T10:00:00+09:00");
-  private static final StoreScope SCOPE = new StoreScope(false, Set.of(1L));
+  private static final StoreScope SCOPE = new StoreScope(Set.of(1L));
 
   @Mock private MemberDirectoryService memberDirectoryService;
   @Mock private PointLedgerService pointLedgerService;

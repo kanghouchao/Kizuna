@@ -71,7 +71,6 @@ const staff = (override: Partial<StaffResponse>): StaffResponse => ({
   display_name: '山田太郎',
   enabled: true,
   roles: [],
-  store_scope_type: 'ALL_STORES',
   store_ids: [],
   version: 0,
   editable: true,

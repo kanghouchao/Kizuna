@@ -76,7 +76,7 @@ public class ApplicantAnonymizationTask implements TaskHandler {
     // 一つの状態の滞留が上限を占め続けても、他の状態の古い対象が後回しにされ続けないようにするため。
     // 店舗集合が空のサービス ID は対象店舗を持たない。空の IN で照会しない。
     int max =
-        stores.allStores() || !stores.storeIds().isEmpty()
+        !stores.storeIds().isEmpty()
             ? properties.getApplicantAnonymization().getMaxApplicants()
             : 0;
     var targets = new ArrayList<ApplicantAnonymizationTarget>();
@@ -84,10 +84,8 @@ public class ApplicantAnonymizationTask implements TaskHandler {
       if (period.getValue() == null || max <= 0) continue;
       var before = transitionedBefore(asOf, period.getValue(), clock.getZone());
       targets.addAll(
-          stores.allStores()
-              ? applicants.findAnonymizationTargets(period.getKey(), before, Limit.of(max))
-              : applicants.findAnonymizationTargetsIn(
-                  period.getKey(), before, stores.storeIds(), Limit.of(max)));
+          applicants.findAnonymizationTargetsIn(
+              period.getKey(), before, stores.storeIds(), Limit.of(max)));
     }
     long count = 0;
     for (var target :

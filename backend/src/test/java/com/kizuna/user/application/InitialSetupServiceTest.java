@@ -15,7 +15,6 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.user.domain.DuplicateStaffEmailException;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -77,7 +76,7 @@ class InitialSetupServiceTest {
   }
 
   @Test
-  @DisplayName("登録は統括ロール + ALL_STORES の有効な STAFF を作り、本人を行為者として監査する")
+  @DisplayName("登録は統括ロール + 空の店舗集合の有効な STAFF を作り、本人を行為者として監査する")
   void registerCreatesRootAdministratorAuditedAsItself() {
     when(userRepository.existsByUserType(UserType.STAFF)).thenReturn(false);
     adminRoleExists();
@@ -101,7 +100,6 @@ class InitialSetupServiceTest {
     assertThat(user.getPassword()).isEqualTo("encoded");
     assertThat(user.getDisplayName()).isEqualTo("管理者 太郎");
     assertThat(user.getRoleIds()).containsExactly(ADMIN_ROLE);
-    assertThat(user.getStoreScopeType()).isEqualTo(StoreScopeType.ALL_STORES);
     assertThat(user.getStoreIds()).isEmpty();
     verify(businessAudit)
         .recordById(

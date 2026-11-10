@@ -68,7 +68,7 @@ class OrderMediumNameIntegrationTest {
     orders = context.getBean(OrderQueryService.class);
     actorId =
         jdbc.queryForObject(
-            "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'受付担当','STAFF','ALL_STORES') returning id",
+            "insert into t_users(email,display_name,user_type) values (?,'受付担当','STAFF') returning id",
             Long.class,
             "order-medium-name@example.test");
   }

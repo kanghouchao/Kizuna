@@ -88,6 +88,17 @@ When(
   }
 );
 
+// 空の店舗集合は有効な授権（どの店舗も担当しない）。一覧は集合が空の従業員も行使者の集合に関わらず返す。
+When(
+  '氏名 {string}・ロール {string} で、担当店舗を選ばずに従業員を追加する',
+  async ({ page }, baseName: string, roleLabel: string) => {
+    await fillCreatePage(page, baseName, [roleLabel]);
+    await expect(resultPanel(page)).toContainText('どの店舗のデータにもアクセスできません');
+    await page.getByRole('button', { name: '追加する', exact: true }).click();
+    await expect(page).toHaveURL(LIST_URL, { timeout: 15000 });
+  }
+);
+
 When('従業員追加画面を開く', async ({ page }) => {
   await openCreatePage(page);
 });

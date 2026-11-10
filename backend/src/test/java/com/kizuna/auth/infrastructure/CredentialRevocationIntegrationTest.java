@@ -25,7 +25,6 @@ import com.kizuna.user.application.RoleService;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -288,8 +287,7 @@ class CredentialRevocationIntegrationTest {
                         User stale = users.findById(holder.getId()).orElseThrow();
                         read.countDown();
                         await(proceed);
-                        credentials.reassignGrants(
-                            stale, Set.of(otherRole), StoreScopeType.ALL_STORES, Set.of());
+                        credentials.reassignGrants(stale, Set.of(otherRole), Set.of());
                         users.saveAndFlush(stale);
                       }));
       assertThat(read.await(10, TimeUnit.SECONDS)).isTrue();
@@ -372,7 +370,7 @@ class CredentialRevocationIntegrationTest {
                         shared.countDown();
                         await(proceed);
                         User user = users.findById(grantee.getId()).orElseThrow();
-                        credentials.reassignGrants(user, next, StoreScopeType.ALL_STORES, Set.of());
+                        credentials.reassignGrants(user, next, Set.of());
                         users.saveAndFlush(user);
                       }));
       assertThat(shared.await(10, TimeUnit.SECONDS)).isTrue();
@@ -597,7 +595,6 @@ class CredentialRevocationIntegrationTest {
                     .enabled(true)
                     .userType(UserType.STAFF)
                     .roleIds(Set.of(roleId))
-                    .storeScopeType(StoreScopeType.ALL_STORES)
                     .build()));
   }
 
@@ -645,10 +642,6 @@ class CredentialRevocationIntegrationTest {
                         type == UserType.STAFF
                             ? Set.of(jdbc.queryForObject("select min(id) from t_roles", Long.class))
                             : Set.of())
-                    .storeScopeType(
-                        type == UserType.MEMBER
-                            ? StoreScopeType.SPECIFIC_STORES
-                            : StoreScopeType.ALL_STORES)
                     .build()));
   }
 

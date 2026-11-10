@@ -134,7 +134,7 @@ export default function ServiceIdentitiesPage() {
                   {roleSetLabel(identity.roles)}
                 </TableCell>
                 <TableCell className="text-muted-foreground">
-                  {storeSetLabel(identity.store_scope_type, identity.store_ids, stores)}
+                  {storeSetLabel(identity.store_ids, stores)}
                 </TableCell>
                 <TableCell>
                   {identity.enabled ? (

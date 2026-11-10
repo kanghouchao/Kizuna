@@ -49,7 +49,7 @@ Given('運営帳票用の完了受注と独立した閲覧出力権限がある'
     const address = prefix + index + '@kizuna.test'; if (index === 0) email = address;
     const staff = await request.post('/api/staff', { headers: headers(admin), data: {
       email: address, password, display_name: '帳票担当', role_ids: [(await role.json()).id],
-      store_scope_type: 'SPECIFIC_STORES', store_ids: [Number(index === 2 ? foreign : STORE1_ID)],
+      store_ids: [Number(index === 2 ? foreign : STORE1_ID)],
     } });
     expect(staff.status(), await staff.text()).toBe(201);
     tokens.push(await loginUser(request, address, password));
@@ -115,7 +115,8 @@ Then('運営帳票は全件同一時点で授権内だけを出力する', async
   expect((await request.get(base, { params })).status()).toBe(401);
   const parts = writer.split('.');
   const forgedClaims = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
-  forgedClaims.storeScopeType = 'ALL_STORES';
+  // 店舗集合は JWT に載らず要求ごとに DB から解決する。署名を欠いた改竄は店舗を名乗っても拒まれる。
+  forgedClaims.storeIds = [Number(STORE1_ID), Number(foreign)];
   parts[1] = Buffer.from(JSON.stringify(forgedClaims)).toString('base64url');
   expect((await request.get(base, { headers: headers(parts.join('.')), params })).status()).toBe(401);
 

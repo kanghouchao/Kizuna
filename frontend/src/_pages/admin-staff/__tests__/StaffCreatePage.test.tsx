@@ -88,13 +88,12 @@ describe('従業員追加ページ', () => {
       password: 'pass1234',
       display_name: '新人 花子',
       role_ids: [11],
-      store_scope_type: 'SPECIFIC_STORES',
       store_ids: [2],
     });
     expect(mockedNotify.success).toHaveBeenCalledWith('従業員を追加しました');
   });
 
-  it('ロール・店舗・本人の欄が欠けていれば欄の傍に文言を出し、作成 API を呼ばない', async () => {
+  it('ロール・本人の欄が欠けていれば欄の傍に文言を出し、作成 API を呼ばない', async () => {
     render(<StaffCreatePage />);
     await screen.findByRole('checkbox', { name: '店長' });
     fireEvent.change(screen.getByLabelText('メールアドレス'), { target: { value: 'invalid' } });
@@ -102,7 +101,6 @@ describe('従業員追加ページ', () => {
     fireEvent.click(screen.getByRole('button', { name: '追加する' }));
 
     expect(await screen.findByText('ロールを 1 つ以上選択してください')).toBeInTheDocument();
-    expect(screen.getByText('対象店舗を 1 つ以上選択してください')).toBeInTheDocument();
     expect(screen.getByText('氏名を入力してください')).toBeInTheDocument();
     expect(screen.getByText('初期パスワードを入力してください')).toBeInTheDocument();
     expect(screen.getByLabelText('メールアドレス')).toHaveAttribute('aria-invalid', 'true');
@@ -131,8 +129,10 @@ describe('従業員追加ページ', () => {
     render(<StaffCreatePage />);
     const result = screen.getByRole('region', { name: 'この設定の結果' });
     expect(result).toHaveTextContent(
-      '新しい従業員は 未選択 として 未選択 のデータにアクセスできます'
+      '新しい従業員は 未選択 として、どの店舗のデータにもアクセスできません'
     );
+    expect(within(result).getByRole('heading', { name: '対象店舗（0 店舗）' })).toBeInTheDocument();
+    expect(within(result).getByText('担当店舗なし')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('氏名'), { target: { value: '新人 花子' } });
     fireEvent.click(await screen.findByRole('checkbox', { name: '店長' }));
@@ -169,18 +169,25 @@ describe('従業員追加ページ', () => {
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/staff'));
     expect(mockedStaffApi.create).toHaveBeenCalledWith(
-      expect.objectContaining({ store_scope_type: 'SPECIFIC_STORES', store_ids: [1, 2] })
+      expect.objectContaining({ store_ids: [1, 2] })
     );
   });
 
-  it('店舗だけが欠けていれば先頭の店舗に焦点を移す', async () => {
+  // 空の店舗集合は「どの店舗も担当しない」で、全店舗の意味は持たない
+  it('店舗を選ばなければ担当店舗なしとして作成する', async () => {
     render(<StaffCreatePage />);
     fillIdentity();
     fireEvent.click(await screen.findByRole('checkbox', { name: '店長' }));
     fireEvent.click(screen.getByRole('button', { name: '追加する' }));
 
-    expect(await screen.findByText('対象店舗を 1 つ以上選択してください')).toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: '新宿店' })).toHaveFocus();
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/staff'));
+    expect(mockedStaffApi.create).toHaveBeenCalledWith({
+      email: 'new@example.com',
+      password: 'pass1234',
+      display_name: '新人 花子',
+      role_ids: [10],
+      store_ids: [],
+    });
   });
 
   it('多店舗でもすべて選択・すべて解除で個別店舗をまとめて切り替えられる', async () => {

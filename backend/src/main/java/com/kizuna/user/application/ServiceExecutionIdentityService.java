@@ -4,12 +4,10 @@ import com.kizuna.audit.recording.AuditActor;
 import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.RoleRepository;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.util.Collections;
-import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -58,11 +56,7 @@ public class ServiceExecutionIdentityService {
   /** 有効なサービス ID のいずれかの店舗集合に入っている店舗。停止中のサービス ID は処理を実行しないので数えない。 */
   public StoreScope coveredStores() {
     var services = users.findByUserTypeAndEnabledTrue(UserType.SERVICE);
-    if (services.stream().anyMatch(u -> u.getStoreScopeType() == StoreScopeType.ALL_STORES)) {
-      return new StoreScope(true, Set.of());
-    }
     return new StoreScope(
-        false,
         services.stream()
             .flatMap(u -> u.getStoreIds().stream())
             .collect(Collectors.toUnmodifiableSet()));

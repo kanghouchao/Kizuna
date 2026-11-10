@@ -42,13 +42,6 @@ databaseChangeLog:
                   type: VARCHAR(100)
                   remarks: 可視化に必要な権限（PermissionCode 名）
               - column:
-                  name: requires_all_stores
-                  type: BOOLEAN
-                  defaultValueBoolean: false
-                  constraints:
-                    nullable: false
-                  remarks: 全店舗を授権された利用者にだけ出す（店舗集合を跨ぐ・グループ級の画面）
-              - column:
                   name: sort_order
                   type: INTEGER
                   defaultValueNumeric: 0

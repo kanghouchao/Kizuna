@@ -31,7 +31,6 @@ import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.PermissionRepository;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -139,7 +138,6 @@ class AuthServiceTest {
         .enabled(true)
         .userType(UserType.STAFF)
         .roleIds(Set.of(HQ_ROLE_ID))
-        .storeScopeType(StoreScopeType.ALL_STORES)
         .storeIds(Set.of())
         .build();
   }
@@ -155,7 +153,7 @@ class AuthServiceTest {
             PermissionCode.ORDER_SET_VIEW));
   }
 
-  private User storeStaff(String email, String displayName, StoreScopeType scopeType) {
+  private User storeStaff(String email, String displayName) {
     return persisted(
         User.builder()
             .email(email)
@@ -164,8 +162,7 @@ class AuthServiceTest {
             .enabled(true)
             .userType(UserType.STAFF)
             .roleIds(Set.of(STORE_ROLE_ID))
-            .storeScopeType(scopeType)
-            .storeIds(scopeType == StoreScopeType.ALL_STORES ? Set.of() : Set.of(1L))
+            .storeIds(Set.of(1L))
             .build());
   }
 
@@ -199,7 +196,7 @@ class AuthServiceTest {
     assertThat(claims).doesNotContainKey("userType");
     assertThat(claims).doesNotContainKey("role");
     // 店舗集合は claim に載せない — 要求ごとに DB から解決する。
-    assertThat(claims).doesNotContainKeys("storeBridge", "storeScopeType", "storeIds");
+    assertThat(claims).doesNotContainKeys("storeBridge", "storeIds");
     // 発行時点の資格情報の版が claim に載る（ADR 0022 — 検証側が相等比較する前提値）。
     assertThat(claims.get("credentialVersion")).isEqualTo(0L);
     // 版の鍵は利用者 ID。subject の電子メールは退会で解放されて別人へ移りうる（ADR 0029）。
@@ -208,7 +205,7 @@ class AuthServiceTest {
 
   @Test
   void login_staffWithStorePermissions_issuesOnlyPermissionAuthorities() {
-    User staff = storeStaff("staff@kizuna.test", "店舗スタッフ", StoreScopeType.SPECIFIC_STORES);
+    User staff = storeStaff("staff@kizuna.test", "店舗スタッフ");
     stubSuccessfulAuthentication("staff@kizuna.test", "pass", staff);
     stubRolePermissions(
         STORE_ROLE_ID, "スタッフ", Set.of(PermissionCode.ORDER_MANAGE, PermissionCode.SHIFT_MANAGE));
@@ -234,7 +231,6 @@ class AuthServiceTest {
                 .displayName("会員")
                 .enabled(true)
                 .userType(UserType.MEMBER)
-                .storeScopeType(StoreScopeType.SPECIFIC_STORES)
                 .storeIds(Set.of())
                 .build());
     stubSuccessfulAuthentication("member@kizuna.test", "pass", member);
@@ -282,7 +278,6 @@ class AuthServiceTest {
                 .displayName("キャスト")
                 .enabled(true)
                 .userType(UserType.CAST)
-                .storeScopeType(StoreScopeType.SPECIFIC_STORES)
                 .storeIds(Set.of(1L))
                 .build());
     stubSuccessfulAuthentication("cast@kizuna.test", "pass", cast);
@@ -321,7 +316,6 @@ class AuthServiceTest {
             .displayName("キャスト")
             .enabled(true)
             .userType(UserType.CAST)
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(Set.of(1L))
             .build();
     when(userRepository.findByEmail("cast@kizuna.test")).thenReturn(Optional.of(cast));
@@ -343,7 +337,6 @@ class AuthServiceTest {
             .displayName("会員")
             .enabled(true)
             .userType(UserType.MEMBER)
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(Set.of())
             .build();
     ReflectionTestUtils.setField(member, "emailVerifiedAt", OffsetDateTime.now());

@@ -146,7 +146,7 @@ class NotificationApplicationTest {
     when(identities.requireServiceScope(5L, PermissionCode.NOTIFICATION_DELIVER))
         .thenReturn(
             new ServiceExecutionIdentityService.ServiceScope(
-                SERVICE, new StoreScope(false, Set.of(STORE_ID))));
+                SERVICE, new StoreScope(Set.of(STORE_ID))));
     var row = row();
     row.queue(null, "確認済み", false);
     when(deliveries.findDueForStores(
@@ -174,15 +174,12 @@ class NotificationApplicationTest {
             deliveries, attempts, identities, audit, mock(ApplicationEventPublisher.class), clock);
     when(identities.requireServiceScope(5L, PermissionCode.NOTIFICATION_DELIVER))
         .thenReturn(
-            new ServiceExecutionIdentityService.ServiceScope(
-                SERVICE, new StoreScope(false, Set.of())));
+            new ServiceExecutionIdentityService.ServiceScope(SERVICE, new StoreScope(Set.of())));
     assertThat(task.execute(new TaskContext(3L, 5L, null, null))).isZero();
     verify(deliveries)
         .findByStatusAndScheduledAtLessThanEqualAndAttributedStoreIdIsNullOrderByScheduledAtAscIdAsc(
             DeliveryStatus.QUEUED, OffsetDateTime.now(clock), Limit.of(100));
     verify(deliveries, never()).findDueForStores(any(), any(), any(), any());
-    verify(deliveries, never())
-        .findByStatusAndScheduledAtLessThanEqualOrderByScheduledAtAscIdAsc(any(), any(), any());
   }
 
   @Test

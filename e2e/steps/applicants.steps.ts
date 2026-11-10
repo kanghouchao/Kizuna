@@ -8,6 +8,7 @@ import {
   STORE1_ID,
   STORE_HEADERS,
   createPermissionRole,
+  createServiceIdentity,
   createStaffFixture,
   authorizedStoreIds,
   ensureMedium,
@@ -69,7 +70,6 @@ async function createRecruiter(
       password,
       display_name: "採用検証担当",
       role_ids: [roleId],
-      store_scope_type: "SPECIFIC_STORES",
       store_ids: [Number(STORE1_ID)],
     },
   });
@@ -1041,17 +1041,13 @@ Then(
       ["TASK_EXECUTE"],
     );
     for (const roleId of [completeRole, incompleteRole]) {
-      const response = await request.post("/api/service-identities", {
-        headers: { ...STORE_HEADERS, Authorization: `Bearer ${ownerToken}` },
-        data: {
-          display_name: `匿名化サービス-${roleId}-${suffix}`,
-          role_ids: [roleId],
-          store_scope_type: "ALL_STORES",
-          store_ids: [],
-        },
-      });
-      expect(response.status(), await response.text()).toBe(201);
-      const id = (await response.json()).id;
+      const id = await createServiceIdentity(
+        request,
+        ownerToken,
+        `匿名化サービス-${roleId}-${suffix}`,
+        [roleId],
+        await authorizedStoreIds(request, ownerToken),
+      );
       if (roleId === completeRole) anonymizeServiceId = id;
       else incompleteServiceId = id;
     }

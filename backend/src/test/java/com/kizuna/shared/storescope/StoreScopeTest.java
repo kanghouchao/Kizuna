@@ -11,7 +11,7 @@ class StoreScopeTest {
   @Test
   @DisplayName("authorizes: 含む店舗は true、含まない店舗と null は false")
   void authorizesRespectsSpecificSet() {
-    StoreScope scope = new StoreScope(false, Set.of(1L));
+    StoreScope scope = new StoreScope(Set.of(1L));
 
     assertThat(scope.authorizes(1L)).isTrue();
     assertThat(scope.authorizes(2L)).isFalse();
@@ -19,12 +19,12 @@ class StoreScopeTest {
   }
 
   @Test
-  @DisplayName("authorizes: ALL_STORES は任意店舗で true、ただし null は false")
-  void authorizesAllStoresExceptNull() {
-    StoreScope scope = new StoreScope(true, Set.of());
+  @DisplayName("authorizes: 空集合はどの店舗も授権しない（全店舗を意味しない）")
+  void emptySetAuthorizesNoStore() {
+    StoreScope scope = new StoreScope(Set.of());
 
-    assertThat(scope.authorizes(1L)).isTrue();
-    assertThat(scope.authorizes(999L)).isTrue();
+    assertThat(scope.authorizes(1L)).isFalse();
+    assertThat(scope.authorizes(999L)).isFalse();
     assertThat(scope.authorizes(null)).isFalse();
   }
 }

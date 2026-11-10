@@ -62,7 +62,6 @@ public class ServiceIdentityService {
                 user.getDisplayName(),
                 user.getEnabled(),
                 rolesOf(user, roleNames),
-                user.getStoreScopeType(),
                 new HashSet<>(user.getStoreIds())));
   }
 
@@ -101,7 +100,6 @@ public class ServiceIdentityService {
             .enabled(true)
             .userType(UserType.SERVICE)
             .roleIds(command.roleIds())
-            .storeScopeType(command.storeScopeType())
             .storeIds(command.storeIds())
             .build();
     user = save(user);
@@ -126,8 +124,7 @@ public class ServiceIdentityService {
       throw new StaleServiceIdentityUpdateException("他の管理者が更新しました。最新の内容を確認してください");
     }
     var before = BusinessAudit.grants(user);
-    credentialOperations.reassignGrants(
-        user, command.roleIds(), command.storeScopeType(), command.storeIds());
+    credentialOperations.reassignGrants(user, command.roleIds(), command.storeIds());
     user = save(user);
     if (!before.equals(BusinessAudit.grants(user)))
       businessAudit.recordCurrent(
@@ -246,7 +243,6 @@ public class ServiceIdentityService {
         user.getDisplayName(),
         user.getEnabled(),
         rolesOf(user, roleNames),
-        user.getStoreScopeType(),
         new HashSet<>(user.getStoreIds()),
         user.getVersion());
   }

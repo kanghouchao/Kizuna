@@ -247,7 +247,7 @@ class MemberNotificationSettingIntegrationTest {
     String email = key + "@example.test";
     long user =
         jdbc.queryForObject(
-            "insert into t_users(display_name,user_type,store_scope_type,email,password) values ('検証会員','MEMBER','SPECIFIC_STORES',?,'x') returning id",
+            "insert into t_users(display_name,user_type,email,password) values ('検証会員','MEMBER',?,'x') returning id",
             Long.class,
             email);
     String code = key.replace("-", "").substring(0, 12);

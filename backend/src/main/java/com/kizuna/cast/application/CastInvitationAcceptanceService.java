@@ -17,7 +17,6 @@ import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -75,7 +74,7 @@ public class CastInvitationAcceptanceService {
         invitation.getExpiresAt());
   }
 
-  /** 新規登録で受諾する。CAST・SPECIFIC_STORES{招待店舗} の身分を作成し、档案へ紐づけて招待を受諾済みにする。 招待店舗の名前を返す。 */
+  /** 新規登録で受諾する。CAST・店舗集合{招待店舗} の身分を作成し、档案へ紐づけて招待を受諾済みにする。 招待店舗の名前を返す。 */
   @Transactional
   public String acceptAsNewUser(String token, CastNewUserAcceptCommand command) {
     CastInvitation invitation = findByToken(token);
@@ -94,7 +93,6 @@ public class CastInvitationAcceptanceService {
                 .displayName(command.displayName())
                 .enabled(true)
                 .userType(UserType.CAST)
-                .storeScopeType(StoreScopeType.SPECIFIC_STORES)
                 .storeIds(Set.of(invitation.getStoreId()))
                 .build());
     link(cast, user.getId());
@@ -102,10 +100,7 @@ public class CastInvitationAcceptanceService {
     return storeName(invitation.getStoreId());
   }
 
-  /**
-   * 資格情報を照合済みの既存の CAST アカウントで受諾する。SPECIFIC_STORES は所属店舗集合に招待店舗を冪等 union し、ALL_STORES
-   * は全店アクセス権をそのまま保持する（降格しない）。 いずれも档案へ紐づけて招待を受諾済みにし、招待店舗の名前を返す。
-   */
+  /** 資格情報を照合済みの既存の CAST アカウントで受諾する。所属店舗集合に招待店舗を冪等 union し、档案へ紐づけて招待を受諾済みにし、 招待店舗の名前を返す。 */
   @Transactional
   public String acceptAsExistingUser(String token, String email, String password) {
     CastInvitation invitation = findByToken(token);
@@ -137,15 +132,11 @@ public class CastInvitationAcceptanceService {
       throw new ConflictException("この店舗には既に有効な在籍があります");
     }
 
-    // ALL_STORES は既に全店アクセス権を持つため、SPECIFIC_STORES へ降格させない（不変条件で storeIds は空）。
-    // SPECIFIC_STORES の場合のみ招待店舗を冪等 union して再割当する（束・精算範囲は触らない — CAST は保持しない）。
-    boolean membershipAdded = false;
-    if (user.getStoreScopeType() == StoreScopeType.SPECIFIC_STORES) {
-      Set<Long> storeIds = new HashSet<>(user.getStoreIds());
-      membershipAdded = storeIds.add(invitation.getStoreId());
-      user.reassignStores(StoreScopeType.SPECIFIC_STORES, storeIds);
-      userRepository.save(user);
-    }
+    // 招待店舗を冪等 union して再割当する（ロールは触らない — CAST は保持しない）。
+    Set<Long> storeIds = new HashSet<>(user.getStoreIds());
+    boolean membershipAdded = storeIds.add(invitation.getStoreId());
+    user.reassignStores(storeIds);
+    userRepository.save(user);
     link(cast, user.getId());
     recordAcceptance(invitation, cast, user, "EXISTING_USER", membershipAdded);
     return storeName(invitation.getStoreId());

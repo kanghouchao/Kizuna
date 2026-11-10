@@ -1,6 +1,5 @@
 package com.kizuna.user.application;
 
-import com.kizuna.user.domain.StoreScopeType;
 import java.util.List;
 import java.util.Set;
 
@@ -13,7 +12,6 @@ public final class ServiceIdentityViews {
       String displayName,
       boolean enabled,
       List<RoleViews.Ref> roles,
-      StoreScopeType storeScopeType,
       Set<Long> storeIds) {}
 
   public record Detail(
@@ -21,7 +19,6 @@ public final class ServiceIdentityViews {
       String displayName,
       boolean enabled,
       List<RoleViews.Ref> roles,
-      StoreScopeType storeScopeType,
       Set<Long> storeIds,
       long version) {}
 }

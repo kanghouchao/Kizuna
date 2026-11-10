@@ -64,7 +64,7 @@ class StoreControllerTest {
   @MockitoBean private StoreRegistryService storeRegistryService;
   @MockitoBean private StoreScopeHolder storeScopeHolder;
 
-  private static final StoreScope SCOPE = new StoreScope(false, Set.of(1L));
+  private static final StoreScope SCOPE = new StoreScope(Set.of(1L));
 
   @BeforeEach
   void resolveScope() {

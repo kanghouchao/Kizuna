@@ -2,7 +2,6 @@ package com.kizuna.menu.application;
 
 import com.kizuna.menu.domain.Menu;
 import com.kizuna.shared.security.Authorities;
-import com.kizuna.shared.storescope.StoreScope;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -16,8 +15,8 @@ final class MenuTreeAssembler {
 
   private MenuTreeAssembler() {}
 
-  static List<MenuNode> assemble(List<Menu> roots, StoreScope scope) {
-    Viewer viewer = new Viewer(currentUserAuthorities(), scope != null && scope.allStores());
+  static List<MenuNode> assemble(List<Menu> roots) {
+    Viewer viewer = new Viewer(currentUserAuthorities());
     return roots.stream()
         .filter(menu -> visible(menu, viewer))
         .map(menu -> toNode(menu, viewer))
@@ -34,7 +33,7 @@ final class MenuTreeAssembler {
     return menu.path() != null || !menu.items().isEmpty();
   }
 
-  private record Viewer(Set<String> authorities, boolean allStores) {}
+  private record Viewer(Set<String> authorities) {}
 
   private static MenuNode toNode(Menu menu, Viewer viewer) {
     List<MenuNode> children =
@@ -50,14 +49,11 @@ final class MenuTreeAssembler {
 
   /**
    * 見出し節（遷移先を持たず子を持つ）は子に見えるものが一つでもあれば出す — 節自身の permission は見ない。葉は permission で判定し、permission
-   * の無い葉は全員に見える。全店舗を要する葉（定期処理・監査・グループ級の通知）は、全店舗を担当しない利用者には出さない。
+   * の無い葉は全員に見える。
    */
   private static boolean visible(Menu menu, Viewer viewer) {
     if (menu.getPath() == null && menu.getChildren() != null && !menu.getChildren().isEmpty()) {
       return menu.getChildren().stream().anyMatch(child -> visible(child, viewer));
-    }
-    if (menu.isRequiresAllStores() && !viewer.allStores()) {
-      return false;
     }
     if (menu.getPermission() == null || menu.getPermission().isEmpty()) {
       return true;

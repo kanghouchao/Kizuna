@@ -92,7 +92,7 @@ class AdvertisingRecruitmentEffectIntegrationTest {
     effects = context.getBean(AdvertisingRecruitmentEffectService.class);
     actorId =
         jdbc.queryForObject(
-            "insert into t_users(email,display_name,user_type,store_scope_type) values ('effect@example.test','採用効果担当','STAFF','ALL_STORES') returning id",
+            "insert into t_users(email,display_name,user_type) values ('effect@example.test','採用効果担当','STAFF') returning id",
             Long.class);
     when(context.getBean(ActorIdentityService.class).requireUserId(any())).thenReturn(actorId);
   }

@@ -43,7 +43,7 @@ class RequestCorrelationFilterTest {
                       (input, output) -> {
                         assertThat(ThreadContext.get("requestId")).isEqualTo(originalId);
                         ThreadContext.put(CurrentStoreArgumentResolver.MDC_STORE_ID, "1");
-                        holder.install(() -> new StoreScope(true, java.util.Set.of()));
+                        holder.install(() -> new StoreScope(java.util.Set.of(1L)));
                         throw new ServletException("非同期失敗");
                       }))
           .isInstanceOf(ServletException.class);

@@ -98,7 +98,7 @@ class TaskExecutionControllerTest {
   @Test
   @DisplayName("どのサービス ID の店舗集合にも入っていない店舗を、呼び出し側の店舗集合で絞って id と名前で返すこと")
   void uncoveredStoresAreListedWithinTheCallerScope() throws Exception {
-    var scope = new StoreScope(false, Set.of(3L));
+    var scope = new StoreScope(Set.of(3L));
     when(storeScopeResolver.resolve(any())).thenReturn(scope);
     when(options.uncoveredStores(scope))
         .thenReturn(List.of(new TaskOptions.UncoveredStore(3L, "新店")));

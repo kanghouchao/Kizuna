@@ -56,8 +56,8 @@ class StoreRegistryServiceTest {
   @Mock private CreatedStoreGrant createdStoreGrant;
   @InjectMocks private StoreRegistryService storeRegistryService;
 
-  private static final StoreScope ALL = new StoreScope(true, Set.of());
-  private static final StoreScope ONLY_2 = new StoreScope(false, Set.of(2L));
+  private static final StoreScope ALL = new StoreScope(Set.of(1L, 2L, 99L));
+  private static final StoreScope ONLY_2 = new StoreScope(Set.of(2L));
 
   @Test
   void list_returnsPage() {
@@ -338,14 +338,13 @@ class StoreRegistryServiceTest {
 
   @Test
   void count_emptyScopeIsZeroWithoutQuerying() {
-    assertThat(storeRegistryService.count(new StoreScope(false, Set.of()))).isZero();
+    assertThat(storeRegistryService.count(new StoreScope(Set.of()))).isZero();
     verify(storeRepository, never()).count(any(Specification.class));
   }
 
   @Test
   void list_emptyScopeIsEmptyWithoutQuerying() {
-    assertThat(
-            storeRegistryService.list(new StoreScope(false, Set.of()), null, PageRequest.of(0, 10)))
+    assertThat(storeRegistryService.list(new StoreScope(Set.of()), null, PageRequest.of(0, 10)))
         .isEmpty();
     verify(storeRepository, never()).findAll(any(Specification.class), any(Pageable.class));
   }

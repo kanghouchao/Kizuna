@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 import com.kizuna.audit.recording.AuditChange;
 import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -47,7 +46,6 @@ class BusinessAuditTest {
             .userType(UserType.STAFF)
             .enabled(true)
             .roleIds(Set.of(1L))
-            .storeScopeType(StoreScopeType.ALL_STORES)
             .storeIds(Set.of())
             .build();
     actor.setId(10L);
@@ -78,7 +76,6 @@ class BusinessAuditTest {
             .userType(UserType.SERVICE)
             .enabled(true)
             .roleIds(Set.of(1L))
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(stores)
             .build();
     var actor = new com.kizuna.audit.recording.AuditActor(1L, "STAFF", "監査担当");

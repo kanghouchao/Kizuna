@@ -52,7 +52,7 @@ public class RemunerationReportReader {
   @Transactional(readOnly = true, propagation = Propagation.MANDATORY)
   public RemunerationReportFacts store(
       Long storeId, OperationalFacts orders, LocalDate from, LocalDate to, int limit) {
-    return read(new StoreScope(false, Set.of(storeId)), orders, from, to, limit);
+    return read(new StoreScope(Set.of(storeId)), orders, from, to, limit);
   }
 
   @PreAuthorize("hasAuthority('PERM_REMUNERATION_SET_VIEW')")

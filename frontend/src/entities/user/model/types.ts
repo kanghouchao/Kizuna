@@ -78,9 +78,6 @@ export type PermissionCode =
   | 'RECRUITMENT_ATTACHMENT_VIEW'
   | 'RECRUITMENT_ATTACHMENT_MANAGE';
 
-// ユーザーの店舗作用域種別
-export type StoreScopeType = 'ALL_STORES' | 'SPECIFIC_STORES';
-
 // ログインリクエスト
 export interface LoginRequest {
   email: string;
@@ -202,7 +199,6 @@ export interface StaffResponse {
   // enabled / version / editable は Java 側が primitive のため、キーは必ず応答に含まれる。
   enabled: boolean;
   roles?: RoleRef[];
-  store_scope_type?: StoreScopeType;
   store_ids?: number[];
   // 楽観ロック用バージョン（更新リクエストへそのまま往復する）
   version: number;
@@ -215,18 +211,14 @@ export interface StaffCreateRequest {
   password: string;
   display_name: string;
   role_ids: number[];
-  store_scope_type: StoreScopeType;
-  // Java 側に必須注解が無い（ALL_STORES のときは送らなくてよい）
-  store_ids?: number[];
+  store_ids: number[];
 }
 
 // 従業員の授権編集リクエスト。停止・再開は専用端点（suspension / resumption）が担うのでここには無い
 // （サーバは未知のキーを 400 で弾くため、enabled を混ぜると更新そのものが通らない）。
 export interface StaffUpdateRequest {
   role_ids: number[];
-  store_scope_type: StoreScopeType;
-  // Java 側に必須注解が無い（ALL_STORES のときは送らなくてよい）
-  store_ids?: number[];
+  store_ids: number[];
   // 楽観ロック用バージョン（応答の version をそのまま返送。不一致は 409）
   version: number;
 }
@@ -239,7 +231,6 @@ export interface ServiceIdentitySummaryResponse {
   // enabled は Java 側が primitive のため、キーは必ず応答に含まれる。
   enabled: boolean;
   roles?: RoleRef[];
-  store_scope_type?: StoreScopeType;
   store_ids?: number[];
 }
 
@@ -252,7 +243,6 @@ export interface ServiceIdentityResponse {
   // enabled と version は Java 側が primitive のため、キーは必ず応答に含まれる。
   enabled: boolean;
   roles?: RoleRef[];
-  store_scope_type?: StoreScopeType;
   store_ids?: number[];
   // 楽観ロック用バージョン（更新リクエストへそのまま往復する）
   version: number;
@@ -262,18 +252,14 @@ export interface ServiceIdentityResponse {
 export interface ServiceIdentityCreateRequest {
   display_name: string;
   role_ids: number[];
-  store_scope_type: StoreScopeType;
-  // Java 側に必須注解が無い（ALL_STORES のときは送らなくてよい）
-  store_ids?: number[];
+  store_ids: number[];
 }
 
 // サービスID授権編集リクエスト。停止・再開は専用端点が担うのでここには無い
 // （サーバは未知のキーを 400 で弾くため、enabled を混ぜると更新そのものが通らない）。
 export interface ServiceIdentityUpdateRequest {
   role_ids: number[];
-  store_scope_type: StoreScopeType;
-  // Java 側に必須注解が無い（ALL_STORES のときは送らなくてよい）
-  store_ids?: number[];
+  store_ids: number[];
   // 楽観ロック用バージョン（応答の version をそのまま返送。不一致は 409）
   version: number;
 }

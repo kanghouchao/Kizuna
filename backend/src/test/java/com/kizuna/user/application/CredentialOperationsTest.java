@@ -9,7 +9,6 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.user.domain.InvalidCredentialAssignmentException;
 import com.kizuna.user.domain.Role;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserCredentialsChanged;
 import com.kizuna.user.domain.UserRepository;
@@ -74,10 +73,10 @@ class CredentialOperationsTest {
   @Test
   void grantReassignmentNotifiesTheCurrentVersionOnEveryRequest() {
     User user = user(UserType.STAFF);
-    operations.reassignGrants(user, Set.of(1L, 2L), StoreScopeType.SPECIFIC_STORES, Set.of(1L));
-    operations.reassignGrants(user, Set.of(1L, 2L), StoreScopeType.ALL_STORES, Set.of());
+    operations.reassignGrants(user, Set.of(1L, 2L), Set.of(1L));
+    operations.reassignGrants(user, Set.of(1L, 2L), Set.of());
     assertThat(user.getRoleIds()).containsExactlyInAnyOrder(1L, 2L);
-    assertThat(user.getStoreScopeType()).isEqualTo(StoreScopeType.ALL_STORES);
+    assertThat(user.getStoreIds()).isEmpty();
     assertThat(user.getCredentialVersion()).isEqualTo(1L);
     assertThat(events)
         .containsExactly(
@@ -88,7 +87,7 @@ class CredentialOperationsTest {
   @Test
   void serviceGrantReassignmentAdvancesWithoutNotification() {
     User user = user(UserType.SERVICE);
-    operations.reassignGrants(user, Set.of(2L), StoreScopeType.SPECIFIC_STORES, Set.of(1L));
+    operations.reassignGrants(user, Set.of(2L), Set.of(1L));
     assertThat(user.getCredentialVersion()).isEqualTo(1L);
     assertThat(events).isEmpty();
   }
@@ -176,7 +175,6 @@ class CredentialOperationsTest {
             .password(type == UserType.SERVICE ? null : "hash")
             .enabled(true)
             .roleIds(type.holdsRoles() ? Set.of(1L) : Set.of())
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(Set.of(1L))
             .build();
     user.setId(42L);

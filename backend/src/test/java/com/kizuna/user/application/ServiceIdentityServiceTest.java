@@ -17,7 +17,6 @@ import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.RoleSummary;
 import com.kizuna.user.domain.StaleServiceIdentityUpdateException;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -72,7 +71,6 @@ class ServiceIdentityServiceTest {
             .enabled(true)
             .userType(UserType.SERVICE)
             .roleIds(roleIds)
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(Set.of(1L))
             .build();
     user.setId(id);
@@ -81,13 +79,11 @@ class ServiceIdentityServiceTest {
   }
 
   private ServiceIdentityCommand.Create createCommand(Set<Long> roleIds) {
-    return new ServiceIdentityCommand.Create(
-        "夜間バッチ", roleIds, StoreScopeType.SPECIFIC_STORES, Set.of(1L));
+    return new ServiceIdentityCommand.Create("夜間バッチ", roleIds, Set.of(1L));
   }
 
   private ServiceIdentityCommand.UpdateGrants updateCommand(Set<Long> roleIds, long version) {
-    return new ServiceIdentityCommand.UpdateGrants(
-        roleIds, StoreScopeType.SPECIFIC_STORES, Set.of(2L), version);
+    return new ServiceIdentityCommand.UpdateGrants(roleIds, Set.of(2L), version);
   }
 
   @Test
@@ -195,7 +191,6 @@ class ServiceIdentityServiceTest {
             .enabled(true)
             .userType(UserType.STAFF)
             .roleIds(Set.of(CUSTOM_ROLE))
-            .storeScopeType(StoreScopeType.ALL_STORES)
             .storeIds(Set.of())
             .build();
     when(repository.findById(6L)).thenReturn(Optional.of(staff));

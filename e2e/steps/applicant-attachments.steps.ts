@@ -34,7 +34,7 @@ Given("添付検証専用の担当者と応募者が存在する", async ({ page
   const role = await createPermissionRole(request, owner, `添付検証-${suffix}`, ["RECRUITMENT_VIEW", "RECRUITMENT_MANAGE", "RECRUITMENT_ATTACHMENT_VIEW", "RECRUITMENT_ATTACHMENT_MANAGE"]);
   email = `attachment-${suffix}@example.invalid`;
   const password = randomUUID();
-  const staff = await request.post("/api/staff", { headers: { ...STORE_HEADERS, Authorization: `Bearer ${managerToken}` }, data: { email, password, display_name: "添付検証担当", role_ids: [role], store_scope_type: "SPECIFIC_STORES", store_ids: [Number(STORE1_ID)] } });
+  const staff = await request.post("/api/staff", { headers: { ...STORE_HEADERS, Authorization: `Bearer ${managerToken}` }, data: { email, password, display_name: "添付検証担当", role_ids: [role], store_ids: [Number(STORE1_ID)] } });
   expect(staff.status(), await staff.text()).toBe(201);
   const login = await request.post("/api/auth/login", { data: { email, password } });
   expect(login.status()).toBe(200);

@@ -2,13 +2,12 @@ package com.kizuna.user.api.dto;
 
 import com.kizuna.user.application.RoleViews;
 import com.kizuna.user.application.StaffView;
-import com.kizuna.user.domain.StoreScopeType;
 import java.util.List;
 import java.util.Set;
 
 /**
- * 従業員（ロール×店舗集合）の応答。JSON キーは Jackson 設定により snake_case（display_name / store_scope_type / store_ids）。
- * 店舗名は解決せず id のみ返す（フロントは授権店舗一覧の id→name で解決する）。ロールは選択 UI と一覧表示のため id と名称を返す。 version
+ * 従業員（ロール×店舗集合）の応答。JSON キーは Jackson 設定により snake_case（display_name / store_ids）。 店舗名は解決せず id
+ * のみ返す（フロントは授権店舗一覧の id→name で解決する）。ロールは選択 UI と一覧表示のため id と名称を返す。 version
  * は楽観ロックの往復用（編集リクエストがそのまま返送し、不一致は 409）。
  *
  * <p>{@code editable} は委譲守衛の判定結果（対象の権限並集と店舗集合が行使者の部分集合か）で、行使者ごとに変わる。
@@ -20,7 +19,6 @@ public record AdminStaffResponse(
     String displayName,
     boolean enabled,
     List<RoleRef> roles,
-    StoreScopeType storeScopeType,
     Set<Long> storeIds,
     long version,
     boolean editable) {
@@ -32,7 +30,6 @@ public record AdminStaffResponse(
         v.displayName(),
         v.enabled(),
         v.roles().stream().map(RoleRef::of).toList(),
-        v.storeScopeType(),
         v.storeIds(),
         v.version(),
         v.editable());

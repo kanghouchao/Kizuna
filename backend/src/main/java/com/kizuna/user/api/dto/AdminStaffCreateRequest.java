@@ -2,7 +2,6 @@ package com.kizuna.user.api.dto;
 
 import com.kizuna.shared.validation.Password;
 import com.kizuna.user.application.StaffCommand;
-import com.kizuna.user.domain.StoreScopeType;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -13,10 +12,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/**
- * スタッフ新規作成リクエスト。JSON キーは Jackson 設定により snake_case（display_name / role_ids / store_scope_type /
- * store_ids）。
- */
+/** スタッフ新規作成リクエスト。JSON キーは Jackson 設定により snake_case（display_name / role_ids / store_ids）。 */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -41,13 +37,11 @@ public class AdminStaffCreateRequest {
   @NotEmpty(message = "role_ids is required")
   private Set<@NotNull(message = "role_ids must not contain null") Long> roleIds;
 
-  @NotNull(message = "store_scope_type is required")
-  private StoreScopeType storeScopeType;
-
-  // null 要素は永続化時に黙って捨てられ、非空検証を通ったのに店舗ゼロの行が残るため要素単位で拒む。
+  // 空集合は「どの店舗も担当しない」で許す。null 要素は永続化時に黙って捨てられ指定と異なる集合が残るため、要素単位で拒む。
+  @NotNull(message = "store_ids is required")
   private Set<@NotNull(message = "store_ids must not contain null") Long> storeIds;
 
   public StaffCommand.Create command() {
-    return new StaffCommand.Create(email, password, displayName, roleIds, storeScopeType, storeIds);
+    return new StaffCommand.Create(email, password, displayName, roleIds, storeIds);
   }
 }

@@ -19,7 +19,6 @@ import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -225,7 +224,6 @@ class OrderAuditIntegrationTest {
               .enabled(true)
               .userType(UserType.STAFF)
               .roleIds(Set.of(1L))
-              .storeScopeType(StoreScopeType.ALL_STORES)
               .build();
       actor.setId(9L);
       when(users.findByEmail("operator@example.test")).thenReturn(Optional.of(actor));

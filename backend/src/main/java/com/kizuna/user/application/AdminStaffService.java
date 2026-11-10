@@ -20,7 +20,6 @@ import com.kizuna.user.domain.SelfPasswordResetNotAllowedException;
 import com.kizuna.user.domain.SelfStopNotAllowedException;
 import com.kizuna.user.domain.StaffOutOfDelegationScopeException;
 import com.kizuna.user.domain.StaleStaffUpdateException;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -101,8 +100,8 @@ public class AdminStaffService {
   }
 
   /**
-   * 一覧の対象は本人種別 STAFF のうち、行使者の店舗集合と交わる者（ALL_STORES の行使者は全員、ALL_STORES の対象は常に該当）。検索語は表示名と
-   * メールアドレスを横断する部分一致。店舗 id は「その店舗を担当範囲に含む」行への絞り込み。
+   * 一覧の対象は本人種別 STAFF のうち、行使者の店舗集合と交わる者と店舗集合が空の者。検索語は表示名とメールアドレスを横断する部分一致。店舗 id は
+   * 「その店舗を担当範囲に含む」行への絞り込みで、集合が空の者は含まない。
    *
    * <p>null の条件は述語を生成しない（JPQL の ":param is null or ..." パターンは PostgreSQL の null パラメータ型推論で 500 になるため
    * Specification で組み立てる）。
@@ -111,9 +110,7 @@ public class AdminStaffService {
     return (root, query, cb) -> {
       List<Predicate> predicates = new ArrayList<>();
       predicates.add(cb.equal(root.get("userType"), UserType.STAFF));
-      if (!scope.allStores()) {
-        predicates.add(authorizesAnyOf(root, cb, scope.storeIds()));
-      }
+      predicates.add(visibleTo(root, cb, scope.storeIds()));
       if (search != null) {
         char escape = LIKE_ESCAPE.getEscapeCharacter();
         String pattern = "%" + LIKE_ESCAPE.escape(search.toLowerCase(Locale.ROOT)) + "%";
@@ -123,18 +120,21 @@ public class AdminStaffService {
                 cb.like(cb.lower(root.get("email")), pattern, escape)));
       }
       if (storeId != null) {
-        predicates.add(authorizesAnyOf(root, cb, Set.of(storeId)));
+        predicates.add(cb.isMember(storeId, root.<Set<Long>>get("storeIds")));
       }
       return cb.and(predicates.toArray(new Predicate[0]));
     };
   }
 
-  /** 担当店舗集合は @ElementCollection のため member of は相関副問い合わせへ展開され、親行を増やさずページングを保つ。 */
-  private static Predicate authorizesAnyOf(
-      Root<User> root, CriteriaBuilder cb, Collection<Long> storeIds) {
+  /**
+   * 店舗集合が空の者、または行使者の店舗集合と交わる者。{@link #intersects} と同じ条件で、一覧に出た行は必ず開ける。担当店舗集合は
+   * {@code @ElementCollection} のため is empty / member of は相関副問い合わせへ展開され、親行を増やさずページングを保つ。
+   */
+  private static Predicate visibleTo(
+      Root<User> root, CriteriaBuilder cb, Collection<Long> actorStoreIds) {
     List<Predicate> any = new ArrayList<>();
-    any.add(cb.equal(root.get("storeScopeType"), StoreScopeType.ALL_STORES));
-    for (Long storeId : storeIds) {
+    any.add(cb.isEmpty(root.<Set<Long>>get("storeIds")));
+    for (Long storeId : actorStoreIds) {
       any.add(cb.isMember(storeId, root.<Set<Long>>get("storeIds")));
     }
     return cb.or(any.toArray(new Predicate[0]));
@@ -180,7 +180,7 @@ public class AdminStaffService {
     Actor actor = actor(actorEmail);
     Map<Long, Role> roles = requireRoles(command.roleIds());
     requireGrantable(roles.values(), actor);
-    requireStoresWithinActorScope(command.storeScopeType(), command.storeIds(), actor.scope());
+    requireStoresWithinActorScope(command.storeIds(), actor.scope());
     if (repository.findByEmail(command.email().toLowerCase(Locale.ROOT)).isPresent()) {
       throw new DuplicateStaffEmailException("このメールアドレスは既に登録されています");
     }
@@ -192,7 +192,6 @@ public class AdminStaffService {
             .enabled(true)
             .userType(UserType.STAFF)
             .roleIds(command.roleIds())
-            .storeScopeType(command.storeScopeType())
             .storeIds(command.storeIds())
             .build();
     user = save(user);
@@ -219,14 +218,13 @@ public class AdminStaffService {
     requireEditable(user, actor);
     Map<Long, Role> roles = requireRoles(command.roleIds());
     requireGrantable(roles.values(), actor);
-    requireStoresWithinActorScope(command.storeScopeType(), command.storeIds(), actor.scope());
+    requireStoresWithinActorScope(command.storeIds(), actor.scope());
     // 供給ロールの追加は並行しうるため、ロック前は要求に既存ロールの除去があるかだけで判断する。
     if (user.getEnabled() && !command.roleIds().containsAll(user.getRoleIds())) {
       roleManageHolderGuard.requireAfterGrantChange(user, command.roleIds());
     }
     var before = BusinessAudit.grants(user);
-    credentialOperations.reassignGrants(
-        user, command.roleIds(), command.storeScopeType(), command.storeIds());
+    credentialOperations.reassignGrants(user, command.roleIds(), command.storeIds());
     user = save(user);
     if (!before.equals(BusinessAudit.grants(user)))
       businessAudit.recordCurrent(
@@ -355,8 +353,8 @@ public class AdminStaffService {
   }
 
   /**
-   * 対象行を取り出す。可視性の述語は一覧と同一で、id を直に指しても一覧に出ない行へは届かない — 本人種別がスタッフ以外の行と、行使者の
-   * 店舗集合と交わらない行は、存在しても「見つからない」に倒す。対象外と不在を呼出側から区別させないため、両者は同一の応答になる。
+   * 対象行を取り出す。可視性の述語は一覧と同一で、id を直に指しても一覧に出ない行へは届かない — 本人種別がスタッフ以外の行と、店舗集合が空でなく
+   * 行使者の店舗集合と交わらない行は、存在しても「見つからない」に倒す。対象外と不在を呼出側から区別させないため、両者は同一の応答になる。
    */
   private User requireVisible(Long id, Actor actor) {
     return repository
@@ -367,10 +365,8 @@ public class AdminStaffService {
   }
 
   private static boolean intersects(User user, StoreScope actorScope) {
-    if (actorScope.allStores() || user.getStoreScopeType() == StoreScopeType.ALL_STORES) {
-      return true;
-    }
-    return user.getStoreIds().stream().anyMatch(actorScope.storeIds()::contains);
+    return user.getStoreIds().isEmpty()
+        || user.getStoreIds().stream().anyMatch(actorScope.storeIds()::contains);
   }
 
   private void requireEditable(User user, Actor actor) {
@@ -390,8 +386,7 @@ public class AdminStaffService {
             .map(roles::get)
             .filter(role -> role != null)
             .allMatch(role -> actor.covers(role.getPermissionIds()));
-    return permissionsWithin
-        && withinScope(user.getStoreScopeType(), user.getStoreIds(), actor.scope());
+    return permissionsWithin && actor.scope().storeIds().containsAll(user.getStoreIds());
   }
 
   /** 付与するロールの権限並集が行使者の権限並集に収まること。ロールを定義できる者以外は、自身が持たない権限を配れない。 */
@@ -404,23 +399,10 @@ public class AdminStaffService {
   }
 
   /** 付与・変更しようとしている店舗集合が行使者の店舗集合に収まること。検証は付与・変更時のみで、既往の付与へは遡らない。 */
-  private static void requireStoresWithinActorScope(
-      StoreScopeType scopeType, Set<Long> storeIds, StoreScope actorScope) {
-    if (!withinScope(scopeType, storeIds, actorScope)) {
+  private static void requireStoresWithinActorScope(Set<Long> storeIds, StoreScope actorScope) {
+    if (!actorScope.storeIds().containsAll(storeIds)) {
       throw new InvalidStoreScopeException("担当店舗の範囲を超える店舗は指定できません");
     }
-  }
-
-  /** 店舗集合の包含判定。ALL_STORES の対象を扱えるのは ALL_STORES の行使者だけ（部分集合の自然な帰結）。 */
-  private static boolean withinScope(
-      StoreScopeType scopeType, Set<Long> storeIds, StoreScope actorScope) {
-    if (actorScope.allStores()) {
-      return true;
-    }
-    if (scopeType == StoreScopeType.ALL_STORES) {
-      return false;
-    }
-    return storeIds == null || actorScope.storeIds().containsAll(storeIds);
   }
 
   private static boolean holdsAny(Set<Long> roleIds, Set<Long> targetRoleIds) {
@@ -471,7 +453,6 @@ public class AdminStaffService {
         user.getDisplayName(),
         user.getEnabled(),
         refs,
-        user.getStoreScopeType(),
         new HashSet<>(user.getStoreIds()),
         user.getVersion(),
         editableBy(user, roles, actor));

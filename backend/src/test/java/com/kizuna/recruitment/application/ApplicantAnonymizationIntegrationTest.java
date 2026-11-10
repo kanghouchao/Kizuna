@@ -101,7 +101,7 @@ class ApplicantAnonymizationIntegrationTest {
     operator =
         new AuditActor(
             jdbc.queryForObject(
-                "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'運用担当','STAFF','SPECIFIC_STORES') returning id",
+                "insert into t_users(email,display_name,user_type) values (?,'運用担当','STAFF') returning id",
                 Long.class,
                 UUID.randomUUID() + "@example.test"),
             "STAFF",
@@ -299,9 +299,9 @@ class ApplicantAnonymizationIntegrationTest {
   @Test
   void storesOutsideEveryEnabledServiceStoreSetAreShownAsUncovered() {
     var options = context.getBean(TaskOptions.class);
-    var everyStore = new StoreScope(true, Set.of());
     long fresh = store("どの集合にも無い店舗");
-    assertThat(options.uncoveredStores(new StoreScope(false, Set.of(storeId))))
+    var everyStore = new StoreScope(Set.of(storeId, fresh));
+    assertThat(options.uncoveredStores(new StoreScope(Set.of(storeId))))
         .extracting(TaskOptions.UncoveredStore::id)
         .as("呼び出し側の集合外の店舗は出さない")
         .doesNotContain(fresh);
@@ -320,13 +320,18 @@ class ApplicantAnonymizationIntegrationTest {
         .extracting(TaskOptions.UncoveredStore::id)
         .contains(fresh);
 
-    long all = service();
-    jdbc.update("update t_users set store_scope_type='ALL_STORES' where id=?", all);
+    long empty = service();
     try {
-      assertThat(options.uncoveredStores(everyStore)).isEmpty();
+      assertThat(options.uncoveredStores(everyStore))
+          .extracting(TaskOptions.UncoveredStore::id)
+          .as("店舗集合が空のサービス ID は、どの店舗も処理するものとして数えない")
+          .contains(fresh);
     } finally {
-      jdbc.update("update t_users set enabled=false where id=?", all);
+      jdbc.update("update t_users set enabled=false where id=?", empty);
     }
+    assertThat(options.uncoveredStores(new StoreScope(Set.of())))
+        .as("店舗集合が空の呼び出し側には、どの店舗も出さない")
+        .isEmpty();
   }
 
   private TaskCommand command() {
@@ -351,7 +356,7 @@ class ApplicantAnonymizationIntegrationTest {
   private long service(long... stores) {
     long id =
         jdbc.queryForObject(
-            "insert into t_users(display_name,user_type,store_scope_type) values ('匿名化処理','SERVICE','SPECIFIC_STORES') returning id",
+            "insert into t_users(display_name,user_type) values ('匿名化処理','SERVICE') returning id",
             Long.class);
     jdbc.update(
         "insert into t_user_roles(user_id,role_id) values (?,?),(?,?)",

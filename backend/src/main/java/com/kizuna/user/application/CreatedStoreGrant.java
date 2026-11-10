@@ -1,7 +1,6 @@
 package com.kizuna.user.application;
 
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import java.util.HashSet;
@@ -29,13 +28,10 @@ public class CreatedStoreGrant {
     // 同じ利用者の並行する作成や授権編集との取りこぼしを防ぐため、行を押さえてから読み直す。
     User creator =
         users.findByEmailForUpdate(auth.getName()).orElseThrow(CreatedStoreGrant::missingCreator);
-    if (creator.getStoreScopeType() == StoreScopeType.ALL_STORES) {
-      return;
-    }
     var before = BusinessAudit.grants(creator);
     Set<Long> storeIds = new HashSet<>(creator.getStoreIds());
     storeIds.add(storeId);
-    creator.reassignStores(StoreScopeType.SPECIFIC_STORES, storeIds);
+    creator.reassignStores(storeIds);
     users.save(creator);
     businessAudit.recordCurrent(
         null,

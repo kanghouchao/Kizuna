@@ -51,8 +51,8 @@ task up
 
 期限切れポイントの記帳は既定で停止している。明示的に `app.points-expiry.enabled=true` と
 `app.points-expiry.service-user-id` を設定した環境だけで、アプリケーションの暦日・時区に従い
-日次に実行する。手動の新規実行・再試行には運用者の `TASK_MANAGE`・`POINT_EXPIRE` と `ALL_STORES` が必要となる。
-サービス ID には `TASK_EXECUTE`・`POINT_EXPIRE` と `ALL_STORES` を明示授与する。
+日次に実行する。手動の新規実行・再試行には運用者の `TASK_MANAGE`・`POINT_EXPIRE` が必要となる。
+サービス ID には `TASK_EXECUTE`・`POINT_EXPIRE` を明示授与する。ポイントは店舗を持たないグループ級のデータなので、店舗集合は問わない。
 既存の人・サービスへの自動授与はない。
 
 `app.points-expiry.cron` の既定は `0 5 0 * * *`、`app.points-expiry.max-lots` は 10,000。
@@ -70,7 +70,7 @@ task up
 期限前案内の起票（処理名 `POINT_EXPIRY_NOTICE`）も既定で停止している。明示的に `app.points-expiry-notice.enabled=true` と
 `app.points-expiry-notice.service-user-id` を設定した環境だけで日次に実行し、システム設定 `point_expiry_notice_days` の日数後に
 期限を迎える未消費ポイントを持つ会員へ、会員と期限日ごとに一通の案内を送信待ちで起票する。権限は失効と同じく、
-サービス ID に `TASK_EXECUTE`・`POINT_EXPIRE` と `ALL_STORES`、手動実行に運用者の `TASK_MANAGE`・`POINT_EXPIRE` と `ALL_STORES`。
+サービス ID に `TASK_EXECUTE`・`POINT_EXPIRE`、手動実行に運用者の `TASK_MANAGE`・`POINT_EXPIRE`。
 `app.points-expiry-notice.cron` の既定は `0 0 9 * * *`（起票した案内は次の送信で届くので、会員に届く時刻を朝にしている）、
 `app.points-expiry-notice.max-lots` は 10,000。案内は業務通知の送信で届くので、送信の定期処理も有効にする。
 
@@ -80,8 +80,8 @@ task up
 `app.applicant-anonymization.service-user-id` を設定した環境だけで、アプリケーションの暦日・時区に従い日次に実行する。
 保持期間はシステム設定の `applicant_retention_rejected_months`・`applicant_retention_withdrawn_months`・
 `applicant_retention_hired_months` で終端状態ごとに定め、未設定の状態は匿名化しない。0 か月は終端へ確定した当日から対象になる。
-手動の新規実行・再試行には運用者の `TASK_MANAGE`・`APPLICANT_ANONYMIZE` と `ALL_STORES` が必要となる。
-サービス ID には `TASK_EXECUTE`・`APPLICANT_ANONYMIZE` と `ALL_STORES` を明示授与する。
+手動の新規実行・再試行には運用者の `TASK_MANAGE`・`APPLICANT_ANONYMIZE` が必要となる。
+サービス ID には `TASK_EXECUTE`・`APPLICANT_ANONYMIZE` を明示授与し、対象の店舗を店舗集合に加える。集合に無い店舗の応募者は匿名化されない。
 `APPLICANT_ANONYMIZE` はどの既定ロールにも授与されない。
 
 `app.applicant-anonymization.cron` の既定は `0 15 0 * * *`、`app.applicant-anonymization.max-applicants` は 100（一回の実行で匿名化する上限。残りは次回の実行で処理する）。
@@ -93,10 +93,10 @@ task up
 
 送信予定を過ぎた業務通知を送信器へ引き渡す処理（処理名 `NOTIFICATION_DELIVER`）は既定で停止している。
 明示的に `app.notification-delivery.enabled=true` と `app.notification-delivery.service-user-id` を設定した環境だけで、
-`app.notification-delivery.cron`（既定 `0 * * * * *`、毎分）に従って全店舗と会員宛の通知を一回最大 100 件ずつ扱う。
+`app.notification-delivery.cron`（既定 `0 * * * * *`、毎分）に従って、サービス ID の店舗集合内の店舗と会員宛の通知を一回最大 100 件ずつ扱う。
 停止中は送信待ちの通知が溜まるだけで、処理画面からの手動実行で流せる。
-サービス ID には `TASK_EXECUTE`・`NOTIFICATION_DELIVER` と `ALL_STORES`、手動の新規実行・再試行には運用者の
-`TASK_MANAGE`・`NOTIFICATION_DELIVER` と `ALL_STORES` が要る。定期実行の実行キーは起動した分（UTC、例 `2026-11-04T00:05:00Z`）で、
+サービス ID には `TASK_EXECUTE`・`NOTIFICATION_DELIVER` と対象の店舗を含む店舗集合、手動の新規実行・再試行には運用者の
+`TASK_MANAGE`・`NOTIFICATION_DELIVER` が要る。定期実行の実行キーは起動した分（UTC、例 `2026-11-04T00:05:00Z`）で、
 同じ分の起動は一つにまとまるので、cron は一分以上の間隔にする。
 
 ## 文書案内

@@ -1,7 +1,6 @@
 package com.kizuna.user.application;
 
 import com.kizuna.user.domain.Role;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserCredentialsChanged;
 import com.kizuna.user.domain.UserRepository;
@@ -39,9 +38,8 @@ public class CredentialOperations {
   }
 
   /** 授権の再割当。ロール集合が変わると集約が版を進める。停止と同じく、再送で反映を書き直せるよう要求ごとに現在版を通知する。 */
-  public void reassignGrants(
-      User user, Set<Long> roleIds, StoreScopeType storeScopeType, Set<Long> storeIds) {
-    user.reassignGrants(roleIds, storeScopeType, storeIds);
+  public void reassignGrants(User user, Set<Long> roleIds, Set<Long> storeIds) {
+    user.reassignGrants(roleIds, storeIds);
     notifyCredentialsChanged(user);
   }
 

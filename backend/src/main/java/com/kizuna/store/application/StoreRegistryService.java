@@ -78,7 +78,7 @@ public class StoreRegistryService {
   /** 呼び出し者の店舗集合内の店舗だけを返す。検索語は名称とドメインを横断する部分一致。 */
   @Transactional(readOnly = true)
   public Page<StoreView> list(StoreScope scope, String search, Pageable pageable) {
-    if (holdsNoStore(scope)) {
+    if (scope.storeIds().isEmpty()) {
       return Page.empty(pageable);
     }
     return storeRepository.findAll(withinScope(scope, search), pageable).map(StoreView::of);
@@ -220,7 +220,7 @@ public class StoreRegistryService {
 
   @Transactional(readOnly = true)
   public long count(StoreScope scope) {
-    return holdsNoStore(scope) ? 0 : storeRepository.count(withinScope(scope, null));
+    return scope.storeIds().isEmpty() ? 0 : storeRepository.count(withinScope(scope, null));
   }
 
   /** 集合外の店舗は存在しない扱い（404）にする。業務上の検証より先に判定し、集合外の店舗の状態（稼働中・略称の重複）を応答で漏らさない。 */
@@ -232,16 +232,11 @@ public class StoreRegistryService {
     return storeId;
   }
 
-  private static boolean holdsNoStore(StoreScope scope) {
-    return !scope.allStores() && scope.storeIds().isEmpty();
-  }
-
+  /** 空集合は呼び手が先に短絡するので、空の IN は組み立てない。 */
   private static Specification<Store> withinScope(StoreScope scope, String search) {
     return (root, query, cb) -> {
       List<Predicate> predicates = new ArrayList<>();
-      if (!scope.allStores()) {
-        predicates.add(root.get("id").in(scope.storeIds()));
-      }
+      predicates.add(root.get("id").in(scope.storeIds()));
       if (search != null) {
         char escape = LIKE_ESCAPE.getEscapeCharacter();
         String pattern = "%" + LIKE_ESCAPE.escape(search.toLowerCase(Locale.ROOT)) + "%";

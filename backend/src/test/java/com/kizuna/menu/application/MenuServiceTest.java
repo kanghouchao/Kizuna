@@ -6,16 +6,12 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.menu.domain.Menu;
 import com.kizuna.menu.domain.MenuRepository;
-import com.kizuna.shared.storescope.StoreScope;
-import com.kizuna.shared.storescope.StoreScopeHolder;
 import java.util.List;
-import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -31,14 +27,12 @@ class MenuServiceTest {
   @Mock private MenuRepository menuRepository;
   @Mock private SecurityContext securityContext;
   @Mock private Authentication authentication;
-  @Spy private StoreScopeHolder storeScopeHolder = new StoreScopeHolder();
 
   @InjectMocks private MenuService menuService;
 
   @AfterEach
   void tearDown() {
     SecurityContextHolder.clearContext();
-    storeScopeHolder.clear();
   }
 
   /** 遷移先を持つ葉。path の無い節は可視な子が無ければ木から落ちるため、葉には必ず path を持たせる。 */
@@ -187,16 +181,8 @@ class MenuServiceTest {
   }
 
   @Test
-  void getMyMenus_hidesAllStoreOperationsFromRestrictedStaff() {
-    authenticateTaskOperator("SPECIFIC_STORES");
-    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(taskMenus());
-
-    assertThat(menuService.getMyMenus()).extracting(MenuNode::name).containsExactly("Dashboard");
-  }
-
-  @Test
-  void getMyMenus_keepsAllStoreOperationsForAllStoreStaff() {
-    authenticateTaskOperator("ALL_STORES");
+  void getMyMenus_showsOperationsByPermissionAlone() {
+    authenticateTaskOperator();
     when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(taskMenus());
 
     var result = menuService.getMyMenus();
@@ -207,31 +193,8 @@ class MenuServiceTest {
   }
 
   @Test
-  void getMyMenus_hidesAllStoreOperationsWhenScopeCannotBeResolved() {
-    authenticateTaskOperator(null);
-    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(taskMenus());
-
-    assertThat(menuService.getMyMenus()).extracting(MenuNode::name).containsExactly("Dashboard");
-  }
-
-  @Test
-  void getMyMenus_hidesAllStoreOperationsForNonJwtAuthentication() {
-    SecurityContextHolder.setContext(securityContext);
-    when(securityContext.getAuthentication()).thenReturn(authentication);
-    doReturn(
-            List.of(
-                new SimpleGrantedAuthority("PERM_TASK_MANAGE"),
-                new SimpleGrantedAuthority("PERM_AUDIT_VIEW")))
-        .when(authentication)
-        .getAuthorities();
-    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(taskMenus());
-
-    assertThat(menuService.getMyMenus()).extracting(MenuNode::name).containsExactly("Dashboard");
-  }
-
-  @Test
-  void getMyMenus_hidesAllStoreOperationsWithoutTheirPermissions() {
-    authenticateTaskOperator("ALL_STORES");
+  void getMyMenus_hidesOperationsWithoutTheirPermissions() {
+    authenticateTaskOperator();
     var auth = (JwtAuthenticationToken) SecurityContextHolder.getContext().getAuthentication();
     SecurityContextHolder.getContext()
         .setAuthentication(new JwtAuthenticationToken(auth.getToken(), List.of()));
@@ -240,38 +203,9 @@ class MenuServiceTest {
     assertThat(menuService.getMyMenus()).extracting(MenuNode::name).containsExactly("Dashboard");
   }
 
-  @Test
-  void getMyMenus_showsGroupLeafSharingAPermissionOnlyToAllStoreStaff() {
-    var group = new Menu();
-    group.setLabel("Customers");
-    group.setChildren(
-        List.of(
-            menu("StoreNotifications", "TASK_MANAGE"),
-            allStores(menu("GroupNotifications", "TASK_MANAGE"))));
-    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(List.of(group));
-
-    authenticateTaskOperator("SPECIFIC_STORES");
-    assertThat(menuService.getMyMenus().getFirst().items())
-        .extracting(MenuNode::name)
-        .containsExactly("StoreNotifications");
-
-    authenticateTaskOperator("ALL_STORES");
-    assertThat(menuService.getMyMenus().getFirst().items())
-        .extracting(MenuNode::name)
-        .containsExactly("StoreNotifications", "GroupNotifications");
-  }
-
-  /** 作用域はトークンでなく保持器（要求ごとの解決器）が持つ。null は解決不能（CAST / MEMBER 等）。 */
-  private void authenticateTaskOperator(String scopeType) {
+  private void authenticateTaskOperator() {
     var builder =
         Jwt.withTokenValue("menu-fixture").header("alg", "none").subject("operator@kizuna.test");
-    StoreScope scope =
-        scopeType == null
-            ? null
-            : "ALL_STORES".equals(scopeType)
-                ? new StoreScope(true, Set.of())
-                : new StoreScope(false, Set.of(1L));
-    storeScopeHolder.install(() -> scope);
     SecurityContextHolder.getContext()
         .setAuthentication(
             new JwtAuthenticationToken(
@@ -284,14 +218,7 @@ class MenuServiceTest {
   private List<Menu> taskMenus() {
     var group = new Menu();
     group.setLabel("Operations");
-    group.setChildren(
-        List.of(
-            allStores(menu("Executions", "TASK_MANAGE")), allStores(menu("Audit", "AUDIT_VIEW"))));
+    group.setChildren(List.of(menu("Executions", "TASK_MANAGE"), menu("Audit", "AUDIT_VIEW")));
     return List.of(menu("Dashboard", null), group);
-  }
-
-  private static Menu allStores(Menu menu) {
-    menu.setRequiresAllStores(true);
-    return menu;
   }
 }

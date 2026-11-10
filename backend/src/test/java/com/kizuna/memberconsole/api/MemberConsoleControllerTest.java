@@ -129,7 +129,7 @@ class MemberConsoleControllerTest {
   @Test
   @DisplayName("詳細は検証日時を返し、未検証の会員では項目ごと消えること")
   void detailCarriesEmailVerifiedAtOnlyWhenVerified() throws Exception {
-    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(true, Set.of()));
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(1L)));
     OffsetDateTime verifiedAt = OffsetDateTime.parse("2026-10-26T10:00:00+09:00");
     when(memberConsoleService.detail(eq(7L), any())).thenReturn(detail(verifiedAt));
     String body =
@@ -176,7 +176,7 @@ class MemberConsoleControllerTest {
   @Test
   @DisplayName("詳細は要求ごとに解決した授権店舗集合を service へ渡すこと")
   void detailPassesResolvedStoreScope() throws Exception {
-    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(false, Set.of(3L)));
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(3L)));
     ArgumentCaptor<StoreScope> scope = ArgumentCaptor.forClass(StoreScope.class);
     when(memberConsoleService.detail(eq(7L), scope.capture())).thenReturn(detail(null));
 
@@ -203,7 +203,7 @@ class MemberConsoleControllerTest {
   @Test
   @DisplayName("存在しない会員の詳細は 404 であること")
   void detailOfMissingMemberIsNotFound() throws Exception {
-    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(true, Set.of()));
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(1L)));
     when(memberConsoleService.detail(anyLong(), any()))
         .thenThrow(new NotFoundException("会員が見つかりません"));
 

@@ -43,7 +43,7 @@ class ReportReaderTreeAuthorizationTest {
   private static final LocalDate DAY = LocalDate.of(2026, 9, 1);
   private static final OperationalFacts NO_STORES =
       new OperationalFacts(OffsetDateTime.parse("2026-10-01T12:00:00+09:00"), List.of(), List.of());
-  private static final StoreScope SCOPE = new StoreScope(false, Set.of(1L));
+  private static final StoreScope SCOPE = new StoreScope(Set.of(1L));
 
   @Autowired RemunerationReportReader remuneration;
   @Autowired AdvertisingReportReader advertising;

@@ -20,7 +20,6 @@ import com.kizuna.storeprofile.domain.StoreProfile;
 import com.kizuna.storeprofile.domain.StoreProfilePatch;
 import com.kizuna.storeprofile.domain.StoreProfileRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -103,7 +102,6 @@ class StoreProfileFileAuditIntegrationTest {
                             .userType(UserType.STAFF)
                             .enabled(true)
                             .roleIds(Set.of(1L))
-                            .storeScopeType(StoreScopeType.ALL_STORES)
                             .build())
                     .getId());
     jdbc.execute(

@@ -23,7 +23,6 @@ import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.storeprofile.domain.StoreProfileRepository;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.application.CreatedStoreGrant;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -44,7 +43,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class StoreAuditTest {
-  private static final StoreScope ALL = new StoreScope(true, Set.of());
+  private static final StoreScope ALL = new StoreScope(Set.of(7L));
   private static final Long STORE_ID = 7L;
   private final StoreRepository stores = mock(StoreRepository.class);
   private final CompletedOrderCheck orders = mock(CompletedOrderCheck.class);
@@ -68,7 +67,6 @@ class StoreAuditTest {
             .displayName("監査担当")
             .userType(UserType.STAFF)
             .roleIds(Set.of(1L))
-            .storeScopeType(StoreScopeType.ALL_STORES)
             .build();
     actor.setId(9L);
     when(users.findByEmail(anyString())).thenReturn(Optional.of(actor));

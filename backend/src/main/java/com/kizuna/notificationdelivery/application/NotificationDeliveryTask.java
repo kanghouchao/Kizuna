@@ -73,9 +73,6 @@ public class NotificationDeliveryTask implements TaskHandler {
   }
 
   private List<NotificationDelivery> due(StoreScope stores, OffsetDateTime now, Limit limit) {
-    if (stores.allStores())
-      return deliveries.findByStatusAndScheduledAtLessThanEqualOrderByScheduledAtAscIdAsc(
-          DeliveryStatus.QUEUED, now, limit);
     if (stores.storeIds().isEmpty())
       return deliveries
           .findByStatusAndScheduledAtLessThanEqualAndAttributedStoreIdIsNullOrderByScheduledAtAscIdAsc(

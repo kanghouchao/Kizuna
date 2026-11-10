@@ -43,9 +43,10 @@ public class CustomerMemberLinkDirectory {
 
   @Transactional(readOnly = true)
   public MemberLinks findByMember(long memberId, StoreScope scope) {
-    if (scope.allStores()) {
+    // 空の IN / NOT IN の描画に頼らず、空集合は「集合内は無し・関連を持つ店舗はすべて集合外」と Java で短絡する。
+    if (scope.storeIds().isEmpty()) {
       return new MemberLinks(
-          toSegments(customerMemberLinkRepository.findLatestDirectoryByMemberId(memberId)), 0);
+          List.of(), customerMemberLinkRepository.countStoresByMemberId(memberId));
     }
     return new MemberLinks(
         toSegments(

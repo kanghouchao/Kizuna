@@ -32,7 +32,7 @@ class OperationalReportScopeTest {
 
   @Test
   void configurationHardLimitRejectsBeforeDatabaseAccess() {
-    var scope = new StoreScope(true, Set.of());
+    var scope = new StoreScope(Set.of(1L));
     for (int maximum : List.of(0, 100_001)) {
       properties.getOperationalReport().setMaxOrders(maximum);
       assertThatThrownBy(

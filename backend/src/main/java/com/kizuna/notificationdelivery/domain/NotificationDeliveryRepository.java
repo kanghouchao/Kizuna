@@ -44,12 +44,9 @@ public interface NotificationDeliveryRepository extends Repository<NotificationD
   Optional<NotificationDelivery> findByIdForUpdate(String id);
 
   /**
-   * 送信の定期処理が取る到来分。境界は実行するサービス ID の店舗集合で、店舗を持たないグループ級の行は集合に関わらず取る。 全店舗を授権された主体は条件なし、集合が空なら店舗の行を取らない。
+   * 送信の定期処理が取る到来分。境界は実行するサービス ID の店舗集合で、店舗を持たないグループ級の行は集合に関わらず取る。storeIds は空でないこと —
+   * 集合が空なら呼び手が下のグループ級だけの照会へ短絡する。
    */
-  @Lock(LockModeType.PESSIMISTIC_WRITE)
-  List<NotificationDelivery> findByStatusAndScheduledAtLessThanEqualOrderByScheduledAtAscIdAsc(
-      DeliveryStatus status, OffsetDateTime time, Limit limit);
-
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query(
       "select d from NotificationDelivery d where d.status = :status and d.scheduledAt <= :time and (d.attributedStoreId is null or d.attributedStoreId in :storeIds) order by d.scheduledAt, d.id")

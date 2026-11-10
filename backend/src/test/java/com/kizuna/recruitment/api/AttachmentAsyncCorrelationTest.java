@@ -72,7 +72,7 @@ class AttachmentAsyncCorrelationTest {
       for (int attempt = 0; attempt < 2; attempt++) {
         SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
         // 要求スレッドの作用域。要求後に filter が掃除し、作業スレッドへ漏れないことを確かめる。
-        holder.install(() -> new StoreScope(false, Set.of(1L)));
+        holder.install(() -> new StoreScope(Set.of(1L)));
         var task = new AtomicReference<WebAsyncTask<ResponseEntity<AttachmentSummaryResponse>>>();
         var request = new MockHttpServletRequest();
         var response = new MockHttpServletResponse();

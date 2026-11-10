@@ -28,7 +28,6 @@ import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -239,7 +238,6 @@ class MemberReceiptClaimAuditIntegrationTest {
               .displayName("会員")
               .enabled(true)
               .userType(UserType.MEMBER)
-              .storeScopeType(StoreScopeType.SPECIFIC_STORES)
               .storeIds(Set.of())
               .build();
       member.setId(USER_ID);

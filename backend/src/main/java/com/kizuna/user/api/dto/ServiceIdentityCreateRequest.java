@@ -1,7 +1,6 @@
 package com.kizuna.user.api.dto;
 
 import com.kizuna.user.application.ServiceIdentityCommand;
-import com.kizuna.user.domain.StoreScopeType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -13,7 +12,7 @@ import lombok.Setter;
 
 /**
  * サービスID新規作成リクエスト。資格情報（email/password）は持たない — サービスIDは対話ログインできない（ADR 0025）。 JSON キーは Jackson 設定により
- * snake_case（display_name / role_ids / store_scope_type / store_ids）。
+ * snake_case（display_name / role_ids / store_ids）。
  */
 @Getter
 @Setter
@@ -29,13 +28,11 @@ public class ServiceIdentityCreateRequest {
   @NotEmpty(message = "role_ids is required")
   private Set<@NotNull(message = "role_ids must not contain null") Long> roleIds;
 
-  @NotNull(message = "store_scope_type is required")
-  private StoreScopeType storeScopeType;
-
-  // null 要素は永続化時に黙って捨てられ、非空検証を通ったのに店舗ゼロの行が残るため要素単位で拒む。
+  // 空集合は「どの店舗も担当しない」で許す。null 要素は永続化時に黙って捨てられ指定と異なる集合が残るため、要素単位で拒む。
+  @NotNull(message = "store_ids is required")
   private Set<@NotNull(message = "store_ids must not contain null") Long> storeIds;
 
   public ServiceIdentityCommand.Create command() {
-    return new ServiceIdentityCommand.Create(displayName, roleIds, storeScopeType, storeIds);
+    return new ServiceIdentityCommand.Create(displayName, roleIds, storeIds);
   }
 }

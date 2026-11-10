@@ -23,7 +23,6 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -164,22 +163,20 @@ class CastInvitationAcceptanceServiceTest {
             .enabled(true)
             .userType(userType)
             .roleIds(userType == UserType.STAFF ? Set.of(99L) : Set.of())
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(storeIds)
             .build();
     user.setId(id);
     return user;
   }
 
-  private User allStoresUser(long id) {
+  private User storelessUser(long id) {
     User user =
         User.builder()
             .email("cast@example.com")
             .password("x")
-            .displayName("全店キャスト")
+            .displayName("店舗の無いキャスト")
             .enabled(true)
             .userType(UserType.CAST)
-            .storeScopeType(StoreScopeType.ALL_STORES)
             .storeIds(Set.of())
             .build();
     user.setId(id);
@@ -310,7 +307,6 @@ class CastInvitationAcceptanceServiceTest {
     verify(userRepository).save(captor.capture());
     User saved = captor.getValue();
     assertThat(saved.getUserType()).isEqualTo(UserType.CAST);
-    assertThat(saved.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
     assertThat(saved.getStoreIds()).containsExactly(1L);
     assertThat(saved.getPassword()).isEqualTo("encoded");
   }
@@ -478,11 +474,11 @@ class CastInvitationAcceptanceServiceTest {
   }
 
   @Test
-  void acceptAsExistingUser_preservesAllStoresScopeWithoutDowngrade() {
+  void acceptAsExistingUser_addsTheInvitedStoreToAnEmptySet() {
     CastInvitation invitation =
         invitation("c2", 2L, CastInvitation.Status.PENDING, OffsetDateTime.now().plusHours(1));
-    CastEnrollment cast = cast("c2", "花子档案（全店）");
-    User existing = allStoresUser(7L);
+    CastEnrollment cast = cast("c2", "花子档案");
+    User existing = storelessUser(7L);
     when(castInvitationRepository.findByToken("tok")).thenReturn(Optional.of(invitation));
     when(castRepository.findByIdAndStoreIdForUpdate("c2", 2L)).thenReturn(Optional.of(cast));
     when(userRepository.findByEmailForUpdate("cast@example.com")).thenReturn(Optional.of(existing));
@@ -498,12 +494,9 @@ class CastInvitationAcceptanceServiceTest {
     String storeName = service.acceptAsExistingUser("tok", "cast@example.com", "pw");
 
     assertThat(storeName).isEqualTo("店舗B");
-    // ALL_STORES 授権は招待受諾で SPECIFIC_STORES へ降格させない（全店アクセス権を1店舗に狭めない）。
-    assertThat(existing.getStoreScopeType()).isEqualTo(StoreScopeType.ALL_STORES);
-    assertThat(existing.getStoreIds()).isEmpty();
+    assertThat(existing.getStoreIds()).containsExactly(2L);
     assertThat(cast.getCastId()).isEqualTo(7L);
-    // 授権に変更がないため User は永続化しない（档案の紐づけのみ）。
-    verify(userRepository, never()).save(any());
+    verify(userRepository).save(existing);
   }
 
   @Test

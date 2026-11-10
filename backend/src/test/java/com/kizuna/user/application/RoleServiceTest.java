@@ -23,7 +23,6 @@ import com.kizuna.user.domain.RoleInUseException;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.RoleSummary;
 import com.kizuna.user.domain.StaleRoleUpdateException;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.SystemRoleImmutableException;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserCredentialsChanged;
@@ -288,7 +287,6 @@ class RoleServiceTest {
             .enabled(true)
             .userType(type)
             .roleIds(Set.of(7L))
-            .storeScopeType(StoreScopeType.ALL_STORES)
             .build();
     user.setId(id);
     return user;

@@ -138,8 +138,7 @@ class ArticleIntegrationTest {
             StoreShortNames.next(),
             suffix + "-other.invalid");
     jdbc.update(
-        "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'記事担当','STAFF','ALL_STORES')",
-        email);
+        "insert into t_users(email,display_name,user_type) values (?,'記事担当','STAFF')", email);
     auth = principal(email, "PERM_ARTICLE_MANAGE");
     SecurityContextHolder.getContext().setAuthentication(auth);
     currentStore = storeId;

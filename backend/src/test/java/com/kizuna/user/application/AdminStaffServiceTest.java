@@ -28,7 +28,6 @@ import com.kizuna.user.domain.SelfPasswordResetNotAllowedException;
 import com.kizuna.user.domain.SelfStopNotAllowedException;
 import com.kizuna.user.domain.StaffOutOfDelegationScopeException;
 import com.kizuna.user.domain.StaleStaffUpdateException;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserCredentialsChanged;
 import com.kizuna.user.domain.UserRepository;
@@ -169,8 +168,7 @@ class AdminStaffServiceTest {
         role(STAFF_ROLE, "スタッフ", Set.of(1L)));
   }
 
-  private static User staff(
-      long id, String email, Set<Long> roleIds, StoreScopeType scopeType, Set<Long> storeIds) {
+  private static User staff(long id, String email, Set<Long> roleIds, Set<Long> storeIds) {
     User user =
         User.builder()
             .email(email)
@@ -179,7 +177,6 @@ class AdminStaffServiceTest {
             .enabled(true)
             .userType(UserType.STAFF)
             .roleIds(roleIds)
-            .storeScopeType(scopeType)
             .storeIds(storeIds)
             .build();
     user.setId(id);
@@ -188,36 +185,29 @@ class AdminStaffServiceTest {
   }
 
   /** 行使者を差し込む。店舗集合は保持器（要求ごとの解決器）に、権限はロールから。 */
-  private User actor(Set<Long> roleIds, StoreScopeType scopeType, Set<Long> storeIds) {
-    User actor = staff(1L, ACTOR, roleIds, scopeType, storeIds);
+  private User actor(Set<Long> roleIds, Set<Long> storeIds) {
+    User actor = staff(1L, ACTOR, roleIds, storeIds);
     when(repository.findByEmail(ACTOR)).thenReturn(Optional.of(actor));
-    holder.install(
-        () ->
-            scopeType == StoreScopeType.ALL_STORES
-                ? new StoreScope(true, Set.of())
-                : new StoreScope(false, storeIds));
+    holder.install(() -> new StoreScope(storeIds));
     return actor;
   }
 
   private User manager(Set<Long> stores) {
-    return actor(Set.of(MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, stores);
+    return actor(Set.of(MANAGER_ROLE), stores);
   }
 
-  private User target(long id, Set<Long> roleIds, StoreScopeType scopeType, Set<Long> storeIds) {
-    User target = staff(id, "target" + id + "@kizuna.test", roleIds, scopeType, storeIds);
+  private User target(long id, Set<Long> roleIds, Set<Long> storeIds) {
+    User target = staff(id, "target" + id + "@kizuna.test", roleIds, storeIds);
     when(repository.findById(id)).thenReturn(Optional.of(target));
     return target;
   }
 
-  private static StaffCommand.Create createCommand(
-      Set<Long> roleIds, StoreScopeType scopeType, Set<Long> storeIds) {
-    return new StaffCommand.Create(
-        "new@kizuna.test", "rawpass", "表示名", roleIds, scopeType, storeIds);
+  private static StaffCommand.Create createCommand(Set<Long> roleIds, Set<Long> storeIds) {
+    return new StaffCommand.Create("new@kizuna.test", "rawpass", "表示名", roleIds, storeIds);
   }
 
-  private static StaffCommand.UpdateGrants updateCommand(
-      Set<Long> roleIds, StoreScopeType scopeType, Set<Long> storeIds) {
-    return new StaffCommand.UpdateGrants(roleIds, scopeType, storeIds, 0L);
+  private static StaffCommand.UpdateGrants updateCommand(Set<Long> roleIds, Set<Long> storeIds) {
+    return new StaffCommand.UpdateGrants(roleIds, storeIds, 0L);
   }
 
   @Test
@@ -232,22 +222,9 @@ class AdminStaffServiceTest {
   @DisplayName("一覧は行使者の店舗集合に交わる者を返し、行ごとの editable は部分集合判定で決まる")
   void listMarksEditableBySubsetOfPermissionsAndStores() {
     manager(Set.of(1L));
-    User peer =
-        staff(
-            2L,
-            "peer@kizuna.test",
-            Set.of(MANAGER_ROLE),
-            StoreScopeType.SPECIFIC_STORES,
-            Set.of(1L));
-    User admin =
-        staff(3L, "admin@kizuna.test", Set.of(ADMIN_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    User twoStores =
-        staff(
-            4L,
-            "two@kizuna.test",
-            Set.of(STAFF_ROLE),
-            StoreScopeType.SPECIFIC_STORES,
-            Set.of(1L, 2L));
+    User peer = staff(2L, "peer@kizuna.test", Set.of(MANAGER_ROLE), Set.of(1L));
+    User admin = staff(3L, "admin@kizuna.test", Set.of(ADMIN_ROLE), Set.of());
+    User twoStores = staff(4L, "two@kizuna.test", Set.of(STAFF_ROLE), Set.of(1L, 2L));
     when(repository.findAll(ArgumentMatchers.<Specification<User>>any(), eq(PAGEABLE)))
         .thenReturn(new PageImpl<>(List.of(peer, admin, twoStores), PAGEABLE, 3));
 
@@ -296,31 +273,18 @@ class AdminStaffServiceTest {
   void createRejectsRoleBeyondActorPermissions() {
     manager(Set.of(1L));
 
-    assertThatThrownBy(
-            () ->
-                service.create(
-                    createCommand(Set.of(ADMIN_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)),
-                    ACTOR))
+    assertThatThrownBy(() -> service.create(createCommand(Set.of(ADMIN_ROLE), Set.of(1L)), ACTOR))
         .isInstanceOf(InvalidRoleGrantException.class);
     verify(repository, never()).saveAndFlush(any());
   }
 
   @Test
-  @DisplayName("作成: 行使者の店舗集合を越える店舗（全店舗を含む）は付与できない")
+  @DisplayName("作成: 行使者の店舗集合を越える店舗は付与できない")
   void createRejectsStoresBeyondActorScope() {
     manager(Set.of(1L));
 
     assertThatThrownBy(
-            () ->
-                service.create(
-                    createCommand(
-                        Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L, 2L)),
-                    ACTOR))
-        .isInstanceOf(InvalidStoreScopeException.class);
-    assertThatThrownBy(
-            () ->
-                service.create(
-                    createCommand(Set.of(STAFF_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR))
+            () -> service.create(createCommand(Set.of(STAFF_ROLE), Set.of(1L, 2L)), ACTOR))
         .isInstanceOf(InvalidStoreScopeException.class);
     verify(repository, never()).saveAndFlush(any());
   }
@@ -332,9 +296,7 @@ class AdminStaffServiceTest {
     when(repository.findByEmail("new@kizuna.test")).thenReturn(Optional.empty());
     when(encoder.encode("rawpass")).thenReturn("ENCODED");
 
-    StaffView res =
-        service.create(
-            createCommand(Set.of(MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)), ACTOR);
+    StaffView res = service.create(createCommand(Set.of(MANAGER_ROLE), Set.of(1L)), ACTOR);
 
     var order = inOrder(roleRepository, repository);
     order.verify(roleRepository).lockIdsForGrant(Set.of(MANAGER_ROLE));
@@ -346,17 +308,15 @@ class AdminStaffServiceTest {
   }
 
   @Test
-  @DisplayName("作成: ALL_STORES の行使者は全店舗の対象も自分の全権限も配れる")
-  void allStoresActorCanGrantEverythingItHolds() {
-    actor(Set.of(ADMIN_ROLE), StoreScopeType.ALL_STORES, Set.of());
+  @DisplayName("作成: 空の店舗集合はどの行使者の集合にも収まるので付与でき、作った対象を編集できる")
+  void emptyStoreSetCanBeGrantedByAnyActor() {
+    manager(Set.of(1L));
     when(repository.findByEmail("new@kizuna.test")).thenReturn(Optional.empty());
     when(encoder.encode("rawpass")).thenReturn("ENCODED");
 
-    StaffView res =
-        service.create(
-            createCommand(Set.of(ADMIN_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR);
+    StaffView res = service.create(createCommand(Set.of(STAFF_ROLE), Set.of()), ACTOR);
 
-    assertThat(res.storeScopeType()).isEqualTo(StoreScopeType.ALL_STORES);
+    assertThat(res.storeIds()).isEmpty();
     assertThat(res.editable()).isTrue();
   }
 
@@ -374,16 +334,14 @@ class AdminStaffServiceTest {
                   .toList();
             });
     when(roleRepository.findIdsByPermissionCode("ROLE_MANAGE")).thenReturn(Set.of(ADMIN_ROLE, 13L));
-    actor(Set.of(13L), StoreScopeType.ALL_STORES, Set.of());
+    actor(Set.of(13L), Set.of(1L, 2L));
     when(repository.findByEmail("new@kizuna.test")).thenReturn(Optional.empty());
     when(encoder.encode("rawpass")).thenReturn("ENCODED");
 
     assertThat(service.grantableRoles(ACTOR))
         .extracting(RoleViews.Grantable::id)
         .containsExactlyInAnyOrder(ADMIN_ROLE, MANAGER_ROLE, STAFF_ROLE);
-    StaffView res =
-        service.create(
-            createCommand(Set.of(MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)), ACTOR);
+    StaffView res = service.create(createCommand(Set.of(MANAGER_ROLE), Set.of(1L)), ACTOR);
     assertThat(res.roles()).extracting(RoleViews.Ref::id).containsExactly(MANAGER_ROLE);
     assertThat(res.editable()).isTrue();
   }
@@ -391,19 +349,10 @@ class AdminStaffServiceTest {
   @Test
   @DisplayName("ROLE_MANAGE 保持者でも店舗集合の部分集合は免れない")
   void roleManageHolderIsStillBoundByTheStoreSet() {
-    actor(Set.of(ADMIN_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L));
+    actor(Set.of(ADMIN_ROLE), Set.of(1L));
 
     assertThatThrownBy(
-            () ->
-                service.create(
-                    createCommand(
-                        Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L, 2L)),
-                    ACTOR))
-        .isInstanceOf(InvalidStoreScopeException.class);
-    assertThatThrownBy(
-            () ->
-                service.create(
-                    createCommand(Set.of(STAFF_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR))
+            () -> service.create(createCommand(Set.of(STAFF_ROLE), Set.of(1L, 2L)), ACTOR))
         .isInstanceOf(InvalidStoreScopeException.class);
     verify(repository, never()).saveAndFlush(any());
   }
@@ -413,24 +362,10 @@ class AdminStaffServiceTest {
   void createRejectsDuplicateEmailAndUnknownRole() {
     manager(Set.of(1L));
     when(repository.findByEmail("new@kizuna.test"))
-        .thenReturn(
-            Optional.of(
-                staff(
-                    5L,
-                    "new@kizuna.test",
-                    Set.of(STAFF_ROLE),
-                    StoreScopeType.SPECIFIC_STORES,
-                    Set.of(1L))));
-    assertThatThrownBy(
-            () ->
-                service.create(
-                    createCommand(Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)),
-                    ACTOR))
+        .thenReturn(Optional.of(staff(5L, "new@kizuna.test", Set.of(STAFF_ROLE), Set.of(1L))));
+    assertThatThrownBy(() -> service.create(createCommand(Set.of(STAFF_ROLE), Set.of(1L)), ACTOR))
         .isInstanceOf(DuplicateStaffEmailException.class);
-    assertThatThrownBy(
-            () ->
-                service.create(
-                    createCommand(Set.of(999L), StoreScopeType.SPECIFIC_STORES, Set.of(1L)), ACTOR))
+    assertThatThrownBy(() -> service.create(createCommand(Set.of(999L), Set.of(1L)), ACTOR))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("ロール");
   }
@@ -439,7 +374,7 @@ class AdminStaffServiceTest {
   @DisplayName("取得・更新: 行使者の店舗集合と交わらない対象は存在しても 404（不在と区別させない）")
   void invisibleTargetIsNotFound() {
     manager(Set.of(1L));
-    target(2L, Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(2L));
+    target(2L, Set.of(STAFF_ROLE), Set.of(2L));
 
     assertThatThrownBy(() -> service.get(2L, ACTOR)).isInstanceOf(NotFoundException.class);
     assertThatThrownBy(() -> service.suspend(2L, ACTOR)).isInstanceOf(NotFoundException.class);
@@ -451,16 +386,12 @@ class AdminStaffServiceTest {
   @DisplayName("更新: 見えるが権限か店舗集合が行使者を超える対象は 400（委譲の境界）")
   void updateRejectsTargetBeyondDelegation() {
     manager(Set.of(1L));
-    target(2L, Set.of(ADMIN_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L));
-    target(3L, Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L, 2L));
+    target(2L, Set.of(ADMIN_ROLE), Set.of(1L));
+    target(3L, Set.of(STAFF_ROLE), Set.of(1L, 2L));
 
     for (long id : List.of(2L, 3L)) {
       assertThatThrownBy(
-              () ->
-                  service.update(
-                      id,
-                      updateCommand(Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L)),
-                      ACTOR))
+              () -> service.update(id, updateCommand(Set.of(STAFF_ROLE), Set.of(1L)), ACTOR))
           .isInstanceOf(StaffOutOfDelegationScopeException.class);
       assertThatThrownBy(() -> service.suspend(id, ACTOR))
           .isInstanceOf(StaffOutOfDelegationScopeException.class);
@@ -474,18 +405,14 @@ class AdminStaffServiceTest {
   @DisplayName("更新: 版の不一致は 409、通れば授権を書き換えて監査する")
   void updateChecksVersionAndReassigns() {
     manager(Set.of(1L, 2L));
-    User target = target(2L, Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L));
+    User target = target(2L, Set.of(STAFF_ROLE), Set.of(1L));
 
     StaffCommand.UpdateGrants stale =
-        new StaffCommand.UpdateGrants(
-            Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L), 5L);
+        new StaffCommand.UpdateGrants(Set.of(STAFF_ROLE), Set.of(1L), 5L);
     assertThatThrownBy(() -> service.update(2L, stale, ACTOR))
         .isInstanceOf(StaleStaffUpdateException.class);
 
-    service.update(
-        2L,
-        updateCommand(Set.of(MANAGER_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L, 2L)),
-        ACTOR);
+    service.update(2L, updateCommand(Set.of(MANAGER_ROLE), Set.of(1L, 2L)), ACTOR);
 
     assertThat(target.getRoleIds()).containsExactly(MANAGER_ROLE);
     assertThat(target.getStoreIds()).containsExactlyInAnyOrder(1L, 2L);
@@ -499,11 +426,10 @@ class AdminStaffServiceTest {
   @Test
   @DisplayName("更新: ロールの除去は ROLE_MANAGE 保持者をゼロにしない守衛を通す")
   void updateRunsRoleManageHolderGuardWhenRemovingRoles() {
-    actor(Set.of(ADMIN_ROLE), StoreScopeType.ALL_STORES, Set.of());
-    User target = target(2L, Set.of(ADMIN_ROLE), StoreScopeType.ALL_STORES, Set.of());
+    actor(Set.of(ADMIN_ROLE), Set.of(1L, 2L));
+    User target = target(2L, Set.of(ADMIN_ROLE), Set.of());
 
-    service.update(
-        2L, updateCommand(Set.of(MANAGER_ROLE), StoreScopeType.ALL_STORES, Set.of()), ACTOR);
+    service.update(2L, updateCommand(Set.of(MANAGER_ROLE), Set.of()), ACTOR);
 
     var order = inOrder(roleRepository, roleManageHolderGuard, repository);
     order.verify(roleRepository).lockIdsForGrant(Set.of(MANAGER_ROLE));
@@ -514,12 +440,12 @@ class AdminStaffServiceTest {
   @Test
   @DisplayName("停止: 自分自身は拒否、対象は直列化点越しに読み直して停止し監査する")
   void suspendRefusesSelfAndStopsOthers() {
-    User me = actor(Set.of(ADMIN_ROLE), StoreScopeType.ALL_STORES, Set.of());
+    User me = actor(Set.of(ADMIN_ROLE), Set.of(1L, 2L));
     when(repository.findById(1L)).thenReturn(Optional.of(me));
     assertThatThrownBy(() -> service.suspend(1L, ACTOR))
         .isInstanceOf(SelfStopNotAllowedException.class);
 
-    User target = target(2L, Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L));
+    User target = target(2L, Set.of(STAFF_ROLE), Set.of(1L));
     when(roleManageHolderGuard.loadForSuspension(2L)).thenReturn(target);
 
     service.suspend(2L, ACTOR);
@@ -542,7 +468,7 @@ class AdminStaffServiceTest {
   @DisplayName("再開: 停止中なら再開して監査、有効なら何もしない（冪等）")
   void resumeIsIdempotent() {
     manager(Set.of(1L));
-    User target = target(2L, Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L));
+    User target = target(2L, Set.of(STAFF_ROLE), Set.of(1L));
     target.stop();
 
     service.resume(2L, ACTOR);
@@ -555,16 +481,16 @@ class AdminStaffServiceTest {
   @Test
   @DisplayName("再設定: 自分自身と管理者（ROLE_MANAGE 保持者）は拒否、通れば仮パスワードを返す")
   void resetPasswordGuards() {
-    User me = actor(Set.of(ADMIN_ROLE), StoreScopeType.ALL_STORES, Set.of());
+    User me = actor(Set.of(ADMIN_ROLE), Set.of(1L, 2L));
     when(repository.findById(1L)).thenReturn(Optional.of(me));
     assertThatThrownBy(() -> service.resetPassword(1L, ACTOR))
         .isInstanceOf(SelfPasswordResetNotAllowedException.class);
 
-    target(2L, Set.of(ADMIN_ROLE), StoreScopeType.ALL_STORES, Set.of());
+    target(2L, Set.of(ADMIN_ROLE), Set.of());
     assertThatThrownBy(() -> service.resetPassword(2L, ACTOR))
         .isInstanceOf(HqPasswordResetNotAllowedException.class);
 
-    User target = target(3L, Set.of(STAFF_ROLE), StoreScopeType.SPECIFIC_STORES, Set.of(1L));
+    User target = target(3L, Set.of(STAFF_ROLE), Set.of(1L));
     when(encoder.encode(any())).thenReturn("ENCODED");
 
     String temporary = service.resetPassword(3L, ACTOR);

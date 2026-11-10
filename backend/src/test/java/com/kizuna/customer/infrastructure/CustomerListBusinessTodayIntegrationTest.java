@@ -115,7 +115,7 @@ class CustomerListBusinessTodayIntegrationTest {
 
   private long staff() {
     return jdbc.queryForObject(
-        "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'検証担当','STAFF','ALL_STORES') returning id",
+        "insert into t_users(email,display_name,user_type) values (?,'検証担当','STAFF') returning id",
         Long.class,
         UUID.randomUUID() + "@example.test");
   }
@@ -123,7 +123,7 @@ class CustomerListBusinessTodayIntegrationTest {
   private long member() {
     long user =
         jdbc.queryForObject(
-            "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'検証会員','MEMBER','SPECIFIC_STORES') returning id",
+            "insert into t_users(email,display_name,user_type) values (?,'検証会員','MEMBER') returning id",
             Long.class,
             UUID.randomUUID() + "@example.test");
     return jdbc.queryForObject(
