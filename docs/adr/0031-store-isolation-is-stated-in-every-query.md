@@ -1,6 +1,6 @@
 # 店舗分離は各クエリが store_id を明示する — Hibernate filter と要求文脈の ThreadLocal を撤去する
 
-Status: Accepted（実装は #1048、PR #1055 / #1061 / #1068）
+Status: Accepted（実装は #1048、PR #1055 / #1061 / #1068）。ALL_STORES の扱いは ADR 0042 で置き換え
 
 ## 決定時の背景
 
