@@ -7,7 +7,7 @@ import {
   STORE_HEADERS,
   createPermissionRole,
   createStaffFixture,
-  createStoreStaffFixture,
+  authorizedStoreIds,
   createUnpublishedCast,
   createCastFieldDefinition,
   deleteCastFieldDefinition,
@@ -90,7 +90,7 @@ Given(
       ],
     );
     const ordinaryEmail = `field-audit-${suffix}@example.test`;
-    ordinaryId = await createStoreStaffFixture(
+    ordinaryId = await createStaffFixture(
       request,
       manager,
       ordinaryEmail,
@@ -106,7 +106,7 @@ Given(
       ["CAST_FIELD_DEF_VIEW"],
     );
     const limitedEmail = `field-limited-${suffix}@example.test`;
-    await createStoreStaffFixture(
+    await createStaffFixture(
       request,
       manager,
       limitedEmail,
@@ -134,6 +134,7 @@ Given(
       auditEmail,
       password,
       [auditRole],
+      await authorizedStoreIds(request, owner),
     );
     auditor = await loginUser(request, auditEmail, password);
   },

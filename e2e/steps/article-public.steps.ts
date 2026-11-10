@@ -5,6 +5,7 @@ import {
   STORE_HEADERS,
   createPermissionRole,
   createStaffFixture,
+  authorizedStoreIds,
   loginUser,
   uploadStoreImage,
 } from './store-api';
@@ -40,7 +41,7 @@ Given('記事を作成している', async ({ request }) => {
   const email = `article-public-${suffix}@kizuna.test`;
   const password = `Article-${suffix}-fixture`;
   const role = await createPermissionRole(request, admin, `記事掲出-${suffix}`, ['ARTICLE_MANAGE']);
-  await createStaffFixture(request, admin, email, password, [role]);
+  await createStaffFixture(request, admin, email, password, [role], await authorizedStoreIds(request, admin));
   token = await loginUser(request, email, password);
   title = `掲出検証-${suffix}`;
   const created = await request.post('/api/articles', { headers: headers(), data: { title, body: body() } });

@@ -6,7 +6,7 @@ import {
   STORE_HEADERS,
   createPermissionRole,
   createStaffFixture,
-  createStoreStaffFixture,
+  authorizedStoreIds,
   createUnpublishedCast,
   issueCastInvitation,
   acceptCastInvitation,
@@ -100,14 +100,13 @@ Given(
       ["SERVICE_MANAGE"],
     );
     const email = `service-audit-${suffix}@example.test`;
-    ordinaryId = await createStoreStaffFixture(
+    ordinaryId = await createStaffFixture(
       request,
       manager,
       email,
       password,
       [role],
       stores.map((store) => store.id),
-      storeId,
     );
     ordinary = await loginUser(request, email, password);
     const limitedRole = await createPermissionRole(
@@ -117,14 +116,13 @@ Given(
       ["CAST_FIELD_DEF_VIEW"],
     );
     const limitedEmail = `service-limited-${suffix}@example.test`;
-    await createStoreStaffFixture(
+    await createStaffFixture(
       request,
       manager,
       limitedEmail,
       password,
       [limitedRole],
       [Number(storeId)],
-      storeId,
     );
     limited = await loginUser(request, limitedEmail, password);
     expect(
@@ -146,6 +144,7 @@ Given(
       auditEmail,
       password,
       [auditRole],
+      await authorizedStoreIds(request, owner),
     );
     auditor = await loginUser(request, auditEmail, password);
     enrollment = await createUnpublishedCast(request, manager, secret, storeId);

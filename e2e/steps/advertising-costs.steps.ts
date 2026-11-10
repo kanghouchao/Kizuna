@@ -12,7 +12,7 @@ import {
   loginAsStoreAdmin,
   getAuthorizedStores,
   createPermissionRole,
-  createStoreStaffFixture,
+  createStaffFixture,
   createCast,
   createCourse,
   completeAgreedOrder,
@@ -169,7 +169,7 @@ Given(
       if (index === 0) email = address;
       if (index === 1) readerEmail = address;
       if (index === 3) orderReaderEmail = address;
-      await createStoreStaffFixture(
+      await createStaffFixture(
         request,
         manager,
         address,
@@ -178,7 +178,6 @@ Given(
         index === 1 || index === 3
           ? [Number(storeId)]
           : [Number(storeId), Number(foreign)],
-        storeId,
       );
       tokens.push(await loginUser(request, address, password));
     }
@@ -1545,14 +1544,13 @@ Then(
         ...perms,
       ]);
       const address = `medium-${label}-${suffix}@example.test`;
-      await createStoreStaffFixture(
+      await createStaffFixture(
         request,
         orderCostWriter,
         address,
         password,
         [role],
         [Number(storeId)],
-        storeId,
       );
       return loginUser(request, address, password);
     };

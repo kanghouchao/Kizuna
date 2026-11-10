@@ -8,7 +8,7 @@ import {
   acceptCastInvitation,
   createPermissionRole,
   createStaffFixture,
-  createStoreStaffFixture,
+  authorizedStoreIds,
   createUnpublishedCast,
   getAuditEvent,
   getAuthorizedStores,
@@ -60,7 +60,7 @@ Given(
       ["CAST_MANAGE", "CAST_INVITE"],
     );
     const operatorEmail = `delete-operator-${suffix}@example.test`;
-    operatorId = await createStoreStaffFixture(
+    operatorId = await createStaffFixture(
       request,
       manager,
       operatorEmail,
@@ -76,7 +76,7 @@ Given(
       ["SHIFT_MANAGE"],
     );
     const limitedEmail = `delete-limited-${suffix}@example.test`;
-    await createStoreStaffFixture(
+    await createStaffFixture(
       request,
       manager,
       limitedEmail,
@@ -92,7 +92,7 @@ Given(
       ["AUDIT_VIEW"],
     );
     const auditEmail = `delete-auditor-${suffix}@example.test`;
-    await createStaffFixture(request, owner, auditEmail, password, [auditRole]);
+    await createStaffFixture(request, owner, auditEmail, password, [auditRole], await authorizedStoreIds(request, owner));
     auditor = await loginUser(request, auditEmail, password);
   },
 );

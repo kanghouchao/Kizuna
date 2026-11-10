@@ -4,6 +4,7 @@ import { APP_URL } from '../base-url';
 import {
   createPermissionRole,
   createStaffFixture,
+  authorizedStoreIds,
   loginUser,
   revealSidebarLink,
   STORE1_ID,
@@ -33,7 +34,7 @@ Given('専用の処理実行者とサービスIDが用意されている', async
   password = 'Audit-' + suffix + '-fixture';
   email = 'audit-' + suffix + '@kizuna.test';
   roleId = await createPermissionRole(request, admin, '実行監査-' + suffix, ['TASK_MANAGE', 'AUDIT_VIEW']);
-  await createStaffFixture(request, admin, email, password, [roleId]);
+  await createStaffFixture(request, admin, email, password, [roleId], await authorizedStoreIds(request, admin));
   operator = await loginUser(request, email, password);
   limitedEmail = 'audit-limited-' + suffix + '@kizuna.test';
   await createStaffFixture(request, admin, limitedEmail, password, [roleId], [Number(STORE1_ID)]);

@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
-import { ADMIN_PASSWORD, STORE_HEADERS, createPermissionRole, createStaffFixture, loginUser, loginViaUiAndEnterStore, openLoginForm } from './store-api';
+import { ADMIN_PASSWORD, STORE_HEADERS, createPermissionRole, authorizedStoreIds, createStaffFixture, loginUser, loginViaUiAndEnterStore, openLoginForm } from './store-api';
 const { Given, When, Then } = createBdd();
 let email = '';
 let password = '';
@@ -18,7 +18,7 @@ Given('既定権限を持たない口コミ担当者が用意されている', a
   email = `review-${suffix}@kizuna.test`;
   password = `Review-${suffix}-fixture`;
   const role = await createPermissionRole(request, admin, `口コミ担当-${suffix}`, ['REVIEW_VIEW', 'REVIEW_MANAGE', 'REVIEW_MODERATE', 'ORDER_MANAGE',]);
-  await createStaffFixture(request, admin, email, password, [role]);
+  await createStaffFixture(request, admin, email, password, [role], await authorizedStoreIds(request, admin));
   token = await loginUser(request, email, password);
   expect((await request.get('/api/reviews', { headers: { Authorization: `Bearer ${token}` } })).status()).toBe(400);
   expect((await request.get('/api/reviews', { headers: STORE_HEADERS })).status()).toBe(401);
