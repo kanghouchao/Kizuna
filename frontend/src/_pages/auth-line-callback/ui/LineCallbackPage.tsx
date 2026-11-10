@@ -12,6 +12,7 @@ import {
   getApiErrorMessage,
   lineCallbackRedirectUri,
   type LineLinkReturn,
+  withNext,
 } from '@/shared/lib';
 import { AuthLayout } from '@/shared/ui';
 import LineRegisterStep, { LineRegisterValues } from './LineRegisterStep';
@@ -40,7 +41,7 @@ export default function LineCallbackPage() {
   const [backTo, setBackTo] = useState<BackTo>('login');
   const [registrationTicket, setRegistrationTicket] = useState('');
   const [lineDisplayName, setLineDisplayName] = useState('');
-  // ログイン画面が持ち越した戻り先。未登録で会員登録へ分岐した場合も、登録後はここへ戻す
+  // ログイン画面が持ち越した戻り先。会員登録へ分岐しても、失敗してログインへ戻ってもここへ引き継ぐ
   const [next, setNext] = useState<string | undefined>();
 
   useEffect(() => {
@@ -57,7 +58,6 @@ export default function LineCallbackPage() {
     const runLogin = async (request: LineAuthorizationRequest, returnTo?: string) => {
       const response = await lineApi.login(request);
       if (!response.registered) {
-        setNext(returnTo);
         setRegistrationTicket(response.registration_ticket ?? '');
         setLineDisplayName(response.display_name ?? '');
         setStage('register');
@@ -102,6 +102,7 @@ export default function LineCallbackPage() {
       const authorization = consumeLineAuthorization(params.get('state'));
       const destination: BackTo =
         authorization?.intent === 'link' ? authorization.returnTo : 'login';
+      if (authorization?.intent === 'login') setNext(authorization.next);
 
       // 利用者が LINE 側で拒否した場合など。error_description は英語のため表示しない
       if (params.get('error')) {
@@ -152,12 +153,13 @@ export default function LineCallbackPage() {
 
   if (stage === 'error') {
     const back = BACK_LINKS[backTo];
+    const href = backTo === 'login' ? withNext(back.href, next) : back.href;
     return (
       <AuthLayout title="LINE認証を完了できません" subtitle="以下の内容をご確認ください">
         <div className="space-y-6">
           <div className="auth-alert auth-alert--error">{errorMessage}</div>
           <p className="text-center text-xs text-[#9a958e]">
-            <Link href={back.href} className="auth-link">
+            <Link href={href} className="auth-link">
               {back.label}
             </Link>
           </p>
