@@ -3,16 +3,18 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type { StoreScopeType } from '@/entities/user';
 import { StoreSetPicker } from '../StoreSetPicker';
 
-it('フォーム文脈なしで授権の店舗集合を選べる', () => {
+type StoreSet = { storeScopeType: StoreScopeType; storeIds: number[] };
+
+function renderPicker(initial: StoreSet) {
   const changed = jest.fn();
   function Harness() {
-    const [value, setValue] = useState<{
-      storeScopeType: StoreScopeType;
-      storeIds: number[];
-    }>({ storeScopeType: 'ALL_STORES', storeIds: [] });
+    const [value, setValue] = useState<StoreSet>(initial);
     return (
       <StoreSetPicker
-        stores={[{ id: 9, name: '店舗A' }]}
+        stores={[
+          { id: 9, name: '店舗A' },
+          { id: 10, name: '店舗B' },
+        ]}
         isLoading={false}
         failed={false}
         onReload={jest.fn()}
@@ -25,10 +27,34 @@ it('フォーム文脈なしで授権の店舗集合を選べる', () => {
     );
   }
   render(<Harness />);
+  return changed;
+}
+
+it('全店舗の選択肢を持たず、店舗を個別に選ぶ', () => {
+  const changed = renderPicker({ storeScopeType: 'SPECIFIC_STORES', storeIds: [] });
+
   expect(screen.getByRole('group', { name: '担当店舗' })).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('radio', { name: '個別店舗' }));
+  expect(screen.queryByRole('radio')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('checkbox', { name: '店舗A' }));
   expect(changed).toHaveBeenLastCalledWith({ storeScopeType: 'SPECIFIC_STORES', storeIds: [9] });
-  fireEvent.click(screen.getByRole('radio', { name: '全店舗' }));
-  expect(changed).toHaveBeenLastCalledWith({ storeScopeType: 'ALL_STORES', storeIds: [] });
+});
+
+it('すべて選択はその時点の店舗を個別に選ぶ', () => {
+  const changed = renderPicker({ storeScopeType: 'SPECIFIC_STORES', storeIds: [] });
+
+  fireEvent.click(screen.getByRole('button', { name: 'すべて選択' }));
+  expect(changed).toHaveBeenLastCalledWith({
+    storeScopeType: 'SPECIFIC_STORES',
+    storeIds: [9, 10],
+  });
+});
+
+it('全店舗の授権は店舗を選び直すまで保ち、選び直すと個別の店舗に変わる', () => {
+  const changed = renderPicker({ storeScopeType: 'ALL_STORES', storeIds: [] });
+
+  expect(screen.getByText(/現在は全店舗/)).toBeInTheDocument();
+  expect(changed).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('checkbox', { name: '店舗B' }));
+  expect(changed).toHaveBeenLastCalledWith({ storeScopeType: 'SPECIFIC_STORES', storeIds: [10] });
+  expect(screen.queryByText(/現在は全店舗/)).not.toBeInTheDocument();
 });

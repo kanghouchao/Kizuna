@@ -56,6 +56,7 @@ export function BenefitRuleStorePicker({
       </RadioGroup>
       {storeScopeType === 'SPECIFIC_STORES' && (
         <StoreChecklist
+          className="ml-6"
           stores={stores}
           isLoading={isLoading}
           failed={failed}

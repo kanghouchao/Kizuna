@@ -1,6 +1,7 @@
 'use client';
 
 import { AuthorizedStore } from '@/entities/user';
+import { cn } from '@/shared/lib';
 import { Button, Checkbox, Label, RegionError } from '@/shared/ui';
 
 interface StoreChecklistProps {
@@ -13,6 +14,7 @@ interface StoreChecklistProps {
   onReload: () => void;
   storeIds: number[];
   onChange: (storeIds: number[]) => void;
+  className?: string;
 }
 
 /** 店舗目録から個別店舗を選ぶチェックボックス一覧。全選択・全解除と、目録の読み込み中・失敗・空の表示を持つ。 */
@@ -23,6 +25,7 @@ export function StoreChecklist({
   onReload,
   storeIds,
   onChange,
+  className,
 }: StoreChecklistProps) {
   const storeIdsInCatalog = stores.flatMap(store => (store.id === undefined ? [] : [store.id]));
   const toggleStore = (id: number) =>
@@ -31,7 +34,7 @@ export function StoreChecklist({
     );
 
   return (
-    <div className="@container ml-6 space-y-3 rounded-md border p-3">
+    <div className={cn('@container space-y-3 rounded-md border p-3', className)}>
       {isLoading ? (
         <p className="text-sm text-muted-foreground">読み込み中...</p>
       ) : failed ? (
