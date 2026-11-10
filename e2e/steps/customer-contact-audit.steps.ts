@@ -9,6 +9,7 @@ import {
   createCustomer,
   createPermissionRole,
   createStaffFixture,
+  authorizedStoreIds,
   deleteCustomerContact,
   getAuthorizedStores,
   loginAsStoreAdmin,
@@ -65,7 +66,7 @@ Given(
       ["AUDIT_VIEW",],
     );
     const email = `contact-auditor-${suffix}@example.test`;
-    await createStaffFixture(request, owner, email, password, [role]);
+    await createStaffFixture(request, owner, email, password, [role], await authorizedStoreIds(request, owner));
     auditor = await loginUser(request, email, password);
     const stores = await getAuthorizedStores(request, staff);
     otherStore = String(

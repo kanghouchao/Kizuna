@@ -8,6 +8,7 @@ import {
   STORE_HEADERS,
   createPermissionRole,
   createStaffFixture,
+  authorizedStoreIds,
   getAuditEvent,
   getStoreConfig,
   listAuditEvents,
@@ -45,12 +46,14 @@ Given(
       ["STORE_PROFILE_MANAGE"],
     );
     const operatorEmail = `profile-operator-${suffix}@example.test`;
+    const ownerStores = await authorizedStoreIds(request, owner);
     operatorId = await createStaffFixture(
       request,
       owner,
       operatorEmail,
       password,
       [operatorRole],
+      ownerStores,
     );
     operator = await loginUser(request, operatorEmail, password);
     const limitedRole = await createPermissionRole(
@@ -60,9 +63,7 @@ Given(
       ["SHIFT_MANAGE"],
     );
     const limitedEmail = `profile-limited-${suffix}@example.test`;
-    await createStaffFixture(request, owner, limitedEmail, password, [
-      limitedRole,
-    ]);
+    await createStaffFixture(request, owner, limitedEmail, password, [limitedRole], ownerStores);
     limited = await loginUser(request, limitedEmail, password);
     const auditRole = await createPermissionRole(
       request,
@@ -71,7 +72,7 @@ Given(
       ["AUDIT_VIEW"],
     );
     const auditEmail = `profile-auditor-${suffix}@example.test`;
-    await createStaffFixture(request, owner, auditEmail, password, [auditRole]);
+    await createStaffFixture(request, owner, auditEmail, password, [auditRole], ownerStores);
     auditor = await loginUser(request, auditEmail, password);
   },
 );

@@ -6,6 +6,7 @@ import {
   createCustomer,
   createPermissionRole,
   createStaffFixture,
+  authorizedStoreIds,
   getAuditEvent,
   getOrder,
   getOrderReceptionists,
@@ -41,7 +42,7 @@ Given(
       "AUDIT_VIEW",
     ]);
     const email = "claim-auditor-" + suffix + "@example.test";
-    await createStaffFixture(request, owner, email, password, [role]);
+    await createStaffFixture(request, owner, email, password, [role], await authorizedStoreIds(request, owner));
     auditor = await loginUser(request, email, password);
     secrets.push(password);
   },

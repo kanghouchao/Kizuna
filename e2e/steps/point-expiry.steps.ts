@@ -1,7 +1,7 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
-import { createPermissionRole, createStaffFixture, loginUser, openLoginForm } from './store-api';
+import { createPermissionRole, authorizedStoreIds, createStaffFixture, loginUser, openLoginForm } from './store-api';
 const { Given, When, Then } = createBdd();
 let operator = '';
 let viewer = '';
@@ -20,10 +20,10 @@ Given('失効処理用の主体と権限不足の主体が用意されている'
   password = 'Expiry-' + suffix + '-fixture';
   email = 'expiry-' + suffix + '@kizuna.test';
   const role = await createPermissionRole(request, admin, '失効運用-' + suffix, ['TASK_MANAGE', 'POINT_EXPIRE', 'AUDIT_VIEW',]);
-  await createStaffFixture(request, admin, email, password, [role]);
+  await createStaffFixture(request, admin, email, password, [role], await authorizedStoreIds(request, admin));
   const viewerRole = await createPermissionRole(request, admin, '失効閲覧-' + suffix, ['TASK_MANAGE']);
   const viewerEmail = 'expiry-view-' + suffix + '@kizuna.test';
-  await createStaffFixture(request, admin, viewerEmail, password, [viewerRole]);
+  await createStaffFixture(request, admin, viewerEmail, password, [viewerRole], await authorizedStoreIds(request, admin));
   viewer = await loginUser(request, viewerEmail, password);
   operator = await loginUser(request, email, password);
   const complete = await createPermissionRole(request, admin, '失効処理-' + suffix, ['TASK_EXECUTE', 'POINT_EXPIRE']);

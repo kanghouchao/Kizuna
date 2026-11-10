@@ -19,6 +19,7 @@ import {
   acceptCastInvitation,
   createPermissionRole,
   createStaffFixture,
+  authorizedStoreIds,
   getAuthorizedStores,
   loginAsStoreAdmin,
   loginUser,
@@ -67,7 +68,7 @@ Given(
       ["AUDIT_VIEW",],
     );
     const email = `shift-auditor-${suffix}@example.test`;
-    await createStaffFixture(request, owner, email, password, [role]);
+    await createStaffFixture(request, owner, email, password, [role], await authorizedStoreIds(request, owner));
     auditor = await loginUser(request, email, password);
     const stores = await getAuthorizedStores(request, staff);
     otherStore = String(

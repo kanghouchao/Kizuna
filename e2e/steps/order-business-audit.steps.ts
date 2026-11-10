@@ -7,6 +7,7 @@ import {
   createCourse,
   createPermissionRole,
   createStaffFixture,
+  authorizedStoreIds,
   getAuthorizedStores,
   getOrder,
   getOrderReceptionists,
@@ -73,6 +74,7 @@ Given(
       email,
       privatePassword,
       [role],
+      await authorizedStoreIds(request, owner),
     );
     auditor = await loginUser(request, email, privatePassword);
     castId = await createCast(request, staff, "監査対象-" + suffix);

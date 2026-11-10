@@ -6,6 +6,7 @@ import {
   STORE_HEADERS,
   createPermissionRole,
   createStaffFixture,
+  authorizedStoreIds,
   loginUser,
   loginViaUiAndEnterStore,
   openLoginForm,
@@ -59,7 +60,7 @@ Given(
       `アンケート担当-${suffix}`,
       ["SURVEY_VIEW", "SURVEY_MANAGE", "SURVEY_RECORD"],
     );
-    await createStaffFixture(request, owner, email, secret, [role]);
+    await createStaffFixture(request, owner, email, secret, [role], await authorizedStoreIds(request, owner));
     token = await loginUser(request, email, secret);
     expect(
       (await request.get("/api/surveys", { headers: STORE_HEADERS })).status(),

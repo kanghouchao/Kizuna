@@ -2,7 +2,7 @@ import { expect, type APIRequestContext, type Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
 import { latestMailTo } from './mailpit';
-import { createConsentingGuestApplication, createPermissionRole, createStaffFixture, createStoreStaffFixture, expectSidebarLinkAbsentEverywhere, loginInBrowser, loginUser, loginViaUiAndEnterStore, memberIdOf, registerMember, selectRailContext, STORE1_ID, STORE_HEADERS, openLoginForm } from './store-api';
+import { createConsentingGuestApplication, createPermissionRole, createStaffFixture, expectSidebarLinkAbsentEverywhere, loginInBrowser, loginUser, loginViaUiAndEnterStore, memberIdOf, registerMember, selectRailContext, STORE1_ID, STORE_HEADERS, openLoginForm } from './store-api';
 const { Given, When, Then, After } = createBdd();
 let email = '';
 let password = '';
@@ -315,7 +315,7 @@ Then('店舗の通知の権限だけを持つ職員は会員宛の業務通知�
   const scopedEmail = 'notification-scoped-' + suffix + '@kizuna.test';
   const scopedPassword = 'Notification-' + suffix + '-scoped';
   const role = await createPermissionRole(request, admin, '店舗通知-' + suffix, ['NOTIFICATION_VIEW', 'NOTIFICATION_SEND', 'MEMBER_VIEW']);
-  await createStoreStaffFixture(request, admin, scopedEmail, scopedPassword, [role], [Number(STORE1_ID)]);
+  await createStaffFixture(request, admin, scopedEmail, scopedPassword, [role], [Number(STORE1_ID)]);
   const scoped = await loginUser(request, scopedEmail, scopedPassword);
   expect((await request.get(MEMBER_DELIVERIES, { headers: { Authorization: `Bearer ${scoped}` } })).status()).toBe(403);
   expect((await request.get(`${MEMBER_DELIVERIES}/${allowedDelivery}`, { headers: { Authorization: `Bearer ${scoped}` } })).status()).toBe(403);

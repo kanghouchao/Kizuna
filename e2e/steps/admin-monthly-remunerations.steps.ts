@@ -3,6 +3,7 @@ import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
 import { expectChange } from './change-table';
 import {
+  createStaffAccount,
   acceptCastInvitation, acceptExistingCastInvitation, cancelOrder,
   completeAgreedOrder, correctOrderExtension, createAgreedOrder, createCast, createCourse,
   getAuthorizedStores, getOrder, invalidateOrder, issueCastInvitation,
@@ -17,11 +18,11 @@ let manager = '';
 let castToken = '';
 let firstReader = '';
 let secondReader = '';
-let allReader = '';
+let twoStoreReader = '';
 let storeOnlyReader = '';
 let setOnlyReader = '';
 let readerEmail = '';
-let allReaderEmail = '';
+let twoStoreReaderEmail = '';
 let password = '';
 let storeName = '';
 let secondStore = '';
@@ -102,19 +103,17 @@ Given('月次受注照会用の本人と異なる授権集合の照会者がい�
   expect(setOnlyRole.status(), await setOnlyRole.text()).toBe(201);
   const setOnlyRoleId = (await setOnlyRole.json()).id;
   const tokens: string[] = [];
-  for (const [index, scope] of [STORE1_ID, secondStore, 'all', STORE1_ID, STORE1_ID].entries()) {
+  for (const [index, storeIds] of [[STORE1_ID], [secondStore], [STORE1_ID, secondStore], [STORE1_ID], [STORE1_ID]].entries()) {
     const email = 'admin-monthly-reader-' + suffix + '-' + index + '@kizuna.test';
     if (index === 0) readerEmail = email;
-    if (index === 2) allReaderEmail = email;
-    const created = await request.post('/api/staff', { headers: { Authorization: 'Bearer ' + admin }, data: {
-      email, password, display_name: '月次参照者-' + suffix + '-' + index,
-      role_ids: [index === 3 ? storeOnlyRoleId : index === 4 ? setOnlyRoleId : roleId], store_scope_type: scope === 'all' ? 'ALL_STORES' : 'SPECIFIC_STORES',
-      store_ids: scope === 'all' ? [] : [Number(scope)],
-    } });
-    expect(created.status(), await created.text()).toBe(201);
+    if (index === 2) twoStoreReaderEmail = email;
+    await createStaffAccount(request, admin, {
+      email, password, displayName: '月次参照者-' + suffix + '-' + index,
+      roleIds: [index === 3 ? storeOnlyRoleId : index === 4 ? setOnlyRoleId : roleId], storeIds: storeIds.map(Number),
+    });
     tokens.push(await loginUser(request, email, password));
   }
-  [firstReader, secondReader, allReader, storeOnlyReader, setOnlyReader] = tokens;
+  [firstReader, secondReader, twoStoreReader, storeOnlyReader, setOnlyReader] = tokens;
   const candidates = await request.get(base + '/casts', { headers: headers(firstReader),
     params: { search: name + '-旧名' } });
   expect(candidates.status()).toBe(200);
@@ -137,7 +136,7 @@ When('受注照会者が受注照会から現在店舗の月次給与明細で�
   await page.goto(APP_URL + '/admin/orders');
   await page.getByRole('link', { name: '月次給与明細', exact: true }).click();
   await expect(page).toHaveURL(/\/store\/orders\/monthly-remunerations$/);
-  if (readerEmail === allReaderEmail) await switchStoreOnRail(page, storeName);
+  if (readerEmail === twoStoreReaderEmail) await switchStoreOnRail(page, storeName);
   await page.getByRole('button', { name: '照会', exact: true }).click();
   await expect(page.getByText('キャスト本人を選択してください', { exact: true })).toBeVisible();
   await page.getByRole('combobox', { name: 'キャスト本人', exact: true }).click();
@@ -209,8 +208,8 @@ Then('月次受注照会は異なる授権集合と直接HTTP要求を検証す�
   const wrongPerson = await request.get(base, { headers: headers(firstReader),
     params: { person_id: foreignPersonId, month: originalMonth } });
   expect(wrongPerson.status()).toBe(404);
-  expect((await monthly(request, allReader, STORE1_ID)).total_remuneration).toBe(14000);
-  expect((await monthly(request, allReader, secondStore)).total_remuneration).toBe(7000);
+  expect((await monthly(request, twoStoreReader, STORE1_ID)).total_remuneration).toBe(14000);
+  expect((await monthly(request, twoStoreReader, secondStore)).total_remuneration).toBe(7000);
   const suspendedCandidates = await request.get(base + '/casts', { headers: headers(secondReader, secondStore),
     params: { search: name + '-他店' } });
   expect(suspendedCandidates.status()).toBe(200);
@@ -294,4 +293,4 @@ Then('受注照会の月次画面は失敗から再試行でき店舗切替で�
   await expect(page.getByRole('combobox', { name: 'キャスト本人', exact: true })).toContainText('源氏名で検索');
 });
 
-Given('月次横断画面の確認者が全店授権である', async () => { readerEmail = allReaderEmail; });
+Given('月次横断画面の確認者が二店舗に授権されている', async () => { readerEmail = twoStoreReaderEmail; });

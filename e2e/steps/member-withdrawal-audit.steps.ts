@@ -7,6 +7,7 @@ import {
   createCustomer,
   createPermissionRole,
   createStaffFixture,
+  authorizedStoreIds,
   getAuditEvent,
   linkMemberToCustomer,
   listAuditEvents,
@@ -50,7 +51,7 @@ Given("退会監査専用の監査者が用意されている", async ({ request
   );
   const email = `withdrawal-auditor-${suffix}@example.test`;
   const password = randomUUID();
-  await createStaffFixture(request, owner, email, password, [role]);
+  await createStaffFixture(request, owner, email, password, [role], await authorizedStoreIds(request, owner));
   auditor = await loginUser(request, email, password);
 });
 

@@ -1,6 +1,6 @@
 import { expect, type APIRequestContext } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { ADMIN_PASSWORD, STORE_HEADERS, createPermissionRole, createStaffFixture, loginUser } from './store-api';
+import { ADMIN_PASSWORD, STORE_HEADERS, createPermissionRole, authorizedStoreIds, createStaffFixture, loginUser } from './store-api';
 
 const { Given, When, Then, After } = createBdd();
 let token = '';
@@ -28,7 +28,7 @@ Given('口コミを受付し内部承認と公開許可を記録している', a
   const email = `review-public-${suffix}@kizuna.test`;
   const password = `Review-${suffix}-fixture`;
   const role = await createPermissionRole(request, admin, `口コミ掲出-${suffix}`, ['REVIEW_VIEW', 'REVIEW_MANAGE', 'REVIEW_MODERATE']);
-  await createStaffFixture(request, admin, email, password, [role]);
+  await createStaffFixture(request, admin, email, password, [role], await authorizedStoreIds(request, admin));
   token = await loginUser(request, email, password);
   marker = `掲出検証-${suffix}`;
   const created = await request.post('/api/reviews', {

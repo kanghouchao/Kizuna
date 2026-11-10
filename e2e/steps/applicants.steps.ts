@@ -9,6 +9,7 @@ import {
   STORE_HEADERS,
   createPermissionRole,
   createStaffFixture,
+  authorizedStoreIds,
   ensureMedium,
   loginAsStoreAdmin,
   loginUser,
@@ -1019,7 +1020,7 @@ Then(
       [viewerRole, "viewer"],
     ] as const) {
       const email = `anonymize-${prefix}-${suffix}@example.invalid`;
-      await createStaffFixture(request, ownerToken, email, password, [role]);
+      await createStaffFixture(request, ownerToken, email, password, [role], await authorizedStoreIds(request, ownerToken));
       const login = await request.post("/api/auth/login", {
         data: { email, password },
       });

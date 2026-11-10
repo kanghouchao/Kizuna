@@ -7,7 +7,7 @@ import {
   STORE_HEADERS,
   createPermissionRole,
   createStaffFixture,
-  createStoreStaffFixture,
+  authorizedStoreIds,
   createUnpublishedCast,
   renameCast,
   setCastPublication,
@@ -87,7 +87,7 @@ Given(
       ["CAST_MANAGE"],
     );
     const ordinaryEmail = `cast-audit-${suffix}@example.test`;
-    ordinaryId = await createStoreStaffFixture(
+    ordinaryId = await createStaffFixture(
       request,
       manager,
       ordinaryEmail,
@@ -103,7 +103,7 @@ Given(
       ["SHIFT_MANAGE"],
     );
     const limitedEmail = `cast-limited-${suffix}@example.test`;
-    await createStoreStaffFixture(
+    await createStaffFixture(
       request,
       manager,
       limitedEmail,
@@ -132,6 +132,7 @@ Given(
       auditEmail,
       password,
       [auditRole],
+      await authorizedStoreIds(request, owner),
     );
     auditor = await loginUser(request, auditEmail, password);
   },

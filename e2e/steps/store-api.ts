@@ -1172,17 +1172,14 @@ export async function createPermissionRole(request: APIRequestContext, token: st
   return (await response.json()).id;
 }
 
-/** 検証専用スタッフを作り、既存アカウントの授権に影響を与えない。 */
-export async function createStaffFixture(request: APIRequestContext, token: string, email: string, password: string, roleIds: number[], storeIds?: number[]): Promise<number> {
-  const response = await request.post('/api/staff', { headers: { Authorization: `Bearer ${token}` }, data: { email, password, display_name: '検証担当', role_ids: roleIds, store_scope_type: storeIds ? 'SPECIFIC_STORES' : 'ALL_STORES', store_ids: storeIds ?? [] } });
-  expect(response.status(), await response.text()).toBe(201);
-  return (await response.json()).id;
+/** 作成者が授権されている店舗をすべて選ぶ。画面の「すべて選択」と同じく、その時点の店舗だけを含む。 */
+export async function authorizedStoreIds(request: APIRequestContext, token: string): Promise<number[]> {
+  return (await getAuthorizedStores(request, token)).map((store) => store.id);
 }
 
-export async function createStoreStaffFixture(request: APIRequestContext, token: string, email: string, password: string, roleIds: number[], storeIds: number[], storeId: string = STORE1_ID): Promise<number> {
-  const response = await request.post('/api/staff', { headers: { Authorization: `Bearer ${token}` }, data: { email, password, display_name: '検証担当', role_ids: roleIds, store_scope_type: 'SPECIFIC_STORES', store_ids: storeIds } });
-  expect(response.status(), await response.text()).toBe(201);
-  return (await response.json()).id;
+/** 検証専用スタッフを作り、既存アカウントの授権に影響を与えない。店舗は明示した集合だけを授ける。 */
+export async function createStaffFixture(request: APIRequestContext, token: string, email: string, password: string, roleIds: number[], storeIds: number[]): Promise<number> {
+  return createStaffAccount(request, token, { email, password, displayName: '検証担当', roleIds, storeIds });
 }
 
 /** 表示名を指定し、個別店舗に授権した従業員を作る（POST /staff, PERM_STAFF_MANAGE）。 */

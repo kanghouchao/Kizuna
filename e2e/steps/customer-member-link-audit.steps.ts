@@ -8,7 +8,7 @@ import {
   createCustomer,
   createPermissionRole,
   createStaffFixture,
-  createStoreStaffFixture,
+  authorizedStoreIds,
   currentCustomerMemberLink,
   customerMemberLinkHistory,
   getAuditEvent,
@@ -71,7 +71,7 @@ Given(
       ["AUDIT_VIEW",],
     );
     const email = `link-auditor-${suffix}@example.test`;
-    await createStaffFixture(request, owner, email, password, [role]);
+    await createStaffFixture(request, owner, email, password, [role], await authorizedStoreIds(request, owner));
     auditor = await loginUser(request, email, password);
     const limitedRole = await createPermissionRole(
       request,
@@ -80,7 +80,7 @@ Given(
       ["SHIFT_MANAGE"],
     );
     const limitedEmail = `link-reader-${suffix}@example.test`;
-    await createStoreStaffFixture(
+    await createStaffFixture(
       request,
       staff,
       limitedEmail,

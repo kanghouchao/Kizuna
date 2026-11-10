@@ -3,6 +3,7 @@ import { createBdd } from "playwright-bdd";
 import { randomUUID } from "node:crypto";
 import {
   ADMIN_PASSWORD,
+  STORE1_ID,
   createPermissionRole,
   createStaffFixture,
   getAuditEvent,
@@ -15,6 +16,9 @@ let operator = "",
   limited = "",
   auditor = "",
   operatorId = 0,
+  ownerToken = "",
+  auditPassword = "",
+  auditRole = 0,
   secretName = "",
   activated = "",
   discarded = "",
@@ -46,6 +50,7 @@ Given(
       operatorEmail,
       password,
       [operatorRole],
+      [Number(STORE1_ID)],
     );
     operator = await loginUser(request, operatorEmail, password);
     const limitedRole = await createPermissionRole(
@@ -55,19 +60,16 @@ Given(
       ["SHIFT_MANAGE"],
     );
     const limitedEmail = `store-limited-${suffix}@example.test`;
-    await createStaffFixture(request, owner, limitedEmail, password, [
-      limitedRole,
-    ]);
+    await createStaffFixture(request, owner, limitedEmail, password, [limitedRole], [Number(STORE1_ID)]);
     limited = await loginUser(request, limitedEmail, password);
-    const auditRole = await createPermissionRole(
+    ownerToken = owner;
+    auditPassword = password;
+    auditRole = await createPermissionRole(
       request,
       owner,
       `店舗登録監査-${suffix}`,
       ["AUDIT_VIEW"],
     );
-    const auditEmail = `store-auditor-${suffix}@example.test`;
-    await createStaffFixture(request, owner, auditEmail, password, [auditRole]);
-    auditor = await loginUser(request, auditEmail, password);
   },
 );
 
@@ -153,6 +155,14 @@ When(
 Then(
   "成功した操作だけが店舗 ID と状態の前後で監査され値は複写されない",
   async ({ request }) => {
+    // 監査は集合内の店舗の行と削除済みの店舗の行だけを返す。作成した店舗は事前の集合に無いため、
+    // 残っている店舗を明示して監査者を作る（削除した店舗の行は集合に関わらず見える）。
+    const auditEmail = `store-auditor-${randomUUID()}@example.test`;
+    await createStaffFixture(request, ownerToken, auditEmail, auditPassword, [auditRole], [
+      Number(activated),
+      Number(untouched),
+    ]);
+    auditor = await loginUser(request, auditEmail, auditPassword);
     const mine = async (action: string) =>
       (await listAuditEvents(request, auditor, action)).content.filter((e) =>
         [activated, discarded, untouched].includes(e.target_id),
