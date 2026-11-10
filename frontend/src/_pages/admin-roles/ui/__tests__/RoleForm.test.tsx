@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import type { PermissionGroupResponse } from '@/entities/user';
+import type { PermissionTreeResponse } from '@/entities/user';
 import { roleApi } from '@/entities/user';
 import { RoleForm } from '../RoleForm';
 
@@ -9,19 +9,37 @@ jest.mock('@/entities/user', () => ({
 
 const mockedRoleApi = roleApi as jest.Mocked<typeof roleApi>;
 
-const catalog: PermissionGroupResponse[] = [
+// 同じ見出し（業務）が二つの木の下に一度ずつ現れる形を含める
+const catalog: PermissionTreeResponse[] = [
   {
-    group: 'BUSINESS',
-    label: '業務',
-    permissions: [
-      { code: 'ORDER_MANAGE', label: '受注の管理' },
-      { code: 'SERVICE_MANAGE', label: 'サービス設定の管理' },
+    tree: 'GROUP',
+    label: 'グループ',
+    groups: [
+      {
+        group: 'BUSINESS',
+        label: '業務',
+        permissions: [{ code: 'ORDER_SET_VIEW', label: '受注の横断照会' }],
+      },
     ],
   },
   {
-    group: 'CUSTOMER',
-    label: '顧客',
-    permissions: [{ code: 'CUSTOMER_MANAGE', label: '顧客の管理' }],
+    tree: 'STORE',
+    label: '店舗',
+    groups: [
+      {
+        group: 'BUSINESS',
+        label: '業務',
+        permissions: [
+          { code: 'ORDER_MANAGE', label: '受注の管理' },
+          { code: 'SERVICE_MANAGE', label: 'サービス設定の管理' },
+        ],
+      },
+      {
+        group: 'CUSTOMER',
+        label: '顧客',
+        permissions: [{ code: 'CUSTOMER_MANAGE', label: '顧客の管理' }],
+      },
+    ],
   },
 ];
 
@@ -31,7 +49,7 @@ describe('ロールフォーム', () => {
     mockedRoleApi.permissions.mockResolvedValue(catalog);
   });
 
-  it('権限を業務領域ごとの見出しの下に並べ、日本語名を項目名にする', async () => {
+  it('権限を「木 → 区分見出し」の下に並べ、日本語名を項目名にする', async () => {
     render(<RoleForm onSubmit={jest.fn()} />);
 
     await screen.findByRole('checkbox', { name: '受注の管理' });
@@ -40,8 +58,23 @@ describe('ロールフォーム', () => {
       within(group)
         .getAllByRole('heading', { level: 2 })
         .map(h => h.textContent)
+    ).toEqual(['グループ', '店舗']);
+
+    const groupTree = within(group).getByRole('group', { name: 'グループ' });
+    const storeTree = within(group).getByRole('group', { name: '店舗' });
+    expect(
+      within(groupTree)
+        .getAllByRole('heading', { level: 3 })
+        .map(h => h.textContent)
+    ).toEqual(['業務']);
+    expect(
+      within(storeTree)
+        .getAllByRole('heading', { level: 3 })
+        .map(h => h.textContent)
     ).toEqual(['業務', '顧客']);
-    expect(within(group).getByRole('checkbox', { name: '受注の管理' })).not.toBeChecked();
+    expect(within(groupTree).getByRole('checkbox', { name: '受注の横断照会' })).not.toBeChecked();
+    expect(within(storeTree).getByRole('checkbox', { name: '受注の管理' })).not.toBeChecked();
+    expect(within(storeTree).queryByRole('checkbox', { name: '受注の横断照会' })).toBeNull();
     expect(within(group).queryByText('ORDER_MANAGE')).not.toBeInTheDocument();
   });
 
@@ -50,7 +83,7 @@ describe('ロールフォーム', () => {
 
     await screen.findByRole('checkbox', { name: '受注の管理' });
     const boxes = within(screen.getByRole('group', { name: '権限' })).getAllByRole('checkbox');
-    expect(boxes).toHaveLength(3);
+    expect(boxes).toHaveLength(4);
     boxes.forEach(box => expect(box).toHaveAttribute('data-slot', 'checkbox'));
   });
 
@@ -65,13 +98,15 @@ describe('ロールフォーム', () => {
     expect(await screen.findByRole('checkbox', { name: '受注の管理' })).toBeChecked();
     expect(screen.getByLabelText('ロール名')).toHaveValue('受付担当');
 
+    // 両方の木から選んだ権限が一つのロールに載る
     fireEvent.click(screen.getByRole('checkbox', { name: '顧客の管理' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '受注の横断照会' }));
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(onSubmit.mock.calls[0][0]).toEqual({
       name: '受付担当',
-      permissions: ['ORDER_MANAGE', 'CUSTOMER_MANAGE'],
+      permissions: ['ORDER_MANAGE', 'CUSTOMER_MANAGE', 'ORDER_SET_VIEW'],
     });
   });
 
@@ -99,7 +134,7 @@ describe('ロールフォーム', () => {
     const group = screen.getByRole('group', { name: '権限' });
     expect(group).toHaveAttribute('aria-invalid', 'true');
     expect(group.getAttribute('aria-describedby')).toContain(message.id);
-    expect(document.activeElement).toBe(screen.getByRole('checkbox', { name: '受注の管理' }));
+    expect(document.activeElement).toBe(screen.getByRole('checkbox', { name: '受注の横断照会' }));
     expect(onSubmit).not.toHaveBeenCalled();
   });
 

@@ -31,9 +31,15 @@ describe('ロール追加ページ', () => {
     jest.clearAllMocks();
     mockedRoleApi.permissions.mockResolvedValue([
       {
-        group: 'CUSTOMER',
-        label: '顧客',
-        permissions: [{ code: 'CUSTOMER_MANAGE', label: '顧客の管理' }],
+        tree: 'STORE',
+        label: '店舗',
+        groups: [
+          {
+            group: 'CUSTOMER',
+            label: '顧客',
+            permissions: [{ code: 'CUSTOMER_MANAGE', label: '顧客の管理' }],
+          },
+        ],
       },
     ]);
     mockedRoleApi.create.mockResolvedValue({} as never);

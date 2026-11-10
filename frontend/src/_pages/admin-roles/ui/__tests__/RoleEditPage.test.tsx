@@ -38,9 +38,15 @@ describe('ロール編集ページ', () => {
     mockRouteId = '5';
     mockedRoleApi.permissions.mockResolvedValue([
       {
-        group: 'BUSINESS',
-        label: '業務',
-        permissions: [{ code: 'ORDER_MANAGE', label: '受注の管理' }],
+        tree: 'STORE',
+        label: '店舗',
+        groups: [
+          {
+            group: 'BUSINESS',
+            label: '業務',
+            permissions: [{ code: 'ORDER_MANAGE', label: '受注の管理' }],
+          },
+        ],
       },
     ]);
     mockedRoleApi.get.mockResolvedValue(role());
