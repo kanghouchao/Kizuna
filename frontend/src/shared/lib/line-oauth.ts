@@ -18,10 +18,12 @@ const LINE_LINK_RETURNS: readonly LineLinkReturn[] = [
 
 /**
  * LINE 認可を開始した入口。ログイン（未登録なら会員登録へ分岐）と既存アカウントへの連携。
+ * ログインはログイン画面が持ち越した戻り先（next と断片）を往復の間ここに預ける。
  * 連携は発起主体（メールアドレス）を束縛し、外部認可の往復中に別アカウントへ切り替わった場合の誤連携を拒む。
  */
 export type LineOauthStart =
-  { intent: 'login' } | { intent: 'link'; subject: string; returnTo: LineLinkReturn };
+  | { intent: 'login'; next?: string }
+  | { intent: 'link'; subject: string; returnTo: LineLinkReturn };
 
 type LineAuthorizationRecord = { state: string; verifier: string } & LineOauthStart;
 
@@ -119,7 +121,12 @@ export function consumeLineAuthorization(state: string | null): LineAuthorizatio
   if (record.state !== state) return null;
   const base = { state: record.state, verifier: record.verifier };
 
-  if (record.intent === 'login') return { ...base, intent: 'login' };
+  // 戻り先の検証は着地（landSession）が本人種別ごとに行う。ここでは形だけ見る
+  if (record.intent === 'login') {
+    return typeof record.next === 'string'
+      ? { ...base, intent: 'login', next: record.next }
+      : { ...base, intent: 'login' };
+  }
   // 連携は発起主体と戻り先が揃って初めて成立する。欠けた保存値は改竄とみなす
   if (
     record.intent === 'link' &&

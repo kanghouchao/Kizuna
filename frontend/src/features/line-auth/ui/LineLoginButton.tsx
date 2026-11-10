@@ -3,7 +3,12 @@
 import { useEffect, useState } from 'react';
 import { notify } from '@/shared/notify';
 import { lineApi } from '@/entities/user';
-import { isLineAppHost, startLineAuthorization, useAppDomain } from '@/shared/lib';
+import {
+  isLineAppHost,
+  loginReturnTarget,
+  startLineAuthorization,
+  useAppDomain,
+} from '@/shared/lib';
 
 /**
  * 統一ログイン画面の LINE ログイン入口。
@@ -36,7 +41,7 @@ export function LineLoginButton() {
   const start = async () => {
     setIsRedirecting(true);
     try {
-      await startLineAuthorization(channelId, { intent: 'login' });
+      await startLineAuthorization(channelId, { intent: 'login', next: loginReturnTarget() });
     } catch {
       // PKCE の生成には SubtleCrypto が要り、安全な接続でないと利用できない
       setIsRedirecting(false);

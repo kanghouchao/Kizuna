@@ -4,10 +4,15 @@ import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import { notify } from '@/shared/notify';
 import { authApi, LoginRequest } from '@/entities/user';
-import { EMAIL_PATTERN, EMAIL_PATTERN_MESSAGE, getApiErrorMessage } from '@/shared/lib';
+import {
+  EMAIL_PATTERN,
+  EMAIL_PATTERN_MESSAGE,
+  getApiErrorMessage,
+  loginReturnTarget,
+} from '@/shared/lib';
 import { completeLogin } from '../model/completeLogin';
 
-/** 統一ログイン動作。ログイン成功後はロールに応じて自動的に適切なコンソールへ遷移する。 */
+/** 統一ログイン動作。ログイン成功後は URL の戻り先、無ければ本人種別ごとの既定の着地へ遷移する。 */
 export default function LoginForm() {
   const router = useRouter();
   const {
@@ -18,7 +23,7 @@ export default function LoginForm() {
 
   const onSubmit = async (data: LoginRequest) => {
     try {
-      const completion = await completeLogin(await authApi.login(data));
+      const completion = await completeLogin(await authApi.login(data), loginReturnTarget());
       if (completion.status === 'unsupported') {
         notify.error('この利用者種別のポータルは準備中です');
         return;

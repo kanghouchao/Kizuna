@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemberReceiptClaimPage } from '../MemberReceiptClaimPage';
 import { memberReceiptApi } from '@/entities/order';
 import { memberPointApi } from '@/entities/point';
-import { redirectToLogin, rememberMemberReturnPath } from '@/shared/lib';
+import { redirectToLogin } from '@/shared/lib';
 
 jest.mock('@/entities/order', () => ({
   memberReceiptApi: { claim: jest.fn() },
@@ -16,7 +16,6 @@ jest.mock('@/entities/point', () => ({
 jest.mock('@/shared/lib', () => ({
   ...jest.requireActual('@/shared/lib'),
   redirectToLogin: jest.fn(),
-  rememberMemberReturnPath: jest.fn(),
 }));
 
 const mockedClaim = memberReceiptApi.claim as jest.Mock;
@@ -93,8 +92,7 @@ describe('MemberReceiptClaimPage', () => {
 
     render(<MemberReceiptClaimPage />);
 
-    await waitFor(() => expect(redirectToLogin).toHaveBeenCalledTimes(1));
-    expect(rememberMemberReturnPath).toHaveBeenCalledWith('/member/receipts', '#tok3n');
+    await waitFor(() => expect(redirectToLogin).toHaveBeenCalledWith({ returnHere: true }));
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 

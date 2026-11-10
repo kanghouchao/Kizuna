@@ -1,5 +1,12 @@
 export { AppDomainProvider, useAppDomain } from './app-domain';
-export { default as redirectToLogin, loginPath } from './navigation';
+export {
+  default as redirectToLogin,
+  currentReturnTarget,
+  loginPath,
+  loginReturnTarget,
+  resolveNext,
+  withNext,
+} from './navigation';
 export {
   ClientDataError,
   getApiErrorMessage,
@@ -21,15 +28,7 @@ export type { OperationStore } from './operation-store';
 export { useOperation, useOperationRevision } from './hooks/useOperation';
 export type { PendingOperation, SendOperation } from './hooks/useOperation';
 export { createUuid } from './uuid';
-export {
-  hasMemberReturnPath,
-  isSafeMemberReturnPath,
-  rememberMemberReturnPath,
-  takeMemberReturnPath,
-  getSessionKind,
-  getCurrentStoreId,
-  setCurrentStore,
-} from './session';
+export { getSessionKind, getCurrentStoreId, setCurrentStore } from './session';
 export { isStorePath, storePath } from './store-route';
 export { cn } from './utils';
 export {

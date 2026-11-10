@@ -1,6 +1,11 @@
 import Cookies from 'js-cookie';
-import { endSession, getSessionUserId, storeSessionToken, type EndReason } from '../session';
-import { rememberMemberReturnPath, takeMemberReturnPath } from '@/shared/lib/session';
+import {
+  endSession,
+  getSessionUserId,
+  landSession,
+  storeSessionToken,
+  type EndReason,
+} from '../session';
 
 const broadcasts: unknown[] = [];
 class FakeBroadcastChannel {
@@ -10,24 +15,17 @@ class FakeBroadcastChannel {
   close() {}
 }
 
-type ReturnPath = 'keep' | 'remember' | 'discard';
-type Row = [
-  EndReason,
-  { cookies: boolean; operations: boolean; broadcast: boolean; returnPath: ReturnPath },
-];
+type Row = [EndReason, { cookies: boolean; operations: boolean; broadcast: boolean }];
 
 // 各行は「何を消し、何を残すか」をすべて固定する。残す側も見ないと、消す範囲を広げる変更が緑のまま通る。
 const table: Row[] = [
-  ['logout', { cookies: true, operations: true, broadcast: true, returnPath: 'keep' }],
-  ['unsupported', { cookies: true, operations: true, broadcast: false, returnPath: 'discard' }],
-  ['expired', { cookies: false, operations: false, broadcast: false, returnPath: 'remember' }],
-  ['other-tab', { cookies: false, operations: false, broadcast: false, returnPath: 'keep' }],
-  [
-    'credential-changed',
-    { cookies: false, operations: false, broadcast: false, returnPath: 'keep' },
-  ],
-  ['relogin', { cookies: true, operations: true, broadcast: false, returnPath: 'remember' }],
-  ['resume-failed', { cookies: false, operations: false, broadcast: false, returnPath: 'keep' }],
+  ['logout', { cookies: true, operations: true, broadcast: true }],
+  ['unsupported', { cookies: true, operations: true, broadcast: false }],
+  ['expired', { cookies: false, operations: false, broadcast: false }],
+  ['other-tab', { cookies: false, operations: false, broadcast: false }],
+  ['credential-changed', { cookies: false, operations: false, broadcast: false }],
+  ['relogin', { cookies: true, operations: true, broadcast: false }],
+  ['resume-failed', { cookies: false, operations: false, broadcast: false }],
 ];
 
 describe('endSession の終了理由ごとの消す範囲', () => {
@@ -45,18 +43,12 @@ describe('endSession の終了理由ごとの消す範囲', () => {
     Cookies.set('session-kind', 'member');
     Cookies.set('current-store-id', '1');
     sessionStorage.setItem('pending-operation:slot', '{}');
-    // 預けてあった戻り先と、終了時の現在地を別の値にして、残す・預け直す・捨てるを見分ける
-    window.history.pushState({}, '', '/member/old');
-    rememberMemberReturnPath('/member/old', '#old');
-    window.history.pushState({}, '', '/member/receipts?s=1#tok3n');
   });
 
   afterEach(() => {
     Cookies.remove('session-kind');
     Cookies.remove('current-store-id');
     sessionStorage.clear();
-    takeMemberReturnPath();
-    window.history.pushState({}, '', '/');
   });
 
   it.each(table)('%s', (reason, expected) => {
@@ -69,12 +61,29 @@ describe('endSession の終了理由ごとの消す範囲', () => {
       expected.operations ? null : '{}'
     );
     expect(broadcasts).toEqual(expected.broadcast ? [{ user_id: 7 }] : []);
-    expect(takeMemberReturnPath()).toBe(
-      {
-        keep: '/member/old#old',
-        remember: '/member/receipts?s=1#tok3n',
-        discard: null,
-      }[expected.returnPath]
-    );
+  });
+});
+
+describe('landSession の着地', () => {
+  const LATER = Date.now() + 60_000;
+
+  afterEach(() => {
+    Cookies.remove('session-kind');
+  });
+
+  it('本人種別の戻り先があればそこへ、断片ごと着地する', () => {
+    expect(landSession('member', LATER, '/member/receipts#tok3n')).toBe('/member/receipts#tok3n');
+    expect(landSession('admin', LATER, '/store/casts')).toBe('/store/casts');
+    expect(landSession('cast', LATER, '/cast/schedule')).toBe('/cast/schedule');
+  });
+
+  it.each([
+    ['admin', '/member/receipts', '/admin/dashboard/'],
+    ['member', 'https://evil.test/', '/member/'],
+    ['cast', '//evil.test/cast/', '/cast/'],
+    ['member', undefined, '/member/'],
+  ] as const)('%s に戻り先 %s を渡しても既定の着地 %s へ進む', (kind, next, landing) => {
+    expect(landSession(kind, LATER, next)).toBe(landing);
+    expect(Cookies.get('session-kind')).toBe(kind);
   });
 });

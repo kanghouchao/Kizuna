@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { ReturnCarryingLink } from '@/features/login';
 import { MemberRegisterForm } from '@/features/member-register';
 import { AuthLayout } from '@/shared/ui';
 
@@ -12,12 +12,12 @@ export function MemberRegisterPage() {
       <MemberRegisterForm />
       <p className="mt-6 text-center text-xs text-[#9a958e]">
         すでにアカウントをお持ちの方は{' '}
-        <Link
+        <ReturnCarryingLink
           href="/auth/login"
           className="text-[#7c3aed] hover:underline focus:underline focus:outline-none"
         >
           ログイン
-        </Link>
+        </ReturnCarryingLink>
       </p>
     </AuthLayout>
   );

@@ -112,6 +112,34 @@ describe('line-oauth', () => {
       expect(consumeLineAuthorization(stored.state)).toBeNull();
     });
 
+    it('ログイン意図は、開始時に預けた戻り先（next と断片）を消費時に返す', async () => {
+      await prepareLineAuthorization('channel-1', {
+        intent: 'login',
+        next: '/member/receipts#tok3n',
+      });
+      const stored = JSON.parse(sessionStorage.getItem(STORAGE_KEY) as string);
+
+      expect(consumeLineAuthorization(stored.state)).toEqual({
+        state: stored.state,
+        verifier: stored.verifier,
+        intent: 'login',
+        next: '/member/receipts#tok3n',
+      });
+    });
+
+    it('ログイン意図の戻り先が文字列でなければ戻り先なしとして返す', () => {
+      sessionStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ state: 'state', verifier: 'v', intent: 'login', next: 42 })
+      );
+
+      expect(consumeLineAuthorization('state')).toEqual({
+        state: 'state',
+        verifier: 'v',
+        intent: 'login',
+      });
+    });
+
     it('連携意図は発起主体と戻り先を消費時に返す（本人束縛と戻り先）', async () => {
       await prepareLineAuthorization('channel-1', LINK);
       const stored = JSON.parse(sessionStorage.getItem(STORAGE_KEY) as string);

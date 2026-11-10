@@ -40,6 +40,8 @@ export default function LineCallbackPage() {
   const [backTo, setBackTo] = useState<BackTo>('login');
   const [registrationTicket, setRegistrationTicket] = useState('');
   const [lineDisplayName, setLineDisplayName] = useState('');
+  // ログイン画面が持ち越した戻り先。未登録で会員登録へ分岐した場合も、登録後はここへ戻す
+  const [next, setNext] = useState<string | undefined>();
 
   useEffect(() => {
     // 保存した state/code_verifier は一度きりの消費のため、開発時の二重実行で空振りさせない
@@ -52,15 +54,16 @@ export default function LineCallbackPage() {
       setStage('error');
     };
 
-    const runLogin = async (request: LineAuthorizationRequest) => {
+    const runLogin = async (request: LineAuthorizationRequest, returnTo?: string) => {
       const response = await lineApi.login(request);
       if (!response.registered) {
+        setNext(returnTo);
         setRegistrationTicket(response.registration_ticket ?? '');
         setLineDisplayName(response.display_name ?? '');
         setStage('register');
         return;
       }
-      const completion = await completeLogin(response);
+      const completion = await completeLogin(response, returnTo);
       if (completion.status === 'unsupported') {
         fail('この利用者種別のポータルは準備中です', 'login');
         return;
@@ -123,7 +126,7 @@ export default function LineCallbackPage() {
           await runLink(request, authorization.subject, authorization.returnTo);
           return;
         }
-        await runLogin(request);
+        await runLogin(request, authorization.next);
       } catch (error) {
         fail(getApiErrorMessage(error, 'LINEでの認証に失敗しました'), destination);
       }
@@ -141,7 +144,7 @@ export default function LineCallbackPage() {
       });
       storeSessionToken(issued);
       // 消費済みのコールバック URL と使用済みフォームを履歴に残さない
-      router.replace(landSession('member', issued.refresh_expires_at));
+      router.replace(landSession('member', issued.refresh_expires_at, next));
     } catch (error) {
       notify.error(getApiErrorMessage(error, '会員登録に失敗しました'));
     }

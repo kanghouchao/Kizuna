@@ -1,6 +1,5 @@
-import Link from 'next/link';
 import { LineLoginButton } from '@/features/line-auth';
-import { LoginForm, SessionResume } from '@/features/login';
+import { LoginForm, ReturnCarryingLink, SessionResume } from '@/features/login';
 import { AuthLayout } from '@/shared/ui';
 import { resolveLoginReason } from '../model/loginReason';
 
@@ -34,12 +33,12 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         {/* 新規会員登録の入口（登録入口から生まれる身分は会員のみ） */}
         <p className="mt-6 text-center text-xs text-[#9a958e]">
           はじめての方は{' '}
-          <Link
+          <ReturnCarryingLink
             href="/auth/register"
             className="text-[#7c3aed] hover:underline focus:underline focus:outline-none"
           >
             新規会員登録
-          </Link>
+          </ReturnCarryingLink>
         </p>
         {/* フッター */}
         <p className="auth-footer mt-8 sm:mt-12 text-center">
