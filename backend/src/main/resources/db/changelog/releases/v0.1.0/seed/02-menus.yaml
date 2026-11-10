@@ -260,7 +260,6 @@ databaseChangeLog:
               - column: { name: path, value: /admin/audit-events }
               - column: { name: icon, value: ShieldAlertIcon }
               - column: { name: permission, value: AUDIT_VIEW }
-              - column: { name: requires_all_stores, valueBoolean: true }
               - column: { name: sort_order, valueNumeric: 2 }
         - insert:
             tableName: t_menus
