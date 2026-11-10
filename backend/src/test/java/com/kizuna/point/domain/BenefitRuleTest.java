@@ -3,7 +3,6 @@ package com.kizuna.point.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.kizuna.user.domain.StoreScopeType;
 import java.time.LocalDate;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
@@ -21,7 +20,7 @@ class BenefitRuleTest {
         BenefitRule.define(
             BenefitRuleType.VISIT,
             definition()
-                .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+                .storeScopeType(BenefitRuleStoreScopeType.SPECIFIC_STORES)
                 .storeIds(Set.of(3L, 5L))
                 .effectiveFrom(FROM)
                 .effectiveUntil(UNTIL)
@@ -31,7 +30,7 @@ class BenefitRuleTest {
                 .build());
 
     assertThat(rule.getType()).isEqualTo(BenefitRuleType.VISIT);
-    assertThat(rule.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
+    assertThat(rule.getStoreScopeType()).isEqualTo(BenefitRuleStoreScopeType.SPECIFIC_STORES);
     assertThat(rule.getStoreIds()).containsExactlyInAnyOrder(3L, 5L);
     assertThat(rule.getEffectiveFrom()).isEqualTo(FROM);
     assertThat(rule.getEffectiveUntil()).isEqualTo(UNTIL);
@@ -206,7 +205,7 @@ class BenefitRuleTest {
                 BenefitRule.define(
                     BenefitRuleType.LOGIN,
                     definition()
-                        .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+                        .storeScopeType(BenefitRuleStoreScopeType.SPECIFIC_STORES)
                         .storeIds(Set.of(3L))
                         .points(100)
                         .build()))
@@ -222,7 +221,7 @@ class BenefitRuleTest {
                 BenefitRule.define(
                     BenefitRuleType.VISIT,
                     definition()
-                        .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+                        .storeScopeType(BenefitRuleStoreScopeType.SPECIFIC_STORES)
                         .storeIds(Set.of())
                         .points(100)
                         .build()))
@@ -238,7 +237,7 @@ class BenefitRuleTest {
                 BenefitRule.define(
                     BenefitRuleType.VISIT,
                     definition()
-                        .storeScopeType(StoreScopeType.ALL_STORES)
+                        .storeScopeType(BenefitRuleStoreScopeType.ALL_STORES)
                         .storeIds(Set.of(3L))
                         .points(100)
                         .build()))
@@ -288,7 +287,7 @@ class BenefitRuleTest {
     rule.redefine(
         definition()
             .name("年末キャンペーン")
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+            .storeScopeType(BenefitRuleStoreScopeType.SPECIFIC_STORES)
             .storeIds(Set.of(7L))
             .effectiveFrom(FROM)
             .effectiveUntil(UNTIL)
@@ -317,7 +316,7 @@ class BenefitRuleTest {
                 rule.redefine(
                     definition()
                         .repeatPolicy(BenefitRuleRepeatPolicy.ONCE_PER_DAY)
-                        .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+                        .storeScopeType(BenefitRuleStoreScopeType.SPECIFIC_STORES)
                         .storeIds(Set.of(3L))
                         .points(100)
                         .build()))
@@ -373,13 +372,24 @@ class BenefitRuleTest {
   }
 
   @Test
+  @DisplayName("全店舗の規則はどの店舗の事象も、店舗を持たない事象も拾うこと")
+  void anAllStoresRuleFiresForEveryStore() {
+    BenefitRule rule = BenefitRule.define(BenefitRuleType.VISIT, definition().points(100).build());
+
+    assertThat(rule.getStoreScopeType()).isEqualTo(BenefitRuleStoreScopeType.ALL_STORES);
+    assertThat(rule.firesFor(3L, FROM)).isTrue();
+    assertThat(rule.firesFor(Long.MAX_VALUE, FROM)).as("後から作られた店舗").isTrue();
+    assertThat(rule.firesFor(null, FROM)).as("ログインのように店舗を持たない事象").isTrue();
+  }
+
+  @Test
   @DisplayName("店舗集合の規則は集合外の店舗と店舗の指定が無い事象を拾わないこと")
   void aStoreSetRuleFiresOnlyInsideItsSet() {
     BenefitRule rule =
         BenefitRule.define(
             BenefitRuleType.VISIT,
             definition()
-                .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+                .storeScopeType(BenefitRuleStoreScopeType.SPECIFIC_STORES)
                 .storeIds(Set.of(3L))
                 .points(100)
                 .build());
@@ -419,7 +429,7 @@ class BenefitRuleTest {
   private static BenefitRuleDefinition.BenefitRuleDefinitionBuilder definition() {
     return BenefitRuleDefinition.builder()
         .name("来店ボーナス")
-        .storeScopeType(StoreScopeType.ALL_STORES)
+        .storeScopeType(BenefitRuleStoreScopeType.ALL_STORES)
         .storeIds(Set.of())
         .repeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME);
   }

@@ -3,7 +3,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type { StoreScopeType } from '@/entities/user';
 import { StoreSetPicker } from '../StoreSetPicker';
 
-it('フォーム文脈なしで特典規則の店舗範囲を選べる', () => {
+it('フォーム文脈なしで授権の店舗集合を選べる', () => {
   const changed = jest.fn();
   function Harness() {
     const [value, setValue] = useState<{
@@ -12,7 +12,6 @@ it('フォーム文脈なしで特典規則の店舗範囲を選べる', () => {
     }>({ storeScopeType: 'ALL_STORES', storeIds: [] });
     return (
       <StoreSetPicker
-        label="適用店舗"
         stores={[{ id: 9, name: '店舗A' }]}
         isLoading={false}
         failed={false}
@@ -26,7 +25,7 @@ it('フォーム文脈なしで特典規則の店舗範囲を選べる', () => {
     );
   }
   render(<Harness />);
-  expect(screen.getByRole('group', { name: '適用店舗' })).toBeInTheDocument();
+  expect(screen.getByRole('group', { name: '担当店舗' })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('radio', { name: '個別店舗' }));
   fireEvent.click(screen.getByRole('checkbox', { name: '店舗A' }));
   expect(changed).toHaveBeenLastCalledWith({ storeScopeType: 'SPECIFIC_STORES', storeIds: [9] });

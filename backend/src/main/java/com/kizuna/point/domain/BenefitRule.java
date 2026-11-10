@@ -1,7 +1,6 @@
 package com.kizuna.point.domain;
 
 import com.kizuna.shared.persistence.BaseEntity;
-import com.kizuna.user.domain.StoreScopeType;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
 import jakarta.persistence.ElementCollection;
@@ -51,10 +50,10 @@ public class BenefitRule extends BaseEntity {
   @Column(nullable = false, updatable = false, length = 20)
   private BenefitRuleType type;
 
-  /** 発火側の絞り込み種別。授権（{@code User}）と同じ語彙を共有するが、意味は「どの店舗での事象を拾うか」である。 */
+  /** 発火側の絞り込み種別（どの店舗での事象を拾うか）。 */
   @Enumerated(EnumType.STRING)
   @Column(name = "store_scope_type", nullable = false, length = 20)
-  private StoreScopeType storeScopeType;
+  private BenefitRuleStoreScopeType storeScopeType;
 
   @ElementCollection(fetch = FetchType.EAGER)
   @CollectionTable(name = "t_benefit_rule_stores", joinColumns = @JoinColumn(name = "rule_id"))
@@ -138,7 +137,7 @@ public class BenefitRule extends BaseEntity {
     if (effectiveUntil != null && occurredOn.isAfter(effectiveUntil)) {
       return false;
     }
-    return storeScopeType == StoreScopeType.ALL_STORES
+    return storeScopeType == BenefitRuleStoreScopeType.ALL_STORES
         || (storeId != null && storeIds.contains(storeId));
   }
 
@@ -184,21 +183,21 @@ public class BenefitRule extends BaseEntity {
   }
 
   private static void validateScope(
-      BenefitRuleType type, StoreScopeType storeScopeType, Set<Long> stores) {
+      BenefitRuleType type, BenefitRuleStoreScopeType storeScopeType, Set<Long> stores) {
     if (storeScopeType == null) {
       throw new InvalidBenefitRuleException("適用店舗の種別は必須です");
     }
-    if (type == BenefitRuleType.LOGIN && storeScopeType != StoreScopeType.ALL_STORES) {
+    if (type == BenefitRuleType.LOGIN && storeScopeType != BenefitRuleStoreScopeType.ALL_STORES) {
       throw new InvalidBenefitRuleException("ログイン規則は全店舗のみを取れます");
     }
-    if (storeScopeType == StoreScopeType.SPECIFIC_STORES && stores.isEmpty()) {
+    if (storeScopeType == BenefitRuleStoreScopeType.SPECIFIC_STORES && stores.isEmpty()) {
       throw new InvalidBenefitRuleException("店舗集合の規則には少なくとも 1 つの店舗が必要です");
     }
     // Set.of(...) は contains(null) で NPE を投げるので、走査で確かめる。
     if (stores.stream().anyMatch(Objects::isNull)) {
       throw new InvalidBenefitRuleException("適用店舗に空の指定は混ぜられません");
     }
-    if (storeScopeType == StoreScopeType.ALL_STORES && !stores.isEmpty()) {
+    if (storeScopeType == BenefitRuleStoreScopeType.ALL_STORES && !stores.isEmpty()) {
       throw new InvalidBenefitRuleException("全店舗の規則に個別店舗を指定できません");
     }
   }

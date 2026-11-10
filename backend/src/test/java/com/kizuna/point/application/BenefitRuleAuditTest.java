@@ -14,6 +14,7 @@ import com.kizuna.point.domain.BenefitRule;
 import com.kizuna.point.domain.BenefitRuleDefinition;
 import com.kizuna.point.domain.BenefitRuleRepeatPolicy;
 import com.kizuna.point.domain.BenefitRuleRepository;
+import com.kizuna.point.domain.BenefitRuleStoreScopeType;
 import com.kizuna.point.domain.BenefitRuleType;
 import com.kizuna.point.domain.InvalidBenefitRuleException;
 import com.kizuna.point.domain.StaleBenefitRuleUpdateException;
@@ -166,7 +167,7 @@ class BenefitRuleAuditTest {
   private static BenefitRuleDefinition definition(String name, int points) {
     return BenefitRuleDefinition.builder()
         .name(name)
-        .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+        .storeScopeType(BenefitRuleStoreScopeType.SPECIFIC_STORES)
         .storeIds(Set.of(3L, 5L))
         .repeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME)
         .points(points)
@@ -179,7 +180,7 @@ class BenefitRuleAuditTest {
             BenefitRuleType.VISIT,
             BenefitRuleDefinition.builder()
                 .name(name)
-                .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+                .storeScopeType(BenefitRuleStoreScopeType.SPECIFIC_STORES)
                 .storeIds(Set.of(3L, 5L))
                 .repeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME)
                 .points(points)

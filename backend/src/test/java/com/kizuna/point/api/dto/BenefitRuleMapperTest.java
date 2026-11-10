@@ -5,8 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.kizuna.point.domain.BenefitRule;
 import com.kizuna.point.domain.BenefitRuleDefinition;
 import com.kizuna.point.domain.BenefitRuleRepeatPolicy;
+import com.kizuna.point.domain.BenefitRuleStoreScopeType;
 import com.kizuna.point.domain.BenefitRuleType;
-import com.kizuna.user.domain.StoreScopeType;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -18,7 +18,7 @@ class BenefitRuleMapperTest {
           BenefitRuleType.VISIT,
           BenefitRuleDefinition.builder()
               .name("来店ボーナス")
-              .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+              .storeScopeType(BenefitRuleStoreScopeType.SPECIFIC_STORES)
               .storeIds(Set.of(3L, 5L))
               .repeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME)
               .points(500)

@@ -1,7 +1,7 @@
 package com.kizuna.point.api.dto;
 
 import com.kizuna.point.domain.BenefitRuleRepeatPolicy;
-import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.point.domain.BenefitRuleStoreScopeType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -23,7 +23,7 @@ public class BenefitRuleUpdateRequest {
   private String name;
 
   @NotNull(message = "適用店舗の種別は必須です")
-  private StoreScopeType storeScopeType;
+  private BenefitRuleStoreScopeType storeScopeType;
 
   private Set<Long> storeIds;
 
