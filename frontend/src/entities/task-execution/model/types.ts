@@ -37,3 +37,8 @@ export interface TaskType {
   name: string;
   manual_allowed: boolean;
 }
+
+export interface UncoveredStore {
+  id: number;
+  name: string;
+}

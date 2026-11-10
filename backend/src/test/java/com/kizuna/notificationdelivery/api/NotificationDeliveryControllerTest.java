@@ -58,10 +58,11 @@ import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
-/** handler が X-Store-ID で名乗られた店舗をそのまま service へ渡すことの単体テスト。 */
-@WebMvcTest(NotificationDeliveryController.class)
+/** 店舗の通知は X-Store-ID の店舗を、会員宛の通知は店舗なし（null）を service へ渡すことの単体テスト。 */
+@WebMvcTest({NotificationDeliveryController.class, MemberNotificationDeliveryController.class})
 @Import({NotificationDeliveryControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
 class NotificationDeliveryControllerTest {
 
@@ -366,70 +367,72 @@ class NotificationDeliveryControllerTest {
   }
 
   @Test
-  @DisplayName("店舗を名乗らない一覧は、全店舗を授権された職員ならグループ級（null）で service を呼ぶこと")
-  void groupListPassesNoStoreForAllStoreStaff() throws Exception {
+  @DisplayName("店舗の通知は X-Store-ID を要し、名乗らなければどの端点も 400 で service に届かないこと")
+  void storeRowsRequireTheStoreHeader() throws Exception {
     when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(true, Set.of()));
-    when(notifications.list(isNull(), eq("user"), any()))
-        .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 50), 0));
+    var all = staff("PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_MANAGE", "PERM_NOTIFICATION_SEND");
+    for (var request : requests("/notification-deliveries", all))
+      mockMvc.perform(request).andExpect(status().isBadRequest());
 
-    mockMvc
-        .perform(get("/notification-deliveries").with(staff("PERM_NOTIFICATION_VIEW")))
-        .andExpect(status().isOk());
-
-    verify(notifications).list(isNull(), eq("user"), any());
+    verifyNoInteractions(notifications);
   }
 
   @Test
-  @DisplayName("全店舗を授権された職員はグループ級の通知へ送信予約できること")
-  void groupQueueReachesServiceForAllStoreStaff() throws Exception {
-    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(true, Set.of()));
+  @DisplayName("会員宛の通知は店舗集合に関わらず会員宛通知の権限で、店舗を持たない（null）として service を呼ぶこと")
+  void memberRowsPassNoStoreForMemberNotificationHolders() throws Exception {
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(false, Set.of()));
+    when(notifications.list(isNull(), eq("user"), any()))
+        .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 50), 0));
     when(notifications.queue(null, "user", "101", 0L, "確認済み", false)).thenReturn(view());
 
     mockMvc
         .perform(
-            post("/notification-deliveries/101/queue")
-                .with(staff("PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_SEND"))
+            get("/member-notification-deliveries").with(staff("PERM_MEMBER_NOTIFICATION_VIEW")))
+        .andExpect(status().isOk());
+    mockMvc
+        .perform(
+            post("/member-notification-deliveries/101/queue")
+                .with(staff("PERM_MEMBER_NOTIFICATION_VIEW", "PERM_MEMBER_NOTIFICATION_SEND"))
                 .contentType("application/json")
                 .content("{\"version\":0,\"reason\":\"確認済み\"}"))
         .andExpect(status().isOk());
+
+    verify(notifications).list(isNull(), eq("user"), any());
+    verify(notifications).queue(null, "user", "101", 0L, "確認済み", false);
   }
 
   @Test
-  @DisplayName("全店舗を授権されていない職員は、どの端点でもグループ級の通知に到達できないこと")
-  void groupRowsAreForbiddenWithoutAllStores() throws Exception {
-    for (StoreScope scope : Arrays.asList(new StoreScope(false, Set.of(STORE_ID)), null)) {
-      when(storeScopeResolver.resolve(any())).thenReturn(scope);
-      var all =
-          staff("PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_MANAGE", "PERM_NOTIFICATION_SEND");
-      var action = "{\"version\":0,\"reason\":\"確認済み\"}";
-      for (var request :
-          List.of(
-              get("/notification-deliveries").with(all),
-              get("/notification-deliveries/101").with(all),
-              get("/notification-deliveries/101/attempts").with(all),
-              post("/notification-deliveries/101/queue")
-                  .with(all)
-                  .contentType("application/json")
-                  .content(action),
-              post("/notification-deliveries/101/retries")
-                  .with(all)
-                  .contentType("application/json")
-                  .content(action),
-              post("/notification-deliveries/101/resolutions")
-                  .with(all)
-                  .contentType("application/json")
-                  .content("{\"version\":0,\"outcome\":\"SENT\",\"reason\":\"確認\"}"),
-              post("/notification-deliveries")
-                  .with(all)
-                  .contentType("application/json")
-                  .content(
-                      "{\"source_type\":\"MEMBER\",\"source_id\":\"1\",\"channel\":\"EMAIL\","
-                          + "\"purpose\":\"BUSINESS\",\"subject\":\"件名\",\"body\":\"本文\","
-                          + "\"scheduled_at\":\"2026-10-07T09:00:00+09:00\",\"dedupe_key\":\"k\"}")))
-        mockMvc.perform(request).andExpect(status().isForbidden());
-    }
+  @DisplayName("店舗の通知の権限だけでは、どの端点でも会員宛の通知に到達できないこと")
+  void storeNotificationPermissionsDoNotOpenMemberRows() throws Exception {
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(true, Set.of()));
+    var store =
+        staff("PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_MANAGE", "PERM_NOTIFICATION_SEND");
+    for (var request : requests("/member-notification-deliveries", store))
+      mockMvc.perform(request).andExpect(status().isForbidden());
 
     verifyNoInteractions(notifications);
+  }
+
+  private static List<MockHttpServletRequestBuilder> requests(
+      String base, RequestPostProcessor principal) {
+    var action = "{\"version\":0,\"reason\":\"確認済み\"}";
+    return List.of(
+        get(base).with(principal),
+        get(base + "/101").with(principal),
+        get(base + "/101/attempts").with(principal),
+        post(base + "/101/queue").with(principal).contentType("application/json").content(action),
+        post(base + "/101/retries").with(principal).contentType("application/json").content(action),
+        post(base + "/101/resolutions")
+            .with(principal)
+            .contentType("application/json")
+            .content("{\"version\":0,\"outcome\":\"SENT\",\"reason\":\"確認\"}"),
+        post(base)
+            .with(principal)
+            .contentType("application/json")
+            .content(
+                "{\"source_type\":\"MEMBER\",\"source_id\":\"1\",\"channel\":\"EMAIL\","
+                    + "\"purpose\":\"BUSINESS\",\"subject\":\"件名\",\"body\":\"本文\","
+                    + "\"scheduled_at\":\"2026-10-07T09:00:00+09:00\",\"dedupe_key\":\"k\"}"));
   }
 
   private static DeliveryView view() {

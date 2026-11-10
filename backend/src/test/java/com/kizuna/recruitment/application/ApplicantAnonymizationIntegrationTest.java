@@ -22,8 +22,10 @@ import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.store.StoreShortNames;
 import com.kizuna.task.application.TaskLifecycle;
+import com.kizuna.task.application.TaskOptions;
 import com.kizuna.task.application.TaskRegistry;
 import com.kizuna.task.execution.TaskCommand;
 import com.kizuna.task.execution.TaskExecutor;
@@ -34,6 +36,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -64,6 +67,7 @@ class ApplicantAnonymizationIntegrationTest {
   private PrivateAttachmentStorage storage;
   private SystemConfigService systemConfigs;
   private long storeId;
+  private long otherStoreId;
   private long serviceId;
   private AuditActor operator;
   private long anonymizeRole;
@@ -90,27 +94,14 @@ class ApplicantAnonymizationIntegrationTest {
     executor = context.getBean(TaskExecutor.class);
     storage = context.getBean(PrivateAttachmentStorage.class);
     systemConfigs = context.getBean(SystemConfigService.class);
-    storeId =
-        jdbc.queryForObject(
-            "insert into t_stores(name,short_name,domain) values ('匿名化検証',?,?) returning id",
-            Long.class,
-            StoreShortNames.next(),
-            UUID.randomUUID() + ".example.test");
+    storeId = store("匿名化検証");
+    otherStoreId = store("集合外の店舗");
     anonymizeRole = role("APPLICANT_ANONYMIZE");
-    serviceId =
-        jdbc.queryForObject(
-            "insert into t_users(display_name,user_type,store_scope_type) values ('匿名化処理','SERVICE','ALL_STORES') returning id",
-            Long.class);
-    jdbc.update(
-        "insert into t_user_roles(user_id,role_id) values (?,?),(?,?)",
-        serviceId,
-        role("TASK_EXECUTE"),
-        serviceId,
-        anonymizeRole);
+    serviceId = service(storeId);
     operator =
         new AuditActor(
             jdbc.queryForObject(
-                "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'運用担当','STAFF','ALL_STORES') returning id",
+                "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'運用担当','STAFF','SPECIFIC_STORES') returning id",
                 Long.class,
                 UUID.randomUUID() + "@example.test"),
             "STAFF",
@@ -284,9 +275,93 @@ class ApplicantAnonymizationIntegrationTest {
     }
   }
 
+  @Test
+  void onlyApplicantsOfStoresInTheServiceStoreSetAreAnonymized() {
+    String inSet = applicant(storeId, "REJECTED", TODAY.minusYears(1), null);
+    String outOfSet = applicant(otherStoreId, "REJECTED", TODAY.minusYears(1), null);
+
+    var run = executor.executeScheduled(command()).execution();
+
+    assertThat(run.processedCount()).isEqualTo(1);
+    assertThat(row(inSet).get("anonymized_at")).isNotNull();
+    assertThat(row(outOfSet)).containsEntry("anonymized_at", null).containsEntry("name", "非公開の氏名");
+
+    var emptySet = executor.executeScheduled(command(service())).execution();
+    assertThat(emptySet.status()).isEqualTo("SUCCEEDED");
+    assertThat(emptySet.processedCount()).isZero();
+    assertThat(row(outOfSet)).containsEntry("anonymized_at", null);
+
+    var widened = executor.executeScheduled(command(service(storeId, otherStoreId))).execution();
+    assertThat(widened.processedCount()).isEqualTo(1);
+    assertThat(row(outOfSet).get("anonymized_at")).isNotNull();
+  }
+
+  @Test
+  void storesOutsideEveryEnabledServiceStoreSetAreShownAsUncovered() {
+    var options = context.getBean(TaskOptions.class);
+    var everyStore = new StoreScope(true, Set.of());
+    long fresh = store("どの集合にも無い店舗");
+    assertThat(options.uncoveredStores(new StoreScope(false, Set.of(storeId))))
+        .extracting(TaskOptions.UncoveredStore::id)
+        .as("呼び出し側の集合外の店舗は出さない")
+        .doesNotContain(fresh);
+    assertThat(options.uncoveredStores(everyStore))
+        .extracting(TaskOptions.UncoveredStore::id)
+        .contains(fresh)
+        .doesNotContain(storeId);
+
+    long covering = service(fresh);
+    assertThat(options.uncoveredStores(everyStore))
+        .extracting(TaskOptions.UncoveredStore::id)
+        .doesNotContain(fresh);
+
+    jdbc.update("update t_users set enabled=false where id=?", covering);
+    assertThat(options.uncoveredStores(everyStore))
+        .extracting(TaskOptions.UncoveredStore::id)
+        .contains(fresh);
+
+    long all = service();
+    jdbc.update("update t_users set store_scope_type='ALL_STORES' where id=?", all);
+    try {
+      assertThat(options.uncoveredStores(everyStore)).isEmpty();
+    } finally {
+      jdbc.update("update t_users set enabled=false where id=?", all);
+    }
+  }
+
   private TaskCommand command() {
+    return command(serviceId);
+  }
+
+  private TaskCommand command(long service) {
     return new TaskCommand(
-        "APPLICANT_ANONYMIZATION", UUID.randomUUID().toString(), serviceId, TODAY, TODAY);
+        "APPLICANT_ANONYMIZATION", UUID.randomUUID().toString(), service, TODAY, TODAY);
+  }
+
+  private long store(String name) {
+    return jdbc.queryForObject(
+        "insert into t_stores(name,short_name,domain) values (?,?,?) returning id",
+        Long.class,
+        name,
+        StoreShortNames.next(),
+        UUID.randomUUID() + ".example.test");
+  }
+
+  /** 明示した店舗だけを店舗集合に持つサービス ID。店舗を渡さなければ集合は空。 */
+  private long service(long... stores) {
+    long id =
+        jdbc.queryForObject(
+            "insert into t_users(display_name,user_type,store_scope_type) values ('匿名化処理','SERVICE','SPECIFIC_STORES') returning id",
+            Long.class);
+    jdbc.update(
+        "insert into t_user_roles(user_id,role_id) values (?,?),(?,?)",
+        id,
+        role("TASK_EXECUTE"),
+        id,
+        anonymizeRole);
+    for (long store : stores)
+      jdbc.update("insert into t_user_stores(user_id,store_id) values (?,?)", id, store);
+    return id;
   }
 
   private Map<String, Object> row(String id) {
@@ -301,6 +376,11 @@ class ApplicantAnonymizationIntegrationTest {
 
   /** 終端への遷移を、業務日の正午（日本時間）に記録した応募者を作る。 */
   private String applicant(String status, LocalDate transitionedOn, String enrollmentId) {
+    return applicant(storeId, status, transitionedOn, enrollmentId);
+  }
+
+  private String applicant(
+      long store, String status, LocalDate transitionedOn, String enrollmentId) {
     String id = UUID.randomUUID().toString();
     jdbc.update(
         """
@@ -311,7 +391,7 @@ class ApplicantAnonymizationIntegrationTest {
           '{"interviewAt":"2026-01-10T10:00:00+09:00","interviewer":"面接担当","notes":"面接メモ","checklist":{"希望確認":true}}'::jsonb,?,0,?)
         """,
         id,
-        storeId,
+        store,
         status,
         operator.id(),
         enrollmentId);
@@ -319,7 +399,7 @@ class ApplicantAnonymizationIntegrationTest {
     jdbc.update(
         "insert into t_applicant_status_histories(id,store_id,created_at,updated_at,version,applicant_id,actor_id,previous_status,new_status,reason) values (?,?,?,?,0,?,?,'INTERVIEWED',?,'非公開の確定理由')",
         UUID.randomUUID().toString(),
-        storeId,
+        store,
         at,
         at,
         id,
@@ -379,6 +459,7 @@ class ApplicantAnonymizationIntegrationTest {
     BusinessAudit.class,
     TaskExecutor.class,
     TaskLifecycle.class,
+    TaskOptions.class,
     TaskRegistry.class,
     AuditWriter.class,
     ServiceExecutionIdentityService.class

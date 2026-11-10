@@ -23,8 +23,9 @@ Given('業務通知の担当者とサービス主体と同意済みゲスト申�
   const suffix = Date.now().toString();
   email = 'notification-' + suffix + '@kizuna.test';
   password = 'Notification-' + suffix + '-fixture';
-  const role = await createPermissionRole(request, admin, '通知運用-' + suffix, ['TASK_MANAGE', 'NOTIFICATION_DELIVER', 'NOTIFICATION_VIEW', 'NOTIFICATION_MANAGE', 'NOTIFICATION_SEND',]);
-  await createStaffFixture(request, admin, email, password, [role]);
+  const role = await createPermissionRole(request, admin, '通知運用-' + suffix, ['TASK_MANAGE', 'NOTIFICATION_DELIVER', 'NOTIFICATION_VIEW', 'NOTIFICATION_MANAGE', 'NOTIFICATION_SEND', 'MEMBER_NOTIFICATION_VIEW', 'MEMBER_NOTIFICATION_MANAGE', 'MEMBER_NOTIFICATION_SEND']);
+  // 担当者は全店舗の授権を持たない。会員宛の通知と定期処理の画面は権限だけで開く。
+  await createStaffFixture(request, admin, email, password, [role], [Number(STORE1_ID)]);
   operator = await loginUser(request, email, password);
   const executionRole = await createPermissionRole(request, admin, '通知実行-' + suffix, ['TASK_EXECUTE', 'NOTIFICATION_DELIVER']);
   serviceName = '通知サービス-' + suffix;
@@ -218,8 +219,9 @@ Then('結果不明の通知を未送達と判定して再試行できる', async
   expect(again.status()).toBe(409);
 });
 
-// グループ級の行は X-Store-ID を付けない要求で扱う。
+// 会員宛（店舗を持たない）の行は店舗の行とは別の資源で、X-Store-ID を付けずに扱う。
 const groupHeaders = () => ({ Authorization: `Bearer ${operator}` });
+const MEMBER_DELIVERIES = '/api/member-notification-deliveries';
 let allowedDelivery = '';
 let allowedEmail = '';
 let unconfirmedDelivery = '';
@@ -237,7 +239,7 @@ async function memberDelivery(request: APIRequestContext, memberEmail: string, a
     expect(chosen.status(), await chosen.text()).toBe(200);
   }
   const memberId = await memberIdOf(request, admin, memberEmail);
-  const created = await request.post('/api/notification-deliveries', {
+  const created = await request.post(MEMBER_DELIVERIES, {
     headers: groupHeaders(),
     data: {
       source_type: 'MEMBER',
@@ -279,7 +281,7 @@ When('担当者がグループの業務通知で会員宛の通知を確認し�
   const detail = page.getByRole('dialog', { name: '通知の内容・送信履歴' });
   for (const [id, decision] of [[allowedDelivery, '業務連絡が許可されています'], [unconfirmedDelivery, '業務連絡の許可が確認できません']]) {
     const [response] = await Promise.all([
-      page.waitForResponse(r => r.url().endsWith(`/notification-deliveries/${id}`) && r.request().method() === 'GET'),
+      page.waitForResponse(r => r.url().endsWith(`/member-notification-deliveries/${id}`) && r.request().method() === 'GET'),
       page
         .getByRole('row')
         .filter({ has: page.getByRole('cell').filter({ hasText: new RegExp(`^会員${memberOf.get(id)}$`) }) })
@@ -298,25 +300,27 @@ When('担当者がグループの業務通知で会員宛の通知を確認し�
 });
 
 Then('許可した会員宛だけが送信されて届き、許可していない会員宛は送信不可になる', async ({ request }) => {
-  const statusOf = async (id: string) => (await (await request.get(`/api/notification-deliveries/${id}`, { headers: groupHeaders() })).json()).status;
+  const statusOf = async (id: string) => (await (await request.get(`${MEMBER_DELIVERIES}/${id}`, { headers: groupHeaders() })).json()).status;
   await expect.poll(() => statusOf(allowedDelivery)).toBe('SENT');
   await expect.poll(() => statusOf(unconfirmedDelivery)).toBe('BLOCKED');
-  const lastFailure = async (id: string) => (await (await request.get(`/api/notification-deliveries/${id}/attempts`, { headers: groupHeaders() })).json()).content[0].failure_code;
+  const lastFailure = async (id: string) => (await (await request.get(`${MEMBER_DELIVERIES}/${id}/attempts`, { headers: groupHeaders() })).json()).content[0].failure_code;
   expect(await lastFailure(unconfirmedDelivery)).toBe('CONTACT_NOT_ALLOWED');
   const mail = await latestMailTo(request, allowedEmail);
   expect(mail.subject).toBe('ポイントのご案内');
   expect(mail.text).toContain('ポイントの期限が近づいています。');
 });
 
-Then('全店舗を担当しない職員はグループの業務通知に到達できない', async ({ page, request }) => {
+Then('店舗の通知の権限だけを持つ職員は会員宛の業務通知に到達できない', async ({ page, request }) => {
   const suffix = Date.now().toString();
   const scopedEmail = 'notification-scoped-' + suffix + '@kizuna.test';
   const scopedPassword = 'Notification-' + suffix + '-scoped';
   const role = await createPermissionRole(request, admin, '店舗通知-' + suffix, ['NOTIFICATION_VIEW', 'NOTIFICATION_SEND', 'MEMBER_VIEW']);
   await createStoreStaffFixture(request, admin, scopedEmail, scopedPassword, [role], [Number(STORE1_ID)]);
   const scoped = await loginUser(request, scopedEmail, scopedPassword);
-  expect((await request.get('/api/notification-deliveries', { headers: { Authorization: `Bearer ${scoped}` } })).status()).toBe(403);
-  expect((await request.get(`/api/notification-deliveries/${allowedDelivery}`, { headers: { Authorization: `Bearer ${scoped}` } })).status()).toBe(403);
+  expect((await request.get(MEMBER_DELIVERIES, { headers: { Authorization: `Bearer ${scoped}` } })).status()).toBe(403);
+  expect((await request.get(`${MEMBER_DELIVERIES}/${allowedDelivery}`, { headers: { Authorization: `Bearer ${scoped}` } })).status()).toBe(403);
+  // 店舗の通知は店舗を名乗らなければ扱えない。
+  expect((await request.get('/api/notification-deliveries', { headers: { Authorization: `Bearer ${scoped}` } })).status()).toBe(400);
   expect((await request.get('/api/notification-deliveries', { headers: { ...STORE_HEADERS, Authorization: `Bearer ${scoped}` } })).status()).toBe(200);
   await page.context().clearCookies();
   await loginInBrowser(page, scopedEmail, scopedPassword);

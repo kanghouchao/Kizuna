@@ -18,6 +18,9 @@ import static com.kizuna.user.domain.PermissionCode.CAST_PERSON_VIEW;
 import static com.kizuna.user.domain.PermissionCode.CUSTOMER_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.CUSTOMER_MERGE;
 import static com.kizuna.user.domain.PermissionCode.GUARANTEE_MANAGE;
+import static com.kizuna.user.domain.PermissionCode.MEMBER_NOTIFICATION_MANAGE;
+import static com.kizuna.user.domain.PermissionCode.MEMBER_NOTIFICATION_SEND;
+import static com.kizuna.user.domain.PermissionCode.MEMBER_NOTIFICATION_VIEW;
 import static com.kizuna.user.domain.PermissionCode.MEMBER_VIEW;
 import static com.kizuna.user.domain.PermissionCode.MEMBER_WITHDRAW;
 import static com.kizuna.user.domain.PermissionCode.NOTIFICATION_DELIVER;
@@ -126,6 +129,9 @@ class DefaultGrantApprovalTests {
           Map.entry(NOTIFICATION_VIEW, Set.of(MANAGER, STAFF)),
           Map.entry(NOTIFICATION_MANAGE, Set.of(MANAGER)),
           Map.entry(NOTIFICATION_SEND, Set.of(MANAGER)),
+          Map.entry(MEMBER_NOTIFICATION_VIEW, Set.of(ADMIN)),
+          Map.entry(MEMBER_NOTIFICATION_MANAGE, Set.of(ADMIN)),
+          Map.entry(MEMBER_NOTIFICATION_SEND, Set.of(ADMIN)),
           Map.entry(OPERATIONAL_REPORT_VIEW, Set.of(MANAGER)),
           Map.entry(OPERATIONAL_REPORT_EXPORT, Set.of(MANAGER)),
           Map.entry(OPERATIONAL_REPORT_SET_VIEW, Set.of(ADMIN)),

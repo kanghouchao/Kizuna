@@ -2,10 +2,12 @@ package com.kizuna.task.api;
 
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.task.api.dto.ExecutionReasonRequest;
 import com.kizuna.task.api.dto.ExecutionSummary;
 import com.kizuna.task.api.dto.TaskExecutionRequest;
 import com.kizuna.task.api.dto.TaskExecutionResponse;
+import com.kizuna.task.api.dto.UncoveredStoreResponse;
 import com.kizuna.task.application.TaskLifecycle;
 import com.kizuna.task.application.TaskOptions;
 import com.kizuna.task.application.TaskQuery;
@@ -22,6 +24,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -42,6 +45,7 @@ public class TaskExecutionController {
   private final TaskQuery query;
   private final ServiceExecutionIdentityService identities;
   private final AppProperties properties;
+  private final StoreScopeHolder storeScopes;
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_TASK_MANAGE')")
@@ -74,6 +78,15 @@ public class TaskExecutionController {
   public List<TaskOptions.TaskType> taskTypes(Authentication auth) {
     identities.requireOperator(auth.getName(), PermissionCode.TASK_MANAGE);
     return options.taskTypes(auth.getName());
+  }
+
+  @GetMapping("/uncovered-stores")
+  @PreAuthorize("hasAuthority('PERM_TASK_MANAGE')")
+  public List<UncoveredStoreResponse> uncoveredStores(Authentication auth) {
+    identities.requireOperator(auth.getName(), PermissionCode.TASK_MANAGE);
+    var scope = storeScopes.current();
+    if (scope == null) throw new AccessDeniedException("授権店舗集合を解決できません");
+    return options.uncoveredStores(scope).stream().map(UncoveredStoreResponse::of).toList();
   }
 
   @GetMapping("/{id}")

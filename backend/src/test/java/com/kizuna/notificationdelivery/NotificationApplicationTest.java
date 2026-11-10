@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -31,6 +32,7 @@ import com.kizuna.notificationdelivery.domain.DeliveryStatus;
 import com.kizuna.notificationdelivery.domain.NotificationDelivery;
 import com.kizuna.notificationdelivery.domain.NotificationDeliveryRepository;
 import com.kizuna.shared.exception.NotFoundException;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.task.execution.TaskContext;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
 import com.kizuna.user.domain.PermissionCode;
@@ -40,6 +42,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -49,7 +52,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
 
-/** 職員の口は引数の店舗だけを repository へ渡し、送信の定期処理は店舗を指定せずに全店舗の到来分を扱うことの単体テスト。 */
+/** 職員の口は引数の店舗だけを repository へ渡し、送信の定期処理はサービス ID の店舗集合と店舗を持たない行の到来分を扱うことの単体テスト。 */
 class NotificationApplicationTest {
   private static final Long STORE_ID = 7L;
   private static final AuditActor STAFF = new AuditActor(1L, "STAFF", "担当者");
@@ -136,15 +139,18 @@ class NotificationApplicationTest {
   }
 
   @Test
-  void sweepIsGroupWideAndTakesDueRowsOfEveryStore() {
+  void sweepTakesDueRowsOfTheServiceStoreSetAndGroupRows() {
     var identities = mock(ServiceExecutionIdentityService.class);
     var events = mock(ApplicationEventPublisher.class);
     var task = new NotificationDeliveryTask(deliveries, attempts, identities, audit, events, clock);
-    when(identities.requireService(5L, PermissionCode.NOTIFICATION_DELIVER)).thenReturn(SERVICE);
+    when(identities.requireServiceScope(5L, PermissionCode.NOTIFICATION_DELIVER))
+        .thenReturn(
+            new ServiceExecutionIdentityService.ServiceScope(
+                SERVICE, new StoreScope(false, Set.of(STORE_ID))));
     var row = row();
     row.queue(null, "確認済み", false);
-    when(deliveries.findByStatusAndScheduledAtLessThanEqualOrderByScheduledAtAscIdAsc(
-            DeliveryStatus.QUEUED, OffsetDateTime.now(clock), Limit.of(100)))
+    when(deliveries.findDueForStores(
+            DeliveryStatus.QUEUED, OffsetDateTime.now(clock), Set.of(STORE_ID), Limit.of(100)))
         .thenReturn(List.of(row));
     when(attempts.saveAndFlush(any()))
         .thenAnswer(
@@ -161,6 +167,25 @@ class NotificationApplicationTest {
   }
 
   @Test
+  void sweepWithAnEmptyStoreSetTakesOnlyGroupRows() {
+    var identities = mock(ServiceExecutionIdentityService.class);
+    var task =
+        new NotificationDeliveryTask(
+            deliveries, attempts, identities, audit, mock(ApplicationEventPublisher.class), clock);
+    when(identities.requireServiceScope(5L, PermissionCode.NOTIFICATION_DELIVER))
+        .thenReturn(
+            new ServiceExecutionIdentityService.ServiceScope(
+                SERVICE, new StoreScope(false, Set.of())));
+    assertThat(task.execute(new TaskContext(3L, 5L, null, null))).isZero();
+    verify(deliveries)
+        .findByStatusAndScheduledAtLessThanEqualAndAttributedStoreIdIsNullOrderByScheduledAtAscIdAsc(
+            DeliveryStatus.QUEUED, OffsetDateTime.now(clock), Limit.of(100));
+    verify(deliveries, never()).findDueForStores(any(), any(), any(), any());
+    verify(deliveries, never())
+        .findByStatusAndScheduledAtLessThanEqualOrderByScheduledAtAscIdAsc(any(), any(), any());
+  }
+
+  @Test
   void claimLocksTheDispatchedRowByIdAndResolvesItsAttributedStore() {
     var authorization = mock(DeliveryAuthorization.class);
     var claims = new DeliveryAttempts(deliveries, attempts, authorization, contacts, audit, clock);
@@ -171,7 +196,7 @@ class NotificationApplicationTest {
     ReflectionTestUtils.setField(attempt, "id", "201");
     when(deliveries.findByIdForUpdate("101")).thenReturn(Optional.of(row));
     when(attempts.findById("201")).thenReturn(Optional.of(attempt));
-    when(authorization.require(5L)).thenReturn(SERVICE);
+    when(authorization.require(5L, STORE_ID)).thenReturn(SERVICE);
     assertThat(claims.claim(new DeliveryDispatch("101", "201", 5L, 3L))).isTrue();
     assertThat(attempt.getStatus()).isEqualTo(DeliveryStatus.SENDING);
     verify(contacts).resolve(STORE_ID, row.content());

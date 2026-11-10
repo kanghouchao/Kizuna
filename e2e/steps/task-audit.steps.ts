@@ -4,7 +4,6 @@ import { APP_URL } from '../base-url';
 import {
   createPermissionRole,
   createStaffFixture,
-  expectSidebarLinkAbsentEverywhere,
   loginUser,
   revealSidebarLink,
   STORE1_ID,
@@ -47,12 +46,12 @@ Given('専用の処理実行者とサービスIDが用意されている', async
 });
 
 When('処理を再送し主体の権限と対象範囲を検証する', async ({ request, browser }) => {
-  // 監査は閲覧権限だけで照会でき、定期処理の画面は全店舗の授権を要する。
-  for (const [token, taskVisible] of [[operator, true], [restricted, false], [admin, true]] as const) {
+  // 定期処理の画面と監査の照会は、どちらも権限だけで開く（店舗集合は問わない）。
+  for (const token of [operator, restricted, admin]) {
     const menus = await request.get('/api/menus/me', { headers: headers(token) });
     expect(menus.status()).toBe(200);
     const paths = menuPaths(await menus.json());
-    expect(paths.includes('/admin/task-executions')).toBe(taskVisible);
+    expect(paths.includes('/admin/task-executions')).toBe(true);
     expect(paths.includes('/admin/audit-events')).toBe(true);
   }
   const restrictedPage = await browser.newPage();
@@ -63,13 +62,13 @@ When('処理を再送し主体の権限と対象範囲を検証する', async ({
     await restrictedPage.getByRole('button', { name: 'ログイン', exact: true }).click();
     await expect(restrictedPage).toHaveURL(/\/admin\/dashboard/, { timeout: 15000 });
     await expect(restrictedPage.locator('aside').locator('a[href="/admin/dashboard"]')).toBeVisible();
-    await expectSidebarLinkAbsentEverywhere(restrictedPage, aside => aside.locator('a[href="/admin/task-executions"]'));
+    await expect(await revealSidebarLink(restrictedPage, aside => aside.locator('a[href="/admin/task-executions"]'))).toBeVisible();
     await expect(await revealSidebarLink(restrictedPage, aside => aside.locator('a[href="/admin/audit-events"]'))).toBeVisible();
   } finally {
     await restrictedPage.close();
   }
   const body = { task_name: 'SERVICE_IDENTITY_CHECK', logical_key: crypto.randomUUID(), service_user_id: serviceId, period_start: '2026-10-07', period_end: '2026-10-07' };
-  expect((await request.get('/api/task-executions', { headers: headers(restricted) })).status()).toBe(403);
+  expect((await request.get('/api/task-executions', { headers: headers(restricted) })).status()).toBe(200);
   expect((await request.get('/api/audit-events', { headers: headers(restricted) })).status()).toBe(200);
   const initial = await request.post('/api/task-executions', { headers: headers(operator), data: body });
   expect(initial.status(), await initial.text()).toBe(201);
@@ -90,7 +89,9 @@ When('処理を再送し主体の権限と対象範囲を検証する', async ({
   const adminReplay = await request.post('/api/task-executions', { headers: headers(admin), data: body });
   expect(adminReplay.status()).toBe(200);
   expect((await adminReplay.json()).execution.id).toBe(execution.id);
-  expect((await request.post('/api/task-executions', { headers: headers(restricted), data: body })).status()).toBe(403);
+  const restrictedReplay = await request.post('/api/task-executions', { headers: headers(restricted), data: body });
+  expect(restrictedReplay.status()).toBe(200);
+  expect((await restrictedReplay.json()).execution.id).toBe(execution.id);
   expect((await request.post('/api/task-executions', { headers: headers(operator), data: { ...body, logical_key: crypto.randomUUID() } })).status()).toBe(403);
   expect((await request.post(`/api/service-identities/${serviceId}/resumption`, { headers: headers(admin) })).status()).toBe(204);
   for (const [id, replacement, callerRevoked] of [

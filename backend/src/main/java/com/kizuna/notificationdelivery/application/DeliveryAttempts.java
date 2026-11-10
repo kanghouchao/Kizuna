@@ -77,8 +77,8 @@ public class DeliveryAttempts {
 
   private AuditActor allowed(Locked locked, DeliveryDispatch event) {
     try {
-      var actor = authorization.require(event.serviceUserId());
       var row = locked.delivery();
+      var actor = authorization.require(event.serviceUserId(), row.getAttributedStoreId());
       if (contacts.resolve(row.getAttributedStoreId(), row.content()).decision()
           != ContactDecision.ALLOWED) {
         finish(locked, event, DeliveryStatus.BLOCKED, "CONTACT_NOT_ALLOWED");

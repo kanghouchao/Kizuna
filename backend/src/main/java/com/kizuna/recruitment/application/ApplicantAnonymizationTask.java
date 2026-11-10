@@ -64,7 +64,9 @@ public class ApplicantAnonymizationTask implements TaskHandler {
     if (asOf == null || !asOf.equals(context.periodStart()) || asOf.isAfter(LocalDate.now(clock))) {
       throw new ServiceException("匿名化処理は本日以前の一日を対象に指定してください");
     }
-    var actor = requireIdentity(context);
+    var service = requireIdentity(context);
+    var actor = service.actor();
+    var stores = service.stores();
     var retention = systemConfigs.applicantRetentionSettings();
     var periods = new LinkedHashMap<ApplicantStatus, Integer>();
     periods.put(ApplicantStatus.REJECTED, retention.rejectedMonths());
@@ -72,15 +74,20 @@ public class ApplicantAnonymizationTask implements TaskHandler {
     periods.put(ApplicantStatus.HIRED, retention.hiredMonths());
     // 状態ごとに古い順で上限まで取り、全状態を通して遷移の古い順に上限件だけ処理する。
     // 一つの状態の滞留が上限を占め続けても、他の状態の古い対象が後回しにされ続けないようにするため。
-    int max = properties.getApplicantAnonymization().getMaxApplicants();
+    // 店舗集合が空のサービス ID は対象店舗を持たない。空の IN で照会しない。
+    int max =
+        stores.allStores() || !stores.storeIds().isEmpty()
+            ? properties.getApplicantAnonymization().getMaxApplicants()
+            : 0;
     var targets = new ArrayList<ApplicantAnonymizationTarget>();
     for (var period : periods.entrySet()) {
       if (period.getValue() == null || max <= 0) continue;
+      var before = transitionedBefore(asOf, period.getValue(), clock.getZone());
       targets.addAll(
-          applicants.findAnonymizationTargets(
-              period.getKey(),
-              transitionedBefore(asOf, period.getValue(), clock.getZone()),
-              Limit.of(max)));
+          stores.allStores()
+              ? applicants.findAnonymizationTargets(period.getKey(), before, Limit.of(max))
+              : applicants.findAnonymizationTargetsIn(
+                  period.getKey(), before, stores.storeIds(), Limit.of(max)));
     }
     long count = 0;
     for (var target :
@@ -132,8 +139,8 @@ public class ApplicantAnonymizationTask implements TaskHandler {
         "status", applicant.getStatus().name(), "version", String.valueOf(applicant.getVersion()));
   }
 
-  private AuditActor requireIdentity(TaskContext context) {
+  private ServiceExecutionIdentityService.ServiceScope requireIdentity(TaskContext context) {
     identities.requireService(context.serviceUserId(), PermissionCode.TASK_EXECUTE);
-    return identities.requireService(context.serviceUserId(), permission());
+    return identities.requireServiceScope(context.serviceUserId(), permission());
   }
 }

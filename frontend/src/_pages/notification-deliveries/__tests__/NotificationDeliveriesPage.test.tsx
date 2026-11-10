@@ -4,7 +4,7 @@ import {
   GroupNotificationDeliveriesPage,
   StoreNotificationDeliveriesPage,
 } from '../ui/NotificationDeliveriesPage';
-import { Delivery, notificationApi } from '@/entities/notification-delivery';
+import { Delivery, memberNotificationApi, notificationApi } from '@/entities/notification-delivery';
 import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 import { notify } from '@/shared/notify';
@@ -32,6 +32,16 @@ jest.mock('@/entities/notification-delivery', () => ({
     resolve: jest.fn(),
     history: jest.fn(),
   },
+
+  memberNotificationApi: {
+    list: jest.fn(),
+    get: jest.fn(),
+    create: jest.fn(),
+    queue: jest.fn(),
+    retry: jest.fn(),
+    resolve: jest.fn(),
+    history: jest.fn(),
+  },
 }));
 jest.mock('@/entities/user/model/MeContext', () => ({
   ...jest.requireActual('@/entities/user/model/MeContext'),
@@ -39,6 +49,7 @@ jest.mock('@/entities/user/model/MeContext', () => ({
 }));
 jest.mock('@/shared/notify', () => ({ notify: { success: jest.fn(), error: jest.fn() } }));
 const api = jest.mocked(notificationApi);
+const memberApi = jest.mocked(memberNotificationApi);
 const row: Delivery = {
   id: '10',
   source_type: 'ORDER',
@@ -396,7 +407,21 @@ test('送信試行はページ番号で送り、次のページを取り直す',
 describe('グループのコンテキスト', () => {
   const member: Delivery = { ...row, id: '20', source_type: 'MEMBER', source_id: '55' };
   beforeEach(() => {
-    api.list.mockResolvedValue({ rows: [member], page: 0, pageCount: 1, total: 1 });
+    permission(
+      'MEMBER_NOTIFICATION_VIEW',
+      'MEMBER_NOTIFICATION_MANAGE',
+      'MEMBER_NOTIFICATION_SEND'
+    );
+    memberApi.list.mockResolvedValue({ rows: [member], page: 0, pageCount: 1, total: 1 });
+    memberApi.get.mockResolvedValue(member);
+    memberApi.history.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
+  });
+  test('店舗の通知の権限だけでは会員宛の通知を開けない', async () => {
+    permission('NOTIFICATION_VIEW', 'NOTIFICATION_MANAGE', 'NOTIFICATION_SEND');
+    render(<GroupNotificationDeliveriesPage />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('業務通知の閲覧権限がありません');
+    expect(memberApi.list).not.toHaveBeenCalled();
+    expect(api.list).not.toHaveBeenCalled();
   });
   test('会員宛の通知を一覧し、管理権限があっても作成口は出さない', async () => {
     render(<GroupNotificationDeliveriesPage />);
@@ -405,8 +430,12 @@ describe('グループのコンテキスト', () => {
     expect(screen.queryByRole('button', { name: '通知を作成' })).not.toBeInTheDocument();
   });
   test('送信不可の通知は理由を添えて再試行できる', async () => {
-    api.get.mockResolvedValue({ ...member, status: 'BLOCKED', contact_decision: 'NOT_ALLOWED' });
-    api.retry.mockResolvedValue({ ...member, status: 'QUEUED', version: 2 });
+    memberApi.get.mockResolvedValue({
+      ...member,
+      status: 'BLOCKED',
+      contact_decision: 'NOT_ALLOWED',
+    });
+    memberApi.retry.mockResolvedValue({ ...member, status: 'QUEUED', version: 2 });
     render(<GroupNotificationDeliveriesPage />);
     const dialog = await detail();
     expect(await within(dialog).findByText('会員 #55')).toBeVisible();
@@ -414,10 +443,11 @@ describe('グループのコンテキスト', () => {
       target: { value: '本人が許可した' },
     });
     fireEvent.click(within(dialog).getByRole('button', { name: '明示的に再試行する' }));
-    await waitFor(() => expect(api.retry).toHaveBeenCalledWith('20', 1, '本人が許可した'));
+    await waitFor(() => expect(memberApi.retry).toHaveBeenCalledWith('20', 1, '本人が許可した'));
+    expect(api.retry).not.toHaveBeenCalled();
   });
   test('結果不明の通知は送信権限があれば判定できる', async () => {
-    api.get.mockResolvedValue({ ...member, status: 'UNKNOWN' });
+    memberApi.get.mockResolvedValue({ ...member, status: 'UNKNOWN' });
     render(<GroupNotificationDeliveriesPage />);
     const dialog = await detail();
     expect(await within(dialog).findByRole('button', { name: '判定を記録する' })).toBeVisible();

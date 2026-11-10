@@ -203,6 +203,18 @@ public enum PermissionCode {
   NOTIFICATION_SEND(
       "業務通知の送信・再試行", PermissionTree.STORE, PermissionGroup.CUSTOMER, SystemRole.MANAGER),
 
+  /** 会員宛（店舗を持たない）業務通知の内容・状態・履歴の閲覧。会員の連絡先に届くので店舗の権限とは分ける。 */
+  MEMBER_NOTIFICATION_VIEW(
+      "会員宛通知の閲覧", PermissionTree.GROUP, PermissionGroup.CUSTOMER, SystemRole.ADMIN),
+
+  /** 会員宛業務通知の作成。閲覧権限と併用する。 */
+  MEMBER_NOTIFICATION_MANAGE(
+      "会員宛通知の作成", PermissionTree.GROUP, PermissionGroup.CUSTOMER, SystemRole.ADMIN),
+
+  /** 会員宛業務通知の送信待ち登録と明示再試行。閲覧権限と併用する。 */
+  MEMBER_NOTIFICATION_SEND(
+      "会員宛通知の送信・再試行", PermissionTree.GROUP, PermissionGroup.CUSTOMER, SystemRole.ADMIN),
+
   /**
    * 特典規則の閲覧・登録・更新・停用（BenefitRuleController）。
    *

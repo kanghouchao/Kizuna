@@ -3,7 +3,6 @@ package com.kizuna.notificationdelivery.application;
 import com.kizuna.audit.recording.AuditActor;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.RoleRepository;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.util.Collections;
@@ -17,18 +16,35 @@ public class NotificationActors {
   private final UserRepository users;
   private final RoleRepository roles;
 
-  /** storeId が null ならグループ級の行の操作で、全店舗を授権された職員だけに許す。 */
-  public AuditActor require(Long storeId, String email, PermissionCode action) {
+  /** 店舗の行は店舗の権限、店舗を持たない会員宛の行は会員宛通知の権限で操作する。 */
+  public enum Action {
+    VIEW(PermissionCode.NOTIFICATION_VIEW, PermissionCode.MEMBER_NOTIFICATION_VIEW),
+    MANAGE(PermissionCode.NOTIFICATION_MANAGE, PermissionCode.MEMBER_NOTIFICATION_MANAGE),
+    SEND(PermissionCode.NOTIFICATION_SEND, PermissionCode.MEMBER_NOTIFICATION_SEND);
+
+    private final PermissionCode store;
+    private final PermissionCode member;
+
+    Action(PermissionCode store, PermissionCode member) {
+      this.store = store;
+      this.member = member;
+    }
+
+    PermissionCode code(Long storeId) {
+      return storeId == null ? member : store;
+    }
+  }
+
+  /** storeId が null なら会員宛の行で、店舗集合ではなく権限だけで判定する。 */
+  public AuditActor require(Long storeId, String email, Action action) {
     var user = users.findByEmail(email).orElseThrow(NotificationActors::denied);
     if (user.getUserType() != UserType.STAFF
         || !Boolean.TRUE.equals(user.getEnabled())
-        || !(storeId == null
-            ? user.getStoreScopeType() == StoreScopeType.ALL_STORES
-            : user.authorizes(storeId))
+        || (storeId != null && !user.authorizes(storeId))
         || Collections.disjoint(
-            user.getRoleIds(),
-            roles.findIdsByPermissionCode(PermissionCode.NOTIFICATION_VIEW.name()))
-        || Collections.disjoint(user.getRoleIds(), roles.findIdsByPermissionCode(action.name())))
+            user.getRoleIds(), roles.findIdsByPermissionCode(Action.VIEW.code(storeId).name()))
+        || Collections.disjoint(
+            user.getRoleIds(), roles.findIdsByPermissionCode(action.code(storeId).name())))
       throw denied();
     return new AuditActor(user.getId(), "STAFF", user.getDisplayName());
   }

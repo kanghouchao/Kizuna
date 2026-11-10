@@ -3,6 +3,7 @@ package com.kizuna.task.api;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -12,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.task.application.TaskLifecycle;
 import com.kizuna.task.application.TaskOptions;
@@ -25,7 +27,10 @@ import com.kizuna.user.application.StoreScopeResolver;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.User;
 import java.time.LocalDate;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -39,10 +44,14 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 /** 実行履歴が運用者の確認を経て、開始の新しい順を既定の並びとして Page で返すことの単体テスト。 */
 @WebMvcTest(TaskExecutionController.class)
@@ -84,6 +93,51 @@ class TaskExecutionControllerTest {
     assertThat(pageable.getValue().getSort())
         .isEqualTo(
             Sort.by(Sort.Direction.DESC, ExecutionAttempt::getStartedAt, ExecutionAttempt::getId));
+  }
+
+  @Test
+  @DisplayName("どのサービス ID の店舗集合にも入っていない店舗を、呼び出し側の店舗集合で絞って id と名前で返すこと")
+  void uncoveredStoresAreListedWithinTheCallerScope() throws Exception {
+    var scope = new StoreScope(false, Set.of(3L));
+    when(storeScopeResolver.resolve(any())).thenReturn(scope);
+    when(options.uncoveredStores(scope))
+        .thenReturn(List.of(new TaskOptions.UncoveredStore(3L, "新店")));
+
+    mockMvc
+        .perform(get("/task-executions/uncovered-stores").with(jwt("PERM_TASK_MANAGE")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].id").value(3))
+        .andExpect(jsonPath("$[0].name").value("新店"));
+
+    verify(identities).requireOperator(eq("user"), eq(PermissionCode.TASK_MANAGE));
+  }
+
+  @Test
+  @DisplayName("店舗集合を解決できなければ未登録の店舗を返さず 403 にすること")
+  void uncoveredStoresWithoutAScopeAreForbidden() throws Exception {
+    mockMvc
+        .perform(get("/task-executions/uncovered-stores").with(jwt("PERM_TASK_MANAGE")))
+        .andExpect(status().isForbidden());
+
+    verify(options, never()).uncoveredStores(any());
+  }
+
+  private static RequestPostProcessor jwt(String... permissions) {
+    var token =
+        new JwtAuthenticationToken(
+            Jwt.withTokenValue("staff").header("alg", "none").subject("user").build(),
+            Arrays.stream(permissions).map(SimpleGrantedAuthority::new).toList(),
+            "user");
+    SecurityContextHolder.getContext().setAuthentication(token);
+    return request -> {
+      request.setUserPrincipal(token);
+      return request;
+    };
+  }
+
+  @AfterEach
+  void clearAuthentication() {
+    SecurityContextHolder.clearContext();
   }
 
   @Test
