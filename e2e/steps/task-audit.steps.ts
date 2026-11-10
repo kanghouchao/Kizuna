@@ -47,12 +47,13 @@ Given('専用の処理実行者とサービスIDが用意されている', async
 });
 
 When('処理を再送し主体の権限と対象範囲を検証する', async ({ request, browser }) => {
-  for (const [token, visible] of [[operator, true], [restricted, false], [admin, true]] as const) {
+  // 監査は閲覧権限だけで照会でき、定期処理の画面は全店舗の授権を要する。
+  for (const [token, taskVisible] of [[operator, true], [restricted, false], [admin, true]] as const) {
     const menus = await request.get('/api/menus/me', { headers: headers(token) });
     expect(menus.status()).toBe(200);
     const paths = menuPaths(await menus.json());
-    expect(paths.includes('/admin/task-executions')).toBe(visible);
-    expect(paths.includes('/admin/audit-events')).toBe(visible);
+    expect(paths.includes('/admin/task-executions')).toBe(taskVisible);
+    expect(paths.includes('/admin/audit-events')).toBe(true);
   }
   const restrictedPage = await browser.newPage();
   try {
@@ -63,13 +64,13 @@ When('処理を再送し主体の権限と対象範囲を検証する', async ({
     await expect(restrictedPage).toHaveURL(/\/admin\/dashboard/, { timeout: 15000 });
     await expect(restrictedPage.locator('aside').locator('a[href="/admin/dashboard"]')).toBeVisible();
     await expectSidebarLinkAbsentEverywhere(restrictedPage, aside => aside.locator('a[href="/admin/task-executions"]'));
-    await expectSidebarLinkAbsentEverywhere(restrictedPage, aside => aside.locator('a[href="/admin/audit-events"]'));
+    await expect(await revealSidebarLink(restrictedPage, aside => aside.locator('a[href="/admin/audit-events"]'))).toBeVisible();
   } finally {
     await restrictedPage.close();
   }
   const body = { task_name: 'SERVICE_IDENTITY_CHECK', logical_key: crypto.randomUUID(), service_user_id: serviceId, period_start: '2026-10-07', period_end: '2026-10-07' };
   expect((await request.get('/api/task-executions', { headers: headers(restricted) })).status()).toBe(403);
-  expect((await request.get('/api/audit-events', { headers: headers(restricted) })).status()).toBe(403);
+  expect((await request.get('/api/audit-events', { headers: headers(restricted) })).status()).toBe(200);
   const initial = await request.post('/api/task-executions', { headers: headers(operator), data: body });
   expect(initial.status(), await initial.text()).toBe(201);
   const execution = (await initial.json()).execution;
@@ -126,6 +127,13 @@ When('処理を再送し主体の権限と対象範囲を検証する', async ({
   expect(snapshot.after_values.enabled).toBe('false');
   expect(JSON.stringify(snapshot)).not.toContain(password);
   expect((await request.put(`/api/audit-events/${event.id}`, { headers: headers(operator), data: snapshot })).status()).toBe(405);
+  // サービス ID の停止は店舗を持たないグループ級の操作なので、集合 {1} の閲覧権限者にも一覧と単件で見える。
+  // 上のロール変更で資格情報の版が進んでいるため、ログインし直す。
+  restricted = await loginUser(request, limitedEmail, password);
+  const restrictedAudit = await request.get('/api/audit-events', { headers: headers(restricted), params: { action: 'SERVICE_ID_SUSPENDED' } });
+  expect(restrictedAudit.status()).toBe(200);
+  expect((await restrictedAudit.json()).content.some((row: { id: number }) => row.id === event.id)).toBe(true);
+  expect((await request.get(`/api/audit-events/${event.id}`, { headers: headers(restricted) })).status()).toBe(200);
 });
 
 Then('実行履歴と変更前後の監査を画面で確認できる', async ({ page, request, $testInfo }) => {
