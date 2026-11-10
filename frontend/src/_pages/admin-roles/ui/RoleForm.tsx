@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useId } from 'react';
 import { useForm } from 'react-hook-form';
-import { PermissionCode, PermissionGroupResponse, roleApi } from '@/entities/user';
+import { PermissionCode, PermissionTreeResponse, roleApi } from '@/entities/user';
 import { useManagedList } from '@/shared/lib';
 import {
   Button,
@@ -32,7 +32,7 @@ interface RoleFormProps {
   onSubmit: (values: RoleFormValues) => Promise<void>;
 }
 
-/** ロールの作成・編集に共通のフォーム（名称 + 業務領域ごとの権限選択）。 */
+/** ロールの作成・編集に共通のフォーム（名称 + 「木 → 区分見出し」の下に並べた権限選択）。 */
 export function RoleForm({ initial, onSubmit }: RoleFormProps) {
   const form = useForm<RoleFormValues>({
     defaultValues: { name: initial?.name ?? '', permissions: initial?.permissions ?? [] },
@@ -44,11 +44,11 @@ export function RoleForm({ initial, onSubmit }: RoleFormProps) {
   } = form;
   const permissionsLabelId = useId();
   const {
-    items: groups,
+    items: trees,
     isLoading: catalogLoading,
     failed: catalogFailed,
     refetch: refetchCatalog,
-  } = useManagedList<PermissionGroupResponse>(() => roleApi.permissions());
+  } = useManagedList<PermissionTreeResponse>(() => roleApi.permissions());
 
   return (
     <Form {...form}>
@@ -85,9 +85,9 @@ export function RoleForm({ initial, onSubmit }: RoleFormProps) {
           rules={{ validate: value => value.length > 0 || '権限を 1 つ以上選択してください' }}
           render={({ field }) => {
             // 焦点は先頭の権限が受ける
-            const firstCode = groups
-              .flatMap(group => group.permissions ?? [])
-              .find(entry => entry.code !== undefined)?.code;
+            const firstCode = trees
+              .flatMap(tree => tree.groups.flatMap(group => group.permissions))
+              .at(0)?.code;
             const toggle = (code: PermissionCode) => {
               field.onChange(
                 field.value.includes(code)
@@ -106,7 +106,7 @@ export function RoleForm({ initial, onSubmit }: RoleFormProps) {
                   <div
                     role="group"
                     aria-labelledby={permissionsLabelId}
-                    className="space-y-5 rounded-md border p-4"
+                    className="space-y-6 rounded-md border p-4"
                   >
                     {catalogLoading ? (
                       <p className="text-sm text-muted-foreground">読み込み中...</p>
@@ -117,24 +117,42 @@ export function RoleForm({ initial, onSubmit }: RoleFormProps) {
                         onRetry={() => void refetchCatalog()}
                       />
                     ) : (
-                      groups.map(group => (
-                        <div key={group.group} className="space-y-1">
-                          <h2 className="text-sm font-semibold text-foreground">{group.label}</h2>
-                          {(group.permissions ?? []).map(entry => {
-                            const code = entry.code;
-                            if (code === undefined) return null;
-                            return (
-                              <Label key={code} className="font-normal">
-                                <Checkbox
-                                  checked={field.value.includes(code)}
-                                  onCheckedChange={() => toggle(code)}
-                                  ref={code === firstCode ? field.ref : undefined}
-                                />
-                                {entry.label}
-                              </Label>
-                            );
-                          })}
-                        </div>
+                      // 同じ見出し（業務 など）が両方の木に出るため、見出しは木の組の中で名乗る
+                      trees.map(tree => (
+                        <section
+                          key={tree.tree}
+                          role="group"
+                          aria-labelledby={`${permissionsLabelId}-${tree.tree}`}
+                          className="space-y-3"
+                        >
+                          <h2
+                            id={`${permissionsLabelId}-${tree.tree}`}
+                            className="border-b pb-1 text-base font-semibold text-foreground"
+                          >
+                            {tree.label}
+                          </h2>
+                          <div className="space-y-4 border-l-2 pl-3">
+                            {tree.groups.map(group => (
+                              <div key={group.group} className="space-y-1">
+                                <h3 className="text-sm font-semibold text-muted-foreground">
+                                  {group.label}
+                                </h3>
+                                <div className="grid grid-cols-1 gap-x-6 gap-y-1 sm:grid-cols-2">
+                                  {group.permissions.map(({ code, label }) => (
+                                    <Label key={code} className="font-normal">
+                                      <Checkbox
+                                        checked={field.value.includes(code)}
+                                        onCheckedChange={() => toggle(code)}
+                                        ref={code === firstCode ? field.ref : undefined}
+                                      />
+                                      {label}
+                                    </Label>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </section>
                       ))
                     )}
                   </div>

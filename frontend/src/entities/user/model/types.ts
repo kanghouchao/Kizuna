@@ -117,17 +117,26 @@ export interface AuthorizedStore {
 
 // 権限目録の1件（ロール編集 UI の選択肢）。label は画面に出す日本語名。
 export interface PermissionResponse {
-  code?: PermissionCode;
-  label?: string;
+  code: PermissionCode;
+  label: string;
 }
 
 export type PermissionGroupCode = 'BUSINESS' | 'CAST' | 'CUSTOMER' | 'ORGANIZATION' | 'OPERATION';
 
-// 権限目録の業務領域ごとの束。組の順序と見出しはサーバが決める。
+// 権限目録の一つの木の中の区分見出しごとの束。権限の無い見出しはサーバが出さない。
 export interface PermissionGroupResponse {
-  group?: PermissionGroupCode;
-  label?: string;
-  permissions?: PermissionResponse[];
+  group: PermissionGroupCode;
+  label: string;
+  permissions: PermissionResponse[];
+}
+
+export type PermissionTreeCode = 'GROUP' | 'STORE';
+
+// 権限目録の木（グループ / 店舗）ごとの束。木・見出し・権限の順序と名前はサーバが決める。
+export interface PermissionTreeResponse {
+  tree: PermissionTreeCode;
+  label: string;
+  groups: PermissionGroupResponse[];
 }
 
 // ロールへの参照（スタッフ応答の埋め込み）。
