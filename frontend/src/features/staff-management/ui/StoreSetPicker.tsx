@@ -8,7 +8,8 @@ interface StoreSetPickerProps extends Pick<
   ComponentProps<'div'>,
   'id' | 'aria-invalid' | 'aria-describedby'
 > {
-  ref?: Ref<HTMLDivElement>;
+  /** 検証で最初の問題になったときに焦点を受ける先（先頭の店舗のチェックボックス）。 */
+  ref?: Ref<HTMLElement>;
   label?: string;
   stores: AuthorizedStore[];
   isLoading: boolean;
@@ -38,14 +39,7 @@ export function StoreSetPicker({
   const labelId = useId();
 
   return (
-    <div
-      role="group"
-      aria-labelledby={labelId}
-      tabIndex={-1}
-      ref={ref}
-      {...groupProps}
-      className="space-y-2 outline-none"
-    >
+    <div role="group" aria-labelledby={labelId} {...groupProps} className="space-y-2">
       <span id={labelId} className="block text-sm font-medium text-foreground">
         {label}
       </span>
@@ -60,6 +54,7 @@ export function StoreSetPicker({
         failed={failed}
         onReload={onReload}
         storeIds={storeIds}
+        firstOptionRef={ref}
         onChange={nextIds => onChange({ storeScopeType: 'SPECIFIC_STORES', storeIds: nextIds })}
       />
     </div>

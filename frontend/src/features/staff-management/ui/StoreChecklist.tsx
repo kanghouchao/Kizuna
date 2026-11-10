@@ -1,5 +1,6 @@
 'use client';
 
+import type { Ref } from 'react';
 import { AuthorizedStore } from '@/entities/user';
 import { cn } from '@/shared/lib';
 import { Button, Checkbox, Label, RegionError } from '@/shared/ui';
@@ -14,6 +15,8 @@ interface StoreChecklistProps {
   onReload: () => void;
   storeIds: number[];
   onChange: (storeIds: number[]) => void;
+  /** 先頭の店舗のチェックボックスへ渡す ref。フォームの検証が焦点を移す先になる。 */
+  firstOptionRef?: Ref<HTMLElement>;
   className?: string;
 }
 
@@ -25,6 +28,7 @@ export function StoreChecklist({
   onReload,
   storeIds,
   onChange,
+  firstOptionRef,
   className,
 }: StoreChecklistProps) {
   const storeIdsInCatalog = stores.flatMap(store => (store.id === undefined ? [] : [store.id]));
@@ -79,6 +83,7 @@ export function StoreChecklist({
                     className="mt-0.5"
                     checked={storeIds.includes(id)}
                     onCheckedChange={() => toggleStore(id)}
+                    ref={id === storeIdsInCatalog[0] ? firstOptionRef : undefined}
                   />
                   {store.name}
                 </Label>

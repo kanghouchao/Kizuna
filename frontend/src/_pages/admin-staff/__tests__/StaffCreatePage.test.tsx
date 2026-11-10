@@ -173,6 +173,16 @@ describe('従業員追加ページ', () => {
     );
   });
 
+  it('店舗だけが欠けていれば先頭の店舗に焦点を移す', async () => {
+    render(<StaffCreatePage />);
+    fillIdentity();
+    fireEvent.click(await screen.findByRole('checkbox', { name: '店長' }));
+    fireEvent.click(screen.getByRole('button', { name: '追加する' }));
+
+    expect(await screen.findByText('対象店舗を 1 つ以上選択してください')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: '新宿店' })).toHaveFocus();
+  });
+
   it('多店舗でもすべて選択・すべて解除で個別店舗をまとめて切り替えられる', async () => {
     render(<StaffCreatePage />);
     fireEvent.click(screen.getByRole('button', { name: 'すべて選択' }));
