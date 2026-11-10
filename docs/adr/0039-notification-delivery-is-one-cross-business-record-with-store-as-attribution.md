@@ -1,6 +1,6 @@
 # 通知の送信正本は業務を跨いで一つにし、店舗を帰属属性・起点を多態参照にする
 
-Status: Accepted
+Status: Accepted。ALL_STORES の扱いは ADR 0042 で置き換え
 
 ## 決定時の背景
 
