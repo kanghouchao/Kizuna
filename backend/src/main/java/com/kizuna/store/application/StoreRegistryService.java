@@ -6,6 +6,7 @@ import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.store.domain.AttendanceRecordCheck;
 import com.kizuna.store.domain.CompletedOrderCheck;
 import com.kizuna.store.domain.Store;
@@ -15,8 +16,11 @@ import com.kizuna.store.domain.StoreStatus;
 import com.kizuna.storeprofile.domain.StoreProfile;
 import com.kizuna.storeprofile.domain.StoreProfileRepository;
 import com.kizuna.user.application.BusinessAudit;
+import com.kizuna.user.application.CreatedStoreGrant;
+import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -29,6 +33,8 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
+import org.springframework.data.jpa.repository.query.EscapeCharacter;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,12 +49,15 @@ public class StoreRegistryService {
    */
   static final String DOMAIN_CACHE = "storeViewByDomain";
 
+  private static final EscapeCharacter LIKE_ESCAPE = EscapeCharacter.DEFAULT;
+
   private final StoreRepository storeRepository;
   private final StoreProfileRepository storeProfileRepository;
   private final CompletedOrderCheck completedOrderCheck;
   private final PointLedgerService pointLedgerService;
   private final AttendanceRecordCheck attendanceRecordCheck;
   private final BusinessAudit businessAudit;
+  private final CreatedStoreGrant createdStoreGrant;
 
   /** 削除を止める側の外部キーの写像。履歴と業務記録は誤登録の撤回にも従わせない。 */
   private static final Map<DbConstraint, Supplier<RuntimeException>> DELETION_VIOLATIONS =
@@ -66,18 +75,21 @@ public class StoreRegistryService {
           DbConstraint.FK_T_BONUS_AWARDS_STORE,
           () -> new ServiceException("ボーナスの記録が存在する店舗は削除できません"));
 
+  /** 呼び出し者の店舗集合内の店舗だけを返す。検索語は名称とドメインを横断する部分一致。 */
   @Transactional(readOnly = true)
-  public Page<StoreView> list(String search, Pageable pageable) {
-    // 派生クエリの Containing は null を渡せないため、絞り込み無し（null）は空パターンで表す。
-    String term = search == null ? "" : search;
-    return storeRepository
-        .findByNameContainingIgnoreCaseOrDomainContainingIgnoreCase(term, term, pageable)
-        .map(StoreView::of);
+  public Page<StoreView> list(StoreScope scope, String search, Pageable pageable) {
+    if (holdsNoStore(scope)) {
+      return Page.empty(pageable);
+    }
+    return storeRepository.findAll(withinScope(scope, search), pageable).map(StoreView::of);
   }
 
   @Transactional(readOnly = true)
-  public StoreView getById(String id) {
-    return storeRepository.findById(parseId(id)).map(StoreView::of).orElseThrow(() -> notFound(id));
+  public StoreView getById(StoreScope scope, String id) {
+    return storeRepository
+        .findById(requireInScope(scope, id))
+        .map(StoreView::of)
+        .orElseThrow(() -> notFound(id));
   }
 
   @Transactional(readOnly = true)
@@ -102,6 +114,8 @@ public class StoreRegistryService {
     Store saved =
         saveShortNameUnique(new Store(command.name(), command.shortName(), command.domain()));
     storeProfileRepository.save(StoreProfile.createDefault(saved.getId()));
+    // 監査が作成者を読むより先に呼ぶ。先に読まれていると、作成者の行ロックが版照合付きの昇格になる。
+    createdStoreGrant.grantToCurrent(saved.getId());
     record(
         saved.getId(),
         "STORE_CREATED",
@@ -119,8 +133,8 @@ public class StoreRegistryService {
   // domain はメソッド本体のローカルにしか現れずキーとして書けない。delete と同じ全件失効に揃える。
   @Transactional
   @CacheEvict(value = DOMAIN_CACHE, allEntries = true)
-  public void update(String id, StorePatch patch) {
-    var store = storeRepository.findById(parseId(id)).orElseThrow(() -> notFound(id));
+  public void update(StoreScope scope, String id, StorePatch patch) {
+    var store = storeRepository.findById(requireInScope(scope, id)).orElseThrow(() -> notFound(id));
     String versionBefore = String.valueOf(store.getVersion());
     boolean renamed = !Objects.equals(store.getName(), patch.name());
     boolean shortNameChanged = !Objects.equals(store.getShortName(), patch.shortName());
@@ -164,8 +178,8 @@ public class StoreRegistryService {
    */
   @Transactional
   @CacheEvict(value = DOMAIN_CACHE, allEntries = true)
-  public void delete(String id) {
-    Long storeId = parseId(id);
+  public void delete(StoreScope scope, String id) {
+    Long storeId = requireInScope(scope, id);
     Store store = storeRepository.findByIdForUpdate(storeId).orElseThrow(() -> notFound(id));
     if (store.getStatus() == StoreStatus.ACTIVE) {
       throw new ServiceException("稼働中の店舗は削除できません");
@@ -205,8 +219,39 @@ public class StoreRegistryService {
   }
 
   @Transactional(readOnly = true)
-  public long count() {
-    return storeRepository.count();
+  public long count(StoreScope scope) {
+    return holdsNoStore(scope) ? 0 : storeRepository.count(withinScope(scope, null));
+  }
+
+  /** 集合外の店舗は存在しない扱い（404）にする。業務上の検証より先に判定し、集合外の店舗の状態（稼働中・略称の重複）を応答で漏らさない。 */
+  private Long requireInScope(StoreScope scope, String id) {
+    Long storeId = parseId(id);
+    if (!scope.authorizes(storeId)) {
+      throw notFound(id);
+    }
+    return storeId;
+  }
+
+  private static boolean holdsNoStore(StoreScope scope) {
+    return !scope.allStores() && scope.storeIds().isEmpty();
+  }
+
+  private static Specification<Store> withinScope(StoreScope scope, String search) {
+    return (root, query, cb) -> {
+      List<Predicate> predicates = new ArrayList<>();
+      if (!scope.allStores()) {
+        predicates.add(root.get("id").in(scope.storeIds()));
+      }
+      if (search != null) {
+        char escape = LIKE_ESCAPE.getEscapeCharacter();
+        String pattern = "%" + LIKE_ESCAPE.escape(search.toLowerCase(Locale.ROOT)) + "%";
+        predicates.add(
+            cb.or(
+                cb.like(cb.lower(root.get("name")), pattern, escape),
+                cb.like(cb.lower(root.get("domain")), pattern, escape)));
+      }
+      return cb.and(predicates.toArray(new Predicate[0]));
+    };
   }
 
   private static NotFoundException notFound(String id) {

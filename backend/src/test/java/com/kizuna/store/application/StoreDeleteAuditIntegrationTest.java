@@ -10,6 +10,7 @@ import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.store.StoreShortNames;
 import com.kizuna.store.domain.AttendanceRecordCheck;
 import com.kizuna.store.domain.CompletedOrderCheck;
@@ -17,6 +18,7 @@ import com.kizuna.store.domain.StorePatch;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.storeprofile.domain.StoreProfileRepository;
 import com.kizuna.user.application.BusinessAudit;
+import com.kizuna.user.application.CreatedStoreGrant;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -63,6 +65,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class StoreDeleteAuditIntegrationTest {
   private static final String ORDINARY = "ordinary@example.test";
+  private static final StoreScope ALL = new StoreScope(true, Set.of());
   private AnnotationConfigApplicationContext context;
   private JdbcTemplate jdbc;
   private StoreRegistryService stores;
@@ -124,10 +127,10 @@ class StoreDeleteAuditIntegrationTest {
     long id = create();
     jdbc.update("insert into t_cascade_child(store_id) values (?), (?)", id, id);
     var rename = new StorePatch("改名後", StoreShortNames.next());
-    stores.update(String.valueOf(id), rename);
-    stores.update(String.valueOf(id), rename);
+    stores.update(ALL, String.valueOf(id), rename);
+    stores.update(ALL, String.valueOf(id), rename);
 
-    stores.delete(String.valueOf(id));
+    stores.delete(ALL, String.valueOf(id));
 
     assertThat(count("select count(*) from t_stores where id=?", id)).isZero();
     assertThat(count("select count(*) from t_cascade_child where store_id=?", id)).isZero();
@@ -164,7 +167,7 @@ class StoreDeleteAuditIntegrationTest {
     jdbc.update("insert into t_services(store_id) values (?)", id);
     long audits = deleteAudits(id);
 
-    assertThatThrownBy(() -> stores.delete(String.valueOf(id)))
+    assertThatThrownBy(() -> stores.delete(ALL, String.valueOf(id)))
         .isInstanceOf(ServiceException.class)
         .hasMessage("サービス設定が存在する店舗は削除できません");
 
@@ -179,7 +182,7 @@ class StoreDeleteAuditIntegrationTest {
     jdbc.execute(
         "alter table t_audit_events add constraint ck_store_delete_audit_test check(action <> 'STORE_DELETED') not valid");
     try {
-      assertThatThrownBy(() -> stores.delete(String.valueOf(id)))
+      assertThatThrownBy(() -> stores.delete(ALL, String.valueOf(id)))
           .isInstanceOf(DataIntegrityViolationException.class);
     } finally {
       jdbc.execute("alter table t_audit_events drop constraint ck_store_delete_audit_test");
@@ -213,7 +216,12 @@ class StoreDeleteAuditIntegrationTest {
         StoreRepository.class,
         StoreProfileRepository.class
       })
-  @Import({AuditWriter.class, BusinessAudit.class, StoreRegistryService.class})
+  @Import({
+    AuditWriter.class,
+    BusinessAudit.class,
+    CreatedStoreGrant.class,
+    StoreRegistryService.class
+  })
   static class Config {
     @Bean
     DataSource dataSource() {

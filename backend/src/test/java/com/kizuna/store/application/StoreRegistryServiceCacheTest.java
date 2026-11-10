@@ -14,6 +14,7 @@ import com.kizuna.store.domain.Store;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.storeprofile.domain.StoreProfileRepository;
 import com.kizuna.user.application.BusinessAudit;
+import com.kizuna.user.application.CreatedStoreGrant;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -59,7 +60,8 @@ class StoreRegistryServiceCacheTest {
           mock(CompletedOrderCheck.class),
           mock(PointLedgerService.class),
           mock(AttendanceRecordCheck.class),
-          mock(BusinessAudit.class));
+          mock(BusinessAudit.class),
+          mock(CreatedStoreGrant.class));
     }
   }
 
