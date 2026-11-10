@@ -37,7 +37,7 @@ Given(
       request,
       owner,
       `店舗登録担当-${suffix}`,
-      ["STORE_MANAGE", "STORE_PROFILE_MANAGE", "STORE_VIEW"],
+      ["STORE_MANAGE", "STORE_PROFILE_MANAGE"],
     );
     const operatorEmail = `store-operator-${suffix}@example.test`;
     operatorId = await createStaffFixture(
@@ -52,7 +52,7 @@ Given(
       request,
       owner,
       `店舗登録権限なし-${suffix}`,
-      ["SHIFT_MANAGE", "STORE_VIEW"],
+      ["SHIFT_MANAGE"],
     );
     const limitedEmail = `store-limited-${suffix}@example.test`;
     await createStaffFixture(request, owner, limitedEmail, password, [

@@ -11,7 +11,6 @@ import com.kizuna.reporting.domain.ReportCriteria;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.storescope.StoreScope;
 import java.util.List;
-import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -39,8 +38,8 @@ public class ReportSnapshot {
         criteria,
         facts,
         includeRemuneration
-            ? remuneration.read(
-                new StoreScope(false, Set.of(storeId)),
+            ? remuneration.store(
+                storeId,
                 facts,
                 criteria.from(),
                 criteria.to(),
@@ -67,7 +66,7 @@ public class ReportSnapshot {
         criteria,
         facts,
         includeRemuneration
-            ? remuneration.read(
+            ? remuneration.groupWide(
                 scope,
                 facts,
                 criteria.from(),

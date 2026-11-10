@@ -58,7 +58,7 @@ function report(total: number): OperationalReport {
 }
 beforeEach(() => {
   jest.clearAllMocks();
-  meWith(['ORDER_SET_VIEW', 'OPERATIONAL_REPORT_VIEW']);
+  meWith(['OPERATIONAL_REPORT_SET_VIEW']);
 });
 test('view permission does not show export and failures clear totals before retry', async () => {
   fetch
@@ -115,9 +115,8 @@ test.each([
   'admin permission %s export %s controls selected advertising',
   async (permission, exportAllowed, visible) => {
     meWith([
-      'ORDER_SET_VIEW',
-      'OPERATIONAL_REPORT_VIEW',
-      'OPERATIONAL_REPORT_EXPORT',
+      'OPERATIONAL_REPORT_SET_VIEW',
+      'OPERATIONAL_REPORT_SET_EXPORT',
       permission,
       exportAllowed ? 'ADVERTISING_COST_SET_EXPORT' : 'ADVERTISING_COST_EXPORT',
     ]);
@@ -148,7 +147,14 @@ test.each([
   }
 );
 
-test('集合全体を読める者には現在店舗の集計への入口を出す', async () => {
+test('店舗集合を跨ぐ集計だけを読める者には現在店舗の集計への入口を出さない', async () => {
+  render(<AdminOperationalReportsPage />);
+  expect(await screen.findByRole('button', { name: '照会' })).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: '現在店舗の集計' })).not.toBeInTheDocument();
+});
+
+test('現在店舗の集計も読める者には入口を出す', async () => {
+  meWith(['OPERATIONAL_REPORT_SET_VIEW', 'OPERATIONAL_REPORT_VIEW', 'ORDER_MANAGE']);
   render(<AdminOperationalReportsPage />);
   expect(await screen.findByRole('link', { name: '現在店舗の集計' })).toHaveAttribute(
     'href',

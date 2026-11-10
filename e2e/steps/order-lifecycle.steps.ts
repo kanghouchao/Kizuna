@@ -273,13 +273,10 @@ Then('グループ級から同じ訂正の費用と報酬を照会できる', as
   await page.goto(`${APP_URL}/admin/orders`);
   const row = page.getByRole('row').filter({ hasText: createdOrderId });
   await expect(row.getByRole('cell', { name: '¥22,000', exact: true })).toBeVisible();
+  await expect(row).toContainText('¥7,000');
   await page.screenshot({ path: 'test-results/935-admin-list.png', animations: 'disabled' });
-  await row.getByRole('button', { name: `訂正履歴 ：受注 ${createdOrderId}`, exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: '訂正履歴', exact: true });
-  await expectChange(dialog, '請求', '¥28,000', '¥22,000');
-  await expectChange(dialog, '発生済み報酬', '¥11,000', '¥7,000');
-  await expect(dialog.getByRole('button', { name: '訂正する', exact: true })).toHaveCount(0);
-  await page.screenshot({ path: 'test-results/935-admin-history.png', animations: 'disabled' });
+  // 訂正履歴は行の店舗の店舗級の読みなので、店舗の業務を持たない統括には出さない。
+  await expect(row.getByRole('button', { name: /訂正履歴/ })).toHaveCount(0);
 });
 
 After(async ({ request }) => {

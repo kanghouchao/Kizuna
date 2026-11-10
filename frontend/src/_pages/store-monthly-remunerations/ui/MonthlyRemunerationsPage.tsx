@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { hasPermission, useMe, useStoreContext } from '@/entities/user';
+import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
@@ -49,6 +49,10 @@ interface Query {
 
 export default function MonthlyRemunerationsPage() {
   const storeId = useStoreContext().currentStoreId;
+  const { me } = useMe();
+  if (me === null) return <MePending />;
+  if (!hasPermission(me, 'ORDER_MANAGE'))
+    return <p role="alert">給与明細を閲覧する権限がありません。</p>;
   return <MonthlyStatement key={storeId} />;
 }
 
@@ -65,12 +69,7 @@ function MonthlyStatement() {
   const [history, setHistory] = useState<{ orderId: string; open: boolean } | null>(null);
   const [query, setQuery] = useState<Query | null>(null);
   const [mode, setMode] = useState<'month' | 'day'>('month');
-  // 横断照会者（ORDER_SET_VIEW のみ）は月次の照会だけを持つ。日別・受注の画面は受注の担当者の権限で開く。
   const { me } = useMe();
-  const manages = hasPermission(me, 'ORDER_MANAGE');
-  const ordersLink = manages
-    ? { href: storePath('/orders'), label: '受注一覧' }
-    : { href: '/admin/orders', label: '受注照会' };
   const clearResult = () => {
     setQuery(null);
     setHistory(null);
@@ -122,32 +121,30 @@ function MonthlyStatement() {
         title={title}
         description="原営業日の日別・月別に発生済み固定報酬を確認します。"
         actions={
-          <Button variant="outline" render={<Link href={ordersLink.href} />}>
-            {ordersLink.label}
+          <Button variant="outline" render={<Link href={storePath('/orders')} />}>
+            受注一覧
           </Button>
         }
         search={{
           onSearch: () => void submit(),
           content: (
             <div className="w-full space-y-6">
-              {manages && (
-                <div role="group" aria-label="集計単位" className="flex gap-3">
-                  {(['month', 'day'] as const).map(value => (
-                    <Button
-                      key={value}
-                      type="button"
-                      variant={mode === value ? 'default' : 'outline'}
-                      aria-pressed={mode === value}
-                      onClick={() => {
-                        clearResult();
-                        setMode(value);
-                      }}
-                    >
-                      {value === 'day' ? '日別' : '月別'}
-                    </Button>
-                  ))}
-                </div>
-              )}
+              <div role="group" aria-label="集計単位" className="flex gap-3">
+                {(['month', 'day'] as const).map(value => (
+                  <Button
+                    key={value}
+                    type="button"
+                    variant={mode === value ? 'default' : 'outline'}
+                    aria-pressed={mode === value}
+                    onClick={() => {
+                      clearResult();
+                      setMode(value);
+                    }}
+                  >
+                    {value === 'day' ? '日別' : '月別'}
+                  </Button>
+                ))}
+              </div>
               <div className="flex flex-wrap items-start gap-6">
                 <FormField
                   control={form.control}
@@ -246,7 +243,7 @@ function MonthlyStatement() {
           statement.failure === 'notFound' ? (
             <RegionError
               message="キャスト本人が見つからないか、閲覧範囲外です。"
-              fallback={{ href: ordersLink.href, label: `${ordersLink.label}へ戻る` }}
+              fallback={{ href: storePath('/orders'), label: '受注一覧へ戻る' }}
             />
           ) : query ? (
             `${periodLabel}の完了受注はありません`
@@ -272,16 +269,12 @@ function MonthlyStatement() {
               <TableRow key={order.order_id}>
                 <TableCell className="whitespace-nowrap">{order.business_date}</TableCell>
                 <TableCell>
-                  {manages ? (
-                    <Link
-                      className="text-primary-strong underline"
-                      href={storePath(`/orders/${order.order_id}/edit`)}
-                    >
-                      {order.order_id}
-                    </Link>
-                  ) : (
-                    order.order_id
-                  )}
+                  <Link
+                    className="text-primary-strong underline"
+                    href={storePath(`/orders/${order.order_id}/edit`)}
+                  >
+                    {order.order_id}
+                  </Link>
                 </TableCell>
                 <TableCell className="max-w-80 whitespace-normal break-words">
                   {order.service_summary}
@@ -312,7 +305,6 @@ function MonthlyStatement() {
           scope={{ scope: 'store', personId: query.personId }}
           month={query.period}
           canView={hasPermission(me, 'REMUNERATION_VIEW')}
-          canManage={manages}
         />
       )}
       {history && (

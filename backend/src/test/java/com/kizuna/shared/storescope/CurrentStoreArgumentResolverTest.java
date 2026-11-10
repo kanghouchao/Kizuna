@@ -198,7 +198,7 @@ class CurrentStoreArgumentResolverTest {
     authenticate(new StoreScope(false, Set.of(1L)), "PERM_ORDER_MANAGE");
     assertThat(resolve(REQUIRED, "1")).isEqualTo(1L);
 
-    authenticate(new StoreScope(true, Set.of()), "PERM_STORE_VIEW");
+    authenticate(new StoreScope(true, Set.of()), "PERM_SHIFT_MANAGE");
     assertThat(resolve(REQUIRED, "999")).isEqualTo(999L);
   }
 

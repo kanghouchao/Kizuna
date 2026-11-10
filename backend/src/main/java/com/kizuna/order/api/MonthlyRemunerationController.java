@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 現在店舗の月次報酬照会。受注の担当者と横断照会者（ORDER_SET_VIEW）の双方が読む。 */
+/** 現在店舗の月次報酬照会。 */
 @RestController
 @RequestMapping("/monthly-remunerations")
 @RequiredArgsConstructor
@@ -24,7 +24,7 @@ public class MonthlyRemunerationController {
   private final OrderMapper mapper;
 
   @GetMapping("/casts")
-  @PreAuthorize("hasAnyAuthority('PERM_ORDER_MANAGE', 'PERM_ORDER_SET_VIEW')")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public Page<MonthlyRemunerationCastSummary> casts(
       @CurrentStore Long storeId,
       @RequestParam(required = false) String search,
@@ -36,7 +36,7 @@ public class MonthlyRemunerationController {
   }
 
   @GetMapping
-  @PreAuthorize("hasAnyAuthority('PERM_ORDER_MANAGE', 'PERM_ORDER_SET_VIEW')")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public MonthlyRemunerationResponse monthly(
       @CurrentStore Long storeId,
       @RequestParam(name = "person_id") Long personId,

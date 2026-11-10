@@ -67,8 +67,10 @@ Given('広告費帳票用の二店舗に受注と保証と賞与と月次費用�
   foreign = String((await getAuthorizedStores(request, manager)).find(s => String(s.id) !== STORE1_ID)!.id);
   const suffix = randomUUID();
   password = randomUUID();
-  const common = ['ORDER_MANAGE', 'ORDER_SET_VIEW',
-    'OPERATIONAL_REPORT_VIEW', 'OPERATIONAL_REPORT_EXPORT', 'REMUNERATION_VIEW'];
+  // 現在店舗の集計（店舗の木）と店舗集合を跨ぐ集計（グループの木）の両方を読むので、両方の木の権限を束ねる。
+  const remuneration = ['REMUNERATION_VIEW', 'REMUNERATION_SET_VIEW'];
+  const common = ['ORDER_MANAGE', 'OPERATIONAL_REPORT_VIEW', 'OPERATIONAL_REPORT_EXPORT',
+    'OPERATIONAL_REPORT_SET_VIEW', 'OPERATIONAL_REPORT_SET_EXPORT', ...remuneration];
   const read = ['ADVERTISING_COST_VIEW', 'ADVERTISING_COST_SET_VIEW'];
   const write = ['ADVERTISING_COST_EXPORT', 'ADVERTISING_COST_SET_EXPORT'];
   const permissions = [
@@ -79,7 +81,7 @@ Given('広告費帳票用の二店舗に受注と保証と賞与と月次費用�
   const tokens: string[] = [];
   for (const [index, additional] of permissions.entries()) {
     const role = await createPermissionRole(request, owner, `広告帳票-${index}-${suffix}`,
-      [...(index === 7 ? common.filter(permission => permission !== 'REMUNERATION_VIEW') : common), ...additional]);
+      [...(index === 7 ? common.filter(permission => !remuneration.includes(permission)) : common), ...additional]);
     const address = `advertising-report-${index}-${suffix}@example.test`;
     if (index === 0) email = address;
     await createStaffFixture(request, owner, address, password, [role],
@@ -153,10 +155,9 @@ Then('広告費帳票は整月と閏年と登録なしを日割りせず区別�
 
 Then('広告費帳票は店と本部の閲覧出力権限を独立して検証する', async ({ request }) => {
   for (const endpoint of [store, admin]) {
-    // 店舗の集計は受注の担当者族（ADVERTISING_COST_*）と横断照会族（ADVERTISING_COST_SET_*）の両方が読む。
-    // 集合全体の集計は横断照会族だけ。
-    const allowed = endpoint === store ? [storeOnly, adminOnly] : [adminOnly];
-    const denied = endpoint === store ? [legacy, exportOnly] : [legacy, storeOnly, exportOnly];
+    // 広告費は端点の木の権限だけで開く。店舗の集計は ADVERTISING_COST_*、集合全体の集計は ADVERTISING_COST_SET_*。
+    const allowed = endpoint === store ? [storeOnly] : [adminOnly];
+    const denied = endpoint === store ? [legacy, adminOnly, exportOnly] : [legacy, storeOnly, exportOnly];
     for (const token of denied) {
       for (const condition of [{}, { group_by: 'day' }, { from: `${year}-02-02` }] as Record<string, string>[]) {
         for (const format of [undefined, 'csv', 'xlsx']) {

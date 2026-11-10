@@ -51,7 +51,7 @@ Given(
       request,
       owner,
       `招待担当-${suffix}`,
-      ["CAST_MANAGE", "CAST_INVITE", "STORE_VIEW"],
+      ["CAST_MANAGE", "CAST_INVITE"],
     );
     const operatorEmail = `invite-operator-${suffix}@example.test`;
     operatorId = await createStoreStaffFixture(
@@ -67,7 +67,7 @@ Given(
       request,
       owner,
       `在籍のみ-${suffix}`,
-      ["CAST_MANAGE", "STORE_VIEW"],
+      ["CAST_MANAGE"],
     );
     const limitedEmail = `invite-limited-${suffix}@example.test`;
     await createStoreStaffFixture(

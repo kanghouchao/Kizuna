@@ -19,6 +19,7 @@ let firstReader = '';
 let secondReader = '';
 let allReader = '';
 let storeOnlyReader = '';
+let setOnlyReader = '';
 let readerEmail = '';
 let allReaderEmail = '';
 let password = '';
@@ -45,7 +46,7 @@ async function monthly(request: APIRequestContext, token = firstReader, storeId 
   return response.json();
 }
 
-Given('月次横断照会用の本人と異なる授権集合の照会者がいる', async ({ request, $testInfo }) => {
+Given('月次受注照会用の本人と異なる授権集合の照会者がいる', async ({ request, $testInfo }) => {
   $testInfo.setTimeout(120000);
   manager = await loginAsStoreAdmin(request);
   const admin = await loginUser(request, 'admin@kizuna.test', 'pass1234');
@@ -89,27 +90,31 @@ Given('月次横断照会用の本人と異なる授権集合の照会者がい�
   await acceptCastInvitation(request, await issueCastInvitation(request, manager, onlyForeign, secondStore),
     'admin-monthly-foreign-' + suffix + '@kizuna.test', password, '他店限定本人');
   const role = await request.post('/api/roles', { headers: { Authorization: 'Bearer ' + admin },
-    data: { name: '月次グループ級参照-' + suffix, permissions: ['ORDER_SET_VIEW', 'REMUNERATION_VIEW'] } });
+    data: { name: '月次受注照会-' + suffix, permissions: ['ORDER_SET_VIEW', 'ORDER_MANAGE', 'REMUNERATION_VIEW'] } });
   expect(role.status(), await role.text()).toBe(201);
   const roleId = (await role.json()).id;
   const storeOnlyRole = await request.post('/api/roles', { headers: { Authorization: 'Bearer ' + admin },
     data: { name: '月次店舗権限のみ-' + suffix, permissions: ['ORDER_MANAGE',] } });
   expect(storeOnlyRole.status(), await storeOnlyRole.text()).toBe(201);
   const storeOnlyRoleId = (await storeOnlyRole.json()).id;
+  const setOnlyRole = await request.post('/api/roles', { headers: { Authorization: 'Bearer ' + admin },
+    data: { name: '月次受注照会のみ-' + suffix, permissions: ['ORDER_SET_VIEW', 'REMUNERATION_VIEW'] } });
+  expect(setOnlyRole.status(), await setOnlyRole.text()).toBe(201);
+  const setOnlyRoleId = (await setOnlyRole.json()).id;
   const tokens: string[] = [];
-  for (const [index, scope] of [STORE1_ID, secondStore, 'all', STORE1_ID].entries()) {
+  for (const [index, scope] of [STORE1_ID, secondStore, 'all', STORE1_ID, STORE1_ID].entries()) {
     const email = 'admin-monthly-reader-' + suffix + '-' + index + '@kizuna.test';
     if (index === 0) readerEmail = email;
     if (index === 2) allReaderEmail = email;
     const created = await request.post('/api/staff', { headers: { Authorization: 'Bearer ' + admin }, data: {
       email, password, display_name: '月次参照者-' + suffix + '-' + index,
-      role_ids: [index === 3 ? storeOnlyRoleId : roleId], store_scope_type: scope === 'all' ? 'ALL_STORES' : 'SPECIFIC_STORES',
+      role_ids: [index === 3 ? storeOnlyRoleId : index === 4 ? setOnlyRoleId : roleId], store_scope_type: scope === 'all' ? 'ALL_STORES' : 'SPECIFIC_STORES',
       store_ids: scope === 'all' ? [] : [Number(scope)],
     } });
     expect(created.status(), await created.text()).toBe(201);
     tokens.push(await loginUser(request, email, password));
   }
-  [firstReader, secondReader, allReader, storeOnlyReader] = tokens;
+  [firstReader, secondReader, allReader, storeOnlyReader, setOnlyReader] = tokens;
   const candidates = await request.get(base + '/casts', { headers: headers(firstReader),
     params: { search: name + '-旧名' } });
   expect(candidates.status()).toBe(200);
@@ -123,7 +128,7 @@ Given('月次横断照会用の本人と異なる授権集合の照会者がい�
   foreignPersonId = (await foreignCandidates.json()).content[0].person_id;
 });
 
-When('横断照会者が受注照会から現在店舗の月次給与明細で本人と原月を選択する', async ({ page }) => {
+When('受注照会者が受注照会から現在店舗の月次給与明細で本人と原月を選択する', async ({ page }) => {
   await openLoginForm(page);
   await page.getByLabel('メールアドレス', { exact: true }).fill(readerEmail);
   await page.getByLabel('パスワード', { exact: true }).fill(password);
@@ -133,8 +138,6 @@ When('横断照会者が受注照会から現在店舗の月次給与明細で�
   await page.getByRole('link', { name: '月次給与明細', exact: true }).click();
   await expect(page).toHaveURL(/\/store\/orders\/monthly-remunerations$/);
   if (readerEmail === allReaderEmail) await switchStoreOnRail(page, storeName);
-  // 横断照会者は日別（受注の担当者の画面）を持たない。
-  await expect(page.getByRole('button', { name: '日別', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: '照会', exact: true }).click();
   await expect(page.getByText('キャスト本人を選択してください', { exact: true })).toBeVisible();
   await page.getByRole('combobox', { name: 'キャスト本人', exact: true }).click();
@@ -145,7 +148,7 @@ When('横断照会者が受注照会から現在店舗の月次給与明細で�
   await expect(page.getByLabel('月次報酬合計')).toHaveText('¥14,000');
 });
 
-Then('横断照会の月次合計は同店の再入店を含み他店と未完了と取消を含まない', async ({ request, page }) => {
+Then('受注照会の月次合計は同店の再入店を含み他店と未完了と取消を含まない', async ({ request, page }) => {
   const first = await monthly(request, firstReader, STORE1_ID, 0, 1);
   const second = await monthly(request, firstReader, STORE1_ID, 1, 1);
   for (const result of [first, second]) {
@@ -156,9 +159,7 @@ Then('横断照会の月次合計は同店の再入店を含み他店と未完�
   expect([first.orders.content[0].order_id, second.orders.content[0].order_id].sort())
     .toEqual([originalOrder, secondOrder].sort());
   await expect(page.getByRole('button', { name: '訂正履歴', exact: true })).toHaveCount(2);
-  // 受注の編集画面は受注の担当者の権限で開くので、横断照会者には導線を出さない。
-  await expect(page.locator('a[href*="/edit"]')).toHaveCount(0);
-  // 保証・ボーナスの内訳は読めるが、管理（受注の担当者の端点）は出さず、その取得失敗も出さない。
+  // 保証・ボーナスの内訳は読めるが、付与の権限が無いので記録の操作は出さない。
   const breakdown = page.getByRole('button', { name: '保証・ボーナスを含む月次明細', exact: true });
   await breakdown.click();
   await expect(page.getByRole('heading', { name: '受注報酬・保証・ボーナス', exact: true })).toBeVisible();
@@ -168,13 +169,13 @@ Then('横断照会の月次合計は同店の再入店を含み他店と未完�
   expect((await monthly(request, secondReader, secondStore)).total_remuneration).toBe(7000);
 });
 
-When('横断照会の原月受注を訂正して無効化する', async ({ request }) => {
+When('受注照会の原月受注を訂正して無効化する', async ({ request }) => {
   await correctOrderExtension(request, manager, originalOrder, '原月の延長報酬を訂正');
   expect((await monthly(request)).total_remuneration).toBe(16000);
   await invalidateOrder(request, manager, originalOrder, '未提供の原月受注を無効化');
 });
 
-Then('横断照会で原月の最新合計と既存の訂正履歴を確認できる', async ({ request, page }) => {
+Then('受注照会で原月の最新合計と既存の訂正履歴を確認できる', async ({ request, page }) => {
   const result = await monthly(request);
   expect(result.total_remuneration).toBe(7000);
   expect(result.orders.content.find((row: { order_id: string }) => row.order_id === originalOrder))
@@ -191,7 +192,7 @@ Then('横断照会で原月の最新合計と既存の訂正履歴を確認で�
   await expectChange(dialog, '発生済み報酬', '¥9,000', '¥0');
 });
 
-Then('月次横断照会は異なる授権集合と直接HTTP要求を検証する', async ({ request }) => {
+Then('月次受注照会は異なる授権集合と直接HTTP要求を検証する', async ({ request }) => {
   const params = { person_id: personId, month: originalMonth };
   // 店舗は X-Store-ID だけで名乗る。本人の店舗集合の外（存在しない店舗を含む）は全経路で拒否する。
   for (const suffix of ['', '/casts', '/pdf']) {
@@ -202,6 +203,8 @@ Then('月次横断照会は異なる授権集合と直接HTTP要求を検証す�
     expect((await request.get(base + suffix, { headers: { 'X-Store-ID': STORE1_ID }, params })).status()).toBe(401);
     expect((await request.get(base + suffix, { headers: headers(castToken), params })).status()).toBe(403);
     expect((await request.get(base + suffix, { headers: headers(storeOnlyReader), params })).status()).toBe(200);
+    // 店舗集合を跨ぐ照会の権限だけでは、店舗級の月次の読みは開かない。
+    expect((await request.get(base + suffix, { headers: headers(setOnlyReader), params })).status()).toBe(403);
   }
   const wrongPerson = await request.get(base, { headers: headers(firstReader),
     params: { person_id: foreignPersonId, month: originalMonth } });
@@ -212,7 +215,7 @@ Then('月次横断照会は異なる授権集合と直接HTTP要求を検証す�
     params: { search: name + '-他店' } });
   expect(suspendedCandidates.status()).toBe(200);
   expect((await suspendedCandidates.json()).content.map((person: { person_id: number }) => person.person_id)).toContain(personId);
-  // 授権店舗一覧は権限を 1 つ以上持つ全員に開く（STORE_VIEW の有無は問わない）。中身は本人の店舗集合だけ。
+  // 授権店舗一覧は権限を 1 つ以上持つ全員に開く。中身は本人の店舗集合だけ。
   const ownStores = await request.get('/api/stores/me', { headers: headers(firstReader) });
   expect(ownStores.status()).toBe(200);
   expect((await ownStores.json()).map((s: { id: number }) => String(s.id))).toEqual([STORE1_ID]);
@@ -223,10 +226,12 @@ Then('月次横断照会は異なる授権集合と直接HTTP要求を検証す�
   expect((await corrections(STORE1_ID)).status()).toBe(404);
   expect((await request.get('/api/orders/' + foreignOrder + '/corrections',
     { headers: headers(secondReader, secondStore) })).status()).toBe(200);
-  // 横断照会は照会だけで、受注そのものと日別の読みは受注の担当者の権限に残る。
-  expect((await request.get('/api/orders/' + originalOrder, { headers: headers(firstReader) })).status()).toBe(403);
+  // 店舗集合を跨ぐ照会の権限だけでは、訂正履歴・受注そのもの・日別のどれも開かない。
+  expect((await request.get('/api/orders/' + originalOrder + '/corrections',
+    { headers: headers(setOnlyReader) })).status()).toBe(403);
+  expect((await request.get('/api/orders/' + originalOrder, { headers: headers(setOnlyReader) })).status()).toBe(403);
   expect((await request.get('/api/daily-remunerations',
-    { headers: headers(firstReader), params: { person_id: personId, business_date: originalDate } })).status()).toBe(403);
+    { headers: headers(setOnlyReader), params: { person_id: personId, business_date: originalDate } })).status()).toBe(403);
   const selfBypass = await request.get('/api/me/remunerations/' + originalOrder, { headers: headers(firstReader) });
   expect(selfBypass.status()).toBe(403);
   for (const [key, value] of [['month', '2026-13'], ['page', '2147483647'], ['person_id', '0']]) {
@@ -247,7 +252,7 @@ Then('月次横断照会は異なる授権集合と直接HTTP要求を検証す�
   expect(await empty.json()).toMatchObject({ total_remuneration: 0, orders: { content: [] } });
 });
 
-Then('横断照会の月次画面の明暗と狭幅とキーボードを確認できる', async ({ page, $testInfo }) => {
+Then('受注照会の月次画面の明暗と狭幅とキーボードを確認できる', async ({ page, $testInfo }) => {
   await page.setViewportSize({ width: 1024, height: 900 });
   for (const theme of ['light', 'dark']) {
     await page.evaluate(value => document.documentElement.classList.toggle('dark', value === 'dark'), theme);
@@ -274,7 +279,7 @@ Then('横断照会の月次画面の明暗と狭幅とキーボードを確認�
   await page.setViewportSize({ width: 1280, height: 900 });
 });
 
-Then('横断照会の月次画面は失敗から再試行でき店舗切替で明細を消す', async ({ page }) => {
+Then('受注照会の月次画面は失敗から再試行でき店舗切替で明細を消す', async ({ page }) => {
   const path = /\/api\/monthly-remunerations\?/;
   await page.route(path, route => route.fulfill({ status: 500, json: { error: '検証用の取得失敗' } }));
   await page.getByRole('button', { name: '照会', exact: true }).click();

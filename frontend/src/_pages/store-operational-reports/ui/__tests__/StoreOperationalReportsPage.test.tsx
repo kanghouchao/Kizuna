@@ -377,18 +377,16 @@ test('store advertising does not pair order management with the cross-store adve
   await screen.findByLabelText('請求額（円）');
   expect(fetch.mock.calls[0][1]).not.toHaveProperty('include_advertising');
 });
-test('cross-store viewer reads the current store with its own advertising permission', async () => {
-  meWith(['ORDER_SET_VIEW', 'OPERATIONAL_REPORT_VIEW', 'ADVERTISING_COST_SET_VIEW']);
-  fetch.mockResolvedValue(report(0));
-  render(<StoreOperationalReportsPage />);
-  fireEvent.click(await screen.findByRole('checkbox', { name: '広告費を含める' }));
-  fireEvent.click(screen.getByRole('button', { name: '照会' }));
-  await screen.findByLabelText('請求額（円）');
-  expect(fetch.mock.calls[0]).toEqual([
-    'store',
-    expect.objectContaining({ include_advertising: true }),
-    0,
+test('cross-store permissions do not open the current store report', async () => {
+  meWith([
+    'ORDER_SET_VIEW',
+    'OPERATIONAL_REPORT_SET_VIEW',
+    'OPERATIONAL_REPORT_VIEW',
+    'ADVERTISING_COST_SET_VIEW',
   ]);
+  render(<StoreOperationalReportsPage />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('閲覧する権限がありません');
+  expect(fetch).not.toHaveBeenCalled();
 });
 test('new dates, group and option discard a late advertising response', async () => {
   grantAdvertising();

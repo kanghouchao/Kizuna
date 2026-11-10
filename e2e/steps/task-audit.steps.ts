@@ -93,7 +93,7 @@ When('処理を再送し主体の権限と対象範囲を検証する', async ({
   expect((await request.post('/api/task-executions', { headers: headers(operator), data: { ...body, logical_key: crypto.randomUUID() } })).status()).toBe(403);
   expect((await request.post(`/api/service-identities/${serviceId}/resumption`, { headers: headers(admin) })).status()).toBe(204);
   for (const [id, replacement, callerRevoked] of [
-    [serviceRoleId, ['STORE_VIEW'], false],
+    [serviceRoleId, ['AUDIT_VIEW'], false],
     [roleId, ['AUDIT_VIEW'], true],
   ] as const) {
     const current = await request.get(`/api/roles/${id}`, { headers: headers(admin) });

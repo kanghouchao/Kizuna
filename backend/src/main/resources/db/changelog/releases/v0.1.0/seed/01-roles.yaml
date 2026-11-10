@@ -158,11 +158,19 @@ databaseChangeLog:
         - insert:
             tableName: t_permissions
             columns:
-              - column: { name: code, value: STORE_VIEW }
+              - column: { name: code, value: ORDER_SET_VIEW }
         - insert:
             tableName: t_permissions
             columns:
-              - column: { name: code, value: ORDER_SET_VIEW }
+              - column: { name: code, value: OPERATIONAL_REPORT_SET_VIEW }
+        - insert:
+            tableName: t_permissions
+            columns:
+              - column: { name: code, value: OPERATIONAL_REPORT_SET_EXPORT }
+        - insert:
+            tableName: t_permissions
+            columns:
+              - column: { name: code, value: REMUNERATION_SET_VIEW }
         - insert:
             tableName: t_permissions
             columns:
@@ -252,7 +260,7 @@ databaseChangeLog:
               - column: { name: name, value: "スタッフ" }
               - column: { name: is_system, valueBoolean: true }
 
-        # 統括: 初期授与 22 権限
+        # 統括: 初期授与 20 権限
         - insert:
             tableName: t_role_permissions
             columns:
@@ -272,12 +280,17 @@ databaseChangeLog:
             tableName: t_role_permissions
             columns:
               - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
-              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'OPERATIONAL_REPORT_VIEW')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'OPERATIONAL_REPORT_SET_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:
               - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
-              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'OPERATIONAL_REPORT_EXPORT')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'OPERATIONAL_REPORT_SET_EXPORT')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'REMUNERATION_SET_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:
@@ -342,24 +355,14 @@ databaseChangeLog:
             tableName: t_role_permissions
             columns:
               - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
-              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STORE_VIEW')" }
-        - insert:
-            tableName: t_role_permissions
-            columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ORDER_SET_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:
               - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STAFF_MANAGE')" }
-        - insert:
-            tableName: t_role_permissions
-            columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
-              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'REMUNERATION_VIEW')" }
 
-        # 店長: 初期授与 40 権限
+        # 店長: 初期授与 38 権限
         - insert:
             tableName: t_role_permissions
             columns:
@@ -464,16 +467,6 @@ databaseChangeLog:
             tableName: t_role_permissions
             columns:
               - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
-              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STORE_VIEW')" }
-        - insert:
-            tableName: t_role_permissions
-            columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
-              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ORDER_SET_VIEW')" }
-        - insert:
-            tableName: t_role_permissions
-            columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STAFF_MANAGE')" }
         - insert:
             tableName: t_role_permissions
@@ -561,7 +554,7 @@ databaseChangeLog:
               - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ARTICLE_MANAGE')" }
 
-        # スタッフ: 初期授与 13 権限
+        # スタッフ: 初期授与 11 権限
         - insert:
             tableName: t_role_permissions
             columns:
@@ -587,16 +580,6 @@ databaseChangeLog:
             columns:
               - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'スタッフ')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'NOTIFICATION_VIEW')" }
-        - insert:
-            tableName: t_role_permissions
-            columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'スタッフ')" }
-              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STORE_VIEW')" }
-        - insert:
-            tableName: t_role_permissions
-            columns:
-              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'スタッフ')" }
-              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ORDER_SET_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:

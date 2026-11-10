@@ -25,20 +25,15 @@ const labels: Record<Day['guarantee_status'], string> = {
   STOPPED: '保証停止',
   CALCULATED: '計算済み',
 };
-/**
- * 店舗側の月次画面の一人分の明細。出し分けは呼出側が渡す。
- * canManage は受注の担当者（ORDER_MANAGE）— 保証・ボーナスの管理はその端点を読み、横断照会者には明細だけを見せる。
- */
+/** 店舗側の月次画面の一人分の明細と、保証・ボーナスの管理。閲覧の可否は呼出側が渡す。 */
 export function RemunerationStatementPanel({
   scope,
   month,
   canView,
-  canManage,
 }: {
   scope: StoreScope;
   month: string;
   canView: boolean;
-  canManage: boolean;
 }) {
   const [open, setOpen] = useState(false);
   if (!canView) return null;
@@ -47,26 +42,11 @@ export function RemunerationStatementPanel({
       <Button type="button" variant="outline" aria-expanded={open} onClick={() => setOpen(!open)}>
         保証・ボーナスを含む月次明細
       </Button>
-      {open && (
-        <Statement
-          key={JSON.stringify(scope) + month}
-          scope={scope}
-          month={month}
-          manages={canManage}
-        />
-      )}
+      {open && <Statement key={JSON.stringify(scope) + month} scope={scope} month={month} />}
     </section>
   );
 }
-function Statement({
-  scope,
-  month,
-  manages,
-}: {
-  scope: StoreScope;
-  month: string;
-  manages: boolean;
-}) {
+function Statement({ scope, month }: { scope: StoreScope; month: string }) {
   const [orderPage, setOrderPage] = useState(0),
     [bonusPage, setBonusPage] = useState(0),
     [revision, setRevision] = useState(0);
@@ -238,15 +218,13 @@ function Statement({
           />
         </>
       )}
-      {manages && (
-        <RemunerationManagement
-          personId={scope.personId}
-          personName={data?.name ?? `本人 ID ${scope.personId}`}
-          month={month}
-          refreshKey={revision}
-          onSaved={() => setRevision(v => v + 1)}
-        />
-      )}
+      <RemunerationManagement
+        personId={scope.personId}
+        personName={data?.name ?? `本人 ID ${scope.personId}`}
+        month={month}
+        refreshKey={revision}
+        onSaved={() => setRevision(v => v + 1)}
+      />
     </div>
   );
 }

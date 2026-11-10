@@ -163,7 +163,7 @@ Given(
         request,
         owner,
         `広告費-${index}-${suffix}`,
-        ["STORE_VIEW", ...perms],
+        [...perms],
       );
       const address = `advertising-${index}-${suffix}@example.test`;
       if (index === 0) email = address;
@@ -1542,7 +1542,6 @@ Then(
     const suffix = randomUUID();
     const staff = async (label: string, perms: string[]) => {
       const role = await createPermissionRole(request, owner, `媒体選択-${label}-${suffix}`, [
-        "STORE_VIEW",
         ...perms,
       ]);
       const address = `medium-${label}-${suffix}@example.test`;

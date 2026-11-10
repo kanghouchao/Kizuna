@@ -76,15 +76,12 @@ beforeEach(() => {
   setCurrentStore('1');
   meAs(7, []);
   statement.mockResolvedValue(data);
+  jest.mocked(remunerationApi.guarantees).mockResolvedValue({ version: 0, entries: page });
+  jest.mocked(remunerationApi.bonuses).mockResolvedValue(page);
 });
 it('未終了時は既知小計を示し完全合計を捏造しない', async () => {
   render(
-    <RemunerationStatementPanel
-      scope={{ scope: 'store', personId: 2 }}
-      month="2026-09"
-      canView
-      canManage={false}
-    />
+    <RemunerationStatementPanel scope={{ scope: 'store', personId: 2 }} month="2026-09" canView />
   );
   fireEvent.click(await screen.findByRole('button', { name: '保証・ボーナスを含む月次明細' }));
   expect(await screen.findByText('退勤記録待ち')).toBeInTheDocument();
@@ -101,12 +98,7 @@ it('停止日の未終了表示はゼロの保証合計と両立する', async (
     days: [{ ...data.days[0], guarantee_status: 'STOPPED', guarantee_amount: 0 }],
   });
   render(
-    <RemunerationStatementPanel
-      scope={{ scope: 'store', personId: 2 }}
-      month="2026-09"
-      canView
-      canManage={false}
-    />
+    <RemunerationStatementPanel scope={{ scope: 'store', personId: 2 }} month="2026-09" canView />
   );
   fireEvent.click(await screen.findByRole('button', { name: '保証・ボーナスを含む月次明細' }));
   expect(await screen.findByText('保証停止')).toBeInTheDocument();
@@ -120,44 +112,23 @@ it('参照権限のない店舗利用者に追加金額の導線を出さない'
       scope={{ scope: 'store', personId: 2 }}
       month="2026-09"
       canView={false}
-      canManage={false}
     />
   );
   expect(screen.queryByRole('button')).not.toBeInTheDocument();
   expect(statement).not.toHaveBeenCalled();
 });
-it.each([[true], [false]])(
-  '店舗の明細は受注の担当者（canManage=%s）にだけ保証・ボーナスの管理を出す',
-  async manages => {
-    meAs(7, ['BONUS_AWARD']);
-    jest.mocked(remunerationApi.guarantees).mockResolvedValue({ version: 0, entries: page });
-    jest.mocked(remunerationApi.bonuses).mockResolvedValue(page);
-    render(
-      <RemunerationStatementPanel
-        scope={{ scope: 'store', personId: 2 }}
-        month="2026-09"
-        canView
-        canManage={manages}
-      />
-    );
-    fireEvent.click(await screen.findByRole('button', { name: '保証・ボーナスを含む月次明細' }));
-    await screen.findByText('退勤記録待ち');
-    if (manages) await waitFor(() => expect(remunerationApi.guarantees).toHaveBeenCalled());
-    else {
-      expect(remunerationApi.guarantees).not.toHaveBeenCalled();
-      expect(remunerationApi.bonuses).not.toHaveBeenCalled();
-      expect(screen.queryByRole('button', { name: 'ボーナスを記録' })).not.toBeInTheDocument();
-    }
-  }
-);
+it('店舗の明細に保証・ボーナスの管理を出す', async () => {
+  meAs(7, ['BONUS_AWARD']);
+  render(
+    <RemunerationStatementPanel scope={{ scope: 'store', personId: 2 }} month="2026-09" canView />
+  );
+  fireEvent.click(await screen.findByRole('button', { name: '保証・ボーナスを含む月次明細' }));
+  await screen.findByText('退勤記録待ち');
+  await waitFor(() => expect(remunerationApi.guarantees).toHaveBeenCalled());
+});
 it('取得失敗時は旧合計を残さず領域内で再試行する', async () => {
   render(
-    <RemunerationStatementPanel
-      scope={{ scope: 'store', personId: 2 }}
-      month="2026-09"
-      canView
-      canManage={false}
-    />
+    <RemunerationStatementPanel scope={{ scope: 'store', personId: 2 }} month="2026-09" canView />
   );
   fireEvent.click(await screen.findByRole('button', { name: '保証・ボーナスを含む月次明細' }));
   await screen.findByText('退勤記録待ち');

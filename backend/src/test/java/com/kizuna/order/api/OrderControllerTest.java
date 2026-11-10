@@ -183,7 +183,7 @@ class OrderControllerTest {
 
   @Test
   @DisplayName("訂正履歴は名乗られた店舗の id で service を呼ぶこと")
-  @WithMockUser(authorities = "PERM_ORDER_SET_VIEW")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void correctionHistoryPassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
@@ -794,14 +794,13 @@ class OrderControllerTest {
   }
 
   @Test
-  @DisplayName("横断照会権限は訂正履歴を読めるが、受注の詳細と訂正操作には届かないこと")
+  @DisplayName("店舗集合を跨ぐ照会の権限では訂正履歴にも受注の詳細・訂正操作にも届かないこと")
   @WithMockUser(authorities = "PERM_ORDER_SET_VIEW")
-  void crossStoreViewerReadsOnlyCorrectionHistory() throws Exception {
+  void crossStoreViewerDoesNotReachStoreOrders() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(correctionHistory.store(eq(1L), eq("o1"), any())).thenReturn(new PageImpl<>(List.of()));
 
-    mockMvc.perform(storeGet("/orders/o1/corrections")).andExpect(status().isOk());
-    verify(correctionHistory).store(eq(1L), eq("o1"), any());
+    mockMvc.perform(storeGet("/orders/o1/corrections")).andExpect(status().isForbidden());
+    verifyNoInteractions(correctionHistory);
     mockMvc.perform(storeGet("/orders/o1")).andExpect(status().isForbidden());
     mockMvc
         .perform(storePost("/orders/o1/corrections", CORRECTION_BODY))

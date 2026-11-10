@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 現在店舗の運営集計。受注の担当者（ORDER_MANAGE）と横断照会者（ORDER_SET_VIEW）の両方が読み、広告費の可否は各々の対となる権限で決める。 */
+/** 現在店舗の運営集計。 */
 @RestController
 @RequestMapping("/operational-reports")
 @RequiredArgsConstructor
@@ -24,7 +24,7 @@ public class OperationalReportController {
 
   @GetMapping
   @PreAuthorize(
-      "hasAuthority('PERM_OPERATIONAL_REPORT_VIEW') and (!#includeRemuneration or hasAuthority('PERM_REMUNERATION_VIEW')) and ((hasAuthority('PERM_ORDER_MANAGE') and (!#includeAdvertising or hasAuthority('PERM_ADVERTISING_COST_VIEW'))) or (hasAuthority('PERM_ORDER_SET_VIEW') and (!#includeAdvertising or hasAuthority('PERM_ADVERTISING_COST_SET_VIEW'))))")
+      "hasAuthority('PERM_OPERATIONAL_REPORT_VIEW') and hasAuthority('PERM_ORDER_MANAGE') and (!#includeRemuneration or hasAuthority('PERM_REMUNERATION_VIEW')) and (!#includeAdvertising or hasAuthority('PERM_ADVERTISING_COST_VIEW'))")
   public ResponseEntity<OperationalReportResponse> view(
       @CurrentStore Long storeId,
       @RequestParam String from,
@@ -49,7 +49,7 @@ public class OperationalReportController {
 
   @GetMapping("/exports")
   @PreAuthorize(
-      "hasAuthority('PERM_OPERATIONAL_REPORT_VIEW') and hasAuthority('PERM_OPERATIONAL_REPORT_EXPORT') and (!#includeRemuneration or hasAuthority('PERM_REMUNERATION_VIEW')) and ((hasAuthority('PERM_ORDER_MANAGE') and (!#includeAdvertising or (hasAuthority('PERM_ADVERTISING_COST_VIEW') and hasAuthority('PERM_ADVERTISING_COST_EXPORT')))) or (hasAuthority('PERM_ORDER_SET_VIEW') and (!#includeAdvertising or (hasAuthority('PERM_ADVERTISING_COST_SET_VIEW') and hasAuthority('PERM_ADVERTISING_COST_SET_EXPORT')))))")
+      "hasAuthority('PERM_OPERATIONAL_REPORT_VIEW') and hasAuthority('PERM_OPERATIONAL_REPORT_EXPORT') and hasAuthority('PERM_ORDER_MANAGE') and (!#includeRemuneration or hasAuthority('PERM_REMUNERATION_VIEW')) and (!#includeAdvertising or (hasAuthority('PERM_ADVERTISING_COST_VIEW') and hasAuthority('PERM_ADVERTISING_COST_EXPORT')))")
   public ResponseEntity<byte[]> export(
       @CurrentStore Long storeId,
       @RequestParam String from,

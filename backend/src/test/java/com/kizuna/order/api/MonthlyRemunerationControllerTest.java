@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.RETURNS_SELF;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -101,22 +102,20 @@ class MonthlyRemunerationControllerTest {
   }
 
   @Test
-  @DisplayName("横断照会権限だけでも現在店舗の月次報酬へ到達する（不可視の本人は404）")
+  @DisplayName("店舗集合を跨ぐ照会の権限では現在店舗の月次報酬にも本人候補にも届かない")
   @WithMockUser(authorities = "PERM_ORDER_SET_VIEW")
-  @SuppressWarnings("unchecked")
-  void crossStoreViewerReachesStoreStatement() throws Exception {
-    TypedQuery<String> name = mock(TypedQuery.class, RETURNS_SELF);
-    when(entityManager.createQuery(anyString(), eq(String.class))).thenReturn(name);
-    when(name.getResultStream()).thenReturn(Stream.empty());
+  void crossStoreViewerDoesNotReachStoreReads() throws Exception {
     mvc.perform(request("").param("person_id", "1").param("month", "2026-09"))
-        .andExpect(status().isNotFound());
+        .andExpect(status().isForbidden());
+    mvc.perform(request("/casts")).andExpect(status().isForbidden());
+    verifyNoInteractions(entityManager);
   }
 
   @Test
-  @DisplayName("横断照会権限だけでも現在店舗の本人候補へ到達し、範囲外のページ指定は既定へ正規化される")
-  @WithMockUser(authorities = "PERM_ORDER_SET_VIEW")
+  @DisplayName("現在店舗の本人候補の範囲外のページ指定は既定へ正規化される")
+  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   @SuppressWarnings("unchecked")
-  void crossStoreViewerReachesCandidatesWithNormalizedPaging() throws Exception {
+  void candidatesNormalizeOutOfRangePaging() throws Exception {
     TypedQuery<Tuple> rows = mock(TypedQuery.class, RETURNS_SELF);
     TypedQuery<Long> count = mock(TypedQuery.class, RETURNS_SELF);
     when(entityManager.createQuery(anyString(), eq(Tuple.class))).thenReturn(rows);

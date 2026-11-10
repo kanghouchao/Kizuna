@@ -10,7 +10,7 @@ import {
 } from '@/entities/operational-report';
 import { ReportExport } from '@/features/operational-report-export';
 import { fromSpringPage } from '@/shared/api';
-import { hasPermission, useMe } from '@/entities/user';
+import { hasPermission, useMe, type MeResponse, type PermissionCode } from '@/entities/user';
 import { useKeyedResource } from '@/shared/lib';
 import {
   Button,
@@ -41,27 +41,32 @@ interface Fields {
   include_remuneration: boolean;
   include_advertising: boolean;
 }
+/**
+ * 集計の各部分を開く権限。store は現在店舗の集計で店舗の木の権限を、admin は店舗集合を跨ぐ集計でグループの木の権限を見る
+ * （端点と同じ組合せ）。
+ */
+export function reportAccess(me: MeResponse | null, scope: 'store' | 'admin') {
+  const has = (code: PermissionCode) => hasPermission(me, code);
+  if (scope === 'store')
+    return {
+      view: has('OPERATIONAL_REPORT_VIEW') && has('ORDER_MANAGE'),
+      output: has('OPERATIONAL_REPORT_EXPORT'),
+      remuneration: has('REMUNERATION_VIEW'),
+      advertising: has('ADVERTISING_COST_VIEW'),
+      advertisingOutput: has('ADVERTISING_COST_VIEW') && has('ADVERTISING_COST_EXPORT'),
+    };
+  return {
+    view: has('OPERATIONAL_REPORT_SET_VIEW'),
+    output: has('OPERATIONAL_REPORT_SET_EXPORT'),
+    remuneration: has('REMUNERATION_SET_VIEW'),
+    advertising: has('ADVERTISING_COST_SET_VIEW'),
+    advertisingOutput: has('ADVERTISING_COST_SET_VIEW') && has('ADVERTISING_COST_SET_EXPORT'),
+  };
+}
+
 export function useOperationalReportPage(scope: 'store' | 'admin') {
   const { me } = useMe();
-  // 店舗の集計は担当者と横断照会者の両方が読み、広告費はそれぞれ対になる権限で開く（端点と同じ組合せ）。
-  const families = (
-    [
-      ['ORDER_MANAGE', 'ADVERTISING_COST_VIEW', 'ADVERTISING_COST_EXPORT'],
-      ['ORDER_SET_VIEW', 'ADVERTISING_COST_SET_VIEW', 'ADVERTISING_COST_SET_EXPORT'],
-    ] as const
-  )
-    .filter(([order]) => scope === 'store' || order === 'ORDER_SET_VIEW')
-    .filter(([order]) => hasPermission(me, order));
-  const access = {
-    ready: me !== null,
-    view: hasPermission(me, 'OPERATIONAL_REPORT_VIEW') && families.length > 0,
-    output: hasPermission(me, 'OPERATIONAL_REPORT_EXPORT'),
-    remuneration: hasPermission(me, 'REMUNERATION_VIEW'),
-    advertising: families.some(([, view]) => hasPermission(me, view)),
-    advertisingOutput: families.some(
-      ([, view, output]) => hasPermission(me, view) && hasPermission(me, output)
-    ),
-  };
+  const access = { ready: me !== null, ...reportAccess(me, scope) };
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo' }).format(new Date());
   const form = useForm<Fields>({
     defaultValues: {
