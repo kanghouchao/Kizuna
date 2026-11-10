@@ -17,12 +17,12 @@ import com.kizuna.point.application.BenefitRuleService;
 import com.kizuna.point.domain.BenefitRule;
 import com.kizuna.point.domain.BenefitRuleDefinition;
 import com.kizuna.point.domain.BenefitRuleRepeatPolicy;
+import com.kizuna.point.domain.BenefitRuleStoreScopeType;
 import com.kizuna.point.domain.BenefitRuleType;
 import com.kizuna.point.domain.InvalidBenefitRuleException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
-import com.kizuna.user.domain.StoreScopeType;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -271,7 +271,7 @@ class BenefitRuleControllerTest {
             BenefitRuleType.VISIT,
             BenefitRuleDefinition.builder()
                 .name(name)
-                .storeScopeType(StoreScopeType.ALL_STORES)
+                .storeScopeType(BenefitRuleStoreScopeType.ALL_STORES)
                 .repeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME)
                 .points(500)
                 .build());

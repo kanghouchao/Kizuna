@@ -13,7 +13,6 @@ import {
   benefitRuleRepeatPolicyOptionsFor,
 } from '@/entities/benefit-rule';
 import { AuthorizedStore } from '@/entities/user';
-import { StoreSetPicker } from '@/features/staff-management';
 import { getApiErrorMessage, integerRule, isConflict, useResource } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import {
@@ -35,6 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/shared/ui';
+import { BenefitRuleStorePicker } from './BenefitRuleStorePicker';
 
 interface BenefitRuleFormValues {
   name: string;
@@ -319,8 +319,7 @@ export function BenefitRuleFormModal({
                   </p>
                 </div>
               ) : (
-                <StoreSetPicker
-                  label="適用店舗（発火を拾う範囲）"
+                <BenefitRuleStorePicker
                   stores={stores}
                   isLoading={storesLoading}
                   failed={storesFailed}

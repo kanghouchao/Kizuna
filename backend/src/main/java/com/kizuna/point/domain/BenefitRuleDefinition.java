@@ -1,6 +1,5 @@
 package com.kizuna.point.domain;
 
-import com.kizuna.user.domain.StoreScopeType;
 import java.time.LocalDate;
 import java.util.Set;
 import lombok.Builder;
@@ -16,7 +15,7 @@ import lombok.Builder;
 @Builder
 public record BenefitRuleDefinition(
     String name,
-    StoreScopeType storeScopeType,
+    BenefitRuleStoreScopeType storeScopeType,
     Set<Long> storeIds,
     LocalDate effectiveFrom,
     LocalDate effectiveUntil,

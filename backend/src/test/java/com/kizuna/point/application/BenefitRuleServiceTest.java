@@ -9,12 +9,12 @@ import com.kizuna.point.domain.BenefitRule;
 import com.kizuna.point.domain.BenefitRuleDefinition;
 import com.kizuna.point.domain.BenefitRuleRepeatPolicy;
 import com.kizuna.point.domain.BenefitRuleRepository;
+import com.kizuna.point.domain.BenefitRuleStoreScopeType;
 import com.kizuna.point.domain.BenefitRuleType;
 import com.kizuna.point.domain.InvalidBenefitRuleException;
 import com.kizuna.point.domain.StaleBenefitRuleUpdateException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.StoreScopeType;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -47,7 +47,7 @@ class BenefitRuleServiceTest {
             BenefitRuleType.VISIT,
             BenefitRuleDefinition.builder()
                 .name("来店ボーナス")
-                .storeScopeType(StoreScopeType.SPECIFIC_STORES)
+                .storeScopeType(BenefitRuleStoreScopeType.SPECIFIC_STORES)
                 .storeIds(Set.of(3L, 5L))
                 .repeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME)
                 .points(500)
@@ -91,7 +91,7 @@ class BenefitRuleServiceTest {
     var definition =
         BenefitRuleDefinition.builder()
             .name("紹介キャンペーン")
-            .storeScopeType(StoreScopeType.ALL_STORES)
+            .storeScopeType(BenefitRuleStoreScopeType.ALL_STORES)
             .repeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME)
             .referrerPoints(1000)
             .referredPoints(500)
@@ -112,7 +112,7 @@ class BenefitRuleServiceTest {
     var definition =
         BenefitRuleDefinition.builder()
             .name("来店ボーナス（改）")
-            .storeScopeType(StoreScopeType.ALL_STORES)
+            .storeScopeType(BenefitRuleStoreScopeType.ALL_STORES)
             .repeatPolicy(BenefitRuleRepeatPolicy.ONCE_PER_MEMBER)
             .points(300)
             .grantValidityDays(90)
@@ -135,7 +135,7 @@ class BenefitRuleServiceTest {
     var definition =
         BenefitRuleDefinition.builder()
             .name("来店ボーナス（改）")
-            .storeScopeType(StoreScopeType.ALL_STORES)
+            .storeScopeType(BenefitRuleStoreScopeType.ALL_STORES)
             .repeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME)
             .points(300)
             .build();

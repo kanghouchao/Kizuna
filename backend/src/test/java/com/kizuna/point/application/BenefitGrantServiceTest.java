@@ -17,12 +17,12 @@ import com.kizuna.point.domain.BenefitRule;
 import com.kizuna.point.domain.BenefitRuleDefinition;
 import com.kizuna.point.domain.BenefitRuleRepeatPolicy;
 import com.kizuna.point.domain.BenefitRuleRepository;
+import com.kizuna.point.domain.BenefitRuleStoreScopeType;
 import com.kizuna.point.domain.BenefitRuleType;
 import com.kizuna.point.domain.PointEntry;
 import com.kizuna.point.domain.PointEntryRepository;
 import com.kizuna.point.domain.PointEntryType;
 import com.kizuna.shared.exception.DbConstraint;
-import com.kizuna.user.domain.StoreScopeType;
 import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Duration;
@@ -85,7 +85,7 @@ class BenefitGrantServiceTest {
   @Test
   @DisplayName("窓の内側で適用店舗の受注は、規則の点数と期限で特典付与を記帳すること")
   void anApplicableRuleIsPostedWithItsPointsAndExpiry() {
-    given(rule(BenefitRuleRepeatPolicy.EVERY_TIME, 180, StoreScopeType.SPECIFIC_STORES));
+    given(rule(BenefitRuleRepeatPolicy.EVERY_TIME, 180, BenefitRuleStoreScopeType.SPECIFIC_STORES));
 
     long granted =
         benefitGrantService.grantVisitBenefits(
@@ -108,7 +108,7 @@ class BenefitGrantServiceTest {
   @Test
   @DisplayName("無期限指定の規則が産む付与は期限を持たないこと")
   void anUnlimitedRuleProducesAnUnexpiringLot() {
-    given(rule(BenefitRuleRepeatPolicy.EVERY_TIME, null, StoreScopeType.ALL_STORES));
+    given(rule(BenefitRuleRepeatPolicy.EVERY_TIME, null, BenefitRuleStoreScopeType.ALL_STORES));
 
     benefitGrantService.grantVisitBenefits(
         MEMBER_ID, ORDER_ID, STORE_ID, LocalDate.of(2026, 10, 1), ACTOR_ID);
@@ -119,7 +119,8 @@ class BenefitGrantServiceTest {
   @Test
   @DisplayName("一人一回限りの規則は、既に受益した会員へ二件目の受注で付与しないこと")
   void aOncePerMemberRuleDoesNotFireTwiceForTheSameMember() {
-    given(rule(BenefitRuleRepeatPolicy.ONCE_PER_MEMBER, null, StoreScopeType.ALL_STORES));
+    given(
+        rule(BenefitRuleRepeatPolicy.ONCE_PER_MEMBER, null, BenefitRuleStoreScopeType.ALL_STORES));
     when(pointEntryRepository.existsByBenefitRuleIdAndMemberId(RULE_ID, MEMBER_ID))
         .thenReturn(true);
 
@@ -134,7 +135,7 @@ class BenefitGrantServiceTest {
   @Test
   @DisplayName("毎回の規則は、同じ発火事象（同じ受注）では二度目を記帳しないこと")
   void anEveryTimeRuleStillRefusesTheSameFiringEventTwice() {
-    given(rule(BenefitRuleRepeatPolicy.EVERY_TIME, null, StoreScopeType.ALL_STORES));
+    given(rule(BenefitRuleRepeatPolicy.EVERY_TIME, null, BenefitRuleStoreScopeType.ALL_STORES));
     when(pointEntryRepository.existsByBenefitRuleIdAndMemberIdAndOrderId(
             RULE_ID, MEMBER_ID, ORDER_ID))
         .thenReturn(true);
@@ -148,7 +149,7 @@ class BenefitGrantServiceTest {
   @Test
   @DisplayName("毎回の規則は、会員の受益歴ではなく発火事象だけを見ること")
   void anEveryTimeRuleNeverConsultsTheMemberWideHistory() {
-    given(rule(BenefitRuleRepeatPolicy.EVERY_TIME, null, StoreScopeType.ALL_STORES));
+    given(rule(BenefitRuleRepeatPolicy.EVERY_TIME, null, BenefitRuleStoreScopeType.ALL_STORES));
 
     benefitGrantService.grantVisitBenefits(
         MEMBER_ID, "order-2", STORE_ID, LocalDate.of(2026, 10, 1), ACTOR_ID);
@@ -160,7 +161,8 @@ class BenefitGrantServiceTest {
   @Test
   @DisplayName("適用店舗の外で起きた受注には付与しないこと")
   void aRuleDoesNotFireOutsideItsStoreSet() {
-    given(rule(BenefitRuleRepeatPolicy.EVERY_TIME, null, StoreScopeType.SPECIFIC_STORES));
+    given(
+        rule(BenefitRuleRepeatPolicy.EVERY_TIME, null, BenefitRuleStoreScopeType.SPECIFIC_STORES));
 
     benefitGrantService.grantVisitBenefits(
         MEMBER_ID, ORDER_ID, 99L, LocalDate.of(2026, 10, 1), ACTOR_ID);
@@ -171,7 +173,7 @@ class BenefitGrantServiceTest {
   @Test
   @DisplayName("適用期間の窓は根拠受注の日で判じ、記帳する日では判じないこと")
   void theWindowIsJudgedByTheOriginatingOrderDate() {
-    given(rule(BenefitRuleRepeatPolicy.EVERY_TIME, null, StoreScopeType.ALL_STORES));
+    given(rule(BenefitRuleRepeatPolicy.EVERY_TIME, null, BenefitRuleStoreScopeType.ALL_STORES));
 
     benefitGrantService.grantVisitBenefits(
         MEMBER_ID, ORDER_ID, STORE_ID, LocalDate.of(2026, 8, 31), ACTOR_ID);
@@ -184,7 +186,7 @@ class BenefitGrantServiceTest {
   @DisplayName("停用済みの規則が問い合わせをすり抜けても付与しないこと")
   void aDeactivatedRuleIsRefusedByTheAggregateToo() {
     BenefitRule deactivated =
-        rule(BenefitRuleRepeatPolicy.EVERY_TIME, null, StoreScopeType.ALL_STORES);
+        rule(BenefitRuleRepeatPolicy.EVERY_TIME, null, BenefitRuleStoreScopeType.ALL_STORES);
     deactivated.deactivate();
     given(deactivated);
 
@@ -205,13 +207,13 @@ class BenefitGrantServiceTest {
                 rule(
                     BenefitRuleRepeatPolicy.EVERY_TIME,
                     null,
-                    StoreScopeType.ALL_STORES,
+                    BenefitRuleStoreScopeType.ALL_STORES,
                     Integer.MAX_VALUE,
                     RULE_ID),
                 rule(
                     BenefitRuleRepeatPolicy.EVERY_TIME,
                     null,
-                    StoreScopeType.ALL_STORES,
+                    BenefitRuleStoreScopeType.ALL_STORES,
                     Integer.MAX_VALUE,
                     RULE_ID + 1)));
 
@@ -384,7 +386,7 @@ class BenefitGrantServiceTest {
             BenefitRuleType.LOGIN,
             BenefitRuleDefinition.builder()
                 .name("ログインボーナス")
-                .storeScopeType(StoreScopeType.ALL_STORES)
+                .storeScopeType(BenefitRuleStoreScopeType.ALL_STORES)
                 .storeIds(Set.of())
                 .effectiveFrom(LocalDate.of(2026, 9, 1))
                 .effectiveUntil(LocalDate.of(2026, 12, 31))
@@ -408,14 +410,16 @@ class BenefitGrantServiceTest {
   }
 
   private static BenefitRule rule(
-      BenefitRuleRepeatPolicy repeatPolicy, Integer validityDays, StoreScopeType scopeType) {
+      BenefitRuleRepeatPolicy repeatPolicy,
+      Integer validityDays,
+      BenefitRuleStoreScopeType scopeType) {
     return rule(repeatPolicy, validityDays, scopeType, 500, RULE_ID);
   }
 
   private static BenefitRule rule(
       BenefitRuleRepeatPolicy repeatPolicy,
       Integer validityDays,
-      StoreScopeType scopeType,
+      BenefitRuleStoreScopeType scopeType,
       int points,
       long id) {
     BenefitRule rule =
@@ -424,7 +428,8 @@ class BenefitGrantServiceTest {
             BenefitRuleDefinition.builder()
                 .name("来店ボーナス")
                 .storeScopeType(scopeType)
-                .storeIds(scopeType == StoreScopeType.ALL_STORES ? Set.of() : Set.of(STORE_ID))
+                .storeIds(
+                    scopeType == BenefitRuleStoreScopeType.ALL_STORES ? Set.of() : Set.of(STORE_ID))
                 .effectiveFrom(LocalDate.of(2026, 9, 1))
                 .effectiveUntil(LocalDate.of(2026, 12, 31))
                 .grantValidityDays(validityDays)

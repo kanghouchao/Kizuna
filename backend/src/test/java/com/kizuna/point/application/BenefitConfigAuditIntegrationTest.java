@@ -8,6 +8,7 @@ import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.point.domain.BenefitRuleDefinition;
 import com.kizuna.point.domain.BenefitRuleRepeatPolicy;
 import com.kizuna.point.domain.BenefitRuleRepository;
+import com.kizuna.point.domain.BenefitRuleStoreScopeType;
 import com.kizuna.point.domain.BenefitRuleType;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.settings.application.SystemConfigServiceImpl;
@@ -248,7 +249,7 @@ class BenefitConfigAuditIntegrationTest {
   private static BenefitRuleDefinition definition(int points) {
     return BenefitRuleDefinition.builder()
         .name("秘密の規則名")
-        .storeScopeType(StoreScopeType.ALL_STORES)
+        .storeScopeType(BenefitRuleStoreScopeType.ALL_STORES)
         .repeatPolicy(BenefitRuleRepeatPolicy.EVERY_TIME)
         .points(points)
         .build();
