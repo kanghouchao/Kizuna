@@ -5,7 +5,9 @@ import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -15,6 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.shared.storescope.PermissionHolderGuard;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.store.application.AdminStoreService;
 import com.kizuna.store.application.StoreRegistryService;
@@ -24,6 +27,8 @@ import com.kizuna.user.application.StoreScopeResolver;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -45,11 +50,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 /** グループ級店舗 API のうち、ハンドラ層で閉じている約束（ページングの全順序・要求本文の検査）の単体テスト。 */
 @WebMvcTest(StoreController.class)
-@Import({
-  StoreControllerTest.MethodSecurityConfig.class,
-  StoreScopeHolder.class,
-  PermissionHolderGuard.class
-})
+@Import({StoreControllerTest.MethodSecurityConfig.class, PermissionHolderGuard.class})
 class StoreControllerTest {
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
@@ -61,6 +62,14 @@ class StoreControllerTest {
 
   @MockitoBean private AdminStoreService adminStoreService;
   @MockitoBean private StoreRegistryService storeRegistryService;
+  @MockitoBean private StoreScopeHolder storeScopeHolder;
+
+  private static final StoreScope SCOPE = new StoreScope(false, Set.of(1L));
+
+  @BeforeEach
+  void resolveScope() {
+    when(storeScopeHolder.current()).thenReturn(SCOPE);
+  }
 
   // CurrentStoreArgumentResolver（引数解決器）は @WebMvcTest に自動で取り込まれるため、
   // その依存もモックで満たす必要がある。
@@ -73,7 +82,7 @@ class StoreControllerTest {
   void listAppendsIdTiebreakerWhenCallerOverridesSort() throws Exception {
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
     Page<StoreView> empty = new PageImpl<>(List.of());
-    when(storeRegistryService.list(any(), pageableCaptor.capture())).thenReturn(empty);
+    when(storeRegistryService.list(eq(SCOPE), any(), pageableCaptor.capture())).thenReturn(empty);
 
     mockMvc.perform(get("/stores?sort=name")).andExpect(status().isOk());
 
@@ -93,7 +102,7 @@ class StoreControllerTest {
                 .content("{\"name\": \"店舗\", \"short_name\": \"店\"}"))
         .andExpect(status().isNoContent());
 
-    verify(storeRegistryService).update(eq("1"), any());
+    verify(storeRegistryService).update(eq(SCOPE), eq("1"), any());
   }
 
   @ParameterizedTest
@@ -241,11 +250,23 @@ class StoreControllerTest {
   @DisplayName("GET /stores/stats は店舗数を total で返すこと")
   @WithMockUser(authorities = "PERM_STORE_MANAGE")
   void statsWritesTotal() throws Exception {
-    when(storeRegistryService.count()).thenReturn(5L);
+    when(storeRegistryService.count(SCOPE)).thenReturn(5L);
 
     mockMvc
         .perform(get("/stores/stats"))
         .andExpect(status().isOk())
         .andExpect(content().json("{\"total\":5}", JsonCompareMode.STRICT));
+  }
+
+  @Test
+  @DisplayName("店舗集合を解決できない要求は店舗の管理で 403 になること")
+  @WithMockUser(authorities = "PERM_STORE_MANAGE")
+  void unresolvedScopeIsForbidden() throws Exception {
+    when(storeScopeHolder.current()).thenReturn(null);
+
+    mockMvc.perform(get("/stores/1")).andExpect(status().isForbidden());
+    mockMvc.perform(delete("/stores/1")).andExpect(status().isForbidden());
+
+    verifyNoInteractions(storeRegistryService);
   }
 }

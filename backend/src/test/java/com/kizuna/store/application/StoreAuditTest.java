@@ -14,6 +14,7 @@ import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.store.domain.AttendanceRecordCheck;
 import com.kizuna.store.domain.CompletedOrderCheck;
 import com.kizuna.store.domain.Store;
@@ -21,6 +22,7 @@ import com.kizuna.store.domain.StorePatch;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.storeprofile.domain.StoreProfileRepository;
 import com.kizuna.user.application.BusinessAudit;
+import com.kizuna.user.application.CreatedStoreGrant;
 import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -42,6 +44,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class StoreAuditTest {
+  private static final StoreScope ALL = new StoreScope(true, Set.of());
   private static final Long STORE_ID = 7L;
   private final StoreRepository stores = mock(StoreRepository.class);
   private final CompletedOrderCheck orders = mock(CompletedOrderCheck.class);
@@ -84,7 +87,8 @@ class StoreAuditTest {
             orders,
             mock(PointLedgerService.class),
             attendance,
-            audit);
+            audit,
+            mock(CreatedStoreGrant.class));
     activation = new StoreActivationService(stores, mock(CacheManager.class), audit);
     store = new Store("旧名称", "旧", "old.example.test");
     store.setId(STORE_ID);
@@ -146,7 +150,7 @@ class StoreAuditTest {
   void renameRecordsFieldNameAndVersionsButNeverNames() {
     var patch = new StorePatch("新名称", "旧");
 
-    registry.update("7", patch);
+    registry.update(ALL, "7", patch);
 
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("STORE_UPDATED");
@@ -161,7 +165,7 @@ class StoreAuditTest {
   void sameNameUpdateRecordsNothing() {
     var patch = new StorePatch("旧名称", "旧");
 
-    registry.update("7", patch);
+    registry.update(ALL, "7", patch);
 
     assertThat(recorded).isEmpty();
   }
@@ -170,7 +174,7 @@ class StoreAuditTest {
   void shortNameChangeRecordsFieldNameOnly() {
     var patch = new StorePatch("旧名称", "新");
 
-    registry.update("7", patch);
+    registry.update(ALL, "7", patch);
 
     var event = recorded.getFirst();
     assertThat(event.getAfterValues())
@@ -184,7 +188,7 @@ class StoreAuditTest {
     var shifts = cascade("t_shifts", 0);
     when(stores.countCascade(STORE_ID)).thenReturn(List.of(profiles, shifts));
 
-    registry.delete("7");
+    registry.delete(ALL, "7");
 
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("STORE_DELETED");
@@ -204,14 +208,14 @@ class StoreAuditTest {
   @Test
   void rejectedOrConstraintFailedDeletionRecordsNothing() {
     when(orders.existsForStore(STORE_ID)).thenReturn(true);
-    assertThatThrownBy(() -> registry.delete("7")).isInstanceOf(ServiceException.class);
+    assertThatThrownBy(() -> registry.delete(ALL, "7")).isInstanceOf(ServiceException.class);
 
     when(orders.existsForStore(STORE_ID)).thenReturn(false);
     doThrow(new DataIntegrityViolationException("fk")).when(stores).flush();
-    assertThatThrownBy(() -> registry.delete("7")).isInstanceOf(RuntimeException.class);
+    assertThatThrownBy(() -> registry.delete(ALL, "7")).isInstanceOf(RuntimeException.class);
 
     store.activate();
-    assertThatThrownBy(() -> registry.delete("7")).isInstanceOf(ServiceException.class);
+    assertThatThrownBy(() -> registry.delete(ALL, "7")).isInstanceOf(ServiceException.class);
 
     assertThat(recorded).isEmpty();
   }
