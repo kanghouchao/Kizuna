@@ -95,9 +95,11 @@ describe('サービスID追加ページ', () => {
     fireEvent.change(screen.getByLabelText('用途名'), { target: { value: '夜間失効' } });
     fireEvent.click(await screen.findByRole('checkbox', { name: '失効バッチ' }));
     fireEvent.click(screen.getByRole('checkbox', { name: '集計連携' }));
-    fireEvent.click(screen.getByRole('radio', { name: '全店舗' }));
+    fireEvent.click(screen.getByRole('button', { name: 'すべて選択' }));
 
-    expect(result).toHaveTextContent('夜間失効は 失効バッチ・集計連携 として 全店舗 のデータ');
+    expect(result).toHaveTextContent(
+      '夜間失効は 失効バッチ・集計連携 として 新宿店・渋谷店 のデータ'
+    );
     expect(within(result).getByRole('heading', { name: '付与される権限' })).toBeInTheDocument();
     expect(within(result).getByText('失効バッチ（3 件）')).toBeInTheDocument();
     expect(within(result).getByText('集計連携（1 件）')).toBeInTheDocument();
@@ -121,7 +123,7 @@ describe('サービスID追加ページ', () => {
     render(<ServiceIdentityCreatePage />);
     fireEvent.change(screen.getByLabelText('用途名'), { target: { value: '夜間失効' } });
     fireEvent.click(await screen.findByRole('checkbox', { name: '失効バッチ' }));
-    fireEvent.click(screen.getByRole('radio', { name: '全店舗' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '新宿店' }));
     fireEvent.click(screen.getByRole('button', { name: '追加する' }));
 
     await waitFor(() =>

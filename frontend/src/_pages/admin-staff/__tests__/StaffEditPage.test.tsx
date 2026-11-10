@@ -80,7 +80,7 @@ describe('従業員の権限編集ページ', () => {
     expect(screen.getByText('yamada@example.com')).toBeInTheDocument();
     expect(await screen.findByRole('checkbox', { name: '店長' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: '経理' })).not.toBeChecked();
-    expect(screen.getByRole('radio', { name: '個別店舗' })).toBeChecked();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
     expect(screen.getByRole('checkbox', { name: '新宿店' })).toBeChecked();
     expect(screen.queryByLabelText('メールアドレス')).not.toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'この設定の結果' })).toHaveTextContent(
@@ -91,14 +91,14 @@ describe('従業員の権限編集ページ', () => {
   it('保存は取得した version を往復し、成功したら一覧へ戻る', async () => {
     render(<StaffEditPage />);
     fireEvent.click(await screen.findByRole('checkbox', { name: '経理' }));
-    fireEvent.click(screen.getByRole('radio', { name: '全店舗' }));
+    fireEvent.click(screen.getByRole('button', { name: 'すべて選択' }));
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/staff'));
     expect(mockedStaffApi.update).toHaveBeenCalledWith(42, {
       role_ids: [10, 11],
-      store_scope_type: 'ALL_STORES',
-      store_ids: [],
+      store_scope_type: 'SPECIFIC_STORES',
+      store_ids: [1, 2],
       version: 7,
     });
     expect(mockedNotify.success).toHaveBeenCalledWith('権限を更新しました');
@@ -110,8 +110,24 @@ describe('従業員の権限編集ページ', () => {
     );
     render(<StaffEditPage />);
 
-    expect(await screen.findByRole('radio', { name: '個別店舗' })).toBeChecked();
-    expect(screen.getByRole('radio', { name: '全店舗' })).not.toBeChecked();
+    expect(await screen.findByRole('checkbox', { name: '新宿店' })).not.toBeChecked();
+    expect(screen.queryByText(/現在は全店舗/)).not.toBeInTheDocument();
+  });
+
+  it('全店舗の授権はロールだけの変更では保つ', async () => {
+    mockedStaffApi.get.mockResolvedValue(staff({ store_scope_type: 'ALL_STORES', store_ids: [] }));
+    render(<StaffEditPage />);
+    expect(await screen.findByText(/現在は全店舗/)).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('checkbox', { name: '経理' }));
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/staff'));
+    expect(mockedStaffApi.update).toHaveBeenLastCalledWith(42, {
+      role_ids: [10, 11],
+      store_scope_type: 'ALL_STORES',
+      store_ids: [],
+      version: 7,
+    });
   });
 
   it('409 は入力を残して案内を出し、読み込み直すと最新の授権と version で描き直す', async () => {

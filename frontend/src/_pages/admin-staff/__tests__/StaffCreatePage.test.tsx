@@ -116,7 +116,7 @@ describe('従業員追加ページ', () => {
     render(<StaffCreatePage />);
     fillIdentity();
     fireEvent.click(await screen.findByRole('checkbox', { name: '店長' }));
-    fireEvent.click(screen.getByRole('radio', { name: '全店舗' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '新宿店' }));
     fireEvent.click(screen.getByRole('button', { name: '追加する' }));
 
     await waitFor(() =>
@@ -154,9 +154,23 @@ describe('従業員追加ページ', () => {
     ).toBeInTheDocument();
     expect(within(result).getAllByText('受注の管理')).toHaveLength(1);
 
-    fireEvent.click(screen.getByRole('radio', { name: '全店舗' }));
-    expect(result).toHaveTextContent('として 全店舗 のデータ');
-    expect(within(result).getByRole('heading', { name: '対象店舗（全店舗）' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'すべて選択' }));
+    expect(result).toHaveTextContent('として 新宿店・渋谷店 のデータ');
+    expect(within(result).getByRole('heading', { name: '対象店舗（2 店舗）' })).toBeInTheDocument();
+  });
+
+  it('全店舗の選択肢は無く、すべて選択はその時点の店舗を個別に送る', async () => {
+    render(<StaffCreatePage />);
+    expect(screen.queryByRole('radio', { name: '全店舗' })).not.toBeInTheDocument();
+    fillIdentity();
+    fireEvent.click(await screen.findByRole('checkbox', { name: '店長' }));
+    fireEvent.click(screen.getByRole('button', { name: 'すべて選択' }));
+    fireEvent.click(screen.getByRole('button', { name: '追加する' }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/staff'));
+    expect(mockedStaffApi.create).toHaveBeenCalledWith(
+      expect.objectContaining({ store_scope_type: 'SPECIFIC_STORES', store_ids: [1, 2] })
+    );
   });
 
   it('多店舗でもすべて選択・すべて解除で個別店舗をまとめて切り替えられる', async () => {

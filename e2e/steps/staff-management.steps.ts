@@ -60,7 +60,6 @@ async function fillCreatePage(page: Page, baseName: string, roleLabels: string[]
 
 async function addStaffInStore(page: Page, baseName: string, roleLabels: string[], storeName: string) {
   await fillCreatePage(page, baseName, roleLabels);
-  await page.getByRole('radio', { name: '個別店舗', exact: true }).click();
   await page.getByRole('checkbox', { name: storeName, exact: true }).check();
   await page.getByRole('button', { name: '追加する', exact: true }).click();
   // 成功時だけ一覧へ戻る（失敗時はエラートーストのまま作成画面に留まる）。
@@ -89,17 +88,6 @@ When(
   }
 );
 
-When(
-  '氏名 {string}・ロール {string}・全店舗で従業員を追加しようとする',
-  async ({ page }, baseName: string, roleLabel: string) => {
-    await fillCreatePage(page, baseName, [roleLabel]);
-    // 全店舗は担当店舗集合の上位集合なので、店舗部分集合の守衛がサーバで撥ねる。
-    // 選択肢として出しておくのは、前端に「何を選べるか」の判定を複製させないためである。
-    await page.getByRole('radio', { name: '全店舗', exact: true }).click();
-    await page.getByRole('button', { name: '追加する', exact: true }).click();
-  }
-);
-
 When('従業員追加画面を開く', async ({ page }) => {
   await openCreatePage(page);
 });
@@ -113,27 +101,6 @@ Then('ロールの選択肢に {string} がある', async ({ page }, roleLabel: 
 Then('ロールの選択肢に {string} がない', async ({ page }, roleLabel: string) => {
   await expect(page.getByRole('group', { name: 'ロール', exact: true }).getByRole('checkbox').first()).toBeVisible();
   await expect(page.getByRole('checkbox', { name: roleLabel, exact: true })).toHaveCount(0);
-});
-
-Then('従業員追加画面に留まる', async ({ page }) => {
-  await expect(page).toHaveURL(CREATE_URL);
-  await expect(createHeading(page)).toBeVisible();
-  await expect(page.getByRole('button', { name: '追加する', exact: true })).toBeEnabled({
-    timeout: 15000,
-  });
-});
-
-/**
- * 「画面に留まる」だけだと、送信そのものが起きなかった場合にも真になる。
- * 行が作られていないことまで見て、拒否したのがサーバであることを確かめる（toast の寿命に依存しない）。
- */
-Then('拒否された従業員は一覧に現れない', async ({ page }) => {
-  await page.getByRole('link', { name: 'キャンセル', exact: true }).click();
-  await expect(page).toHaveURL(LIST_URL, { timeout: 15000 });
-  await searchStaff(page, createdStaffName);
-  await expect(page.getByText('該当する従業員が見つかりません', { exact: true })).toBeVisible({
-    timeout: 15000,
-  });
 });
 
 When(
@@ -171,16 +138,23 @@ When('{string} の編集画面を開く', async ({ page }, _label: string) => {
   await expect(editHeading(page)).toBeVisible();
 });
 
-When('店舗集合を {string} に変更する', async ({ page }, scopeLabel: string) => {
+When('担当店舗をすべて選択する', async ({ page }) => {
   await page
     .getByRole('group', { name: '担当店舗', exact: true })
-    .getByRole('radio', { name: scopeLabel, exact: true })
+    .getByRole('button', { name: 'すべて選択', exact: true })
     .click();
 });
 
-Then('設定結果の要約に {string} が表示される', async ({ page }, text: string) => {
-  // 結果は名前付きの領域に閉じている。同じ文言の選択肢（「全店舗」のラジオ等）と取り違えない。
-  await expect(resultPanel(page)).toContainText(text);
+// 選択肢は行使者の授権店舗そのものなので、選択数が選択肢の数に等しく、結果の対象店舗も同数になる。
+Then('担当店舗の選択肢がすべて選ばれ、設定結果の対象店舗に並ぶ', async ({ page }) => {
+  const group = page.getByRole('group', { name: '担当店舗', exact: true });
+  const options = group.getByRole('checkbox');
+  await expect(options.first()).toBeVisible({ timeout: 15000 });
+  const total = await options.count();
+  await expect(group.getByText(`${total} / ${total} 店舗を選択中`, { exact: true })).toBeVisible();
+  await expect(
+    resultPanel(page).getByRole('heading', { name: `対象店舗（${total} 店舗）`, exact: true })
+  ).toBeVisible();
 });
 
 When('保存する', async ({ page }) => {
