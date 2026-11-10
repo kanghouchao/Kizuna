@@ -40,6 +40,10 @@ function meResponse(overrides: Partial<MeResponse>): MeResponse {
   };
 }
 
+/** ログイン画面の URL（next と断片）を開いた状態にする。 */
+const openLogin = (searchAndHash: string) =>
+  window.history.pushState({}, '', `/auth/login${searchAndHash}`);
+
 async function submitLoginForm() {
   render(<LoginForm />);
   fireEvent.change(screen.getByLabelText('メールアドレス'), {
@@ -64,6 +68,7 @@ describe('LoginForm の利用者種別による分岐', () => {
     endSession('resume-failed');
     Cookies.remove('session-kind');
     Cookies.remove('current-store-id');
+    window.history.pushState({}, '', '/');
   });
 
   it('user_type=STAFF は admin セッションを開始し /admin/dashboard/ へ遷移する', async () => {
@@ -98,67 +103,66 @@ describe('LoginForm の利用者種別による分岐', () => {
     expect(mockedNotifyError).not.toHaveBeenCalled();
   });
 
-  it('会員が公式サイトの予約導線から弾かれていた場合、その画面へ戻ること', async () => {
+  it('会員が公式サイトの予約導線から弾かれていた場合、next の画面へ戻ること', async () => {
     mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'MEMBER' }));
-    Cookies.set('member-return-path', '/member/reservations/new?store=store1.kizuna.test');
+    openLogin('?next=%2Fmember%2Freservations%2Fnew%3Fstore%3Dstore1.kizuna.test');
 
     await submitLoginForm();
 
     await waitFor(() =>
       expect(mockPush).toHaveBeenCalledWith('/member/reservations/new?store=store1.kizuna.test')
     );
-    expect(Cookies.get('member-return-path')).toBeUndefined();
   });
 
-  it('伝票の QR から来ていた場合、トークン（フラグメント）ごと申領画面へ戻ること', async () => {
-    // フラグメントはサーバへ送られないため cookie には無い。申領に要るトークンはこれしか無く、
-    // 落とすと戻れても申領できない画面に着地する
+  it('伝票の QR から来ていた場合、ログイン画面の断片ごと申領画面へ戻ること', async () => {
+    // 断片はサーバへ送られない。申領に要るトークンはこれしか無く、落とすと戻れても申領できない
     mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'MEMBER' }));
-    Cookies.set('member-return-path', '/member/receipts');
-    sessionStorage.setItem('member-return-target', '/member/receipts#tok3n');
+    openLogin('?next=%2Fmember%2Freceipts#tok3n');
 
     await submitLoginForm();
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/member/receipts#tok3n'));
-    expect(sessionStorage.getItem('member-return-target')).toBeNull();
   });
 
-  it('会員以外がログインしたら、預かっていた戻り先とトークンを捨てること', async () => {
-    // 同じタブで後からログインした会員がその戻り先へ運ばれると、申領画面は開いた時点で
-    // 取り込むため「他人の伝票を無確認で申領する」経路になる
+  it('従業員も next の画面へ戻ること', async () => {
+    mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'STAFF' }));
+    openLogin('?reason=expired&next=%2Fstore%2Fcasts');
+
+    await submitLoginForm();
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/casts'));
+  });
+
+  it('別の本人種別の next は無視し、既定の着地へ進むこと', async () => {
+    // 申領画面は開いた時点で取り込むため、会員以外のログインで会員の画面へ運ばない
     mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'CAST' }));
-    Cookies.set('member-return-path', '/member/receipts');
-    sessionStorage.setItem('member-return-target', '/member/receipts#tok3n');
+    openLogin('?next=%2Fmember%2Freceipts#tok3n');
 
     await submitLoginForm();
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/cast/'));
-    expect(Cookies.get('member-return-path')).toBeUndefined();
-    expect(sessionStorage.getItem('member-return-target')).toBeNull();
   });
 
-  it('/me が失敗したログインでは預かった戻り先を消費しないこと', async () => {
-    // 取り出しは 1 度きり。ログインが確定する前に消すと、通信の一時的な失敗でやり直したときには
-    // 戻り先が既に無い（伝票の生値はこの断片にしか無く、再取得の口が無い）
-    mockedAuthApi.me.mockRejectedValue(new Error('network'));
-    Cookies.set('member-return-path', '/member/receipts');
-    sessionStorage.setItem('member-return-target', '/member/receipts#tok3n');
+  it.each(['https://evil.test/', '//evil.test/member/'])(
+    'next に %s が仕込まれていても既定のホームへ遷移すること',
+    async next => {
+      mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'MEMBER' }));
+      openLogin(`?next=${encodeURIComponent(next)}`);
 
-    await submitLoginForm();
+      await submitLoginForm();
 
-    await waitFor(() => expect(mockedNotifyError).toHaveBeenCalled());
-    expect(mockPush).not.toHaveBeenCalled();
-    expect(Cookies.get('member-return-path')).toBe('/member/receipts');
-    expect(sessionStorage.getItem('member-return-target')).toBe('/member/receipts#tok3n');
-  });
+      await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/member/'));
+    }
+  );
 
-  it('戻り先に外部 URL が仕込まれていても既定のホームへ遷移すること', async () => {
+  it('会員の戻り先 cookie を発行しないこと', async () => {
     mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'MEMBER' }));
-    Cookies.set('member-return-path', 'https://evil.test/');
+    openLogin('?next=%2Fmember%2Freceipts#tok3n');
 
     await submitLoginForm();
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/member/'));
+    await waitFor(() => expect(mockPush).toHaveBeenCalled());
+    expect(Cookies.get('member-return-path')).toBeUndefined();
   });
 
   it('user_type=MEMBER は member セッションを開始し /member/ へ遷移する', async () => {

@@ -51,8 +51,7 @@ describe('MemberRegisterForm', () => {
   afterEach(() => {
     endSession('resume-failed');
     Cookies.remove('session-kind');
-    Cookies.remove('member-return-path');
-    sessionStorage.clear();
+    window.history.pushState({}, '', '/');
   });
 
   it('登録成功後にそのままログインし、member セッションで /member/ へ遷移する', async () => {
@@ -82,11 +81,8 @@ describe('MemberRegisterForm', () => {
   });
 
   it('伝票の QR から未登録で来ていた場合、登録後は申領画面へ戻ること', async () => {
-    // 会員ポータルで弾かれた人はログイン画面経由でこの登録画面へ来る。預かった戻り先を
-    // 消費しないと、その人は伝票を取り込めないまま、断片は次に同じタブでログインした
-    // 別の会員へ渡ってしまう
-    Cookies.set('member-return-path', '/member/receipts');
-    sessionStorage.setItem('member-return-target', '/member/receipts#tok3n');
+    // 会員ポータルで弾かれた人はログイン画面から next と断片を引き継いでこの登録画面へ来る
+    window.history.pushState({}, '', '/auth/register?next=%2Fmember%2Freceipts#tok3n');
     mockedRegister.mockResolvedValue({ member_code: '123456789012' });
     mockedLogin.mockResolvedValue({
       token: 'jwt-token',
@@ -98,8 +94,6 @@ describe('MemberRegisterForm', () => {
     await submitForm();
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/member/receipts#tok3n'));
-    expect(Cookies.get('member-return-path')).toBeUndefined();
-    expect(sessionStorage.getItem('member-return-target')).toBeNull();
   });
 
   it('登録に失敗したらエラートーストを出し、ログインは試みない', async () => {

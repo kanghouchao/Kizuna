@@ -48,7 +48,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     }
     endSession('logout', userId);
-    router.push(loginPath(reason));
+    router.push(loginPath({ reason }));
   };
 
   const value: AuthContextType = {

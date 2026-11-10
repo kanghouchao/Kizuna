@@ -1,20 +1,16 @@
 // mock navigation helper before importing client so that interceptor uses the mock
 const redirectMock = jest.fn();
 const clearSessionMock = jest.fn();
-const rememberMemberReturnPathMock = jest.fn();
 let sessionKindValue: string | undefined;
 jest.mock('@/shared/lib', () => ({
   // 引数をそのまま渡す。握り潰すと理由コードが未配線でもテストが緑のままになる。
-  redirectToLogin: (reason?: string) => redirectMock(reason),
+  redirectToLogin: (options?: unknown) => redirectMock(options),
   getCurrentStoreId: () => undefined,
 }));
 jest.mock('@/shared/lib/session', () => ({
   clearSession: () => clearSessionMock(),
-  rememberMemberReturnPath: (value: string, fragment?: string) =>
-    rememberMemberReturnPathMock(value, fragment),
   getSessionKind: () => sessionKindValue,
   startSession: jest.fn(),
-  takeMemberReturnPath: jest.fn(),
 }));
 
 import { apiClient, getSessionUserId, storeSessionToken } from '@/shared/api';

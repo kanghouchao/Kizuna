@@ -4,11 +4,10 @@ import type { AxiosAdapter, InternalAxiosRequestConfig } from 'axios';
 const redirectMock = jest.fn();
 jest.mock('@/shared/lib', () => ({
   ...jest.requireActual('@/shared/lib'),
-  redirectToLogin: (reason?: string) => redirectMock(reason),
+  redirectToLogin: (options?: unknown) => redirectMock(options),
 }));
 
 import { apiClient, endSession, getSessionUserId, setSessionAlert } from '@/shared/api';
-import { takeMemberReturnPath } from '@/shared/lib';
 import { SessionGate } from '../SessionGate';
 
 /** 同じブラウザのタブ間の通知を、テストの中だけで配る代役。送信元には届かない点も本物に合わせる。 */
@@ -104,8 +103,7 @@ describe('SessionGate', () => {
     expect(redirectMock).toHaveBeenCalled();
   });
 
-  it('再ログインのボタンは、会員ポータルの現在地をフラグメントごと戻り先に預けてからログインへ移る', async () => {
-    window.history.pushState({}, '', '/member/receipts#tok3n');
+  it('再ログインのボタンは、今の画面を戻り先として預けてログインへ移る', async () => {
     serve({
       '/auth/refresh': [{ status: 401, headers: { 'x-auth-failure': 'credential_changed' } }],
     });
@@ -113,8 +111,7 @@ describe('SessionGate', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'ログイン画面へ' }));
 
-    expect(takeMemberReturnPath()).toBe('/member/receipts#tok3n');
-    window.history.pushState({}, '', '/');
+    expect(redirectMock).toHaveBeenCalledWith({ returnHere: true });
   });
 
   it('操作中のリフレッシュが 409 を受けると再読込を促すダイアログを出し、自動では再読込しない', async () => {
@@ -147,7 +144,7 @@ describe('SessionGate', () => {
     broadcastFromAnotherTab({ user_id: 7 });
 
     expect(getSessionUserId()).toBeUndefined();
-    expect(redirectMock).toHaveBeenCalled();
+    expect(redirectMock).toHaveBeenCalledWith(undefined);
   });
 
   it('別の利用者のログアウト通知では、画面もトークンも変わらない', async () => {

@@ -1,13 +1,7 @@
 // 桶（@/shared/lib）経由だと useOperation が本モジュールを読み、初期化の循環になる
 import { forgetAll } from '@/shared/lib/operation-store';
-import {
-  clearSession,
-  getSessionKind,
-  rememberMemberReturnPath,
-  type SessionKind,
-  startSession,
-  takeMemberReturnPath,
-} from '@/shared/lib/session';
+import { resolveNext } from '@/shared/lib/navigation';
+import { clearSession, getSessionKind, type SessionKind, startSession } from '@/shared/lib/session';
 import type { TokenResponse } from './types';
 
 /**
@@ -33,20 +27,19 @@ export type { SessionKind };
 
 /**
  * トークンを持った後のセッションを始め、着地パスを返す。session-kind の期限はリフレッシュトークンに揃える。
- * 戻り先は種別の判定より前に必ず取り出す — 会員以外のログインで残すと、同じタブで後からログインした会員が
- * その戻り先へ運ばれる（申領画面は開いた時点で伝票を取り込む）。呼出側は /me の成功後に呼ぶ: 1 度きりの
- * 取り出しなので、ログインの確定前に消すと通信の失敗でやり直したときに戻り先が残っていない。
+ * 戻り先（ログイン画面の next と断片）はこの本人種別の自サイト内の相対パスのときだけ使い、それ以外は既定の着地へ進む。
  */
-export function landSession(kind: SessionKind, refreshExpiresAt: number): string {
-  const memberReturnPath = takeMemberReturnPath();
+export function landSession(kind: SessionKind, refreshExpiresAt: number, next?: string): string {
   startSession(kind, refreshExpiresAt);
+  const returnTo = resolveNext(kind, next);
+  if (returnTo) return returnTo;
   // 従業員は一つの管理画面へ入り、着地は全員ダッシュボード（集計カードは権限で出し分ける）。
   if (kind === 'admin') return '/admin/dashboard/';
   if (kind === 'cast') return '/cast/';
-  return memberReturnPath ?? '/member/';
+  return '/member/';
 }
 
-/** リフレッシュの成功で session-kind の期限を延ばす。戻り先は取り出さない（着地ではない）。 */
+/** リフレッシュの成功で session-kind の期限を延ばす（着地ではない）。 */
 export function extendSession(refreshExpiresAt: number): void {
   const kind = getSessionKind();
   if (kind) startSession(kind, refreshExpiresAt);
@@ -67,22 +60,20 @@ interface EndScope {
   /** 再読込を越えて保持した結果不明の操作 */
   operations: boolean;
   broadcast: boolean;
-  returnPath: 'keep' | 'remember' | 'discard';
 }
 
 /**
  * 終了理由ごとに消す範囲。トークンはどの理由でも消す。結果不明の操作は再送が決着するまで忘れない
- * （GLOSSARY「操作の受領」）ので、消すのはセッションごと捨てる理由だけ。unsupported の discard は
- * landSession と同じ理由で、着地しないログインでも戻り先を残さない。
+ * （GLOSSARY「操作の受領」）ので、消すのはセッションごと捨てる理由だけ。
  */
 const END_SCOPES: Record<EndReason, EndScope> = {
-  logout: { cookies: true, operations: true, broadcast: true, returnPath: 'keep' },
-  unsupported: { cookies: true, operations: true, broadcast: false, returnPath: 'discard' },
-  expired: { cookies: false, operations: false, broadcast: false, returnPath: 'remember' },
-  'other-tab': { cookies: false, operations: false, broadcast: false, returnPath: 'keep' },
-  'credential-changed': { cookies: false, operations: false, broadcast: false, returnPath: 'keep' },
-  relogin: { cookies: true, operations: true, broadcast: false, returnPath: 'remember' },
-  'resume-failed': { cookies: false, operations: false, broadcast: false, returnPath: 'keep' },
+  logout: { cookies: true, operations: true, broadcast: true },
+  unsupported: { cookies: true, operations: true, broadcast: false },
+  expired: { cookies: false, operations: false, broadcast: false },
+  'other-tab': { cookies: false, operations: false, broadcast: false },
+  'credential-changed': { cookies: false, operations: false, broadcast: false },
+  relogin: { cookies: true, operations: true, broadcast: false },
+  'resume-failed': { cookies: false, operations: false, broadcast: false },
 };
 
 /**
@@ -95,15 +86,6 @@ export function endSession(reason: EndReason, userId = current?.userId): void {
   if (scope.cookies) clearSession();
   if (scope.operations) forgetAll();
   if (scope.broadcast && userId !== undefined) broadcastLogout(userId);
-  if (scope.returnPath === 'discard') takeMemberReturnPath();
-  // 会員ポータルの現在地（店舗つき・フラグメントつき）を預ける。白名単の外（店舗コンソール・ログイン画面等）は
-  // rememberMemberReturnPath が黙って捨てる。フラグメントは申領画面の伝票トークンのように、画面が読み取る値が
-  // そこにしか無い経路のために持ち越す。
-  if (scope.returnPath === 'remember' && typeof window !== 'undefined')
-    rememberMemberReturnPath(
-      `${window.location.pathname}${window.location.search}`,
-      window.location.hash
-    );
 }
 
 /**

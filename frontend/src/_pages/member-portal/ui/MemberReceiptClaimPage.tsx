@@ -9,7 +9,6 @@ import {
   isNotFound,
   redirectToLogin,
   formatPointChange,
-  rememberMemberReturnPath,
 } from '@/shared/lib';
 import { Button, RegionError, Skeleton } from '@/shared/ui';
 import { MEMBER_ACTION } from './memberPager';
@@ -29,7 +28,7 @@ type ClaimFailure = { message: string; retryable: boolean; verifyInHistory?: boo
  * リクエストターゲットとして送られ、リバースプロキシとアプリのアクセスログに 90 日有効の生値が残るため、
  * サーバへ送られないフラグメントで受け取り、この画面が申領要求の本体へ載せ替える。
  *
- * 未ログインなら申領の 401 を全域の 401 経路が拾い、フラグメントごと戻り先を預けてログインへ送る。
+ * 未ログインなら申領の 401 を全域の 401 経路が拾い、フラグメントごと戻り先を next に載せてログインへ送る。
  * 会員以外のセッションが残っている場合の 403 はここで同じように送る — 失敗を出すとトークンが失われる。
  */
 export function MemberReceiptClaimPage() {
@@ -55,11 +54,7 @@ export function MemberReceiptClaimPage() {
       setGrantedPoints(claimed.granted_points);
     } catch (error) {
       if (isForbidden(error)) {
-        rememberMemberReturnPath(
-          `${window.location.pathname}${window.location.search}`,
-          window.location.hash
-        );
-        redirectToLogin();
+        redirectToLogin({ returnHere: true });
         return;
       }
       // 応答だけを取り落とした要求（サーバは申領済み）の再試行は、使用済みとして同形の 404 で返る。

@@ -48,6 +48,7 @@ function arriveAt(
     intent: string;
     subject?: string;
     returnTo?: string;
+    next?: string;
   }
 ) {
   if (stored) {
@@ -65,7 +66,6 @@ describe('LineCallbackPage', () => {
   afterEach(() => {
     endSession('resume-failed');
     Cookies.remove('session-kind');
-    Cookies.remove('member-return-path');
   });
 
   describe('ログイン意図', () => {
@@ -145,11 +145,13 @@ describe('LineCallbackPage', () => {
     });
 
     it('伝票の QR から未登録で来ていた場合、登録後は申領画面へ戻ること', async () => {
-      // 預かった戻り先を消費しないと、その人は伝票を取り込めないまま、断片は次に同じタブで
-      // ログインした別の会員へ渡ってしまう
-      Cookies.set('member-return-path', '/member/receipts');
-      sessionStorage.setItem('member-return-target', '/member/receipts#tok3n');
-      arriveAt('?code=auth-code&state=s1', { state: 's1', verifier: 'v1', intent: 'login' });
+      // ログイン画面の next と断片は、LINE の往復の間 state と同じ記録に預けてある
+      arriveAt('?code=auth-code&state=s1', {
+        state: 's1',
+        verifier: 'v1',
+        intent: 'login',
+        next: '/member/receipts#tok3n',
+      });
       mockedLineApi.login.mockResolvedValue({
         registered: false,
         registration_ticket: 'ticket-1',
@@ -171,8 +173,29 @@ describe('LineCallbackPage', () => {
       fireEvent.click(screen.getByRole('button', { name: '登録する' }));
 
       await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/member/receipts#tok3n'));
-      expect(Cookies.get('member-return-path')).toBeUndefined();
-      expect(sessionStorage.getItem('member-return-target')).toBeNull();
+    });
+
+    it('登録済みなら、預けた next を着地へ渡す', async () => {
+      arriveAt('?code=auth-code&state=s1', {
+        state: 's1',
+        verifier: 'v1',
+        intent: 'login',
+        next: '/member/receipts#tok3n',
+      });
+      const response = {
+        registered: true,
+        token: 'jwt-token',
+        expires_at: Date.now() + 900_000,
+        user_id: 7,
+        refresh_expires_at: Date.now() + 1_209_600_000,
+      };
+      mockedLineApi.login.mockResolvedValue(response);
+      mockedComplete.mockResolvedValue({ status: 'ok', path: '/member/receipts#tok3n' });
+
+      render(<LineCallbackPage />);
+
+      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/member/receipts#tok3n'));
+      expect(mockedComplete).toHaveBeenCalledWith(response, '/member/receipts#tok3n');
     });
 
     it('同意チェックが無ければ登録を送らない', async () => {

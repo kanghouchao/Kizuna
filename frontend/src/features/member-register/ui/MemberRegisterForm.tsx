@@ -6,11 +6,17 @@ import { notify } from '@/shared/notify';
 import { landSession, storeSessionToken } from '@/shared/api';
 import { memberApi, MemberRegisterRequest } from '@/entities/member';
 import { authApi } from '@/entities/user';
-import { EMAIL_PATTERN, EMAIL_PATTERN_MESSAGE, getApiErrorMessage } from '@/shared/lib';
+import {
+  EMAIL_PATTERN,
+  EMAIL_PATTERN_MESSAGE,
+  getApiErrorMessage,
+  loginPath,
+  loginReturnTarget,
+} from '@/shared/lib';
 
 /**
  * 会員の新規登録フォーム（メール + パスワード + 表示名の 3 項目）。
- * 登録成功後はそのままログインして会員ポータルのホーム（会員コード表示）へ遷移する。
+ * 登録成功後はそのままログインし、ログイン画面から持ち越した戻り先、無ければ会員ポータルのホームへ遷移する。
  */
 export function MemberRegisterForm() {
   const router = useRouter();
@@ -32,11 +38,11 @@ export function MemberRegisterForm() {
     try {
       const issued = await authApi.login({ email: values.email, password: values.password });
       storeSessionToken(issued);
-      router.push(landSession('member', issued.refresh_expires_at));
+      router.push(landSession('member', issued.refresh_expires_at, loginReturnTarget()));
     } catch {
       // 登録自体は完了している。自動ログインだけが失敗した稀な場合はログイン画面から再開させる。
       notify.success('登録が完了しました。ログインしてください');
-      router.push('/auth/login');
+      router.push(loginPath({ next: loginReturnTarget() }));
     }
   };
 

@@ -102,14 +102,14 @@ export async function requestRefresh(): Promise<RefreshResult> {
   }
 }
 
-/** ログインへ差し戻す。会員ポータルの現在地（店舗つき・フラグメントつき）は戻り先として預ける。 */
+/** ログインへ差し戻す。今の画面（クエリ・断片つき）を戻り先として預け、ログイン後にここへ戻す。 */
 function sendToLogin(): void {
   if (getSessionAlert() === 'credential_changed') return;
   // 失効を名乗るのはトークンを持っていたときだけ（未ログインの来訪者には言わない）。
   const hadToken = getAccessToken() !== undefined;
   // 画面遷移の守衛は無く、未ログイン・失効の差し戻しはここが唯一の経路。
   endSession('expired');
-  redirectToLogin(hadToken ? 'expired' : undefined);
+  redirectToLogin({ reason: hadToken ? 'expired' : undefined, returnHere: true });
 }
 
 let inFlight: Promise<RefreshResult> | null = null;

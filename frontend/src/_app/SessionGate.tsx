@@ -86,7 +86,7 @@ function SessionAlertDialog() {
               onClick={() => {
                 endSession('relogin');
                 setSessionAlert(null);
-                redirectToLogin();
+                redirectToLogin({ returnHere: true });
               }}
             >
               ログイン画面へ

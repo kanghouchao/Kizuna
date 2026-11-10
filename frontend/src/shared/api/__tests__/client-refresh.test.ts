@@ -1,22 +1,18 @@
 import type { AxiosAdapter, InternalAxiosRequestConfig } from 'axios';
 
 const redirectMock = jest.fn();
-const rememberMemberReturnPathMock = jest.fn();
 const startSessionMock = jest.fn();
 let currentStoreId: string | undefined;
 let onStorePage = false;
 jest.mock('@/shared/lib', () => ({
-  redirectToLogin: (reason?: string) => redirectMock(reason),
+  redirectToLogin: (options?: unknown) => redirectMock(options),
   getCurrentStoreId: () => currentStoreId,
   isStorePath: () => onStorePage,
 }));
 jest.mock('@/shared/lib/session', () => ({
   clearSession: jest.fn(),
-  rememberMemberReturnPath: (value: string, fragment?: string) =>
-    rememberMemberReturnPathMock(value, fragment),
   getSessionKind: () => 'admin',
   startSession: (kind: string, expiresAt?: number) => startSessionMock(kind, expiresAt),
-  takeMemberReturnPath: jest.fn(),
 }));
 
 import {
@@ -189,11 +185,10 @@ describe('apiClient のリフレッシュ経路', () => {
 
     expect(server.calls('/auth/refresh')).toHaveLength(1);
     expect(server.calls('/orders')).toHaveLength(2);
-    expect(redirectMock).toHaveBeenCalledWith('expired');
+    expect(redirectMock).toHaveBeenCalledWith({ reason: 'expired', returnHere: true });
   });
 
   it('リフレッシュ自身の 401 は再びリフレッシュせず、戻り先を預けてログインへ差し戻す', async () => {
-    window.history.pushState({}, '', '/member/receipts#tok3n');
     storeSessionToken({ token: 'old', expires_at: 1, user_id: 7, refresh_expires_at: 1_000 });
     const server = serve({
       '/me': [{ status: 401 }],
@@ -204,8 +199,7 @@ describe('apiClient のリフレッシュ経路', () => {
 
     expect(server.calls('/auth/refresh')).toHaveLength(1);
     expect(server.calls('/me')).toHaveLength(1);
-    expect(rememberMemberReturnPathMock).toHaveBeenCalledWith('/member/receipts', '#tok3n');
-    expect(redirectMock).toHaveBeenCalledWith('expired');
+    expect(redirectMock).toHaveBeenCalledWith({ reason: 'expired', returnHere: true });
     expect(getSessionUserId()).toBeUndefined();
   });
 
@@ -214,7 +208,7 @@ describe('apiClient のリフレッシュ経路', () => {
 
     expect(await restoreSession()).toEqual({ status: 'unauthenticated' });
 
-    expect(redirectMock).toHaveBeenCalledWith(undefined);
+    expect(redirectMock).toHaveBeenCalledWith({ reason: undefined, returnHere: true });
   });
 
   it('資格情報の変更による 401 は自動では遷移せず、再ログインを促す表示を出す', async () => {

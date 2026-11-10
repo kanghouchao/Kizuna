@@ -4,7 +4,6 @@ import Cookies from 'js-cookie';
 import { authApi } from '@/entities/user';
 import type { MeResponse } from '@/entities/user';
 import { apiClient, endSession, getSessionAlert } from '@/shared/api';
-import { rememberMemberReturnPath, takeMemberReturnPath } from '@/shared/lib';
 import { SessionResume } from '../SessionResume';
 
 const mockReplace = jest.fn();
@@ -50,6 +49,7 @@ describe('SessionResume（ログイン画面を開いたときの継続ログイ
   afterEach(() => {
     apiClient.defaults.adapter = originalAdapter;
     Cookies.remove('session-kind');
+    window.history.pushState({}, '', '/');
   });
 
   it('リフレッシュに成功すればフォームを出さずに、利用者種別の着地先へ移る', async () => {
@@ -63,23 +63,37 @@ describe('SessionResume（ログイン画面を開いたときの継続ログイ
     expect(Cookies.get('session-kind')).toBe('admin');
   });
 
-  it('会員の戻り先が預けられていれば、着地先はそれを優先する', async () => {
-    rememberMemberReturnPath('/member/reservations/new?store=s1');
+  it('ログイン画面の next が本人種別の戻り先なら、着地先はそれを断片ごと優先する', async () => {
+    window.history.pushState(
+      {},
+      '',
+      '/auth/login?next=%2Fmember%2Freservations%2Fnew%3Fstore%3Ds1#tok3n'
+    );
     refreshReplies({ status: 200 });
     mockedMe.mockResolvedValue(me('MEMBER'));
 
     render(<SessionResume>フォーム</SessionResume>);
 
     await waitFor(() =>
-      expect(mockReplace).toHaveBeenCalledWith('/member/reservations/new?store=s1')
+      expect(mockReplace).toHaveBeenCalledWith('/member/reservations/new?store=s1#tok3n')
     );
   });
 
+  it('next が別の本人種別のパスなら、既定の着地へ進む', async () => {
+    window.history.pushState({}, '', '/auth/login?next=%2Fcast%2F');
+    refreshReplies({ status: 200 });
+    mockedMe.mockResolvedValue(me('STAFF'));
+
+    render(<SessionResume>フォーム</SessionResume>);
+
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/admin/dashboard/'));
+  });
+
   it.each(['STAFF', 'CAST'] as const)(
-    '会員の戻り先を預けたまま %s のセッションが続いていれば、着地せずにフォームを出し、戻り先も残す',
+    '会員の画面への next を持ったまま %s のセッションが続いていれば、着地せずにフォームを出す',
     async userType => {
-      // 会員ポータルの申領を会員以外のセッションで開くと 403 から戻り先を預けてここへ来る。会員で入り直す導線を残す。
-      rememberMemberReturnPath('/member/receipts', '#tok3n');
+      // 会員ポータルの申領を会員以外のセッションで開くと 403 から next を載せてここへ来る。会員で入り直す導線を残す。
+      window.history.pushState({}, '', '/auth/login?next=%2Fmember%2Freceipts#tok3n');
       refreshReplies({ status: 200 });
       mockedMe.mockResolvedValue(me(userType));
 
@@ -87,7 +101,6 @@ describe('SessionResume（ログイン画面を開いたときの継続ログイ
 
       expect(await screen.findByText('フォーム')).toBeInTheDocument();
       expect(mockReplace).not.toHaveBeenCalled();
-      expect(takeMemberReturnPath()).toBe('/member/receipts#tok3n');
     }
   );
 

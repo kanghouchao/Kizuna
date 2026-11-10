@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authApi } from '@/entities/user';
 import { endSession, requestRefresh } from '@/shared/api';
-import { hasMemberReturnPath } from '@/shared/lib';
+import { loginReturnTarget, resolveNext } from '@/shared/lib';
 import { landFromMe } from '../model/completeLogin';
 
 /**
@@ -20,17 +20,18 @@ export function SessionResume({ children }: { children: React.ReactNode }) {
     let active = true;
     void (async () => {
       const result = await requestRefresh();
-      // StrictMode の二度目の effect と競わせない。着地は会員の戻り先を 1 度だけ取り出すため、二重に走らせない。
+      // StrictMode の二度目の effect と競わせない（着地とフォームの表示を二重に走らせない）。
       if (!active) return;
       if (result.status === 'ok') {
         try {
           const me = await authApi.me();
-          // 会員ポータルが会員以外のセッションを 403 で拒んで戻り先を預けた場合は、着地させずに会員で入り直させる。
-          // 着地すると戻り先を消費し、会員でログインし直しても伝票の画面へ戻れない。
+          const next = loginReturnTarget();
+          // 会員ポータルが会員以外のセッションを 403 で拒んで差し戻した場合は、着地させずに会員で入り直させる。
+          // 着地すると既定の着地へ進み、会員でログインし直す機会が無いまま伝票の画面へ戻れない。
           const landing =
-            me.user_type !== 'MEMBER' && hasMemberReturnPath()
+            me.user_type !== 'MEMBER' && resolveNext('member', next)
               ? null
-              : landFromMe(me, result.refreshExpiresAt);
+              : landFromMe(me, result.refreshExpiresAt, next);
           if (landing?.status === 'ok') {
             router.replace(landing.path);
             return;
