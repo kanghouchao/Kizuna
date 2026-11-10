@@ -393,6 +393,40 @@ describe('LineCallbackPage', () => {
       expect(mockedLineApi.login).not.toHaveBeenCalled();
     });
 
+    // 伝票の QR から来た利用者が LINE で失敗しても、ログインからやり直せば申領画面へ戻れるようにする
+    it('LINE 側で拒否された場合、ログインへ戻るリンクは預けた next と断片を引き継ぐ', async () => {
+      arriveAt('?error=access_denied&state=s1', {
+        state: 's1',
+        verifier: 'v1',
+        intent: 'login',
+        next: '/member/receipts#tok3n',
+      });
+
+      render(<LineCallbackPage />);
+
+      expect(await screen.findByRole('link', { name: 'ログイン画面へ戻る' })).toHaveAttribute(
+        'href',
+        '/auth/login?next=%2Fmember%2Freceipts#tok3n'
+      );
+    });
+
+    it('引き換えが失敗した場合も、ログインへ戻るリンクは預けた next と断片を引き継ぐ', async () => {
+      arriveAt('?code=auth-code&state=s1', {
+        state: 's1',
+        verifier: 'v1',
+        intent: 'login',
+        next: '/member/receipts#tok3n',
+      });
+      mockedLineApi.login.mockRejectedValue(new Error('network'));
+
+      render(<LineCallbackPage />);
+
+      expect(await screen.findByRole('link', { name: 'ログイン画面へ戻る' })).toHaveAttribute(
+        'href',
+        '/auth/login?next=%2Fmember%2Freceipts#tok3n'
+      );
+    });
+
     it('保存が無い場合（別タブでの開始など）もエラー表示にする', async () => {
       arriveAt('?code=auth-code&state=s1');
 
