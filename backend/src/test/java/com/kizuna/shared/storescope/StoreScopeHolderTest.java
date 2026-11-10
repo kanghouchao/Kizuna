@@ -27,7 +27,7 @@ class StoreScopeHolderTest {
   @DisplayName("解決器は最初の current() まで呼ばれず、以後は記憶した値を返す（1 回だけ解決する）")
   void resolvesLazilyAndOnce() {
     AtomicInteger calls = new AtomicInteger();
-    StoreScope scope = new StoreScope(false, Set.of(1L));
+    StoreScope scope = new StoreScope(Set.of(1L));
     holder.install(
         () -> {
           calls.incrementAndGet();
@@ -58,20 +58,20 @@ class StoreScopeHolderTest {
   @Test
   @DisplayName("clear 後は null、差し替えると記憶も捨てる")
   void clearAndReinstallDropMemo() {
-    holder.install(() -> new StoreScope(true, Set.of()));
-    assertThat(holder.current().allStores()).isTrue();
+    holder.install(() -> new StoreScope(Set.of(1L)));
+    assertThat(holder.current().storeIds()).containsExactly(1L);
 
     holder.clear();
     assertThat(holder.current()).isNull();
 
-    holder.install(() -> new StoreScope(false, Set.of(2L)));
+    holder.install(() -> new StoreScope(Set.of(2L)));
     assertThat(holder.current().storeIds()).containsExactly(2L);
   }
 
   @Test
   @DisplayName("保持はスレッド局所で、別スレッドには見えない")
   void isThreadLocal() throws InterruptedException {
-    holder.install(() -> new StoreScope(true, Set.of()));
+    holder.install(() -> new StoreScope(Set.of(1L)));
     StoreScope[] seen = new StoreScope[1];
     Thread other = new Thread(() -> seen[0] = holder.current());
     other.start();

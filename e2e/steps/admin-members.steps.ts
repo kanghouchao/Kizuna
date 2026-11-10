@@ -79,7 +79,7 @@ Then("会員詳細に残高 120 pt と店舗1の関連が表示される", async
   await expect(page.getByRole("heading", { name: "会員詳細" })).toBeVisible();
   await expect(page.getByText(`${GRANTED_POINTS} pt`, { exact: true }).first()).toBeVisible();
   await expect(page.getByText(memberEmail)).toBeVisible();
-  // 店舗1の関連（顧客名）。管理者は全店舗の作用域なので担当外の注記は出ない
+  // 店舗1の関連（顧客名）。管理者の店舗集合は店舗1を含むので担当外の注記は出ない
   await expect(page.getByText(/E2Eコンソール顧客-/)).toBeVisible();
   await expect(page.getByText(/担当外の/)).toHaveCount(0);
 });

@@ -66,7 +66,7 @@ class LoginBenefitIntegrationTest {
     String key = UUID.randomUUID().toString();
     userId =
         jdbc.queryForObject(
-            "insert into t_users(display_name,user_type,store_scope_type,email,password) values ('検証会員','MEMBER','SPECIFIC_STORES',?,'x') returning id",
+            "insert into t_users(display_name,user_type,email,password) values ('検証会員','MEMBER',?,'x') returning id",
             Long.class,
             key + "@example.test");
     memberId =

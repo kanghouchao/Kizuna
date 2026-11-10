@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 
 class UserTest {
 
-  /** STAFF・ALL_STORES・ロール {1} の妥当な既定値。各テストが対象の属性だけ上書きする。 */
+  /** STAFF・空の店舗集合・ロール {1} の妥当な既定値。各テストが対象の属性だけ上書きする。 */
   private User.UserBuilder staffBuilder() {
     return User.builder()
         .email("user@kizuna.test")
@@ -21,7 +21,6 @@ class UserTest {
         .enabled(true)
         .userType(UserType.STAFF)
         .roleIds(Set.of(1L))
-        .storeScopeType(StoreScopeType.ALL_STORES)
         .storeIds(Set.of());
   }
 
@@ -39,27 +38,17 @@ class UserTest {
   }
 
   @Test
-  @DisplayName("SPECIFIC_STORES で店舗集合が空だと不変条件違反で例外")
-  void specificStoresWithEmptyStoreIdsThrows() {
-    assertThatThrownBy(
-            () ->
-                staffBuilder()
-                    .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-                    .storeIds(Set.of())
-                    .build())
-        .isInstanceOf(InvalidStoreScopeException.class);
-  }
+  @DisplayName("店舗集合はどの本人種別でも空で構築でき、空はどの店舗も授権しない（全店舗を意味しない）")
+  void emptyStoreSetBuildsForEveryTypeAndAuthorizesNothing() {
+    for (UserType type : UserType.values()) {
+      var builder = type.holdsRoles() ? staffBuilder() : staffBuilder().roleIds(Set.of());
+      if (type == UserType.SERVICE) builder = serviceBuilder();
+      User user = builder.userType(type).storeIds(Set.of()).build();
 
-  @Test
-  @DisplayName("ALL_STORES で店舗集合が非空だと不変条件違反で例外")
-  void allStoresWithNonEmptyStoreIdsThrows() {
-    assertThatThrownBy(
-            () ->
-                staffBuilder()
-                    .storeScopeType(StoreScopeType.ALL_STORES)
-                    .storeIds(Set.of(1L))
-                    .build())
-        .isInstanceOf(InvalidStoreScopeException.class);
+      assertThat(user.getStoreIds()).as(type.name()).isEmpty();
+      assertThat(user.authorizes(1L)).as(type.name()).isFalse();
+      assertThat(user.authorizes(null)).as(type.name()).isFalse();
+    }
   }
 
   @Test
@@ -77,7 +66,6 @@ class UserTest {
                 staffBuilder()
                     .userType(UserType.CAST)
                     .roleIds(Set.of(1L))
-                    .storeScopeType(StoreScopeType.SPECIFIC_STORES)
                     .storeIds(Set.of(1L))
                     .build())
         .isInstanceOf(InvalidRoleGrantException.class);
@@ -91,73 +79,35 @@ class UserTest {
                 staffBuilder()
                     .userType(UserType.MEMBER)
                     .roleIds(Set.of(1L))
-                    .storeScopeType(StoreScopeType.SPECIFIC_STORES)
                     .storeIds(Set.of(1L))
                     .build())
         .isInstanceOf(InvalidRoleGrantException.class);
   }
 
   @Test
-  @DisplayName("MEMBER は SPECIFIC_STORES + 空集合で構築でき、どの店舗も授権しない（登録時点で紐づけ店舗なし）")
-  void memberWithEmptySpecificStoresBuildsAndAuthorizesNothing() {
+  @DisplayName("MEMBER は空の店舗集合で構築でき、どの店舗も授権しない（登録時点で紐づけ店舗なし）")
+  void memberWithEmptyStoreSetBuildsAndAuthorizesNothing() {
     User user =
-        staffBuilder()
-            .userType(UserType.MEMBER)
-            .roleIds(Set.of())
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of())
-            .build();
+        staffBuilder().userType(UserType.MEMBER).roleIds(Set.of()).storeIds(Set.of()).build();
 
     assertThat(user.getUserType()).isEqualTo(UserType.MEMBER);
     assertThat(user.authorizes(1L)).isFalse();
   }
 
   @Test
-  @DisplayName("MEMBER に ALL_STORES を授権できない（authorizes が無条件 true になる fail-open を塞ぐ）")
-  void memberWithAllStoresThrows() {
-    assertThatThrownBy(
-            () ->
-                staffBuilder()
-                    .userType(UserType.MEMBER)
-                    .roleIds(Set.of())
-                    .storeScopeType(StoreScopeType.ALL_STORES)
-                    .storeIds(Set.of())
-                    .build())
-        .isInstanceOf(InvalidStoreScopeException.class);
-  }
-
-  @Test
   @DisplayName("CAST はロールなしで構築できる")
   void castWithoutRolesBuilds() {
     User user =
-        staffBuilder()
-            .userType(UserType.CAST)
-            .roleIds(Set.of())
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of(1L))
-            .build();
+        staffBuilder().userType(UserType.CAST).roleIds(Set.of()).storeIds(Set.of(1L)).build();
 
     assertThat(user.getUserType()).isEqualTo(UserType.CAST);
     assertThat(user.getRoleIds()).isEmpty();
   }
 
   @Test
-  @DisplayName("ALL_STORES は任意の店舗 id を授権する")
-  void allStoresAuthorizesAnyStore() {
-    User user = staffBuilder().build();
-
-    assertThat(user.authorizes(1L)).isTrue();
-    assertThat(user.authorizes(999L)).isTrue();
-  }
-
-  @Test
-  @DisplayName("SPECIFIC_STORES はメンバー店舗のみを授権する")
-  void specificStoresAuthorizesOnlyMembers() {
-    User user =
-        staffBuilder()
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of(1L, 2L))
-            .build();
+  @DisplayName("店舗集合のメンバー店舗のみを授権する")
+  void authorizesOnlyMembers() {
+    User user = staffBuilder().storeIds(Set.of(1L, 2L)).build();
 
     assertThat(user.authorizes(1L)).isTrue();
     assertThat(user.authorizes(2L)).isTrue();
@@ -177,10 +127,9 @@ class UserTest {
   void reassignGrantsUpdatesAllGrantDimensions() {
     User user = staffBuilder().build();
 
-    user.reassignGrants(Set.of(2L, 3L), StoreScopeType.SPECIFIC_STORES, Set.of(1L));
+    user.reassignGrants(Set.of(2L, 3L), Set.of(1L));
 
     assertThat(user.getRoleIds()).containsExactlyInAnyOrder(2L, 3L);
-    assertThat(user.getStoreScopeType()).isEqualTo(StoreScopeType.SPECIFIC_STORES);
     assertThat(user.getStoreIds()).containsExactly(1L);
   }
 
@@ -189,7 +138,7 @@ class UserTest {
   void reassignGrantsWithChangedRolesBumpsCredentialVersion() {
     User user = staffBuilder().build();
 
-    user.reassignGrants(Set.of(1L, 2L), StoreScopeType.ALL_STORES, Set.of());
+    user.reassignGrants(Set.of(1L, 2L), Set.of());
 
     assertThat(user.getCredentialVersion()).isEqualTo(1L);
   }
@@ -199,8 +148,8 @@ class UserTest {
   void reassignGrantsWithSameRolesKeepsCredentialVersion() {
     User user = staffBuilder().build();
 
-    user.reassignGrants(Set.of(1L), StoreScopeType.SPECIFIC_STORES, Set.of(5L));
-    user.reassignGrants(Set.of(1L), StoreScopeType.SPECIFIC_STORES, Set.of(5L));
+    user.reassignGrants(Set.of(1L), Set.of(5L));
+    user.reassignGrants(Set.of(1L), Set.of(5L));
 
     assertThat(user.getCredentialVersion()).isZero();
   }
@@ -210,7 +159,7 @@ class UserTest {
   void reassignGrantsWithEmptyRolesThrows() {
     User user = staffBuilder().build();
 
-    assertThatThrownBy(() -> user.reassignGrants(Set.of(), StoreScopeType.ALL_STORES, Set.of()))
+    assertThatThrownBy(() -> user.reassignGrants(Set.of(), Set.of()))
         .isInstanceOf(InvalidRoleGrantException.class);
   }
 
@@ -218,14 +167,9 @@ class UserTest {
   @DisplayName("reassignStores は店舗集合のみを更新しロールを変えない（CAST 受諾用）")
   void reassignStoresUpdatesOnlyStoreScope() {
     User user =
-        staffBuilder()
-            .userType(UserType.CAST)
-            .roleIds(Set.of())
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-            .storeIds(Set.of(1L))
-            .build();
+        staffBuilder().userType(UserType.CAST).roleIds(Set.of()).storeIds(Set.of(1L)).build();
 
-    user.reassignStores(StoreScopeType.SPECIFIC_STORES, Set.of(1L, 2L));
+    user.reassignStores(Set.of(1L, 2L));
 
     assertThat(user.getStoreIds()).containsExactlyInAnyOrder(1L, 2L);
     assertThat(user.getRoleIds()).isEmpty();
@@ -233,12 +177,17 @@ class UserTest {
   }
 
   @Test
-  @DisplayName("reassignStores で SPECIFIC_STORES に空集合を渡すと不変条件違反で例外")
-  void reassignStoresSpecificWithEmptyThrows() {
-    User user = staffBuilder().build();
+  @DisplayName("reassignStores / reassignGrants は空の店舗集合を受け付ける")
+  void reassigningToAnEmptyStoreSetIsAllowed() {
+    User user = staffBuilder().storeIds(Set.of(1L)).build();
 
-    assertThatThrownBy(() -> user.reassignStores(StoreScopeType.SPECIFIC_STORES, Set.of()))
-        .isInstanceOf(InvalidStoreScopeException.class);
+    user.reassignStores(Set.of());
+    assertThat(user.getStoreIds()).isEmpty();
+
+    user.reassignGrants(Set.of(1L), Set.of(2L));
+    user.reassignGrants(Set.of(1L), Set.of());
+    assertThat(user.getStoreIds()).isEmpty();
+    assertThat(user.authorizes(2L)).isFalse();
   }
 
   @Test
@@ -332,14 +281,13 @@ class UserTest {
     assertThat(user.getLineUserId()).isEqualTo("U-line-1");
   }
 
-  /** SERVICE・ALL_STORES・ロール {1} の妥当な既定値。資格情報を持たないことが構築の前提。 */
+  /** SERVICE・空の店舗集合・ロール {1} の妥当な既定値。資格情報を持たないことが構築の前提。 */
   private User.UserBuilder serviceBuilder() {
     return User.builder()
         .displayName("夜間バッチ")
         .enabled(true)
         .userType(UserType.SERVICE)
         .roleIds(Set.of(1L))
-        .storeScopeType(StoreScopeType.ALL_STORES)
         .storeIds(Set.of());
   }
 
@@ -403,26 +351,6 @@ class UserTest {
   }
 
   @Test
-  @DisplayName("SERVICE は ALL_STORES を持てる（明示授与のみ。STAFF と同じ店舗集合の語彙）")
-  void serviceWithAllStoresAuthorizesAnyStore() {
-    User user = serviceBuilder().build();
-
-    assertThat(user.authorizes(99L)).isTrue();
-  }
-
-  @Test
-  @DisplayName("SERVICE の SPECIFIC_STORES は空集合を許さない（STAFF と同じ不変条件）")
-  void serviceWithEmptySpecificStoresThrows() {
-    assertThatThrownBy(
-            () ->
-                serviceBuilder()
-                    .storeScopeType(StoreScopeType.SPECIFIC_STORES)
-                    .storeIds(Set.of())
-                    .build())
-        .isInstanceOf(InvalidStoreScopeException.class);
-  }
-
-  @Test
   @DisplayName("SERVICE を停止しても行は残り、過去の実行主体の記録を保持する")
   void serviceStopKeepsTheRow() {
     User user = serviceBuilder().build();
@@ -456,7 +384,6 @@ class UserTest {
                 staffBuilder()
                     .userType(UserType.MEMBER)
                     .roleIds(Set.of())
-                    .storeScopeType(StoreScopeType.SPECIFIC_STORES)
                     .storeIds(Set.of())
                     .password(null)
                     .build())

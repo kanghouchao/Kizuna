@@ -29,7 +29,7 @@ public class OperationalReportReader {
       isolation = Isolation.REPEATABLE_READ,
       timeoutString = "#{@appProperties.operationalReport.readTimeoutSeconds}")
   public OperationalFacts store(Long storeId, LocalDate from, LocalDate to) {
-    return read(new StoreScope(false, Set.of(storeId)), storeId, from, to);
+    return read(new StoreScope(Set.of(storeId)), storeId, from, to);
   }
 
   @Transactional(
@@ -47,15 +47,18 @@ public class OperationalReportReader {
     int maxStores = settings.getMaxStores();
     if (maxOrders < 1 || maxOrders > 100_000 || maxStores < 1 || maxStores > 10_000)
       throw new ServiceUnavailableException("帳票件数の設定が範囲外です。管理者へお問い合わせください");
+    // 空の授権集合は店舗を持たない帳票で、空の IN は組み立てない。
+    if (storeId == null && scope.storeIds().isEmpty())
+      return new OperationalFacts(OffsetDateTime.now(clock), List.of(), List.of());
     // 無注文店を含む一覧のため店舗台帳から引き、授権集合は s.id の条件に明示する。
-    String storesFrom = "from com.kizuna.store.domain.Store s where 1 = 1";
-    if (storeId != null) storesFrom += " and s.id = :storeId";
-    else if (!scope.allStores()) storesFrom += " and s.id in :storeIds";
+    String storesFrom =
+        "from com.kizuna.store.domain.Store s where "
+            + (storeId != null ? "s.id = :storeId" : "s.id in :storeIds");
     var storesQuery =
         entityManager.createQuery(
             "select s.id, s.name " + storesFrom + " order by s.id", Tuple.class);
     if (storeId != null) storesQuery.setParameter("storeId", storeId);
-    else if (!scope.allStores()) storesQuery.setParameter("storeIds", scope.storeIds());
+    else storesQuery.setParameter("storeIds", scope.storeIds());
     var stores =
         storesQuery.setMaxResults(maxStores + 1).getResultList().stream()
             .map(

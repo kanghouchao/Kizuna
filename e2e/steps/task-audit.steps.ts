@@ -3,6 +3,7 @@ import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
 import {
   createPermissionRole,
+  createServiceIdentity,
   createStaffFixture,
   authorizedStoreIds,
   loginUser,
@@ -41,9 +42,7 @@ Given('専用の処理実行者とサービスIDが用意されている', async
   restricted = await loginUser(request, limitedEmail, password);
   serviceRoleId = await createPermissionRole(request, admin, '実行確認-' + suffix, ['TASK_EXECUTE']);
   serviceName = '履歴に残るサービス-' + suffix;
-  const service = await request.post('/api/service-identities', { headers: headers(admin), data: { display_name: serviceName, role_ids: [serviceRoleId], store_scope_type: 'ALL_STORES', store_ids: [] } });
-  expect(service.status(), await service.text()).toBe(201);
-  serviceId = (await service.json()).id;
+  serviceId = await createServiceIdentity(request, admin, serviceName, [serviceRoleId], await authorizedStoreIds(request, admin));
 });
 
 When('処理を再送し主体の権限と対象範囲を検証する', async ({ request, browser }) => {

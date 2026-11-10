@@ -1,6 +1,5 @@
 package com.kizuna.user.application;
 
-import com.kizuna.user.domain.StoreScopeType;
 import java.util.List;
 import java.util.Set;
 
@@ -11,7 +10,6 @@ public record StaffView(
     String displayName,
     boolean enabled,
     List<RoleViews.Ref> roles,
-    StoreScopeType storeScopeType,
     Set<Long> storeIds,
     long version,
     boolean editable) {}

@@ -59,8 +59,7 @@ class ApplicantAnonymizationTaskTest {
     when(identities.requireService(eq(8L), any())).thenReturn(actor);
     when(identities.requireServiceScope(eq(8L), any()))
         .thenReturn(
-            new ServiceExecutionIdentityService.ServiceScope(
-                actor, new StoreScope(true, Set.of())));
+            new ServiceExecutionIdentityService.ServiceScope(actor, new StoreScope(Set.of(1L))));
   }
 
   @Test
@@ -75,7 +74,7 @@ class ApplicantAnonymizationTaskTest {
     when(systemConfigs.applicantRetentionSettings())
         .thenReturn(new ApplicantRetentionSettings(null, null, null));
     assertThat(task.execute(context)).isZero();
-    verify(applicants, never()).findAnonymizationTargets(any(), any(), any());
+    verify(applicants, never()).findAnonymizationTargetsIn(any(), any(), any(), any());
   }
 
   @Test
@@ -83,18 +82,22 @@ class ApplicantAnonymizationTaskTest {
     properties.getApplicantAnonymization().setMaxApplicants(5);
     when(systemConfigs.applicantRetentionSettings())
         .thenReturn(new ApplicantRetentionSettings(6, null, 0));
-    when(applicants.findAnonymizationTargets(any(), any(), any())).thenReturn(List.of());
+    when(applicants.findAnonymizationTargetsIn(any(), any(), any(), any())).thenReturn(List.of());
     task.execute(context);
     verify(applicants)
-        .findAnonymizationTargets(
+        .findAnonymizationTargetsIn(
             eq(ApplicantStatus.REJECTED),
             eq(OffsetDateTime.parse("2026-05-01T00:00+09:00")),
+            eq(Set.of(1L)),
             any());
     verify(applicants)
-        .findAnonymizationTargets(
-            eq(ApplicantStatus.HIRED), eq(OffsetDateTime.parse("2026-10-31T00:00+09:00")), any());
+        .findAnonymizationTargetsIn(
+            eq(ApplicantStatus.HIRED),
+            eq(OffsetDateTime.parse("2026-10-31T00:00+09:00")),
+            eq(Set.of(1L)),
+            any());
     verify(applicants, never())
-        .findAnonymizationTargets(eq(ApplicantStatus.WITHDRAWN), any(), any());
+        .findAnonymizationTargetsIn(eq(ApplicantStatus.WITHDRAWN), any(), any(), any());
   }
 
   @Test
@@ -102,11 +105,10 @@ class ApplicantAnonymizationTaskTest {
     when(identities.requireServiceScope(eq(8L), any()))
         .thenReturn(
             new ServiceExecutionIdentityService.ServiceScope(
-                new AuditActor(8L, "SERVICE", "匿名化処理"), new StoreScope(false, Set.of())));
+                new AuditActor(8L, "SERVICE", "匿名化処理"), new StoreScope(Set.of())));
     when(systemConfigs.applicantRetentionSettings())
         .thenReturn(new ApplicantRetentionSettings(6, 6, 0));
     assertThat(task.execute(context)).isZero();
-    verify(applicants, never()).findAnonymizationTargets(any(), any(), any());
     verify(applicants, never()).findAnonymizationTargetsIn(any(), any(), any(), any());
   }
 

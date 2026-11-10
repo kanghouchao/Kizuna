@@ -47,7 +47,6 @@ describe('staffApi', () => {
       password: 'pass1234',
       display_name: '新規スタッフ',
       role_ids: [2],
-      store_scope_type: 'SPECIFIC_STORES',
       store_ids: [1],
     });
     expect(res).toEqual({ ok: true, url: '/staff' });
@@ -60,7 +59,6 @@ describe('staffApi', () => {
   it('update は /staff/:id を PUT し version を往復する', async () => {
     const res = await staffApi.update(1, {
       role_ids: [1, 2],
-      store_scope_type: 'ALL_STORES',
       store_ids: [],
       version: 7,
     });

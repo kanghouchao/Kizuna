@@ -22,14 +22,9 @@ public interface ApplicantRepository
   Set<String> findReferencedEnrollmentIds(Collection<String> enrollmentIds);
 
   /**
-   * 匿名化処理だけが使う店舗を跨ぐ照会で、境界は実行するサービス ID の店舗集合。全店舗を授権された主体は条件なし、それ以外は集合内の店舗に絞る。
+   * 匿名化処理だけが使う店舗を跨ぐ照会で、境界は実行するサービス ID の店舗集合。storeIds は空でないこと（空集合は呼び手が照会しない）。
    * 以後の操作は各行の店舗で引き直す。終端は一度きりなので遷移履歴は一行に定まる。
    */
-  @Query(
-      "select new com.kizuna.recruitment.domain.ApplicantAnonymizationTarget(a.id, a.storeId, h.createdAt) from Applicant a, ApplicantStatusHistory h where h.storeId = a.storeId and h.applicantId = a.id and h.newStatus = a.status and a.status = :status and a.anonymizedAt is null and h.createdAt < :before order by h.createdAt, a.id")
-  List<ApplicantAnonymizationTarget> findAnonymizationTargets(
-      ApplicantStatus status, OffsetDateTime before, Limit limit);
-
   @Query(
       "select new com.kizuna.recruitment.domain.ApplicantAnonymizationTarget(a.id, a.storeId, h.createdAt) from Applicant a, ApplicantStatusHistory h where h.storeId = a.storeId and h.applicantId = a.id and h.newStatus = a.status and a.status = :status and a.anonymizedAt is null and h.createdAt < :before and a.storeId in :storeIds order by h.createdAt, a.id")
   List<ApplicantAnonymizationTarget> findAnonymizationTargetsIn(

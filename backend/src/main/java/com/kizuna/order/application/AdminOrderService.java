@@ -19,12 +19,11 @@ public class AdminOrderService {
 
   private final OrderRepository orderRepository;
 
-  /** 授権店舗集合での受注横断一覧。SPECIFIC_STORES は集合内の店舗だけ、ALL_STORES は全店舗を返す。 */
+  /** 授権店舗集合での受注横断一覧。集合内の店舗の受注だけを返し、集合が空なら空の頁を返す（空の IN は組み立てない）。 */
   @Transactional(readOnly = true)
   public Page<AdminOrderView> list(StoreScope scope, Pageable pageable) {
     var page = Paging.totalOrder(pageable, Sort.Order.asc(Order::getId));
-    return scope.allStores()
-        ? orderRepository.findGroupWideViews(page)
-        : orderRepository.findGroupWideViewsInStores(scope.storeIds(), page);
+    if (scope.storeIds().isEmpty()) return Page.empty(page);
+    return orderRepository.findGroupWideViewsInStores(scope.storeIds(), page);
   }
 }

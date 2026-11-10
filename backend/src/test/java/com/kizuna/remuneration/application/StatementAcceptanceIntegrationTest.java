@@ -43,7 +43,6 @@ import com.kizuna.store.StoreShortNames;
 import com.kizuna.store.domain.Store;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -147,7 +146,6 @@ class StatementAcceptanceIntegrationTest {
                   .userType(UserType.CAST)
                   .enabled(true)
                   .roleIds(Set.of())
-                  .storeScopeType(StoreScopeType.SPECIFIC_STORES)
                   .storeIds(Set.of(storeId))
                   .build();
           em.persist(actor);

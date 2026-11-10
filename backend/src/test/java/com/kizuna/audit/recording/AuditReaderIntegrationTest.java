@@ -78,7 +78,7 @@ class AuditReaderIntegrationTest {
   @Test
   @DisplayName("集合 {1} には店舗 1・店舗なし・削除済み店舗の行が見え、店舗 2 の行は一覧にも単件にも出ないこと")
   void storeSetOneSeesItsStoreGroupAndDeletedStoreRows() {
-    var scope = new StoreScope(false, Set.of(STORE1));
+    var scope = new StoreScope(Set.of(STORE1));
 
     assertThat(listIds(scope, null)).containsExactly(deletedStoreRow, groupRow, store1Row);
     assertThat(reader.get(scope, store1Row).event().id()).isEqualTo(store1Row);
@@ -90,7 +90,7 @@ class AuditReaderIntegrationTest {
   @Test
   @DisplayName("集合 {2} には店舗 2 の行が見え、店舗 1 の行は一覧にも単件にも出ないこと")
   void storeSetTwoSeesStoreTwoButNotStoreOne() {
-    var scope = new StoreScope(false, Set.of(STORE2));
+    var scope = new StoreScope(Set.of(STORE2));
 
     assertThat(listIds(scope, null)).containsExactly(deletedStoreRow, groupRow, store2Row);
     assertThat(reader.get(scope, store2Row).event().id()).isEqualTo(store2Row);
@@ -100,16 +100,19 @@ class AuditReaderIntegrationTest {
   @Test
   @DisplayName("空の集合には店舗なしと削除済み店舗の行だけが見え、空集合が全店に化けないこと")
   void emptySetSeesOnlyGroupAndDeletedStoreRows() {
-    var scope = new StoreScope(false, Set.of());
+    var scope = new StoreScope(Set.of());
 
     assertThat(listIds(scope, null)).containsExactly(deletedStoreRow, groupRow);
+    assertThat(reader.get(scope, groupRow).event().id()).isEqualTo(groupRow);
+    assertThat(reader.get(scope, deletedStoreRow).event().id()).isEqualTo(deletedStoreRow);
     assertThatThrownBy(() -> reader.get(scope, store1Row)).isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> reader.get(scope, store2Row)).isInstanceOf(NotFoundException.class);
   }
 
   @Test
-  @DisplayName("ALL_STORES はその時点の全店舗を集合とし、すべての行が見えること")
-  void allStoresSeesEveryRow() {
-    var scope = new StoreScope(true, Set.of());
+  @DisplayName("全店舗を明示した集合にはすべての行が見えること")
+  void explicitSetOfEveryStoreSeesEveryRow() {
+    var scope = new StoreScope(Set.of(STORE1, STORE2));
 
     assertThat(listIds(scope, null))
         .containsExactly(deletedStoreRow, groupRow, store2Row, store1Row);
@@ -119,7 +122,7 @@ class AuditReaderIntegrationTest {
   @Test
   @DisplayName("操作名の絞り込みは店舗集合の絞り込みと併せて効くこと")
   void actionFilterCombinesWithStoreSet() {
-    var scope = new StoreScope(false, Set.of(STORE1));
+    var scope = new StoreScope(Set.of(STORE1));
 
     assertThat(listIds(scope, "STORE_" + STORE2)).isEmpty();
     assertThat(listIds(scope, "STORE_" + STORE1)).containsExactly(store1Row);

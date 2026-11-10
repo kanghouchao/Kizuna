@@ -43,7 +43,7 @@ export default function StaffCreatePage() {
           password: '',
           display_name: '',
           role_ids: [],
-          storeSet: { storeScopeType: 'SPECIFIC_STORES', storeIds: [] },
+          store_ids: [],
         }}
         profile={{
           title: '従業員',

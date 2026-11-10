@@ -93,7 +93,7 @@ class OperationalReportControllerTest {
 
   @BeforeEach
   void setup() {
-    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(false, Set.of(1L)));
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(1L)));
     properties.getOperationalReport().setMaxBytes(16L * 1024 * 1024);
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     var facts =
@@ -183,7 +183,7 @@ class OperationalReportControllerTest {
 
   @Test
   void storeReportReadsEverySourceForTheNamedStore() throws Exception {
-    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(false, Set.of(7L)));
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(7L)));
     mvc.perform(
             get("/operational-reports")
                 .param("from", "2026-09-01")
@@ -208,7 +208,7 @@ class OperationalReportControllerTest {
 
   @Test
   void groupWideReportPassesTheResolvedScopeToEverySource() throws Exception {
-    var scope = new StoreScope(false, Set.of(1L, 7L));
+    var scope = new StoreScope(Set.of(1L, 7L));
     when(storeScopeResolver.resolve(any())).thenReturn(scope);
     mvc.perform(
             request(

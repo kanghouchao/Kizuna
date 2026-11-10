@@ -1,7 +1,6 @@
 package com.kizuna.user.application;
 
 import com.kizuna.shared.storescope.StoreScope;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import java.util.Set;
@@ -30,9 +29,6 @@ public class StoreScopeResolver {
   }
 
   static StoreScope scopeOf(User user) {
-    if (user.getStoreScopeType() == StoreScopeType.ALL_STORES) {
-      return new StoreScope(true, Set.of());
-    }
-    return new StoreScope(false, Set.copyOf(user.getStoreIds()));
+    return new StoreScope(Set.copyOf(user.getStoreIds()));
   }
 }

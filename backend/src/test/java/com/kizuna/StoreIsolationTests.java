@@ -25,7 +25,7 @@ class StoreIsolationTests {
 
   @Test
   @DisplayName("store_id 列を持つ全 @Entity が StoreScopedEntity を継承していること（豁免なし）")
-  void allStoreScopedEntitiesExtendBaseClass() {
+  void everyStoreScopedEntityExtendsBaseClass() {
     try (StandardServiceRegistry registry = serviceRegistryWithoutDatabase()) {
       Metadata metadata = bootModel(registry);
 

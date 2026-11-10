@@ -97,7 +97,7 @@ class ApplicantEnrollmentIntegrationTest {
     otherStoreId = store();
     actorId =
         jdbc.queryForObject(
-            "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'在籍登録担当','STAFF','ALL_STORES') returning id",
+            "insert into t_users(email,display_name,user_type) values (?,'在籍登録担当','STAFF') returning id",
             Long.class,
             ACTOR);
   }

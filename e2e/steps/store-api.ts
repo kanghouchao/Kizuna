@@ -1182,9 +1182,16 @@ export async function createStaffFixture(request: APIRequestContext, token: stri
   return createStaffAccount(request, token, { email, password, displayName: '検証担当', roleIds, storeIds });
 }
 
+/** 定期処理を実行するサービス ID を作り、id を返す。定期処理は店舗集合で店舗のデータを絞るため、処理させる店舗を明示する。 */
+export async function createServiceIdentity(request: APIRequestContext, token: string, displayName: string, roleIds: number[], storeIds: number[]): Promise<number> {
+  const response = await request.post('/api/service-identities', { headers: { Authorization: `Bearer ${token}` }, data: { display_name: displayName, role_ids: roleIds, store_ids: storeIds } });
+  expect(response.status(), await response.text()).toBe(201);
+  return (await response.json()).id;
+}
+
 /** 表示名を指定し、個別店舗に授権した従業員を作る（POST /staff, PERM_STAFF_MANAGE）。 */
 export async function createStaffAccount(request: APIRequestContext, token: string, staff: { email: string; password: string; displayName: string; roleIds: number[]; storeIds: number[] }): Promise<number> {
-  const response = await request.post('/api/staff', { headers: { Authorization: `Bearer ${token}` }, data: { email: staff.email, password: staff.password, display_name: staff.displayName, role_ids: staff.roleIds, store_scope_type: 'SPECIFIC_STORES', store_ids: staff.storeIds } });
+  const response = await request.post('/api/staff', { headers: { Authorization: `Bearer ${token}` }, data: { email: staff.email, password: staff.password, display_name: staff.displayName, role_ids: staff.roleIds, store_ids: staff.storeIds } });
   expect(response.status(), await response.text()).toBe(201);
   return (await response.json()).id;
 }

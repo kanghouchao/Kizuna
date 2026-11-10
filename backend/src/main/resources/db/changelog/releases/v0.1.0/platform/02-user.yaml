@@ -60,12 +60,6 @@ databaseChangeLog:
                     nullable: false
                   remarks: 本人種別（STAFF/SERVICE/CAST/MEMBER）
               - column:
-                  name: store_scope_type
-                  type: VARCHAR(20)
-                  constraints:
-                    nullable: false
-                  remarks: 授権店舗範囲種別（ALL_STORES / SPECIFIC_STORES）
-              - column:
                   # 1 つの LINE アカウントが複数の身分に結び付くと、なりすまし経路になるため一意
                   # （未退会の行の間で。下の部分一意索引）。
                   name: line_user_id
@@ -115,7 +109,7 @@ databaseChangeLog:
               ON t_users (line_user_id) WHERE withdrawn_at IS NULL
         - createTable:
             tableName: t_user_stores
-            remarks: 授権店舗集合（store_scope_type=SPECIFIC_STORES 時のみ行を持つ）
+            remarks: 授権店舗集合（明示した店舗だけ。行が無ければどの店舗も授権しない）
             columns:
               - column:
                   name: user_id

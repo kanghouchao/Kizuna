@@ -106,7 +106,7 @@ class PointExpiryIntegrationTest {
     operator =
         new AuditActor(
             jdbc.queryForObject(
-                "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'検証担当','STAFF','SPECIFIC_STORES') returning id",
+                "insert into t_users(email,display_name,user_type) values (?,'検証担当','STAFF') returning id",
                 Long.class,
                 UUID.randomUUID() + "@example.test"),
             "STAFF",
@@ -666,7 +666,7 @@ class PointExpiryIntegrationTest {
     String key = UUID.randomUUID().toString();
     long user =
         jdbc.queryForObject(
-            "insert into t_users(display_name,user_type,store_scope_type,email,password) values ('検証会員','MEMBER','SPECIFIC_STORES',?,?) returning id",
+            "insert into t_users(display_name,user_type,email,password) values ('検証会員','MEMBER',?,?) returning id",
             Long.class,
             key + "@example.test",
             HASH);
@@ -694,7 +694,7 @@ class PointExpiryIntegrationTest {
   private long service(String name, long... roles) {
     long id =
         jdbc.queryForObject(
-            "insert into t_users(display_name,user_type,store_scope_type) values (?,'SERVICE','SPECIFIC_STORES') returning id",
+            "insert into t_users(display_name,user_type) values (?,'SERVICE') returning id",
             Long.class,
             name);
     for (long role : roles)

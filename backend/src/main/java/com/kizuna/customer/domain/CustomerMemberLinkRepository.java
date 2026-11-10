@@ -105,11 +105,7 @@ public interface CustomerMemberLinkRepository extends StoreScopedRepository<Cust
 
   String DIRECTORY_ORDER = " order by l.linkedAt desc, l.id desc";
 
-  /** 全店舗の作用域を持つ閲覧者向け。 */
-  @Query(DIRECTORY_SELECT + " where l.memberId = :memberId" + DIRECTORY_LATEST + DIRECTORY_ORDER)
-  List<MemberLinkDirectoryView> findLatestDirectoryByMemberId(@Param("memberId") Long memberId);
-
-  /** 個別授権の閲覧者向け。授権店舗の最新の区間だけを展開する。 */
+  /** 閲覧者の店舗集合内の店舗の最新の区間だけを展開する。storeIds は空でないこと（空の IN は呼び手が短絡する）。 */
   @Query(
       DIRECTORY_SELECT
           + " where l.memberId = :memberId and l.storeId in :storeIds"
@@ -118,7 +114,13 @@ public interface CustomerMemberLinkRepository extends StoreScopedRepository<Cust
   List<MemberLinkDirectoryView> findLatestDirectoryByMemberIdAndStoreIdIn(
       @Param("memberId") Long memberId, @Param("storeIds") Collection<Long> storeIds);
 
-  /** 個別授権の閲覧者には見せない、授権外で関連（解除済みを含む）を持つ店舗の数。 */
+  /** 会員が関連（解除済みを含む）を持つ店舗の数。境界は会員 id で、店舗集合が空の閲覧者の「集合外の店舗数」に使う。 */
+  @Query(
+      "select count(distinct l.storeId) from com.kizuna.customer.domain.CustomerMemberLink l"
+          + " where l.memberId = :memberId")
+  long countStoresByMemberId(@Param("memberId") Long memberId);
+
+  /** 閲覧者には見せない、店舗集合外で関連（解除済みを含む）を持つ店舗の数。storeIds は空でないこと（空の NOT IN は呼び手が短絡する）。 */
   @Query(
       "select count(distinct l.storeId) from com.kizuna.customer.domain.CustomerMemberLink l"
           + " where l.memberId = :memberId and l.storeId not in :storeIds")

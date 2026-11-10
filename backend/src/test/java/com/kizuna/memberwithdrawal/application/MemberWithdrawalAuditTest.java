@@ -19,7 +19,6 @@ import com.kizuna.order.withdrawal.MemberWithdrawalApplications;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.point.application.PointLedgerService.WithdrawalClearance;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -154,7 +153,6 @@ class MemberWithdrawalAuditTest {
             .displayName(name)
             .enabled(true)
             .userType(id == STAFF_ID ? UserType.STAFF : UserType.MEMBER)
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(id == STAFF_ID ? Set.of(1L) : Set.of())
             .roleIds(id == STAFF_ID ? Set.of(1L) : Set.of())
             .build();

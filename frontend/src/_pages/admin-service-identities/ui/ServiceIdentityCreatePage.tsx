@@ -34,7 +34,7 @@ export default function ServiceIdentityCreatePage() {
         defaultValues={{
           display_name: '',
           role_ids: [],
-          storeSet: { storeScopeType: 'SPECIFIC_STORES', storeIds: [] },
+          store_ids: [],
         }}
         profile={{
           title: 'サービスID',

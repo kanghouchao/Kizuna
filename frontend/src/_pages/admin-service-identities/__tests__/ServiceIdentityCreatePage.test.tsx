@@ -80,7 +80,6 @@ describe('サービスID追加ページ', () => {
     expect(mockedApi.create).toHaveBeenCalledWith({
       display_name: '夜間ポイント失効',
       role_ids: [20],
-      store_scope_type: 'SPECIFIC_STORES',
       store_ids: [2],
     });
     expect(mockedNotify.success).toHaveBeenCalledWith('サービスIDを追加しました');
@@ -90,7 +89,9 @@ describe('サービスID追加ページ', () => {
   it('この設定の結果は用途名に敬称を付けず、権限をロールごとの件数で示す', async () => {
     render(<ServiceIdentityCreatePage />);
     const result = screen.getByRole('region', { name: 'この設定の結果' });
-    expect(result).toHaveTextContent('新しいサービスIDは 未選択 として 未選択 のデータ');
+    expect(result).toHaveTextContent(
+      '新しいサービスIDは 未選択 として、どの店舗のデータにもアクセスできません'
+    );
 
     fireEvent.change(screen.getByLabelText('用途名'), { target: { value: '夜間失効' } });
     fireEvent.click(await screen.findByRole('checkbox', { name: '失効バッチ' }));
@@ -105,15 +106,28 @@ describe('サービスID追加ページ', () => {
     expect(within(result).getByText('集計連携（1 件）')).toBeInTheDocument();
   });
 
-  it('用途名・ロール・店舗が欠けていれば欄の傍に文言を出し、作成 API を呼ばない', async () => {
+  it('用途名・ロールが欠けていれば欄の傍に文言を出し、作成 API を呼ばない', async () => {
     render(<ServiceIdentityCreatePage />);
     await screen.findByRole('checkbox', { name: '失効バッチ' });
     fireEvent.click(screen.getByRole('button', { name: '追加する' }));
 
     expect(await screen.findByText('用途名を入力してください')).toBeInTheDocument();
     expect(screen.getByText('ロールを 1 つ以上選択してください')).toBeInTheDocument();
-    expect(screen.getByText('対象店舗を 1 つ以上選択してください')).toBeInTheDocument();
     expect(mockedApi.create).not.toHaveBeenCalled();
+  });
+
+  it('店舗を選ばなければ担当店舗なしとして作成する', async () => {
+    render(<ServiceIdentityCreatePage />);
+    fireEvent.change(screen.getByLabelText('用途名'), { target: { value: '夜間失効' } });
+    fireEvent.click(await screen.findByRole('checkbox', { name: '失効バッチ' }));
+    fireEvent.click(screen.getByRole('button', { name: '追加する' }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/service-identities'));
+    expect(mockedApi.create).toHaveBeenCalledWith({
+      display_name: '夜間失効',
+      role_ids: [20],
+      store_ids: [],
+    });
   });
 
   it('作成に失敗したらサーバの文言を出し、入力を残して画面に留まる', async () => {

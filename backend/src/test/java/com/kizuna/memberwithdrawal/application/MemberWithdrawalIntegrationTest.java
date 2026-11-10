@@ -113,7 +113,7 @@ class MemberWithdrawalIntegrationTest {
     staffEmail = UUID.randomUUID() + "@example.test";
     staff =
         jdbc.queryForObject(
-            "insert into t_users(email,password,display_name,user_type,store_scope_type) values (?,?,'検証職員','STAFF','ALL_STORES') returning id",
+            "insert into t_users(email,password,display_name,user_type) values (?,?,'検証職員','STAFF') returning id",
             Long.class,
             staffEmail,
             HASH);
@@ -359,7 +359,7 @@ class MemberWithdrawalIntegrationTest {
     assertThatThrownBy(
             () ->
                 jdbc.update(
-                    "insert into t_users(email,password,display_name,user_type,store_scope_type) values (?,?,'重複','MEMBER','SPECIFIC_STORES')",
+                    "insert into t_users(email,password,display_name,user_type) values (?,?,'重複','MEMBER')",
                     member.email,
                     HASH))
         .isInstanceOf(DuplicateKeyException.class)
@@ -538,8 +538,7 @@ class MemberWithdrawalIntegrationTest {
     // 詳細: 退会情報は職員の表示名で、関連は閲覧者の店舗集合内だけ展開し集合外は件数のみ、明細は WITHDRAWAL_CLEAR を含む。
     var console = context.getBean(MemberConsoleService.class);
     MemberDetailResponse detail =
-        MemberDetailResponse.of(
-            console.detail(member.memberId, new StoreScope(false, Set.of(store))));
+        MemberDetailResponse.of(console.detail(member.memberId, new StoreScope(Set.of(store))));
     assertThat(detail.email()).isEqualTo(member.email);
     assertThat(detail.withdrawal().reason()).isEqualTo("本人からの電話依頼");
     assertThat(detail.withdrawal().bySelf()).isFalse();
@@ -559,13 +558,20 @@ class MemberWithdrawalIntegrationTest {
     assertThat(detail.otherStoreLinkCount()).isEqualTo(1);
     assertThat(
             console
-                .detail(member.memberId, new StoreScope(false, Set.of(otherStore)))
+                .detail(member.memberId, new StoreScope(Set.of(otherStore)))
                 .links()
                 .otherStoreCount())
         .as("集合外は区間ではなく店舗を数える")
         .isEqualTo(1);
-    assertThat(console.detail(member.memberId, new StoreScope(true, Set.of())).links().segments())
+    assertThat(
+            console
+                .detail(member.memberId, new StoreScope(Set.of(store, otherStore)))
+                .links()
+                .segments())
         .hasSize(2);
+    var noStore = console.detail(member.memberId, new StoreScope(Set.of())).links();
+    assertThat(noStore.segments()).as("空の店舗集合は区間を展開しない").isEmpty();
+    assertThat(noStore.otherStoreCount()).as("空の店舗集合では関連を持つ店舗はすべて集合外").isEqualTo(2);
     var entries =
         console.entries(
             member.memberId,
@@ -585,7 +591,7 @@ class MemberWithdrawalIntegrationTest {
     String email = key + "@example.test";
     long user =
         jdbc.queryForObject(
-            "insert into t_users(display_name,user_type,store_scope_type,email,password) values ('検証会員','MEMBER','SPECIFIC_STORES',?,?) returning id",
+            "insert into t_users(display_name,user_type,email,password) values ('検証会員','MEMBER',?,?) returning id",
             Long.class,
             email,
             HASH);

@@ -31,7 +31,6 @@ const staff = (override: Partial<StaffResponse> = {}): StaffResponse => ({
   display_name: '山田太郎',
   enabled: true,
   roles: [{ id: 10, name: '店長' }],
-  store_scope_type: 'SPECIFIC_STORES',
   store_ids: [1],
   version: 7,
   editable: true,
@@ -97,34 +96,33 @@ describe('従業員の権限編集ページ', () => {
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/staff'));
     expect(mockedStaffApi.update).toHaveBeenCalledWith(42, {
       role_ids: [10, 11],
-      store_scope_type: 'SPECIFIC_STORES',
       store_ids: [1, 2],
       version: 7,
     });
     expect(mockedNotify.success).toHaveBeenCalledWith('権限を更新しました');
   });
 
-  it('応答の店舗範囲が欠落しても全店舗へ拡大しない', async () => {
-    mockedStaffApi.get.mockResolvedValue(
-      staff({ store_scope_type: undefined, store_ids: undefined })
-    );
+  it('応答の店舗集合が欠けていれば担当店舗なしとして描く', async () => {
+    mockedStaffApi.get.mockResolvedValue(staff({ store_ids: undefined }));
     render(<StaffEditPage />);
 
     expect(await screen.findByRole('checkbox', { name: '新宿店' })).not.toBeChecked();
-    expect(screen.queryByText(/現在は全店舗/)).not.toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: '渋谷店' })).not.toBeChecked();
   });
 
-  it('全店舗の授権はロールだけの変更では保つ', async () => {
-    mockedStaffApi.get.mockResolvedValue(staff({ store_scope_type: 'ALL_STORES', store_ids: [] }));
+  it('担当店舗なしの従業員は店舗を選ばずに保存でき、空の店舗集合を送る', async () => {
+    mockedStaffApi.get.mockResolvedValue(staff({ store_ids: [] }));
     render(<StaffEditPage />);
-    expect(await screen.findByText(/現在は全店舗/)).toBeInTheDocument();
+    const result = await screen.findByRole('region', { name: 'この設定の結果' });
+    expect(result).toHaveTextContent(
+      '山田太郎さんは 店長 として、どの店舗のデータにもアクセスできません'
+    );
     fireEvent.click(await screen.findByRole('checkbox', { name: '経理' }));
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/staff'));
     expect(mockedStaffApi.update).toHaveBeenLastCalledWith(42, {
       role_ids: [10, 11],
-      store_scope_type: 'ALL_STORES',
       store_ids: [],
       version: 7,
     });

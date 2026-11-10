@@ -18,7 +18,7 @@ export const staffApi = {
     page: number;
     size: number;
     search?: string;
-    /** 指定店舗を担当範囲に含むスタッフだけへ絞り込む（全店舗担当も該当する） */
+    /** 指定店舗を担当範囲に含むスタッフだけへ絞り込む（店舗集合が空のスタッフは該当しない） */
     storeId?: number;
   }): Promise<PageResult<StaffResponse>> => {
     const response = await apiClient.get('/staff', {

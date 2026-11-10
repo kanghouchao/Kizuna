@@ -176,12 +176,12 @@ class NotificationIntegrationTest {
             suffix + "-other.invalid");
     operatorId =
         jdbc.queryForObject(
-            "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'通知担当','STAFF','SPECIFIC_STORES') returning id",
+            "insert into t_users(email,display_name,user_type) values (?,'通知担当','STAFF') returning id",
             Long.class,
             email);
     serviceId =
         jdbc.queryForObject(
-            "insert into t_users(display_name,user_type,store_scope_type) values ('通知SERVICE','SERVICE','SPECIFIC_STORES') returning id",
+            "insert into t_users(display_name,user_type) values ('通知SERVICE','SERVICE') returning id",
             Long.class);
     Long role =
         jdbc.queryForObject(
@@ -205,7 +205,7 @@ class NotificationIntegrationTest {
         role,
         serviceId,
         serviceRole);
-    // 操作者も送信の主体も全店舗の授権を持たない。サービス ID の集合は storeId だけで、otherStore の行は送らない。
+    // サービス ID の集合は storeId だけで、otherStore の行は送らない。
     jdbc.update(
         "insert into t_user_stores(user_id,store_id) values (?,?),(?,?),(?,?)",
         operatorId,
@@ -805,7 +805,7 @@ class NotificationIntegrationTest {
   }
 
   @Test
-  void serviceCandidatesNeedThePermissionNotAllStoresWithoutGrantingExecution() {
+  void serviceCandidatesNeedOnlyThePermissionWithoutGrantingExecution() {
     var options = context.getBean(TaskOptions.class);
     assertThat(options.candidates("NOTIFICATION_DELIVER", PageRequest.of(0, 100)).getContent())
         .extracting(ServiceExecutionIdentityService.Candidate::id)
@@ -863,6 +863,17 @@ class NotificationIntegrationTest {
     awaitIn(otherStore, there.id(), "SENT");
     assertThat(transport.results)
         .containsExactlyInAnyOrder("permitted@example.invalid", "other@example.invalid");
+  }
+
+  @Test
+  void aServiceWithAnEmptyStoreSetDeliversGroupRowsButNoStoreRow() throws Exception {
+    var here = queue(draft());
+    var group = groupQueued(member("empty-set@example.invalid", "ALLOWED", null, false));
+    jdbc.update("delete from t_user_stores where user_id=?", serviceId);
+    runTask();
+    awaitGroup(group.id(), "SENT");
+    assertThat(get(here.id()).status()).as("空の店舗集合は店舗の行を取らない").isEqualTo("QUEUED");
+    assertThat(transport.results).containsExactly("empty-set@example.invalid");
   }
 
   private String customerWithEmail(String address) {
@@ -952,7 +963,7 @@ class NotificationIntegrationTest {
   private long member(String address, String business, String marketing, boolean withdrawn) {
     var user =
         jdbc.queryForObject(
-            "insert into t_users(display_name,user_type,store_scope_type,email,password) values ('検証会員','MEMBER','SPECIFIC_STORES',?,'x') returning id",
+            "insert into t_users(display_name,user_type,email,password) values ('検証会員','MEMBER',?,'x') returning id",
             Long.class,
             address);
     var member =
@@ -1112,7 +1123,7 @@ class NotificationIntegrationTest {
   private Long staff(String address, String... permissions) {
     var id =
         jdbc.queryForObject(
-            "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'通知の担当','STAFF','SPECIFIC_STORES') returning id",
+            "insert into t_users(email,display_name,user_type) values (?,'通知の担当','STAFF') returning id",
             Long.class,
             address);
     var role =

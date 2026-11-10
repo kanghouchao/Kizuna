@@ -95,44 +95,20 @@ class CustomerMemberLinkDirectoryTest {
   }
 
   @Test
-  @DisplayName("全店舗の閲覧者は全店舗の最新区間を展開し、集合外の店舗数は 0 で数えもしない")
-  void allStoresExpandsEverything() {
-    when(repository.findLatestDirectoryByMemberId(7L))
-        .thenReturn(
-            List.of(
-                new View(
-                    "L2",
-                    2L,
-                    "支店",
-                    "C2",
-                    "佐藤",
-                    LinkStatus.RELEASED,
-                    LinkReason.MEMBER_CODE,
-                    AT.minusDays(1),
-                    AT,
-                    "会員退会"),
-                new View(
-                    "L1",
-                    1L,
-                    "本店",
-                    "C1",
-                    "山田",
-                    LinkStatus.ACTIVE,
-                    LinkReason.MEMBER_REQUEST,
-                    AT.minusDays(2),
-                    null,
-                    null)));
+  @DisplayName("店舗集合が空の閲覧者は区間を展開せず、関連を持つ店舗をすべて集合外として数える")
+  void emptyScopeExpandsNothingAndCountsEveryStore() {
+    when(repository.countStoresByMemberId(7L)).thenReturn(2L);
 
-    var links = directory.findByMember(7L, new StoreScope(true, Set.of()));
+    var links = directory.findByMember(7L, new StoreScope(Set.of()));
 
-    assertThat(links.segments()).extracting(s -> s.storeName()).containsExactly("支店", "本店");
-    assertThat(links.segments().getFirst().releaseReason()).isEqualTo("会員退会");
-    assertThat(links.otherStoreCount()).isZero();
+    assertThat(links.segments()).isEmpty();
+    assertThat(links.otherStoreCount()).isEqualTo(2);
+    verify(repository, never()).findLatestDirectoryByMemberIdAndStoreIdIn(anyLong(), any());
     verify(repository, never()).countStoresByMemberIdAndStoreIdNotIn(anyLong(), any());
   }
 
   @Test
-  @DisplayName("個別授権の閲覧者は授権店舗の最新区間だけを展開し、授権外は店舗数だけを返す")
+  @DisplayName("閲覧者は店舗集合内の店舗の最新区間だけを展開し、集合外は店舗数だけを返す")
   void specificStoresExpandsOnlyAuthorizedAndCountsTheRest() {
     when(repository.findLatestDirectoryByMemberIdAndStoreIdIn(7L, Set.of(1L)))
         .thenReturn(
@@ -150,12 +126,12 @@ class CustomerMemberLinkDirectoryTest {
                     null)));
     when(repository.countStoresByMemberIdAndStoreIdNotIn(7L, Set.of(1L))).thenReturn(2L);
 
-    var links = directory.findByMember(7L, new StoreScope(false, Set.of(1L)));
+    var links = directory.findByMember(7L, new StoreScope(Set.of(1L)));
 
     assertThat(links.segments())
         .singleElement()
         .satisfies(s -> assertThat(s.customerName()).isEqualTo("山田"));
     assertThat(links.otherStoreCount()).isEqualTo(2);
-    verify(repository, never()).findLatestDirectoryByMemberId(anyLong());
+    verify(repository, never()).countStoresByMemberId(anyLong());
   }
 }

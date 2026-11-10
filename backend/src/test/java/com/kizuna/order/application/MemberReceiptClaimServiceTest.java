@@ -23,7 +23,6 @@ import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -101,7 +100,6 @@ class MemberReceiptClaimServiceTest {
             .displayName("会員 花子")
             .enabled(true)
             .userType(UserType.MEMBER)
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(Set.of())
             .build();
     user.setId(USER_ID);

@@ -16,7 +16,6 @@ let operator = "",
   limited = "",
   auditor = "",
   operatorId = 0,
-  ownerToken = "",
   auditPassword = "",
   auditRole = 0,
   secretName = "",
@@ -41,7 +40,8 @@ Given(
       request,
       owner,
       `店舗登録担当-${suffix}`,
-      ["STORE_MANAGE", "STORE_PROFILE_MANAGE"],
+      // 新しい店舗は作成者の店舗集合にだけ入るため、監査者への授与は担当が行う（付与できるのは自身の権限の範囲）。
+      ["STORE_MANAGE", "STORE_PROFILE_MANAGE", "STAFF_MANAGE", "AUDIT_VIEW"],
     );
     const operatorEmail = `store-operator-${suffix}@example.test`;
     operatorId = await createStaffFixture(
@@ -62,7 +62,6 @@ Given(
     const limitedEmail = `store-limited-${suffix}@example.test`;
     await createStaffFixture(request, owner, limitedEmail, password, [limitedRole], [Number(STORE1_ID)]);
     limited = await loginUser(request, limitedEmail, password);
-    ownerToken = owner;
     auditPassword = password;
     auditRole = await createPermissionRole(
       request,
@@ -155,10 +154,10 @@ When(
 Then(
   "成功した操作だけが店舗 ID と状態の前後で監査され値は複写されない",
   async ({ request }) => {
-    // 監査は集合内の店舗の行と削除済みの店舗の行だけを返す。作成した店舗は事前の集合に無いため、
+    // 監査は集合内の店舗の行と削除済みの店舗の行だけを返す。作成した店舗を持つ担当が、
     // 残っている店舗を明示して監査者を作る（削除した店舗の行は集合に関わらず見える）。
     const auditEmail = `store-auditor-${randomUUID()}@example.test`;
-    await createStaffFixture(request, ownerToken, auditEmail, auditPassword, [auditRole], [
+    await createStaffFixture(request, operator, auditEmail, auditPassword, [auditRole], [
       Number(activated),
       Number(untouched),
     ]);

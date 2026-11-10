@@ -64,7 +64,7 @@ class FileUploadAuthorizationTest {
 
   @BeforeEach
   void stubs() {
-    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(false, Set.of(1L)));
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(1L)));
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(storage.store(eq(1L), eq("public"), any(), any())).thenReturn("public/1/x/y.png");
   }

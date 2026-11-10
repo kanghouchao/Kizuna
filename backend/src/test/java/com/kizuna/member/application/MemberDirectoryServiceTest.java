@@ -14,7 +14,6 @@ import com.kizuna.member.domain.MemberRankHistory;
 import com.kizuna.member.domain.MemberRankHistoryRepository;
 import com.kizuna.member.domain.MemberRepository;
 import com.kizuna.member.domain.MemberSearchView;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -233,7 +232,6 @@ class MemberDirectoryServiceTest {
             .displayName(displayName)
             .enabled(true)
             .userType(UserType.MEMBER)
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(Set.of())
             .build();
     user.setId(id);

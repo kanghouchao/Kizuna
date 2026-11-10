@@ -7,7 +7,6 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.user.domain.DuplicateStaffEmailException;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.SystemRole;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -21,7 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 最初の管理者（統括 + ALL_STORES）を匿名で登録する初期設定。
+ * 最初の管理者（統括 + 空の店舗集合）を匿名で登録する初期設定。店舗は管理者が作成した時点で作成者の店舗集合へ加わる。
  *
  * <p>要否は「本人種別 STAFF の行が 1 件も無い」で判定する。有効な ROLE_MANAGE 保持者の有無で判定すると、保持者が DB
  * の直接編集などでゼロになったときに匿名の登録口が再び開いてしまう。ユーザー行を削除する経路は無いため、一度完了すると未完了へは戻らない。
@@ -58,7 +57,6 @@ public class InitialSetupService {
                 .enabled(true)
                 .userType(UserType.STAFF)
                 .roleIds(Set.of(admin.getId()))
-                .storeScopeType(StoreScopeType.ALL_STORES)
                 .storeIds(Set.of())
                 .build());
     businessAudit.recordById(

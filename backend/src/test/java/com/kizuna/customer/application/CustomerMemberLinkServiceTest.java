@@ -19,7 +19,6 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -66,7 +65,6 @@ class CustomerMemberLinkServiceTest {
             .displayName("山田次郎")
             .enabled(true)
             .userType(UserType.STAFF)
-            .storeScopeType(StoreScopeType.SPECIFIC_STORES)
             .storeIds(Set.of(1L))
             .roleIds(Set.of(1L))
             .build();

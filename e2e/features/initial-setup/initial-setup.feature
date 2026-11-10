@@ -11,8 +11,11 @@
     ならば 自動でログインしてダッシュボードへ遷移する
     もし サイドバーの "ロール管理" から "/admin/roles" を開く
     ならば 一覧の "統括" の行に "既定" が表示される
+    # 初期設定は空の店舗集合を授与する。集合が空の従業員は一覧に出るため、本人の行も見える
     もし サイドバーの "従業員管理" から "/admin/staff" を開く
     ならば 一覧の "admin@kizuna.test" の行に "統括" が表示される
+    かつ "admin@kizuna.test" とパスワード "pass1234" で API にログインする
+    ならば ログインした管理者の授権店舗は空である
     もし サイドバーの "店舗一覧" から "/admin/stores" を開く
     ならば 店舗一覧に "店舗がありません" と表示される
 
@@ -23,6 +26,7 @@
       | Sample   | S1   | store1.kizuna.test |
       | Sample 2 | S2   | store2.kizuna.test |
     ならば 店舗 "store1.kizuna.test" の id が店舗文脈の固定 id と一致する
+    かつ ログインした管理者の授権店舗は登録した店舗と一致する
     もし 次の従業員を作成する
       | 氏名     | メールアドレス            | パスワード | ロール       | 店舗                                   |
       | 田中花子 | tanaka.hanako@kizuna.test | pass1234   | 店長         | store1.kizuna.test, store2.kizuna.test |

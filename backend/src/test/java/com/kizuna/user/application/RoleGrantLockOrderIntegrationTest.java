@@ -10,7 +10,6 @@ import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -144,36 +143,32 @@ class RoleGrantLockOrderIntegrationTest {
                 UUID.randomUUID().toString(),
                 "付与検証",
                 Set.of(granted),
-                StoreScopeType.ALL_STORES,
                 Set.of());
         yield context.getBean(AdminStaffService.class).create(command, actorEmail).id();
       }
       case STAFF_UPDATE -> {
         var command =
-            new StaffCommand.UpdateGrants(
-                Set.of(kept, granted), StoreScopeType.ALL_STORES, Set.of(), target.getVersion());
+            new StaffCommand.UpdateGrants(Set.of(kept, granted), Set.of(), target.getVersion());
         yield context
             .getBean(AdminStaffService.class)
             .update(target.getId(), command, actorEmail)
             .id();
       }
       case SERVICE_CREATE -> {
-        var command =
-            new ServiceIdentityCommand.Create(
-                "付与検証", Set.of(granted), StoreScopeType.ALL_STORES, Set.of());
+        var command = new ServiceIdentityCommand.Create("付与検証", Set.of(granted), Set.of());
         yield context.getBean(ServiceIdentityService.class).create(command).id();
       }
       case SERVICE_UPDATE -> {
         var command =
             new ServiceIdentityCommand.UpdateGrants(
-                Set.of(kept, granted), StoreScopeType.ALL_STORES, Set.of(), target.getVersion());
+                Set.of(kept, granted), Set.of(), target.getVersion());
         yield context.getBean(ServiceIdentityService.class).update(target.getId(), command).id();
       }
     };
   }
 
   private <T> T asActor(Callable<T> call) throws Exception {
-    scopes.install(() -> new StoreScope(true, Set.of()));
+    scopes.install(() -> new StoreScope(Set.of()));
     try {
       return call.call();
     } finally {
@@ -241,12 +236,7 @@ class RoleGrantLockOrderIntegrationTest {
     return transaction.execute(
         status ->
             users.saveAndFlush(
-                builder
-                    .displayName("付与検証")
-                    .enabled(true)
-                    .roleIds(Set.of(roleId))
-                    .storeScopeType(StoreScopeType.ALL_STORES)
-                    .build()));
+                builder.displayName("付与検証").enabled(true).roleIds(Set.of(roleId)).build()));
   }
 
   @Configuration

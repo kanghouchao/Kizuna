@@ -7,10 +7,12 @@ import static org.mockito.Mockito.mock;
 import com.kizuna.audit.domain.AuditEventRepository;
 import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.point.application.PointLedgerService;
+import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.shared.storescope.StoreScope;
+import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.store.StoreShortNames;
 import com.kizuna.store.domain.AttendanceRecordCheck;
 import com.kizuna.store.domain.CompletedOrderCheck;
@@ -19,7 +21,11 @@ import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.storeprofile.domain.StoreProfileRepository;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.application.CreatedStoreGrant;
-import com.kizuna.user.domain.StoreScopeType;
+import com.kizuna.user.application.InitialSetupCommand;
+import com.kizuna.user.application.InitialSetupService;
+import com.kizuna.user.domain.Role;
+import com.kizuna.user.domain.RoleRepository;
+import com.kizuna.user.domain.SystemRole;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -55,11 +61,13 @@ import org.springframework.orm.jpa.vendor.HibernateJpaDialect;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** 実PGで、店舗の管理が呼び出し者の店舗集合の内側に限られ、作成者の集合へ新店舗が同じ取引で加わることを確認する。 */
+/** 実PGで、店舗の管理が呼び出し者の店舗集合の内側に限られ、作成者の集合へ新店舗が同じ取引で加わることを確認する。統括は初期設定で登録し、 空の店舗集合から始まる。 */
 @EnabledIfIntegration
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class StoreScopeManagementIntegrationTest {
@@ -70,6 +78,8 @@ class StoreScopeManagementIntegrationTest {
   private TransactionTemplate transactions;
   private StoreRegistryService stores;
   private Long managerId;
+  private long hqId;
+  private List<Long> hqStoresAfterSetup;
   private long storeA;
   private long storeB;
 
@@ -79,11 +89,25 @@ class StoreScopeManagementIntegrationTest {
     jdbc = new JdbcTemplate(context.getBean(DataSource.class));
     stores = context.getBean(StoreRegistryService.class);
     transactions = new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
-    saveUser(HQ, StoreScopeType.ALL_STORES, Set.of());
+    transactions.executeWithoutResult(
+        status ->
+            context
+                .getBean(RoleRepository.class)
+                .saveAndFlush(
+                    Role.builder()
+                        .name(SystemRole.ADMIN.getRoleName())
+                        .systemRole(true)
+                        .permissionIds(Set.of(1L))
+                        .build()));
+    hqId =
+        context
+            .getBean(InitialSetupService.class)
+            .register(new InitialSetupCommand(HQ, UUID.randomUUID().toString(), "統括"));
+    hqStoresAfterSetup = storeIdsOf(hqId);
     actAs(HQ);
     storeA = create();
     storeB = create();
-    managerId = saveUser(MANAGER, StoreScopeType.SPECIFIC_STORES, Set.of(storeA));
+    managerId = saveUser(MANAGER, Set.of(storeA));
   }
 
   @AfterEach
@@ -97,9 +121,9 @@ class StoreScopeManagementIntegrationTest {
   }
 
   @Test
-  void specificScopeListsOnlyStoresInTheSet() {
-    var all = new StoreScope(true, Set.of());
-    var onlyA = new StoreScope(false, Set.of(storeA));
+  void listsOnlyStoresInTheSet() {
+    var all = new StoreScope(Set.of(storeA, storeB));
+    var onlyA = new StoreScope(Set.of(storeA));
 
     assertThat(stores.list(onlyA, null, PageRequest.of(0, 100)).map(StoreView::id))
         .contains(storeA)
@@ -107,12 +131,29 @@ class StoreScopeManagementIntegrationTest {
     assertThat(stores.list(all, null, PageRequest.of(0, 100)).map(StoreView::id))
         .contains(storeA, storeB);
     assertThat(stores.count(onlyA)).isEqualTo(1);
-    assertThat(stores.list(new StoreScope(false, Set.of()), null, PageRequest.of(0, 10))).isEmpty();
+  }
+
+  @Test
+  void emptySetListsCountsAndAuthorizesNoStore() {
+    var empty = new StoreScope(Set.of());
+
+    assertThat(stores.list(empty, null, PageRequest.of(0, 10))).isEmpty();
+    assertThat(stores.list(empty, "検証店", PageRequest.of(0, 10))).isEmpty();
+    assertThat(stores.count(empty)).isZero();
+    assertThatThrownBy(() -> stores.getById(empty, String.valueOf(storeA)))
+        .isInstanceOf(NotFoundException.class);
+    var holder = context.getBean(StoreScopeHolder.class);
+    holder.install(() -> empty);
+    try {
+      assertThat(context.getBean(AdminStoreService.class).listAuthorizedStores()).isEmpty();
+    } finally {
+      holder.clear();
+    }
   }
 
   @Test
   void searchStaysInsideTheSetAndEscapesLikeWildcards() {
-    var onlyA = new StoreScope(false, Set.of(storeA));
+    var onlyA = new StoreScope(Set.of(storeA));
 
     assertThat(stores.list(onlyA, "検証店", PageRequest.of(0, 100)).map(StoreView::id))
         .containsExactly(storeA);
@@ -122,7 +163,7 @@ class StoreScopeManagementIntegrationTest {
   @Test
   void storeOutsideTheSetCannotBeReadUpdatedOrDeleted() {
     actAs(MANAGER);
-    var onlyA = new StoreScope(false, Set.of(storeA));
+    var onlyA = new StoreScope(Set.of(storeA));
     String outside = String.valueOf(storeB);
     long auditsBefore = audits(storeB);
 
@@ -132,7 +173,7 @@ class StoreScopeManagementIntegrationTest {
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(() -> stores.delete(onlyA, outside)).isInstanceOf(NotFoundException.class);
 
-    assertThat(stores.getById(new StoreScope(true, Set.of()), outside).name()).isEqualTo("検証店");
+    assertThat(stores.getById(new StoreScope(Set.of(storeB)), outside).name()).isEqualTo("検証店");
     assertThat(audits(storeB)).isEqualTo(auditsBefore);
   }
 
@@ -140,11 +181,9 @@ class StoreScopeManagementIntegrationTest {
   void storeInsideTheSetCanBeReadUpdatedAndDeleted() {
     actAs(HQ);
     long target = create();
-    long holder =
-        saveUser(
-            UUID.randomUUID() + "@example.test", StoreScopeType.SPECIFIC_STORES, Set.of(target));
+    long holder = saveUser(UUID.randomUUID() + "@example.test", Set.of(target));
     actAs(emailOf(holder));
-    var scope = new StoreScope(false, Set.of(target));
+    var scope = new StoreScope(Set.of(target));
     String id = String.valueOf(target);
 
     assertThat(stores.getById(scope, id).id()).isEqualTo(target);
@@ -174,17 +213,14 @@ class StoreScopeManagementIntegrationTest {
   }
 
   @Test
-  void allStoresCreatorIsLeftUnchanged() {
+  void initialSetupGrantsAnEmptySetAndTheAdminGainsEachStoreTheyCreate() {
+    assertThat(hqStoresAfterSetup).as("初期設定の直後の統括は店舗集合が空").isEmpty();
+    assertThat(storeIdsOf(hqId)).as("作成した店舗は作成者の集合へ加わる").contains(storeA, storeB);
+
     actAs(HQ);
-    Long hqId = jdbc.queryForObject("select id from t_users where email=?", Long.class, HQ);
+    long created = create();
 
-    create();
-
-    assertThat(storeIdsOf(hqId)).isEmpty();
-    assertThat(
-            jdbc.queryForObject(
-                "select store_scope_type from t_users where id=?", String.class, hqId))
-        .isEqualTo("ALL_STORES");
+    assertThat(storeIdsOf(hqId)).contains(created);
   }
 
   private long create() {
@@ -192,7 +228,7 @@ class StoreScopeManagementIntegrationTest {
         new StoreCreateCommand("検証店", StoreShortNames.next(), UUID.randomUUID() + ".example.test"));
   }
 
-  private long saveUser(String email, StoreScopeType type, Set<Long> storeIds) {
+  private long saveUser(String email, Set<Long> storeIds) {
     return transactions.execute(
         status ->
             context
@@ -205,7 +241,6 @@ class StoreScopeManagementIntegrationTest {
                         .userType(UserType.STAFF)
                         .enabled(true)
                         .roleIds(Set.of(1L))
-                        .storeScopeType(type)
                         .storeIds(storeIds)
                         .build())
                 .getId());
@@ -240,9 +275,12 @@ class StoreScopeManagementIntegrationTest {
       })
   @Import({
     AuditWriter.class,
+    AdminStoreService.class,
     BusinessAudit.class,
     CreatedStoreGrant.class,
-    StoreRegistryService.class
+    InitialSetupService.class,
+    StoreRegistryService.class,
+    StoreScopeHolder.class
   })
   static class Config {
     @Bean
@@ -301,6 +339,21 @@ class StoreScopeManagementIntegrationTest {
     @Bean
     PointLedgerService pointLedger() {
       return mock(PointLedgerService.class);
+    }
+
+    @Bean
+    PasswordEncoder passwordEncoder() {
+      return new BCryptPasswordEncoder(4);
+    }
+
+    @Bean
+    AppProperties appProperties() {
+      return new AppProperties();
+    }
+
+    @Bean
+    RoleRepository roles(EntityManager em) {
+      return new JpaRepositoryFactory(em).getRepository(RoleRepository.class);
     }
 
     @Bean

@@ -203,13 +203,7 @@ public interface OrderRepository extends StoreScopedRepository<Order> {
       from com.kizuna.order.domain.Order o
       """;
 
-  /** 店舗を跨ぐ照会。店舗の境界は無く、全店舗（ALL_STORES）を授権された呼び手だけが使う。 */
-  @Query(
-      value = GROUP_WIDE_VIEW_SELECT,
-      countQuery = "select count(o) from com.kizuna.order.domain.Order o")
-  Page<AdminOrderView> findGroupWideViews(Pageable pageable);
-
-  /** 店舗を跨ぐ照会。境界は呼び手の授権店舗集合（SPECIFIC_STORES）。 */
+  /** 店舗を跨ぐ照会。境界は呼び手の授権店舗集合で、storeIds は空でないこと（空集合は呼び手が短絡する）。 */
   @Query(
       value = GROUP_WIDE_VIEW_SELECT + " where o.storeId in :storeIds",
       countQuery =

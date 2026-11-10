@@ -18,14 +18,11 @@ import {
   CardHeader,
   CardTitle,
   Form,
-  FormControl,
   FormField,
-  FormItem,
-  FormMessage,
 } from '@/shared/ui';
 import type { Grants } from '../lib/grants';
 import { roleSetLabel } from '../lib/roleSetLabel';
-import { storeSetLabel } from '../lib/storeSetLabel';
+import { EMPTY_STORE_SET_LABEL, storeSetLabel } from '../lib/storeSetLabel';
 import { RolePicker } from './RolePicker';
 import { StoreSetPicker } from './StoreSetPicker';
 
@@ -83,7 +80,7 @@ export function GrantForm<T extends GrantFormValues>({
   const resultId = useId();
   const displayName = useWatch({ control, name: 'display_name' });
   const roleIds = useWatch({ control, name: 'role_ids' });
-  const storeSet = useWatch({ control, name: 'storeSet' });
+  const storeIds = useWatch({ control, name: 'store_ids' });
 
   const {
     items: roles,
@@ -103,12 +100,9 @@ export function GrantForm<T extends GrantFormValues>({
   const grantedPermissions = [
     ...new Map(listed.flatMap(role => role.permissions).map(entry => [entry.code, entry])).values(),
   ];
-  const selectedStores =
-    storeSet.storeScopeType === 'ALL_STORES'
-      ? []
-      : storeCatalog.filter(
-          store => store.id !== undefined && storeSet.storeIds.includes(store.id)
-        );
+  const selectedStores = storeCatalog.filter(
+    store => store.id !== undefined && storeIds.includes(store.id)
+  );
   // 目録が未着・取得失敗の間は名前を引けない。保持中の選択を「未選択」と述べず件数で示す
   const rolesUnavailable = rolesLoading || rolesFailed;
   const storesUnavailable = stores === null;
@@ -116,10 +110,9 @@ export function GrantForm<T extends GrantFormValues>({
     rolesUnavailable && roleIds.length > 0
       ? `選択中の ${roleIds.length} ロール`
       : roleSetLabel(selectedRoles);
-  const storeSummary =
-    storesUnavailable && storeSet.storeScopeType !== 'ALL_STORES' && storeSet.storeIds.length > 0
-      ? `選択中の ${storeSet.storeIds.length} 店舗`
-      : storeSetLabel(storeSet.storeScopeType, storeSet.storeIds, storeCatalog);
+  const storeSummary = storesUnavailable
+    ? `選択中の ${storeIds.length} 店舗`
+    : storeSetLabel(storeIds, storeCatalog);
   const name = editingName ?? displayName.trim();
   const subject = name ? `${name}${honorific}` : unnamedSubject;
   const editing = editingName !== undefined;
@@ -169,31 +162,20 @@ export function GrantForm<T extends GrantFormValues>({
                     />
                   )}
                 />
+                {/* 空の集合は「どの店舗も担当しない」で有効な授権のため、検証を置かない */}
                 <FormField
                   control={control}
-                  name="storeSet"
-                  rules={{
-                    validate: value =>
-                      value.storeScopeType === 'ALL_STORES' ||
-                      value.storeIds.length > 0 ||
-                      '対象店舗を 1 つ以上選択してください',
-                  }}
+                  name="store_ids"
                   render={({ field }) => (
-                    <FormItem className="gap-1">
-                      <FormControl>
-                        <StoreSetPicker
-                          label={storeLabel}
-                          stores={storeCatalog}
-                          isLoading={stores === null && !storesFailed}
-                          failed={storesFailed}
-                          onReload={reloadStores}
-                          {...field.value}
-                          onChange={field.onChange}
-                          ref={field.ref}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                    <StoreSetPicker
+                      label={storeLabel}
+                      stores={storeCatalog}
+                      isLoading={stores === null && !storesFailed}
+                      failed={storesFailed}
+                      onReload={reloadStores}
+                      storeIds={field.value}
+                      onChange={field.onChange}
+                    />
                   )}
                 />
               </CardContent>
@@ -211,7 +193,9 @@ export function GrantForm<T extends GrantFormValues>({
             </CardHeader>
             <CardContent className="space-y-5 text-sm">
               <p className="text-foreground break-words">
-                {subject}は {roleSummary} として {storeSummary} のデータにアクセスできます
+                {storeIds.length === 0
+                  ? `${subject}は ${roleSummary} として、どの店舗のデータにもアクセスできません`
+                  : `${subject}は ${roleSummary} として ${storeSummary} のデータにアクセスできます`}
               </p>
               <div className="space-y-2">
                 <h3 className="font-medium text-foreground">
@@ -252,22 +236,16 @@ export function GrantForm<T extends GrantFormValues>({
               </div>
               <div className="space-y-2">
                 <h3 className="font-medium text-foreground">
-                  対象店舗（
-                  {storeSet.storeScopeType === 'ALL_STORES'
-                    ? '全店舗'
-                    : `${storesUnavailable ? storeSet.storeIds.length : selectedStores.length} 店舗`}
-                  ）
+                  対象店舗（{storesUnavailable ? storeIds.length : selectedStores.length} 店舗）
                 </h3>
-                {storeSet.storeScopeType === 'ALL_STORES' ? (
-                  <p className="text-muted-foreground">今後追加される店舗も含みます。</p>
+                {storeIds.length === 0 ? (
+                  <p className="text-muted-foreground">{EMPTY_STORE_SET_LABEL}</p>
                 ) : storesUnavailable && storesFailed ? (
                   <p className="text-muted-foreground">
                     店舗一覧を取得できないため、選択中の店舗を表示できません。
                   </p>
                 ) : storesUnavailable ? (
                   <p className="text-muted-foreground">読み込み中...</p>
-                ) : selectedStores.length === 0 ? (
-                  <p className="text-muted-foreground">店舗が選ばれていません。</p>
                 ) : (
                   <ul className="max-h-64 space-y-1 overflow-y-auto">
                     {selectedStores.map(store => (

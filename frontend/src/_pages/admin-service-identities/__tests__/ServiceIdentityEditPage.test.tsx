@@ -30,7 +30,6 @@ const identity = (override: Partial<ServiceIdentityResponse> = {}): ServiceIdent
   display_name: '夜間失効',
   enabled: true,
   roles: [{ id: 20, name: '失効バッチ' }],
-  store_scope_type: 'SPECIFIC_STORES',
   store_ids: [1],
   version: 7,
   ...override,
@@ -83,34 +82,28 @@ describe('サービスIDの権限編集ページ', () => {
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/service-identities'));
     expect(mockedApi.update).toHaveBeenCalledWith(42, {
       role_ids: [20, 21],
-      store_scope_type: 'SPECIFIC_STORES',
       store_ids: [1, 2],
       version: 7,
     });
     expect(mockedNotify.success).toHaveBeenCalledWith('権限を更新しました');
   });
 
-  it('応答の店舗範囲が欠落しても全店舗へ拡大しない', async () => {
-    mockedApi.get.mockResolvedValue(
-      identity({ store_scope_type: undefined, store_ids: undefined })
-    );
+  it('応答の店舗集合が欠けていれば担当店舗なしとして描く', async () => {
+    mockedApi.get.mockResolvedValue(identity({ store_ids: undefined }));
     render(<ServiceIdentityEditPage />);
 
     expect(await screen.findByRole('checkbox', { name: '新宿店' })).not.toBeChecked();
-    expect(screen.queryByText(/現在は全店舗/)).not.toBeInTheDocument();
   });
 
-  it('全店舗の授権はロールだけの変更では保つ', async () => {
-    mockedApi.get.mockResolvedValue(identity({ store_scope_type: 'ALL_STORES', store_ids: [] }));
+  it('担当店舗なしのサービスIDは店舗を選ばずに保存でき、空の店舗集合を送る', async () => {
+    mockedApi.get.mockResolvedValue(identity({ store_ids: [] }));
     render(<ServiceIdentityEditPage />);
-    expect(await screen.findByText(/現在は全店舗/)).toBeInTheDocument();
     fireEvent.click(await screen.findByRole('checkbox', { name: '集計連携' }));
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/service-identities'));
     expect(mockedApi.update).toHaveBeenLastCalledWith(42, {
       role_ids: [20, 21],
-      store_scope_type: 'ALL_STORES',
       store_ids: [],
       version: 7,
     });

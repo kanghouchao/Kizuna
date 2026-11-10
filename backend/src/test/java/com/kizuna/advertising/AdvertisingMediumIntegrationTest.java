@@ -85,7 +85,7 @@ class AdvertisingMediumIntegrationTest {
     media = context.getBean(MediumService.class);
     long actorId =
         jdbc.queryForObject(
-            "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'広告担当','STAFF','ALL_STORES') returning id",
+            "insert into t_users(email,display_name,user_type) values (?,'広告担当','STAFF') returning id",
             Long.class,
             ACTOR);
     when(context.getBean(ActorIdentityService.class).requireUserId(any())).thenReturn(actorId);

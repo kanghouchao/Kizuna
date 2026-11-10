@@ -67,8 +67,8 @@ public class CurrentStoreArgumentResolver implements HandlerMethodArgumentResolv
         throw new AccessDeniedException("この店舗の権限がありません");
       }
     }
-    // 全店舗を授権された主体と未認証の公開サイトは実在しない id も名乗れ、外部キー任せでは 500 になるため 400 で拒否する。
-    // 集合の検査より後に置くのは、特定店舗の主体に「実在しない」と「授権外」を区別させないため。
+    // 未認証の公開サイトは実在しない id も名乗れ、外部キー任せでは 500 になるため 400 で拒否する。
+    // 集合の検査より後に置くのは、認証主体に「実在しない」と「授権外」を区別させないため。
     if (!storeExistenceCheck.exists(storeId)) {
       throw new ServiceException("店舗が見つかりません");
     }

@@ -76,8 +76,7 @@ class MediumIntegrationTest {
     jdbc = context.getBean(JdbcTemplate.class);
     media = context.getBean(MediumService.class);
     jdbc.update(
-        "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'媒体担当','STAFF','ALL_STORES')",
-        ACTOR);
+        "insert into t_users(email,display_name,user_type) values (?,'媒体担当','STAFF')", ACTOR);
   }
 
   @BeforeEach

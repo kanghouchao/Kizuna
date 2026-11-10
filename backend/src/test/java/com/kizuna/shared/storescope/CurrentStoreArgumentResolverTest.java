@@ -106,7 +106,7 @@ class CurrentStoreArgumentResolverTest {
   @ValueSource(strings = {"abc", "-1", "1.5", "99999999999999999999"})
   @DisplayName("数値でない・long 範囲を超えるヘッダは400")
   void malformedHeaderIsBadRequest(String header) {
-    authenticate(new StoreScope(true, Set.of()), "PERM_ORDER_MANAGE");
+    authenticate(new StoreScope(Set.of(1L)), "PERM_ORDER_MANAGE");
     assertBadRequest(REQUIRED, header, "店舗 ID の形式が正しくありません");
     verifyNoInteractions(existence);
   }
@@ -143,7 +143,7 @@ class CurrentStoreArgumentResolverTest {
   @DisplayName("権限（PERM_）を持たない CAST / MEMBER は店舗集合に店舗があっても 403（招待で店舗を持つ CAST を塞ぐ）")
   void subjectWithoutPermissionIsDeniedEvenWithinScope() {
     when(existence.exists(1L)).thenReturn(true);
-    authenticate(new StoreScope(false, Set.of(1L)), "ROLE_CAST");
+    authenticate(new StoreScope(Set.of(1L)), "ROLE_CAST");
     assertForbidden("1");
   }
 
@@ -159,7 +159,16 @@ class CurrentStoreArgumentResolverTest {
   @DisplayName("本人の店舗集合に含まれない店舗を名乗ると 403")
   void storeOutsideScopeIsDenied() {
     when(existence.exists(2L)).thenReturn(true);
-    authenticate(new StoreScope(false, Set.of(1L)), "PERM_ORDER_MANAGE");
+    authenticate(new StoreScope(Set.of(1L)), "PERM_ORDER_MANAGE");
+    assertForbidden("2");
+  }
+
+  @Test
+  @DisplayName("店舗集合が空の権限保持者は、実在するどの店舗を名乗っても 403")
+  void emptyScopeIsDeniedForEveryStore() {
+    when(existence.exists(anyLong())).thenReturn(true);
+    authenticate(new StoreScope(Set.of()), "PERM_ORDER_MANAGE");
+    assertForbidden("1");
     assertForbidden("2");
   }
 
@@ -167,7 +176,7 @@ class CurrentStoreArgumentResolverTest {
   @DisplayName("集合の外の実在しない店舗も 403 で、実在確認まで進まない（不在と授権外を区別させない）")
   void nonexistentStoreOutsideScopeIsDeniedBeforeExistenceCheck() {
     when(existence.exists(anyLong())).thenReturn(false);
-    authenticate(new StoreScope(false, Set.of(1L)), "PERM_ORDER_MANAGE");
+    authenticate(new StoreScope(Set.of(1L)), "PERM_ORDER_MANAGE");
     assertForbidden("999");
     verify(existence, never()).exists(anyLong());
   }
@@ -175,19 +184,16 @@ class CurrentStoreArgumentResolverTest {
   @Test
   @DisplayName("集合の内の店舗でも実在しなければ 400")
   void nonexistentStoreInsideScopeIsBadRequest() {
-    authenticate(new StoreScope(false, Set.of(1L)), "PERM_ORDER_MANAGE");
+    authenticate(new StoreScope(Set.of(1L)), "PERM_ORDER_MANAGE");
     assertBadRequest(REQUIRED, "1", "店舗が見つかりません");
   }
 
   @Test
-  @DisplayName("権限保持者は集合の内の店舗を名乗れ、ALL_STORES は実在する任意の店舗を名乗れること")
+  @DisplayName("権限保持者は集合の内の店舗を名乗れること")
   void permissionHolderWithinScopeResolvesStore() throws Exception {
     when(existence.exists(anyLong())).thenReturn(true);
-    authenticate(new StoreScope(false, Set.of(1L)), "PERM_ORDER_MANAGE");
+    authenticate(new StoreScope(Set.of(1L)), "PERM_ORDER_MANAGE");
     assertThat(resolve(REQUIRED, "1")).isEqualTo(1L);
-
-    authenticate(new StoreScope(true, Set.of()), "PERM_SHIFT_MANAGE");
-    assertThat(resolve(REQUIRED, "999")).isEqualTo(999L);
   }
 
   @Test
@@ -207,7 +213,7 @@ class CurrentStoreArgumentResolverTest {
   @Test
   @DisplayName("全検証を通ったときだけ店舗 id をログの MDC に載せること")
   void mdcCarriesTheStoreOnlyAfterSuccess() throws Exception {
-    authenticate(new StoreScope(false, Set.of(1L)), "PERM_ORDER_MANAGE");
+    authenticate(new StoreScope(Set.of(1L)), "PERM_ORDER_MANAGE");
     assertBadRequest(REQUIRED, "1", "店舗が見つかりません");
 
     when(existence.exists(1L)).thenReturn(true);

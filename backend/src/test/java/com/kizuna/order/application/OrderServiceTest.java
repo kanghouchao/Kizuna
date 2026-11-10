@@ -69,7 +69,6 @@ import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.application.ReceptionistEligibilityService;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.RoleRepository;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -212,7 +211,7 @@ class OrderServiceTest {
         .thenReturn(new AttributionMaterializer.Result(0, 0, null, false));
   }
 
-  private User receptionist(UserType userType, StoreScopeType scopeType, Set<Long> storeIds) {
+  private User receptionist(UserType userType, Set<Long> storeIds) {
     return User.builder()
         .email("receptionist@kizuna.test")
         .password("pw")
@@ -220,14 +219,13 @@ class OrderServiceTest {
         .enabled(true)
         .userType(userType)
         .roleIds(userType == UserType.STAFF ? Set.of(STAFF_ROLE_ID) : Set.of())
-        .storeScopeType(scopeType)
         .storeIds(storeIds)
         .build();
   }
 
   /** 現店舗(store_id=1)を授権し ORDER_MANAGE 権限を持つ受付担当者。 */
   private User authorizedReceptionist() {
-    return receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(STORE_ID));
+    return receptionist(UserType.STAFF, Set.of(STORE_ID));
   }
 
   /**
@@ -388,8 +386,7 @@ class OrderServiceTest {
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     // 別店舗(store_id=2)専用スコープ: 現店舗(=1)を授権しない
     when(userRepository.findById(1L))
-        .thenReturn(
-            Optional.of(receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L))));
+        .thenReturn(Optional.of(receptionist(UserType.STAFF, Set.of(2L))));
 
     assertThatThrownBy(() -> service.create(STORE_ID, mapper.toCommand(req), ACTOR_EMAIL, true))
         .isInstanceOf(NotFoundException.class)
@@ -408,7 +405,7 @@ class OrderServiceTest {
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     // 全店舗授権でも CAST 本人種別は受付担当者になれない
     when(userRepository.findById(1L))
-        .thenReturn(Optional.of(receptionist(UserType.CAST, StoreScopeType.ALL_STORES, Set.of())));
+        .thenReturn(Optional.of(receptionist(UserType.CAST, Set.of())));
 
     assertThatThrownBy(() -> service.create(STORE_ID, mapper.toCommand(req), ACTOR_EMAIL, true))
         .isInstanceOf(NotFoundException.class)
@@ -434,8 +431,7 @@ class OrderServiceTest {
             .enabled(true)
             .userType(UserType.STAFF)
             .roleIds(Set.of(31L))
-            .storeScopeType(StoreScopeType.ALL_STORES)
-            .storeIds(Set.of())
+            .storeIds(Set.of(STORE_ID))
             .build();
     when(userRepository.findById(1L)).thenReturn(Optional.of(staffWithoutOrderManage));
 
@@ -535,8 +531,7 @@ class OrderServiceTest {
 
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     when(userRepository.findByEmail(ACTOR_EMAIL))
-        .thenReturn(
-            Optional.of(receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L))));
+        .thenReturn(Optional.of(receptionist(UserType.STAFF, Set.of(2L))));
 
     assertThatThrownBy(() -> service.create(STORE_ID, mapper.toCommand(req), ACTOR_EMAIL, true))
         .isInstanceOf(ServiceException.class)
@@ -963,8 +958,7 @@ class OrderServiceTest {
     when(orderRepository.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(existing));
     // 別店舗(store_id=2)専用スコープ: 現店舗(=1)を授権しない
     when(userRepository.findById(2L))
-        .thenReturn(
-            Optional.of(receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L))));
+        .thenReturn(Optional.of(receptionist(UserType.STAFF, Set.of(2L))));
 
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setCastId("g2");
@@ -988,7 +982,7 @@ class OrderServiceTest {
     when(orderRepository.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(existing));
     // 全店舗授権でも CAST 本人種別は受付担当者になれない
     when(userRepository.findById(2L))
-        .thenReturn(Optional.of(receptionist(UserType.CAST, StoreScopeType.ALL_STORES, Set.of())));
+        .thenReturn(Optional.of(receptionist(UserType.CAST, Set.of())));
 
     OrderUpdateRequest req = new OrderUpdateRequest();
     req.setCastId("g2");
@@ -1416,7 +1410,7 @@ class OrderServiceTest {
     stubBusinessDate();
     when(orderApplicationRepository.findByIdAndStoreId("a1", STORE_ID))
         .thenReturn(Optional.of(application));
-    User otherStoreActor = receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L));
+    User otherStoreActor = receptionist(UserType.STAFF, Set.of(2L));
     otherStoreActor.setId(7L);
     when(userRepository.findByEmail("staff@kizuna.test")).thenReturn(Optional.of(otherStoreActor));
     stubOrderCreation();
@@ -1438,8 +1432,7 @@ class OrderServiceTest {
     stubBusinessDate();
     when(orderApplicationRepository.findByIdAndStoreId("a1", STORE_ID))
         .thenReturn(Optional.of(application));
-    User otherStoreReceptionist =
-        receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L));
+    User otherStoreReceptionist = receptionist(UserType.STAFF, Set.of(2L));
     when(userRepository.findById(9L)).thenReturn(Optional.of(otherStoreReceptionist));
 
     OrderApplicationConfirmationRequest request = confirmation();

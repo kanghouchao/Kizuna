@@ -369,7 +369,7 @@ class NotificationDeliveryControllerTest {
   @Test
   @DisplayName("店舗の通知は X-Store-ID を要し、名乗らなければどの端点も 400 で service に届かないこと")
   void storeRowsRequireTheStoreHeader() throws Exception {
-    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(true, Set.of()));
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(1L)));
     var all = staff("PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_MANAGE", "PERM_NOTIFICATION_SEND");
     for (var request : requests("/notification-deliveries", all))
       mockMvc.perform(request).andExpect(status().isBadRequest());
@@ -380,7 +380,7 @@ class NotificationDeliveryControllerTest {
   @Test
   @DisplayName("会員宛の通知は店舗集合に関わらず会員宛通知の権限で、店舗を持たない（null）として service を呼ぶこと")
   void memberRowsPassNoStoreForMemberNotificationHolders() throws Exception {
-    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(false, Set.of()));
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of()));
     when(notifications.list(isNull(), eq("user"), any()))
         .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 50), 0));
     when(notifications.queue(null, "user", "101", 0L, "確認済み", false)).thenReturn(view());
@@ -404,7 +404,7 @@ class NotificationDeliveryControllerTest {
   @Test
   @DisplayName("店舗の通知の権限だけでは、どの端点でも会員宛の通知に到達できないこと")
   void storeNotificationPermissionsDoNotOpenMemberRows() throws Exception {
-    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(true, Set.of()));
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(1L)));
     var store =
         staff("PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_MANAGE", "PERM_NOTIFICATION_SEND");
     for (var request : requests("/member-notification-deliveries", store))

@@ -4,7 +4,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
 
-/** 全群横断受注一覧の読み側 projection（集合作用域）。店舗の絞り込みは授権店舗集合の形に応じてクエリが持つ。 */
+/** 全群横断受注一覧の読み側 projection（集合作用域）。店舗の絞り込みは授権店舗集合でクエリが持つ。 */
 public interface AdminOrderView {
   boolean getCompletionInvalidated();
 

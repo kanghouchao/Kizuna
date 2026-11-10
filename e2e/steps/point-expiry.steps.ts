@@ -1,7 +1,7 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
-import { createPermissionRole, authorizedStoreIds, createStaffFixture, loginUser, openLoginForm } from './store-api';
+import { createPermissionRole, authorizedStoreIds, createServiceIdentity, createStaffFixture, loginUser, openLoginForm } from './store-api';
 const { Given, When, Then } = createBdd();
 let operator = '';
 let viewer = '';
@@ -30,9 +30,7 @@ Given('失効処理用の主体と権限不足の主体が用意されている'
   const incomplete = await createPermissionRole(request, admin, '実行のみ-' + suffix, ['TASK_EXECUTE']);
   serviceName = '日次失効サービス-' + suffix;
   for (const [roleId, name] of [[complete, serviceName], [incomplete, '権限不足-' + suffix]] as const) {
-    const response = await request.post('/api/service-identities', { headers: headers(admin), data: { display_name: name, role_ids: [roleId], store_scope_type: 'ALL_STORES', store_ids: [] } });
-    expect(response.status(), await response.text()).toBe(201);
-    const id = (await response.json()).id;
+    const id = await createServiceIdentity(request, admin, name, [roleId], await authorizedStoreIds(request, admin));
     if (roleId === complete) serviceId = id;
     else incompleteId = id;
   }

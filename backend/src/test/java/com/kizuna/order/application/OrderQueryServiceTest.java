@@ -35,7 +35,6 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.user.application.ReceptionistEligibilityService;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.RoleRepository;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -106,7 +105,7 @@ class OrderQueryServiceTest {
     when(businessDateService.currentBusinessDate()).thenReturn(CURRENT_BUSINESS_DATE);
   }
 
-  private User receptionist(UserType userType, StoreScopeType scopeType, Set<Long> storeIds) {
+  private User receptionist(UserType userType, Set<Long> storeIds) {
     return User.builder()
         .email("receptionist@kizuna.test")
         .password("pw")
@@ -114,14 +113,13 @@ class OrderQueryServiceTest {
         .enabled(true)
         .userType(userType)
         .roleIds(userType == UserType.STAFF ? Set.of(STAFF_ROLE_ID) : Set.of())
-        .storeScopeType(scopeType)
         .storeIds(storeIds)
         .build();
   }
 
   /** 現店舗(store_id=1)を授権し ORDER_MANAGE 権限を持つ受付担当者。 */
   private User authorizedReceptionist() {
-    return receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(STORE_ID));
+    return receptionist(UserType.STAFF, Set.of(STORE_ID));
   }
 
   /** 作業キューの読み口が返す 1 行分の projection。並びの鍵になる項目だけを埋める。 */
@@ -380,7 +378,7 @@ class OrderQueryServiceTest {
 
   @Test
   void listReceptionistsExcludesStaffAuthorizedForDifferentStore() {
-    User otherStore = receptionist(UserType.STAFF, StoreScopeType.SPECIFIC_STORES, Set.of(2L));
+    User otherStore = receptionist(UserType.STAFF, Set.of(2L));
     otherStore.setId(10L);
     when(userRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(UserType.STAFF, STORE_ID))
         .thenReturn(List.of(otherStore));
@@ -390,7 +388,7 @@ class OrderQueryServiceTest {
 
   @Test
   void listReceptionistsExcludesCastRole() {
-    User cast = receptionist(UserType.CAST, StoreScopeType.ALL_STORES, Set.of());
+    User cast = receptionist(UserType.CAST, Set.of());
     cast.setId(10L);
     when(userRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(UserType.STAFF, STORE_ID))
         .thenReturn(List.of(cast));
@@ -431,8 +429,7 @@ class OrderQueryServiceTest {
             .enabled(true)
             .userType(UserType.STAFF)
             .roleIds(Set.of(31L))
-            .storeScopeType(StoreScopeType.ALL_STORES)
-            .storeIds(Set.of())
+            .storeIds(Set.of(STORE_ID))
             .build();
     noPermission.setId(10L);
     when(userRepository.findAuthorizedByUserTypeOrderByDisplayNameAsc(UserType.STAFF, STORE_ID))

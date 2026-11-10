@@ -24,7 +24,7 @@ import org.springframework.security.access.AccessDeniedException;
 class AdvertisingReportReaderTest {
   EntityManager em = mock(EntityManager.class);
   AdvertisingReportReader reader = new AdvertisingReportReader(em);
-  StoreScope scope = new StoreScope(false, Set.of(1L));
+  StoreScope scope = new StoreScope(Set.of(1L));
 
   @Test
   void foreignAndUnresolvedScopesFailBeforeReading() {

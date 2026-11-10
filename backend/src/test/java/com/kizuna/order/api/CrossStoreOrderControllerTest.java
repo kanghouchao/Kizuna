@@ -77,7 +77,7 @@ class CrossStoreOrderControllerTest {
   @Test
   @DisplayName("GET /orders/cross-store?sort=status でも id が副キーとして補われること")
   void listAppendsIdTiebreakerWhenCallerOverridesSort() throws Exception {
-    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(true, Set.of()));
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(1L)));
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
     Page<AdminOrderView> empty = new PageImpl<>(List.of());
     when(adminOrderService.list(any(), pageableCaptor.capture())).thenReturn(empty);
@@ -88,16 +88,16 @@ class CrossStoreOrderControllerTest {
   }
 
   @Test
-  @DisplayName("SPECIFIC_STORES の授権集合がそのまま service へ渡ること")
+  @DisplayName("授権集合がそのまま service へ渡ること")
   void listPassesTheResolvedStoreSet() throws Exception {
-    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(false, Set.of(3L, 5L)));
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(3L, 5L)));
     ArgumentCaptor<StoreScope> scopeCaptor = ArgumentCaptor.forClass(StoreScope.class);
     when(adminOrderService.list(scopeCaptor.capture(), any()))
         .thenReturn(new PageImpl<>(List.of()));
 
     mockMvc.perform(list("")).andExpect(status().isOk());
 
-    assertThat(scopeCaptor.getValue()).isEqualTo(new StoreScope(false, Set.of(3L, 5L)));
+    assertThat(scopeCaptor.getValue()).isEqualTo(new StoreScope(Set.of(3L, 5L)));
   }
 
   @Test

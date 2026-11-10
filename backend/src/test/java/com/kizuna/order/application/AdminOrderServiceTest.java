@@ -35,36 +35,24 @@ class AdminOrderServiceTest {
   @InjectMocks AdminOrderService service;
 
   @Test
-  void listReturnsGroupWideViews() {
+  void storeSetBindsTheGrantedStoreIds() {
     AdminOrderView view = mock(AdminOrderView.class);
     Page<AdminOrderView> page = new PageImpl<>(List.of(view), PageRequest.of(0, 10), 1);
+    when(orderRepository.findGroupWideViewsInStores(eq(Set.of(3L, 5L)), any(Pageable.class)))
+        .thenReturn(page);
 
-    when(orderRepository.findGroupWideViews(any(Pageable.class))).thenReturn(page);
-
-    Page<AdminOrderView> result =
-        service.list(new StoreScope(true, Set.of()), PageRequest.of(0, 10));
+    var result = service.list(new StoreScope(Set.of(3L, 5L)), PageRequest.of(0, 10));
 
     assertThat(result.getContent()).containsExactly(view);
   }
 
   @Test
-  void specificStoresBindTheGrantedStoreIds() {
-    when(orderRepository.findGroupWideViewsInStores(eq(Set.of(3L, 5L)), any(Pageable.class)))
-        .thenReturn(Page.empty());
-
-    service.list(new StoreScope(false, Set.of(3L, 5L)), PageRequest.of(0, 10));
-
-    verify(orderRepository).findGroupWideViewsInStores(eq(Set.of(3L, 5L)), any(Pageable.class));
-    verify(orderRepository, never()).findGroupWideViews(any(Pageable.class));
-  }
-
-  @Test
   void pageEndsInOrderIdAfterCallerSort() {
     var captor = ArgumentCaptor.forClass(Pageable.class);
-    when(orderRepository.findGroupWideViews(captor.capture())).thenReturn(Page.empty());
+    when(orderRepository.findGroupWideViewsInStores(any(), captor.capture()))
+        .thenReturn(Page.empty());
 
-    service.list(
-        new StoreScope(true, Set.of()), PageRequest.of(1, 10, Sort.by(Order::getCreatedAt)));
+    service.list(new StoreScope(Set.of(3L)), PageRequest.of(1, 10, Sort.by(Order::getCreatedAt)));
 
     assertThat(captor.getValue().getSort())
         .containsExactly(Sort.Order.asc(Order::getCreatedAt), Sort.Order.asc(Order::getId));
@@ -72,12 +60,11 @@ class AdminOrderServiceTest {
   }
 
   @Test
-  void allStoresAddNoStoreCondition() {
-    when(orderRepository.findGroupWideViews(any(Pageable.class))).thenReturn(Page.empty());
+  void emptyStoreSetReturnsAnEmptyPageWithoutQuerying() {
+    var result = service.list(new StoreScope(Set.of()), PageRequest.of(0, 10));
 
-    service.list(new StoreScope(true, Set.of()), PageRequest.of(0, 10));
-
-    verify(orderRepository).findGroupWideViews(any(Pageable.class));
+    assertThat(result.getContent()).isEmpty();
+    assertThat(result.getTotalElements()).isZero();
     verify(orderRepository, never()).findGroupWideViewsInStores(any(), any(Pageable.class));
   }
 }

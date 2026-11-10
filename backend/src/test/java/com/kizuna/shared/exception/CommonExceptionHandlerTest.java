@@ -6,6 +6,7 @@ import static org.assertj.core.api.InstanceOfAssertFactories.MAP;
 import com.kizuna.storeprofile.api.dto.StoreProfileUpdateRequest;
 import com.kizuna.storeprofile.domain.SnsLink;
 import com.kizuna.user.api.dto.AdminStaffCreateRequest;
+import com.kizuna.user.domain.UserType;
 import jakarta.validation.Validation;
 import jakarta.validation.ValidatorFactory;
 import java.sql.SQLException;
@@ -209,10 +210,13 @@ class CommonExceptionHandlerTest {
     }
   }
 
+  record Typed(UserType userType) {}
+
   @Test
   @DisplayName("列挙に無い値は 400 で、details にワイヤ上のフィールド名（snake_case）を載せ、Java の型名は載せない")
   void unreadableBodyExposesWireFieldOnly() {
-    HttpMessageNotReadableException ex = unreadable("{\"store_scope_type\":\"NOT_A_REAL_TYPE\"}");
+    HttpMessageNotReadableException ex =
+        unreadable("{\"user_type\":\"NOT_A_REAL_TYPE\"}", Typed.class);
 
     ResponseEntity<Map<String, Object>> response = handler.handle(ex);
 
@@ -220,7 +224,7 @@ class CommonExceptionHandlerTest {
     assertThat(response.getBody()).containsEntry("error", "リクエストの形式が正しくありません");
     assertThat(response.getBody())
         .extracting("details")
-        .isEqualTo(Map.of("store_scope_type", "値の形式が正しくありません"));
+        .isEqualTo(Map.of("user_type", "値の形式が正しくありません"));
     assertThat(response.getBody().toString()).doesNotContain("com.kizuna");
   }
 
@@ -277,8 +281,8 @@ class CommonExceptionHandlerTest {
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(response.getBody())
         .extracting("details", MAP)
-        .containsKeys("display_name", "role_ids", "store_scope_type")
-        .doesNotContainKeys("displayName", "roleIds", "storeScopeType");
+        .containsKeys("display_name", "role_ids", "store_ids")
+        .doesNotContainKeys("displayName", "roleIds", "storeIds");
   }
 
   @Test

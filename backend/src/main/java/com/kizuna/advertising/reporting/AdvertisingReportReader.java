@@ -30,7 +30,7 @@ public class AdvertisingReportReader {
   @Transactional(readOnly = true, propagation = Propagation.MANDATORY)
   public AdvertisingReportFacts store(
       Long storeId, List<Long> stores, String from, String to, int limit) {
-    return read(new StoreScope(false, Set.of(storeId)), stores, from, to, limit);
+    return read(new StoreScope(Set.of(storeId)), stores, from, to, limit);
   }
 
   @PreAuthorize("hasAuthority('PERM_ADVERTISING_COST_SET_VIEW')")

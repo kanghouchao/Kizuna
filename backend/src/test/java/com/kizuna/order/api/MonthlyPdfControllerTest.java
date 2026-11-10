@@ -106,7 +106,7 @@ class MonthlyPdfControllerTest {
 
   @BeforeEach
   void data() {
-    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(false, Set.of(1L)));
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(1L)));
     properties.getMonthlyPdf().setMaxBytes(16L * 1024 * 1024);
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(stores.name(1L)).thenReturn("日本語店舗");

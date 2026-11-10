@@ -13,22 +13,6 @@ jest.mock('@/entities/user', () => ({
   useStoreContext: () => ({ stores: [{ id: 10, name: '本店' }] }),
 }));
 
-jest.mock('@/features/staff-management', () => ({
-  roleSetLabel: (roles: { name?: string }[] | undefined) =>
-    roles && roles.length > 0 ? roles.map(role => role.name).join('・') : '未選択',
-  storeSetLabel: (
-    scopeType: string | undefined,
-    storeIds: number[] | undefined,
-    stores: { id?: number; name?: string }[]
-  ) =>
-    scopeType === 'ALL_STORES'
-      ? '全店舗'
-      : stores
-          .filter(store => store.id !== undefined && (storeIds ?? []).includes(store.id))
-          .map(store => store.name)
-          .join('・') || '未選択',
-}));
-
 jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
 }));
@@ -42,7 +26,6 @@ const identity = (
   display_name: '夜間バッチ',
   enabled: true,
   roles: [{ id: 3, name: 'バッチ実行' }],
-  store_scope_type: 'SPECIFIC_STORES',
   store_ids: [10],
   ...override,
 });
@@ -69,7 +52,6 @@ describe('サービスID管理ページ', () => {
           display_name: '外部連携',
           enabled: false,
           roles: [{ id: 4, name: '連携用' }],
-          store_scope_type: 'ALL_STORES',
           store_ids: [],
         }),
       ])
@@ -84,7 +66,7 @@ describe('サービスID管理ページ', () => {
     expect(screen.getByText('バッチ実行')).toBeInTheDocument();
     expect(screen.getByText('連携用')).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText('本店')).toBeInTheDocument());
-    expect(screen.getByText('全店舗')).toBeInTheDocument();
+    expect(screen.getByText('担当店舗なし')).toBeInTheDocument();
     expect(screen.getByText('有効')).toBeInTheDocument();
     expect(screen.getByText('停止中')).toBeInTheDocument();
   });

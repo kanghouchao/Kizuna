@@ -7,7 +7,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.kizuna.point.application.BenefitGrantService;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserType;
 import java.util.Set;
@@ -63,8 +62,6 @@ class LoginBenefitTriggerTest {
             .enabled(true)
             .userType(type)
             .roleIds(type == UserType.STAFF ? Set.of(10L) : Set.of())
-            .storeScopeType(
-                type == UserType.STAFF ? StoreScopeType.ALL_STORES : StoreScopeType.SPECIFIC_STORES)
             .storeIds(type == UserType.CAST ? Set.of(1L) : Set.of())
             .build();
     ReflectionTestUtils.setField(user, "id", id);

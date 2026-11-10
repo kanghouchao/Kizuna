@@ -95,8 +95,6 @@ public class BusinessAudit {
         String.valueOf(user.getEnabled()),
         "role_ids",
         ids(user.getRoleIds()),
-        "store_scope_type",
-        user.getStoreScopeType().name(),
         "store_ids",
         ids(user.getStoreIds()));
   }

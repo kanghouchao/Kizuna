@@ -15,7 +15,6 @@ import com.kizuna.settings.domain.SystemConfigRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -56,7 +55,6 @@ class SystemConfigAuditTest {
             .displayName("監査担当")
             .userType(UserType.STAFF)
             .roleIds(Set.of(1L))
-            .storeScopeType(StoreScopeType.ALL_STORES)
             .build();
     actor.setId(9L);
     when(users.findByEmail(anyString())).thenReturn(Optional.of(actor));

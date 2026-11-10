@@ -4,7 +4,6 @@ databaseChangeLog:
       author: kanghouchao
       # 統合メニューの正典（2 階層厳守）。見出し節は permission を持たず、子に見えるものがあれば出る。
       # 葉は permission で可視性を決め、permission の無い葉（ダッシュボード）は全員に見える。
-      # requires_all_stores の葉は、さらに全店舗を授権された利用者にだけ出る。
       # 節は業務領域で分け、節内は日常操作 → 照会・履歴 → 設定の順に並べる。
       # 親→子の順で挿入し自己参照 FK（fk_t_menus_parent）を満たす。
       preConditions:

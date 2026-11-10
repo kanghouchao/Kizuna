@@ -21,6 +21,7 @@ const INITIAL_SETUP_API = `${APP_URL}/api/auth/initial-setup`;
 const INITIAL_SETUP_URL = `${APP_URL}/auth/initial-setup`;
 
 let adminToken = '';
+let registeredDomains: string[] = [];
 let createdStaff: { email: string; password: string; storeIds: string[] }[] = [];
 
 Given('初期設定の要否 API が required: {word} を返す', async ({ request }, required: string) => {
@@ -73,7 +74,9 @@ Given('{string} とパスワード {string} で API にログインする', asyn
 
 When('次の店舗を登録する', async ({ request }, table: DataTable) => {
   // 登録順が採番順になり、先頭の店舗が STORE1_ID を得る。
+  registeredDomains = [];
   for (const row of table.hashes()) {
+    registeredDomains.push(row['ドメイン']);
     await createStore(request, adminToken, {
       name: row['店舗名'],
       short_name: row['略称'],
@@ -86,6 +89,21 @@ Then('店舗 {string} の id が店舗文脈の固定 id と一致する', async
   // store-api.ts は店舗文脈の id を STORE1_ID に固定している。採番がずれると、それを使う全シナリオが
   // 別の店舗を指すため、ここで止める。
   expect(await findStoreIdByDomain(request, adminToken, domain)).toBe(STORE1_ID);
+});
+
+Then('ログインした管理者の授権店舗は空である', async ({ request }) => {
+  expect(await getAuthorizedStores(request, adminToken)).toEqual([]);
+});
+
+// 店舗を作成した者には、その店舗が自動で店舗集合へ加わる。
+Then('ログインした管理者の授権店舗は登録した店舗と一致する', async ({ request }) => {
+  expect(registeredDomains.length).toBeGreaterThan(0);
+  const expected: string[] = [];
+  for (const domain of registeredDomains) {
+    expected.push(String(await findStoreIdByDomain(request, adminToken, domain)));
+  }
+  const stores = await getAuthorizedStores(request, adminToken);
+  expect(stores.map((store) => String(store.id)).sort()).toEqual(expected.sort());
 });
 
 When('次の従業員を作成する', async ({ request }, table: DataTable) => {

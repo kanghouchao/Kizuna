@@ -29,12 +29,11 @@ import org.hibernate.annotations.BatchSize;
  * は権限モデルに入らない。ロールは跨集約 ID 参照（{@link Role}）。停止は {@link
  * #stop()}（enabled=false）であり、行を削除しないことで過去の実行主体の記録を保持する。
  *
+ * <p>店舗集合は明示した店舗 ID の集合で、どの本人種別でも空でよい（空は全店舗を意味しない）。
+ *
  * <p>不変条件（構築時と再割当時に検証、違反は 400 系ドメイン例外）:
  *
  * <ul>
- *   <li>店舗集合: {@code SPECIFIC_STORES} は非空（MEMBER のみ空を許容 — 登録時点で紐づけ店舗を持たないため）、{@code ALL_STORES}
- *       は空かつ MEMBER には授権不可（{@code authorizes} が無条件 true になる fail-open を塞ぐ）（{@link
- *       InvalidStoreScopeException}）
  *   <li>ロール: STAFF / SERVICE は 1 ロール以上、CAST/MEMBER は空（{@link InvalidRoleGrantException}）
  *   <li>資格情報: SERVICE は email・password・LINE 連携をいずれも持たず、他の種別は email・password が必須（{@link
  *       InvalidCredentialAssignmentException}）
@@ -97,10 +96,6 @@ public class User extends BaseEntity {
   @BatchSize(size = 25)
   private Set<Long> roleIds = new HashSet<>();
 
-  @Enumerated(EnumType.STRING)
-  @Column(name = "store_scope_type", nullable = false, length = 20)
-  private StoreScopeType storeScopeType;
-
   @ElementCollection(fetch = FetchType.EAGER)
   @CollectionTable(name = "t_user_stores", joinColumns = @JoinColumn(name = "user_id"))
   @Column(name = "store_id")
@@ -115,13 +110,11 @@ public class User extends BaseEntity {
       boolean enabled,
       UserType userType,
       Set<Long> roleIds,
-      StoreScopeType storeScopeType,
       Set<Long> storeIds,
       String lineUserId) {
     Set<Long> roles = roleIds == null ? Set.of() : roleIds;
     Set<Long> stores = storeIds == null ? Set.of() : storeIds;
     validateRoleGrant(userType, roles);
-    validateScope(userType, storeScopeType, stores);
     validateCredentials(userType, email, password, lineUserId);
     this.email = email == null ? null : email.toLowerCase(Locale.ROOT);
     this.password = password;
@@ -130,7 +123,6 @@ public class User extends BaseEntity {
     this.enabled = enabled;
     this.userType = userType;
     this.roleIds = new HashSet<>(roles);
-    this.storeScopeType = storeScopeType;
     this.storeIds = new HashSet<>(stores);
   }
 
@@ -148,24 +140,20 @@ public class User extends BaseEntity {
    * 授権（ロール・担当店舗集合）を再割当てする。構築時と同一の不変条件を検証する（本人属性は変更しない）。ロール集合が変わると版を進める —
    * トークンの権限はロールから発行時に写したものだから。店舗集合は毎要求 DB から解決されるので進めない。{@code CredentialOperations} だけが呼ぶ。
    */
-  public void reassignGrants(Set<Long> roleIds, StoreScopeType storeScopeType, Set<Long> storeIds) {
+  public void reassignGrants(Set<Long> roleIds, Set<Long> storeIds) {
     Set<Long> roles = roleIds == null ? Set.of() : roleIds;
     Set<Long> stores = storeIds == null ? Set.of() : storeIds;
     validateRoleGrant(this.userType, roles);
-    validateScope(this.userType, storeScopeType, stores);
     if (!this.roleIds.equals(roles)) {
       this.credentialVersion++;
     }
     this.roleIds = new HashSet<>(roles);
-    this.storeScopeType = storeScopeType;
     this.storeIds = new HashSet<>(stores);
   }
 
   /** 担当店舗集合のみを再割当てする（CAST の招待受諾が所属店舗を冪等 union する用途。ロールは変更しない）。 */
-  public void reassignStores(StoreScopeType storeScopeType, Set<Long> storeIds) {
+  public void reassignStores(Set<Long> storeIds) {
     Set<Long> stores = storeIds == null ? Set.of() : storeIds;
-    validateScope(this.userType, storeScopeType, stores);
-    this.storeScopeType = storeScopeType;
     this.storeIds = new HashSet<>(stores);
   }
 
@@ -264,23 +252,8 @@ public class User extends BaseEntity {
     }
   }
 
-  private static void validateScope(
-      UserType userType, StoreScopeType storeScopeType, Set<Long> stores) {
-    if (userType == UserType.MEMBER && storeScopeType == StoreScopeType.ALL_STORES) {
-      throw new InvalidStoreScopeException("MEMBER に ALL_STORES を授権できません");
-    }
-    if (storeScopeType == StoreScopeType.SPECIFIC_STORES
-        && stores.isEmpty()
-        && userType != UserType.MEMBER) {
-      throw new InvalidStoreScopeException("SPECIFIC_STORES の授権には少なくとも 1 つの店舗が必要です");
-    }
-    if (storeScopeType == StoreScopeType.ALL_STORES && !stores.isEmpty()) {
-      throw new InvalidStoreScopeException("ALL_STORES の授権に個別店舗を指定できません");
-    }
-  }
-
-  /** 指定店舗を授権するか。ALL_STORES は常に true、SPECIFIC_STORES は店舗集合のメンバーのみ true。 */
+  /** 指定店舗を授権するか。店舗集合に含まれる店舗だけ true（空集合はどの店舗も授権しない）。 */
   public boolean authorizes(Long storeId) {
-    return storeScopeType == StoreScopeType.ALL_STORES || storeIds.contains(storeId);
+    return storeId != null && storeIds.contains(storeId);
   }
 }

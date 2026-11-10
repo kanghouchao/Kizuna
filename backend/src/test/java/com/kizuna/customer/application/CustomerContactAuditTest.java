@@ -24,7 +24,6 @@ import com.kizuna.customer.domain.CustomerContactHistoryRepository;
 import com.kizuna.customer.domain.CustomerContactRepository;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.StoreScopeType;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
@@ -63,7 +62,6 @@ class CustomerContactAuditTest {
             .enabled(true)
             .userType(UserType.STAFF)
             .roleIds(Set.of(1L))
-            .storeScopeType(StoreScopeType.ALL_STORES)
             .build();
     actor.setId(9L);
     when(users.findByEmail(anyString())).thenReturn(Optional.of(actor));

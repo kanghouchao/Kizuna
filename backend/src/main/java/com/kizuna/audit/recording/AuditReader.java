@@ -40,10 +40,9 @@ public class AuditReader {
     return new AuditEventResponse(summary(event), event.getBeforeValues(), event.getAfterValues());
   }
 
-  // 店舗は帰属属性で隔離軸ではないため、集合内の店舗に加えて店舗を持たない行と既に存在しない店舗の行を返す。ALL_STORES は
-  // その時点の全店舗を集合とするので条件を付けない。店舗はエンティティ名で引き、store モジュールへの依存を作らない。
+  // 店舗は帰属属性で隔離軸ではないため、集合内の店舗に加えて店舗を持たない行と既に存在しない店舗の行を返す。集合が空なら後者の
+  // 二つだけで、空の IN は組み立てない。店舗はエンティティ名で引き、store モジュールへの依存を作らない。
   private Specification<AuditEvent> visibleTo(StoreScope scope) {
-    if (scope.allStores()) return Specification.unrestricted();
     return (root, query, cb) -> {
       Path<Long> storeId = root.get("originatingStoreId");
       Subquery<Integer> storeExists = query.subquery(Integer.class);

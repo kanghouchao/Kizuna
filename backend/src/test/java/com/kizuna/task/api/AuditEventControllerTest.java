@@ -46,7 +46,7 @@ class AuditEventControllerTest {
   @EnableMethodSecurity
   static class MethodSecurityConfig {}
 
-  private static final StoreScope STORE_ONE = new StoreScope(false, Set.of(1L));
+  private static final StoreScope STORE_ONE = new StoreScope(Set.of(1L));
 
   @Autowired private MockMvc mockMvc;
 

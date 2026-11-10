@@ -145,9 +145,15 @@ class SurveyIntegrationTest {
             suffix + "-other.invalid");
     actorId =
         jdbc.queryForObject(
-            "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'受付担当','STAFF','ALL_STORES') returning id",
+            "insert into t_users(email,display_name,user_type) values (?,'受付担当','STAFF') returning id",
             Long.class,
             email);
+    jdbc.update(
+        "insert into t_user_stores(user_id,store_id) values (?,?),(?,?)",
+        actorId,
+        storeId,
+        actorId,
+        otherStore);
     roleId =
         jdbc.queryForObject(
             "insert into t_roles(name,is_system) values (?,false) returning id",

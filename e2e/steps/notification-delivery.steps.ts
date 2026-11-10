@@ -2,7 +2,7 @@ import { expect, type APIRequestContext, type Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
 import { latestMailTo } from './mailpit';
-import { createConsentingGuestApplication, createPermissionRole, createStaffFixture, expectSidebarLinkAbsentEverywhere, loginInBrowser, loginUser, loginViaUiAndEnterStore, memberIdOf, registerMember, selectRailContext, STORE1_ID, STORE_HEADERS, openLoginForm } from './store-api';
+import { authorizedStoreIds, createConsentingGuestApplication, createPermissionRole, createServiceIdentity, createStaffFixture, expectSidebarLinkAbsentEverywhere, loginInBrowser, loginUser, loginViaUiAndEnterStore, memberIdOf, registerMember, selectRailContext, STORE1_ID, STORE_HEADERS, openLoginForm } from './store-api';
 const { Given, When, Then, After } = createBdd();
 let email = '';
 let password = '';
@@ -24,16 +24,12 @@ Given('業務通知の担当者とサービス主体と同意済みゲスト申�
   email = 'notification-' + suffix + '@kizuna.test';
   password = 'Notification-' + suffix + '-fixture';
   const role = await createPermissionRole(request, admin, '通知運用-' + suffix, ['TASK_MANAGE', 'NOTIFICATION_DELIVER', 'NOTIFICATION_VIEW', 'NOTIFICATION_MANAGE', 'NOTIFICATION_SEND', 'MEMBER_NOTIFICATION_VIEW', 'MEMBER_NOTIFICATION_MANAGE', 'MEMBER_NOTIFICATION_SEND']);
-  // 担当者は全店舗の授権を持たない。会員宛の通知と定期処理の画面は権限だけで開く。
+  // 担当者は店舗 1 だけを持つ。会員宛の通知と定期処理の画面は権限だけで開く。
   await createStaffFixture(request, admin, email, password, [role], [Number(STORE1_ID)]);
   operator = await loginUser(request, email, password);
   const executionRole = await createPermissionRole(request, admin, '通知実行-' + suffix, ['TASK_EXECUTE', 'NOTIFICATION_DELIVER']);
   serviceName = '通知サービス-' + suffix;
-  const service = await request.post('/api/service-identities', {
-    headers: { Authorization: `Bearer ${admin}` },
-    data: { display_name: serviceName, role_ids: [executionRole], store_scope_type: 'ALL_STORES', store_ids: [] },
-  });
-  expect(service.status(), await service.text()).toBe(201);
+  await createServiceIdentity(request, admin, serviceName, [executionRole], await authorizedStoreIds(request, admin));
   guestEmail = 'notification-' + suffix + '@example.invalid';
   applicationId = await createConsentingGuestApplication(request, guestEmail);
 });
