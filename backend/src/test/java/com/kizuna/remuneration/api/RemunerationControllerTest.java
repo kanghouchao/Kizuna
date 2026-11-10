@@ -418,20 +418,8 @@ class RemunerationControllerTest {
         .andExpect(status().isForbidden());
   }
 
-  @Test
-  @WithMockUser(authorities = {"PERM_ORDER_SET_VIEW", "PERM_REMUNERATION_VIEW"})
-  void crossStoreViewerReadsCurrentStoreStatement() throws Exception {
-    mvc.perform(
-            get("/remuneration-statements")
-                .header("X-Store-ID", "1")
-                .param("person_id", "34")
-                .param("month", "2026-09"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.total").value(12000));
-  }
-
   @ParameterizedTest
-  @ValueSource(strings = {"/remuneration-guarantees", "/bonus-awards"})
+  @ValueSource(strings = {"/remuneration-statements", "/remuneration-guarantees", "/bonus-awards"})
   @WithMockUser(authorities = {"PERM_ORDER_SET_VIEW", "PERM_REMUNERATION_VIEW"})
   void crossStoreViewerDoesNotReachStoreOnlyReads(String path) throws Exception {
     mvc.perform(

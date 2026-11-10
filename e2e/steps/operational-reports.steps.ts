@@ -42,8 +42,8 @@ Given('運営帳票用の完了受注と独立した閲覧出力権限がある'
   await completeAgreedOrder(request, manager, otherOrder, foreign);
   const tokens: string[] = [];
   for (let index = 0; index < 3; index++) {
-    const permissions = ['ORDER_SET_VIEW', 'OPERATIONAL_REPORT_VIEW'];
-    if (index !== 1) permissions.push('OPERATIONAL_REPORT_EXPORT');
+    const permissions = ['ORDER_SET_VIEW', 'OPERATIONAL_REPORT_SET_VIEW'];
+    if (index !== 1) permissions.push('OPERATIONAL_REPORT_SET_EXPORT');
     const role = await request.post('/api/roles', { headers: headers(admin), data: { name: prefix + index, permissions } });
     expect(role.status(), await role.text()).toBe(201);
     const address = prefix + index + '@kizuna.test'; if (index === 0) email = address;
@@ -121,9 +121,9 @@ Then('運営帳票は全件同一時点で授権内だけを出力する', async
 
   expect((await request.get(base + '/exports', { headers: headers(viewer), params: { ...params, format: 'csv' } })).status()).toBe(403);
   expect((await request.get('/api/operational-reports', { headers: { ...headers(writer), 'X-Store-ID': foreign }, params })).status()).toBe(403);
-  expect((await request.get(base, { headers: headers(manager), params })).status()).toBe(200);
-  // 横断照会者は現在店舗の集計も読む（店舗は X-Store-ID が本人の店舗集合から名乗る）。
-  expect((await request.get('/api/operational-reports', { headers: { ...STORE_HEADERS, ...headers(writer) }, params })).status()).toBe(200);
+  // 店長の既定ロールは現在店舗の集計の権限だけを持ち、店舗集合を跨ぐ集計は開かない。
+  expect((await request.get(base, { headers: headers(manager), params })).status()).toBe(403);
+  expect((await request.get('/api/operational-reports', { headers: { ...STORE_HEADERS, ...headers(manager) }, params })).status()).toBe(200);
   const other = await request.get(base, { headers: headers(secondReader), params });
   expect(await other.json()).toMatchObject({ total_order_count: 1, total_fee: 12000, stores: [{ store_id: Number(foreign) }] });
   const empty = await request.get(base, { headers: headers(writer), params: { from: '1998-01-01', to: '1998-01-31' } });
@@ -163,16 +163,12 @@ Then('運営帳票の再取得は原期の訂正と無効化を反映する', as
   await expect(page.getByLabel('有効完了件数', { exact: true })).toHaveText('2,000');
   await expect(page.getByLabel('無効化件数', { exact: true })).toHaveText('1');
 });
-Then('横断照会だけの担当者は運営帳票画面から現在店舗の集計へ到達する', async ({ page }) => {
-  // この担当者は ORDER_SET_VIEW だけを持ち、受注一覧（ORDER_MANAGE）からは店舗級の集計へ入れない。
-  await page.getByRole('link', { name: '現在店舗の集計', exact: true }).click();
-  await expect(page).toHaveURL(/\/store\/operational-reports$/);
-  await page.getByLabel('開始営業日').fill(params.from); await page.getByLabel('終了営業日').fill(params.to);
-  const [response] = await Promise.all([
-    page.waitForResponse(r => new URL(r.url()).pathname === '/api/operational-reports'),
-    page.getByRole('button', { name: '照会', exact: true }).click(),
-  ]);
-  expect(response.status()).toBe(200);
-  await expect(page.getByLabel('有効完了件数', { exact: true })).toHaveText('2,000');
-  await expect(page.getByLabel('無効化件数', { exact: true })).toHaveText('1');
+Then('横断照会だけの担当者は現在店舗の集計を開けない', async ({ request, page }) => {
+  // 店舗集合を跨ぐ集計の権限は単店の集計を開かない。入口も出さない。
+  await expect(page.getByRole('heading', { name: '運営金額集計' })).toBeVisible();
+  await expect(page.getByRole('link', { name: '現在店舗の集計', exact: true })).toHaveCount(0);
+  const response = await request.get('/api/operational-reports', {
+    headers: { ...headers(writer), 'X-Store-ID': STORE1_ID }, params,
+  });
+  expect(response.status()).toBe(403);
 });

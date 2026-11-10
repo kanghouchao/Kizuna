@@ -511,9 +511,9 @@ public class OrderController {
             storeId, id, orderMapper.toInput(request), principal.getName()));
   }
 
-  /** 訂正履歴。横断一覧（/orders/cross-store）からも行の店舗を X-Store-ID に名指して読むので、横断照会者も通す。 */
+  /** 訂正履歴。 */
   @GetMapping("/{id}/corrections")
-  @PreAuthorize("hasAnyAuthority('PERM_ORDER_MANAGE', 'PERM_ORDER_SET_VIEW')")
+  @PreAuthorize("hasAuthority('PERM_ORDER_MANAGE')")
   public Page<OrderCorrectionResult> corrections(
       @CurrentStore Long storeId,
       @PathVariable String id,

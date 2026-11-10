@@ -25,6 +25,8 @@ import static com.kizuna.user.domain.PermissionCode.NOTIFICATION_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.NOTIFICATION_SEND;
 import static com.kizuna.user.domain.PermissionCode.NOTIFICATION_VIEW;
 import static com.kizuna.user.domain.PermissionCode.OPERATIONAL_REPORT_EXPORT;
+import static com.kizuna.user.domain.PermissionCode.OPERATIONAL_REPORT_SET_EXPORT;
+import static com.kizuna.user.domain.PermissionCode.OPERATIONAL_REPORT_SET_VIEW;
 import static com.kizuna.user.domain.PermissionCode.OPERATIONAL_REPORT_VIEW;
 import static com.kizuna.user.domain.PermissionCode.ORDER_CORRECT;
 import static com.kizuna.user.domain.PermissionCode.ORDER_MANAGE;
@@ -37,6 +39,7 @@ import static com.kizuna.user.domain.PermissionCode.RECRUITMENT_DECIDE;
 import static com.kizuna.user.domain.PermissionCode.RECRUITMENT_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.RECRUITMENT_VIEW;
 import static com.kizuna.user.domain.PermissionCode.REMUNERATION_CORRECT;
+import static com.kizuna.user.domain.PermissionCode.REMUNERATION_SET_VIEW;
 import static com.kizuna.user.domain.PermissionCode.REMUNERATION_VIEW;
 import static com.kizuna.user.domain.PermissionCode.REVIEW_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.REVIEW_MODERATE;
@@ -49,7 +52,6 @@ import static com.kizuna.user.domain.PermissionCode.STAFF_CREDENTIAL_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.STAFF_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.STORE_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.STORE_PROFILE_MANAGE;
-import static com.kizuna.user.domain.PermissionCode.STORE_VIEW;
 import static com.kizuna.user.domain.PermissionCode.SURVEY_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.SURVEY_RECORD;
 import static com.kizuna.user.domain.PermissionCode.SURVEY_VIEW;
@@ -94,8 +96,7 @@ class DefaultGrantApprovalTests {
           Map.entry(BENEFIT_MANAGE, Set.of(ADMIN)),
           Map.entry(SERVICE_ID_MANAGE, Set.of(ADMIN)),
           Map.entry(SERVICE_MANAGE, Set.of(MANAGER)),
-          Map.entry(STORE_VIEW, Set.of(ADMIN, MANAGER, STAFF)),
-          Map.entry(ORDER_SET_VIEW, Set.of(ADMIN, MANAGER, STAFF)),
+          Map.entry(ORDER_SET_VIEW, Set.of(ADMIN)),
           Map.entry(ORDER_MANAGE, Set.of(MANAGER, STAFF)),
           Map.entry(CUSTOMER_MANAGE, Set.of(MANAGER, STAFF)),
           Map.entry(CUSTOMER_MERGE, Set.of(MANAGER)),
@@ -125,8 +126,10 @@ class DefaultGrantApprovalTests {
           Map.entry(NOTIFICATION_VIEW, Set.of(MANAGER, STAFF)),
           Map.entry(NOTIFICATION_MANAGE, Set.of(MANAGER)),
           Map.entry(NOTIFICATION_SEND, Set.of(MANAGER)),
-          Map.entry(OPERATIONAL_REPORT_VIEW, Set.of(ADMIN, MANAGER)),
-          Map.entry(OPERATIONAL_REPORT_EXPORT, Set.of(ADMIN, MANAGER)),
+          Map.entry(OPERATIONAL_REPORT_VIEW, Set.of(MANAGER)),
+          Map.entry(OPERATIONAL_REPORT_EXPORT, Set.of(MANAGER)),
+          Map.entry(OPERATIONAL_REPORT_SET_VIEW, Set.of(ADMIN)),
+          Map.entry(OPERATIONAL_REPORT_SET_EXPORT, Set.of(ADMIN)),
           Map.entry(TASK_MANAGE, Set.of(ADMIN)),
           Map.entry(NOTIFICATION_DELIVER, Set.of(ADMIN)),
           Map.entry(POINT_EXPIRE, Set.of(ADMIN)),
@@ -136,7 +139,8 @@ class DefaultGrantApprovalTests {
           Map.entry(RECRUITMENT_DECIDE, Set.of(MANAGER)),
           Map.entry(RECRUITMENT_ATTACHMENT_VIEW, Set.of(MANAGER)),
           Map.entry(RECRUITMENT_ATTACHMENT_MANAGE, Set.of(MANAGER)),
-          Map.entry(REMUNERATION_VIEW, Set.of(ADMIN, MANAGER)),
+          Map.entry(REMUNERATION_VIEW, Set.of(MANAGER)),
+          Map.entry(REMUNERATION_SET_VIEW, Set.of(ADMIN)),
           Map.entry(GUARANTEE_MANAGE, Set.of(MANAGER)),
           Map.entry(BONUS_AWARD, Set.of(MANAGER)),
           Map.entry(REMUNERATION_CORRECT, Set.of(MANAGER)));

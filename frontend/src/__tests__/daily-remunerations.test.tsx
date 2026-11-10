@@ -172,14 +172,9 @@ describe('店舗の日別給与明細', () => {
   });
 });
 
-it('横断照会者（ORDER_SET_VIEW のみ）には日別の切替と受注編集への導線を出さない', async () => {
+it('受注の権限を持たない利用者には給与明細を出さない', async () => {
   granted = new Set(['ORDER_SET_VIEW']);
   render(<MonthlyRemunerationsPage />);
-  expect(screen.queryByRole('button', { name: '日別' })).not.toBeInTheDocument();
-  expect(screen.getByRole('link', { name: '受注照会' })).toHaveAttribute('href', '/admin/orders');
-  fireEvent.change(screen.getByLabelText('対象人物'), { target: { value: '1' } });
-  fireEvent.change(screen.getByLabelText('対象月'), { target: { value: '2026-09' } });
-  fireEvent.click(screen.getByRole('button', { name: '照会' }));
-  expect(await screen.findByText('old-order')).not.toHaveAttribute('href');
-  expect(dailyRemunerationApi.store).not.toHaveBeenCalled();
+  expect(screen.getByRole('alert')).toHaveTextContent('給与明細を閲覧する権限がありません');
+  expect(screen.queryByRole('button', { name: '照会' })).not.toBeInTheDocument();
 });

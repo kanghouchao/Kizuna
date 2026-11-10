@@ -421,13 +421,13 @@ class CredentialRevocationIntegrationTest {
     jdbc.update(
         "update t_role_permissions set permission_id = (select id from t_permissions where code = ?)"
             + " where role_id = ?",
-        PermissionCode.STORE_VIEW.name(),
+        PermissionCode.SHIFT_MANAGE.name(),
         roleId);
 
     var response = refresh(session.refresh().value(), null);
 
     assertThat(decoder.decode(accessTokenOf(response)).getClaimAsStringList("authorities"))
-        .containsExactly(PermissionCode.STORE_VIEW.authority());
+        .containsExactly(PermissionCode.SHIFT_MANAGE.authority());
   }
 
   @Test

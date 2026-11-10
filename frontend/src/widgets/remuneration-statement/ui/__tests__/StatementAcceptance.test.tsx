@@ -2,7 +2,15 @@ import { fireEvent, render, screen, within } from '@testing-library/react';
 import { remunerationApi, type Day, type Statement } from '../../api';
 import { RemunerationStatementPanel } from '../RemunerationStatementPanel';
 jest.mock('../../api', () => ({
-  remunerationApi: { statement: jest.fn() },
+  remunerationApi: { statement: jest.fn(), guarantees: jest.fn(), bonuses: jest.fn() },
+}));
+jest.mock('@/entities/user/model/MeContext', () => ({
+  ...jest.requireActual('@/entities/user/model/MeContext'),
+  useMe: () => ({ me: null }),
+}));
+jest.mock('@/entities/user/model/StoreContext', () => ({
+  ...jest.requireActual('@/entities/user/model/StoreContext'),
+  useStoreContext: () => ({ currentStoreId: '1' }),
 }));
 const statement = jest.mocked(remunerationApi.statement);
 const page = { content: [], number: 0, size: 20, total_elements: 0, total_pages: 0 };
@@ -77,12 +85,7 @@ const data: Statement = {
 const row = (date: string) => screen.getByRole('row', { name: new RegExp(date) });
 async function open() {
   render(
-    <RemunerationStatementPanel
-      scope={{ scope: 'store', personId: 2 }}
-      month="2026-09"
-      canView
-      canManage={false}
-    />
+    <RemunerationStatementPanel scope={{ scope: 'store', personId: 2 }} month="2026-09" canView />
   );
   fireEvent.click(await screen.findByRole('button', { name: '保証・ボーナスを含む月次明細' }));
   await screen.findByText('店舗 / 本人 / 2026-09');
@@ -90,6 +93,8 @@ async function open() {
 beforeEach(() => {
   jest.clearAllMocks();
   statement.mockResolvedValue(data);
+  jest.mocked(remunerationApi.guarantees).mockResolvedValue({ version: 0, entries: page });
+  jest.mocked(remunerationApi.bonuses).mockResolvedValue(page);
 });
 it('日別行に四つの状態と変更ありの差分を示し、承諾の操作は持たない', async () => {
   await open();

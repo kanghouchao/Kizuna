@@ -84,7 +84,7 @@ Given(
       request,
       owner,
       `在籍担当-${suffix}`,
-      ["CAST_MANAGE", "STORE_VIEW",],
+      ["CAST_MANAGE"],
     );
     const ordinaryEmail = `cast-audit-${suffix}@example.test`;
     ordinaryId = await createStoreStaffFixture(
@@ -100,7 +100,7 @@ Given(
       request,
       owner,
       `勤務担当-${suffix}`,
-      ["SHIFT_MANAGE", "STORE_VIEW",],
+      ["SHIFT_MANAGE"],
     );
     const limitedEmail = `cast-limited-${suffix}@example.test`;
     await createStoreStaffFixture(

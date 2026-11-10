@@ -188,7 +188,6 @@ const RECRUITER_PERMISSIONS = [
   "RECRUITMENT_VIEW",
   "RECRUITMENT_MANAGE",
   "RECRUITMENT_DECIDE",
-  "STORE_VIEW",
 ];
 
 Given(
@@ -790,7 +789,6 @@ Then(
     const manager = await createRecruiter(request, [
       "RECRUITMENT_VIEW",
       "RECRUITMENT_MANAGE",
-      "STORE_VIEW",
     ]);
     const body = {
       version: detail.version,

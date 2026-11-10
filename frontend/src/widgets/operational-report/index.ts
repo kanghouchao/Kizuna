@@ -1,1 +1,6 @@
-export { useOperationalReportPage, ReportSearch, ReportTable } from './ui/OperationalReport';
+export {
+  reportAccess,
+  useOperationalReportPage,
+  ReportSearch,
+  ReportTable,
+} from './ui/OperationalReport';

@@ -46,12 +46,13 @@ Given('帳票用の歴史在籍に日跨ぎ出勤と受注のない保証日と�
   privateName = `出力禁止本人名-${suffix}`;
   privateReason = `出力禁止内部理由-${suffix}`;
   foreign = String((await getAuthorizedStores(request, manager)).find(s => String(s.id) !== STORE1_ID)!.id);
-  const common = ['ORDER_MANAGE', 'ORDER_SET_VIEW',
-    'OPERATIONAL_REPORT_VIEW', 'OPERATIONAL_REPORT_EXPORT'];
+  // 現在店舗の集計（店舗の木）と店舗集合を跨ぐ集計（グループの木）の両方を読むので、両方の木の権限を束ねる。
+  const common = ['ORDER_MANAGE', 'OPERATIONAL_REPORT_VIEW', 'OPERATIONAL_REPORT_EXPORT',
+    'OPERATIONAL_REPORT_SET_VIEW', 'OPERATIONAL_REPORT_SET_EXPORT'];
   const tokens: string[] = [];
   for (const enhanced of [true, false]) {
     const role = await createPermissionRole(request, owner, `帳票報酬-${enhanced}-${suffix}`,
-      enhanced ? [...common, 'REMUNERATION_VIEW', 'GUARANTEE_MANAGE', 'BONUS_AWARD', 'REMUNERATION_CORRECT'] : common);
+      enhanced ? [...common, 'REMUNERATION_VIEW', 'REMUNERATION_SET_VIEW', 'GUARANTEE_MANAGE', 'BONUS_AWARD', 'REMUNERATION_CORRECT'] : common);
     const email = `report-remuneration-${enhanced}-${suffix}@example.test`;
     if (enhanced) readerEmail = email;
     await createStaffFixture(request, owner, email, password, [role], [Number(STORE1_ID)]);

@@ -77,7 +77,7 @@ Given(
       request,
       owner,
       `関連参照-${suffix}`,
-      ["SHIFT_MANAGE", "STORE_VIEW",],
+      ["SHIFT_MANAGE"],
     );
     const limitedEmail = `link-reader-${suffix}@example.test`;
     await createStoreStaffFixture(

@@ -16,6 +16,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
@@ -49,9 +50,21 @@ public class RemunerationReportReader {
 
   @PreAuthorize("hasAuthority('PERM_REMUNERATION_VIEW')")
   @Transactional(readOnly = true, propagation = Propagation.MANDATORY)
-  public RemunerationReportFacts read(
+  public RemunerationReportFacts store(
+      Long storeId, OperationalFacts orders, LocalDate from, LocalDate to, int limit) {
+    return read(new StoreScope(false, Set.of(storeId)), orders, from, to, limit);
+  }
+
+  @PreAuthorize("hasAuthority('PERM_REMUNERATION_SET_VIEW')")
+  @Transactional(readOnly = true, propagation = Propagation.MANDATORY)
+  public RemunerationReportFacts groupWide(
       StoreScope scope, OperationalFacts orders, LocalDate from, LocalDate to, int limit) {
     if (scope == null) throw new AccessDeniedException("授権店舗集合を解決できません");
+    return read(scope, orders, from, to, limit);
+  }
+
+  private RemunerationReportFacts read(
+      StoreScope scope, OperationalFacts orders, LocalDate from, LocalDate to, int limit) {
     var stores = orders.stores().stream().map(OperationalFacts.Store::storeId).toList();
     for (var store : stores)
       if (!scope.authorizes(store)) throw new AccessDeniedException("授権店舗集合に含まれません");

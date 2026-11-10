@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import AdminOrdersPage from '../ui/AdminOrdersPage';
-import { orderApi } from '@/entities/order';
+import { orderApi, type AdminOrder } from '@/entities/order';
 import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 
@@ -27,36 +27,36 @@ const meWith = (permissions: PermissionCode[]) =>
     reload: jest.fn(),
     setMe: jest.fn(),
   });
+const row: AdminOrder = {
+  completion_invalidated: false,
+  id: 'o1',
+  store_id: 2,
+  status: 'COMPLETED',
+  business_date: '2026-09-14',
+  completed_at: '2026-09-15T01:00:00Z',
+  accrued_remuneration: 7000,
+  total_remuneration: 7000,
+  total_fee: 11900,
+  course: {
+    service_id: 's1',
+    revision_id: 'r1',
+    revision_number: 1,
+    name: '標準',
+    duration_minutes: 60,
+    price: 12000,
+    remuneration: 7000,
+    adoption_basis: 'CURRENT_SETTING',
+    adopted_at: '2026-09-14T00:00:00Z',
+  },
+};
 beforeEach(() => {
   jest.clearAllMocks();
-  meWith(['ORDER_SET_VIEW', 'OPERATIONAL_REPORT_VIEW']);
+  meWith(['ORDER_SET_VIEW', 'OPERATIONAL_REPORT_SET_VIEW']);
 });
-it('参照権限だけで一覧と履歴を開き、訂正操作は表示しない', async () => {
+it('店舗の受注の権限も持つ参照者は行の店舗で履歴を開き、訂正操作は表示しない', async () => {
+  meWith(['ORDER_SET_VIEW', 'ORDER_MANAGE']);
   jest.mocked(orderApi.adminList).mockResolvedValue({
-    rows: [
-      {
-        completion_invalidated: false,
-        id: 'o1',
-        store_id: 2,
-        status: 'COMPLETED',
-        business_date: '2026-09-14',
-        completed_at: '2026-09-15T01:00:00Z',
-        accrued_remuneration: 7000,
-        total_remuneration: 7000,
-        total_fee: 11900,
-        course: {
-          service_id: 's1',
-          revision_id: 'r1',
-          revision_number: 1,
-          name: '標準',
-          duration_minutes: 60,
-          price: 12000,
-          remuneration: 7000,
-          adoption_basis: 'CURRENT_SETTING',
-          adopted_at: '2026-09-14T00:00:00Z',
-        },
-      },
-    ],
+    rows: [row],
     total: 1,
     page: 0,
     pageCount: 1,
@@ -91,4 +91,18 @@ it('帳票閲覧権限のない注文参照者には帳票入口を表示しな�
   render(<AdminOrdersPage />);
   await screen.findByText('受注はありません。');
   expect(screen.queryByRole('link', { name: '運営金額集計' })).not.toBeInTheDocument();
+});
+
+it('店舗集合を跨ぐ照会の権限だけでは店舗級の月次と訂正履歴への入口を出さない', async () => {
+  jest.mocked(orderApi.adminList).mockResolvedValue({
+    rows: [row],
+    total: 1,
+    page: 0,
+    pageCount: 1,
+  });
+  render(<AdminOrdersPage />);
+  expect(await screen.findByRole('button', { name: /詳細.*受注 o1/ })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /訂正履歴/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: '月次給与明細' })).not.toBeInTheDocument();
+  expect(screen.getByRole('link', { name: '運営金額集計' })).toBeInTheDocument();
 });

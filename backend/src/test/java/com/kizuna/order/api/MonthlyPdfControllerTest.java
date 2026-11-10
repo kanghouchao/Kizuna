@@ -166,7 +166,7 @@ class MonthlyPdfControllerTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"store", "crossStore", "self"})
+  @ValueSource(strings = {"store", "self"})
   void emptyMonthHasNamesAndNoPrivateIdentity(String scope) throws Exception {
     var result =
         mvc.perform(request(scope))
@@ -213,9 +213,14 @@ class MonthlyPdfControllerTest {
   }
 
   @Test
-  void crossStoreViewerCannotNameStoreOutsideGrantedSet() throws Exception {
+  void crossStoreViewerDoesNotReachStorePdf() throws Exception {
+    mvc.perform(request("crossStore")).andExpect(status().isForbidden());
+  }
+
+  @Test
+  void storeOutsideGrantedSetIsForbidden() throws Exception {
     mvc.perform(
-            request("crossStore")
+            request("store")
                 .with(
                     r -> {
                       r.removeHeader("X-Store-ID");
@@ -259,7 +264,7 @@ class MonthlyPdfControllerTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"store", "crossStore", "self"})
+  @ValueSource(strings = {"store", "self"})
   void wrongPermissionDoesNotGrantPdf(String scope) throws Exception {
     mvc.perform(
             request(scope).with(jwt().authorities(new SimpleGrantedAuthority("PERM_CAST_MANAGE"))))

@@ -26,7 +26,7 @@ public class CrossStoreOperationalReportController {
 
   @GetMapping
   @PreAuthorize(
-      "(!#includeAdvertising or hasAuthority('PERM_ADVERTISING_COST_SET_VIEW')) and (!#includeRemuneration or hasAuthority('PERM_REMUNERATION_VIEW')) and hasAuthority('PERM_ORDER_SET_VIEW') and hasAuthority('PERM_OPERATIONAL_REPORT_VIEW')")
+      "hasAuthority('PERM_OPERATIONAL_REPORT_SET_VIEW') and (!#includeRemuneration or hasAuthority('PERM_REMUNERATION_SET_VIEW')) and (!#includeAdvertising or hasAuthority('PERM_ADVERTISING_COST_SET_VIEW'))")
   public ResponseEntity<OperationalReportResponse> view(
       @RequestParam String from,
       @RequestParam String to,
@@ -52,7 +52,7 @@ public class CrossStoreOperationalReportController {
 
   @GetMapping("/exports")
   @PreAuthorize(
-      "(!#includeAdvertising or hasAuthority('PERM_ADVERTISING_COST_SET_VIEW')) and (!#includeRemuneration or hasAuthority('PERM_REMUNERATION_VIEW')) and hasAuthority('PERM_ORDER_SET_VIEW') and hasAuthority('PERM_OPERATIONAL_REPORT_VIEW') and hasAuthority('PERM_OPERATIONAL_REPORT_EXPORT') and (!#includeAdvertising or hasAuthority('PERM_ADVERTISING_COST_SET_EXPORT'))")
+      "hasAuthority('PERM_OPERATIONAL_REPORT_SET_VIEW') and hasAuthority('PERM_OPERATIONAL_REPORT_SET_EXPORT') and (!#includeRemuneration or hasAuthority('PERM_REMUNERATION_SET_VIEW')) and (!#includeAdvertising or (hasAuthority('PERM_ADVERTISING_COST_SET_VIEW') and hasAuthority('PERM_ADVERTISING_COST_SET_EXPORT')))")
   public ResponseEntity<byte[]> export(
       @RequestParam String from,
       @RequestParam String to,

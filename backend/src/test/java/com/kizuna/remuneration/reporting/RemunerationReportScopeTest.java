@@ -37,9 +37,10 @@ class RemunerationReportScopeTest {
 
   @Test
   void unresolvedOrPartialScopeFailsBeforeReading() {
-    assertThatThrownBy(() -> reader.read(null, facts, FROM, TO, 20))
+    assertThatThrownBy(() -> reader.groupWide(null, facts, FROM, TO, 20))
         .isInstanceOf(AccessDeniedException.class);
-    assertThatThrownBy(() -> reader.read(new StoreScope(false, Set.of(1L)), facts, FROM, TO, 20))
+    assertThatThrownBy(
+            () -> reader.groupWide(new StoreScope(false, Set.of(1L)), facts, FROM, TO, 20))
         .isInstanceOf(AccessDeniedException.class);
     verifyNoInteractions(em, attendances);
   }
@@ -48,7 +49,7 @@ class RemunerationReportScopeTest {
   void authorizedScopeReadsEveryListedStore() {
     query(RemunerationReportFacts.Bonus.class);
     query(RemunerationReportReader.Term.class);
-    var result = reader.read(new StoreScope(false, Set.of(1L, 2L)), facts, FROM, TO, 20);
+    var result = reader.groupWide(new StoreScope(false, Set.of(1L, 2L)), facts, FROM, TO, 20);
     assertThat(result.days()).isEmpty();
     verify(attendances).forReport(List.of(1L, 2L), FROM, TO, 20);
   }

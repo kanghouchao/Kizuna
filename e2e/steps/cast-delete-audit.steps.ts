@@ -57,7 +57,7 @@ Given(
       request,
       owner,
       `削除担当-${suffix}`,
-      ["CAST_MANAGE", "CAST_INVITE", "STORE_VIEW"],
+      ["CAST_MANAGE", "CAST_INVITE"],
     );
     const operatorEmail = `delete-operator-${suffix}@example.test`;
     operatorId = await createStoreStaffFixture(
@@ -73,7 +73,7 @@ Given(
       request,
       owner,
       `勤務のみ-${suffix}`,
-      ["SHIFT_MANAGE", "STORE_VIEW"],
+      ["SHIFT_MANAGE"],
     );
     const limitedEmail = `delete-limited-${suffix}@example.test`;
     await createStoreStaffFixture(

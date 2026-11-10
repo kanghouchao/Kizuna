@@ -97,7 +97,7 @@ Given(
       request,
       owner,
       `サービス担当-${suffix}`,
-      ["SERVICE_MANAGE", "STORE_VIEW",],
+      ["SERVICE_MANAGE"],
     );
     const email = `service-audit-${suffix}@example.test`;
     ordinaryId = await createStoreStaffFixture(
@@ -114,7 +114,7 @@ Given(
       request,
       owner,
       `サービス閲覧資格-${suffix}`,
-      ["CAST_FIELD_DEF_VIEW", "STORE_VIEW",],
+      ["CAST_FIELD_DEF_VIEW"],
     );
     const limitedEmail = `service-limited-${suffix}@example.test`;
     await createStoreStaffFixture(

@@ -36,7 +36,9 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Stream;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -99,7 +101,9 @@ class OperationalReportControllerTest {
             OffsetDateTime.parse("2026-10-01T12:00:00+09:00"),
             List.of(new OperationalFacts.Store(1L, "日本語店舗")),
             List.of());
-    when(remuneration.read(any(), any(), any(), any(), anyInt()))
+    when(remuneration.store(any(), any(), any(), any(), anyInt()))
+        .thenReturn(new RemunerationReportFacts(List.of(), List.of()));
+    when(remuneration.groupWide(any(), any(), any(), any(), anyInt()))
         .thenReturn(new RemunerationReportFacts(List.of(), List.of()));
     when(advertising.store(anyLong(), any(), any(), any(), anyInt()))
         .thenReturn(new AdvertisingReportFacts(List.of()));
@@ -109,11 +113,7 @@ class OperationalReportControllerTest {
     when(reader.groupWide(any(), any(), any())).thenReturn(facts);
   }
 
-  /**
-   * scope は store（店舗の担当者）・crossStore（横断照会者が /operational-reports を現在店舗で読む）・admin（集合全体を
-   * /operational-reports/cross-store で読む）。crossStore と admin は横断照会の権限族（ORDER_SET_VIEW /
-   * ADVERTISING_COST_SET_*）を使う。
-   */
+  /** scope は store（現在店舗の集計、店舗の木の権限）と admin（店舗集合を跨ぐ集計、グループの木の権限）。 */
   MockHttpServletRequestBuilder request(String scope, String path, String... permissions) {
     var request =
         get("/operational-reports" + (scope.equals("admin") ? "/cross-store" : "") + path)
@@ -128,6 +128,57 @@ class OperationalReportControllerTest {
                             .toArray(SimpleGrantedAuthority[]::new)));
     if (!scope.equals("admin")) request.header("X-Store-ID", "1");
     return request;
+  }
+
+  /** 論理名を scope の木の権限へ写す。店舗集合を跨ぐ集計は受注の権限を要さないので admin の ORDER は無い。 */
+  static String permission(String scope, String logical) {
+    boolean store = scope.equals("store");
+    return switch (logical) {
+      case "ORDER" -> store ? "ORDER_MANAGE" : null;
+      case "VIEW" -> store ? "OPERATIONAL_REPORT_VIEW" : "OPERATIONAL_REPORT_SET_VIEW";
+      case "EXPORT" -> store ? "OPERATIONAL_REPORT_EXPORT" : "OPERATIONAL_REPORT_SET_EXPORT";
+      case "REMUNERATION" -> store ? "REMUNERATION_VIEW" : "REMUNERATION_SET_VIEW";
+      case "AD_VIEW" -> store ? "ADVERTISING_COST_VIEW" : "ADVERTISING_COST_SET_VIEW";
+      case "AD_EXPORT" -> store ? "ADVERTISING_COST_EXPORT" : "ADVERTISING_COST_SET_EXPORT";
+      default -> throw new IllegalArgumentException(logical);
+    };
+  }
+
+  MockHttpServletRequestBuilder report(String scope, String path, String... logical) {
+    return request(
+        scope,
+        path,
+        Arrays.stream(logical)
+            .map(name -> permission(scope, name))
+            .filter(Objects::nonNull)
+            .toArray(String[]::new));
+  }
+
+  @Test
+  void eachReportOpensOnlyWithItsOwnTreesPermissions() throws Exception {
+    String[] all = {"ORDER", "VIEW", "EXPORT", "REMUNERATION", "AD_VIEW", "AD_EXPORT"};
+    for (String[] pair : List.of(new String[] {"store", "admin"}, new String[] {"admin", "store"}))
+      for (String path : List.of("", "/exports")) {
+        String[] other =
+            Arrays.stream(all)
+                .map(name -> permission(pair[1], name))
+                .filter(Objects::nonNull)
+                .toArray(String[]::new);
+        mvc.perform(
+                request(pair[0], path, other)
+                    .param("include_remuneration", "true")
+                    .param("include_advertising", "true")
+                    .param("group_by", "month")
+                    .param("format", "csv"))
+            .andExpect(status().isForbidden());
+        mvc.perform(
+                report(pair[0], path, all)
+                    .param("include_remuneration", "true")
+                    .param("include_advertising", "true")
+                    .param("group_by", "month")
+                    .param("format", "csv"))
+            .andExpect(status().isOk());
+      }
   }
 
   @Test
@@ -151,7 +202,7 @@ class OperationalReportControllerTest {
                             new SimpleGrantedAuthority("PERM_ADVERTISING_COST_VIEW"))))
         .andExpect(status().isOk());
     verify(reader).store(eq(7L), any(), any());
-    verify(remuneration).read(eq(new StoreScope(false, Set.of(7L))), any(), any(), any(), anyInt());
+    verify(remuneration).store(eq(7L), any(), any(), any(), anyInt());
     verify(advertising).store(eq(7L), any(), any(), any(), anyInt());
   }
 
@@ -163,16 +214,15 @@ class OperationalReportControllerTest {
             request(
                     "admin",
                     "",
-                    "ORDER_SET_VIEW",
-                    "OPERATIONAL_REPORT_VIEW",
-                    "REMUNERATION_VIEW",
+                    "OPERATIONAL_REPORT_SET_VIEW",
+                    "REMUNERATION_SET_VIEW",
                     "ADVERTISING_COST_SET_VIEW")
                 .param("group_by", "month")
                 .param("include_remuneration", "true")
                 .param("include_advertising", "true"))
         .andExpect(status().isOk());
     verify(reader).groupWide(same(scope), any(), any());
-    verify(remuneration).read(same(scope), any(), any(), any(), anyInt());
+    verify(remuneration).groupWide(same(scope), any(), any(), any(), anyInt());
     verify(advertising).groupWide(same(scope), any(), any(), any(), anyInt());
   }
 
@@ -181,12 +231,7 @@ class OperationalReportControllerTest {
     when(storeScopeResolver.resolve(any())).thenReturn(null);
     for (String path : List.of("", "/exports"))
       mvc.perform(
-              request(
-                      "admin",
-                      path,
-                      "ORDER_SET_VIEW",
-                      "OPERATIONAL_REPORT_VIEW",
-                      "OPERATIONAL_REPORT_EXPORT")
+              request("admin", path, "OPERATIONAL_REPORT_SET_VIEW", "OPERATIONAL_REPORT_SET_EXPORT")
                   .param("format", "csv"))
           .andExpect(status().isForbidden());
     verifyNoInteractions(reader, remuneration, advertising);
@@ -194,31 +239,19 @@ class OperationalReportControllerTest {
 
   @Test
   void readAndExportRequireIndependentPermissionsAndScopeAuthority() throws Exception {
-    for (String scope : List.of("store", "crossStore", "admin")) {
-      String permission = scope.equals("store") ? "ORDER_MANAGE" : "ORDER_SET_VIEW";
-      mvc.perform(request(scope, "", permission, "OPERATIONAL_REPORT_VIEW"))
+    for (String scope : List.of("store", "admin")) {
+      mvc.perform(report(scope, "", "ORDER", "VIEW"))
           .andExpect(status().isOk())
           .andExpect(header().string("Cache-Control", "no-store"))
           .andExpect(jsonPath("$.stores[0].store_name").value("日本語店舗"))
           .andExpect(jsonPath("$.total_fee").value(0));
-      mvc.perform(
-              request(scope, "/exports", permission, "OPERATIONAL_REPORT_VIEW")
-                  .param("format", "csv"))
+      mvc.perform(report(scope, "/exports", "ORDER", "VIEW").param("format", "csv"))
           .andExpect(status().isForbidden());
-      mvc.perform(request(scope, "", "OPERATIONAL_REPORT_VIEW", "OPERATIONAL_REPORT_EXPORT"))
-          .andExpect(status().isForbidden());
-      mvc.perform(
-              request(scope, "/exports", permission, "OPERATIONAL_REPORT_EXPORT")
-                  .param("format", "csv"))
+      mvc.perform(report(scope, "/exports", "ORDER", "EXPORT").param("format", "csv"))
           .andExpect(status().isForbidden());
       for (String format : List.of("csv", "xlsx"))
         mvc.perform(
-                request(
-                        scope,
-                        "/exports",
-                        permission,
-                        "OPERATIONAL_REPORT_VIEW",
-                        "OPERATIONAL_REPORT_EXPORT")
+                report(scope, "/exports", "ORDER", "VIEW", "EXPORT")
                     .param("format", format)
                     .param("page", "99")
                     .param("size", "1"))
@@ -230,47 +263,36 @@ class OperationalReportControllerTest {
                         "Content-Disposition",
                         "attachment; filename=\"operational-report." + format + "\""));
     }
+    mvc.perform(report("store", "", "VIEW", "EXPORT")).andExpect(status().isForbidden());
   }
 
   @Test
   void additionalAmountsRequireRemunerationPermissionAndLegacyOmitsFields() throws Exception {
-    for (String scope : List.of("store", "crossStore", "admin")) {
-      String permission = scope.equals("store") ? "ORDER_MANAGE" : "ORDER_SET_VIEW";
-      mvc.perform(request(scope, "", permission, "OPERATIONAL_REPORT_VIEW"))
+    for (String scope : List.of("store", "admin")) {
+      mvc.perform(report(scope, "", "ORDER", "VIEW"))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.remuneration").doesNotExist())
           .andExpect(jsonPath("$.basis").value("completed-orders-current-v1"));
       for (String path : List.of("", "/exports")) {
         mvc.perform(
-                request(
-                        scope,
-                        path,
-                        permission,
-                        "OPERATIONAL_REPORT_VIEW",
-                        "OPERATIONAL_REPORT_EXPORT")
+                report(scope, path, "ORDER", "VIEW", "EXPORT")
                     .param("include_remuneration", "true")
                     .param("format", "csv"))
             .andExpect(status().isForbidden());
         mvc.perform(
-                request(
-                        scope,
-                        path,
-                        permission,
-                        "OPERATIONAL_REPORT_VIEW",
-                        "OPERATIONAL_REPORT_EXPORT",
-                        "REMUNERATION_VIEW")
+                report(scope, path, "ORDER", "VIEW", "EXPORT", "REMUNERATION")
                     .param("include_remuneration", "true")
                     .param("format", "csv"))
             .andExpect(status().isOk());
       }
       mvc.perform(
-              request(scope, "", permission, "OPERATIONAL_REPORT_VIEW", "REMUNERATION_VIEW")
+              report(scope, "", "ORDER", "VIEW", "REMUNERATION")
                   .param("include_remuneration", "true"))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.remuneration.total").value(0))
           .andExpect(jsonPath("$.basis").value("completed-orders-remuneration-current-v2"));
       mvc.perform(
-              request(scope, "/exports", permission, "OPERATIONAL_REPORT_VIEW", "REMUNERATION_VIEW")
+              report(scope, "/exports", "ORDER", "VIEW", "REMUNERATION")
                   .param("include_remuneration", "true")
                   .param("format", "csv"))
           .andExpect(status().isForbidden());
@@ -294,7 +316,7 @@ class OperationalReportControllerTest {
             "NOT_CONFIGURED",
             null,
             500);
-    when(remuneration.read(any(), any(), any(), any(), anyInt()))
+    when(remuneration.store(any(), any(), any(), any(), anyInt()))
         .thenReturn(new RemunerationReportFacts(List.of(day), List.of()));
     mvc.perform(
             request("store", "", "ORDER_MANAGE", "OPERATIONAL_REPORT_VIEW", "REMUNERATION_VIEW")
@@ -311,27 +333,26 @@ class OperationalReportControllerTest {
 
   @Test
   void advertisingPermissionsAreIndependentForEachConsoleAndExport() throws Exception {
-    for (String scope : List.of("store", "crossStore", "admin")) {
-      String order = scope.equals("store") ? "ORDER_MANAGE" : "ORDER_SET_VIEW";
-      String view = scope.equals("store") ? "ADVERTISING_COST_VIEW" : "ADVERTISING_COST_SET_VIEW";
-      String export =
-          scope.equals("store") ? "ADVERTISING_COST_EXPORT" : "ADVERTISING_COST_SET_EXPORT";
-      String otherView =
-          scope.equals("store") ? "ADVERTISING_COST_SET_VIEW" : "ADVERTISING_COST_VIEW";
-      mvc.perform(request(scope, "", order, "OPERATIONAL_REPORT_VIEW"))
+    for (String scope : List.of("store", "admin")) {
+      String otherView = permission(scope.equals("store") ? "admin" : "store", "AD_VIEW");
+      mvc.perform(report(scope, "", "ORDER", "VIEW"))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.advertising").doesNotExist());
       for (String group : List.of("month", "day")) {
         for (String path : List.of("", "/exports")) {
-          for (String extra : List.of("REMUNERATION_VIEW", otherView, export)) {
+          for (String extra :
+              List.of(
+                  permission(scope, "REMUNERATION"), otherView, permission(scope, "AD_EXPORT"))) {
             mvc.perform(
                     request(
                             scope,
                             path,
-                            order,
-                            "OPERATIONAL_REPORT_VIEW",
-                            "OPERATIONAL_REPORT_EXPORT",
-                            extra)
+                            Stream.concat(
+                                    Stream.of("ORDER", "VIEW", "EXPORT")
+                                        .map(name -> permission(scope, name))
+                                        .filter(Objects::nonNull),
+                                    Stream.of(extra))
+                                .toArray(String[]::new))
                         .param("include_advertising", "true")
                         .param("group_by", group)
                         .param("format", "csv"))
@@ -340,7 +361,7 @@ class OperationalReportControllerTest {
         }
       }
       mvc.perform(
-              request(scope, "", order, "OPERATIONAL_REPORT_VIEW", view)
+              report(scope, "", "ORDER", "VIEW", "AD_VIEW")
                   .param("include_advertising", "true")
                   .param("group_by", "month"))
           .andExpect(status().isOk())
@@ -348,40 +369,27 @@ class OperationalReportControllerTest {
           .andExpect(jsonPath("$.advertising.entry_count").value(0))
           .andExpect(jsonPath("$.basis").value("completed-orders-advertising-current-v3"));
       mvc.perform(
-              request(
-                      scope,
-                      "/exports",
-                      order,
-                      "OPERATIONAL_REPORT_VIEW",
-                      "OPERATIONAL_REPORT_EXPORT",
-                      view)
+              report(scope, "/exports", "ORDER", "VIEW", "EXPORT", "AD_VIEW")
                   .param("include_advertising", "true")
                   .param("group_by", "month")
                   .param("format", "csv"))
           .andExpect(status().isForbidden());
       for (String format : List.of("csv", "xlsx")) {
         mvc.perform(
-                request(
-                        scope,
-                        "/exports",
-                        order,
-                        "OPERATIONAL_REPORT_VIEW",
-                        "OPERATIONAL_REPORT_EXPORT",
-                        view,
-                        export)
+                report(scope, "/exports", "ORDER", "VIEW", "EXPORT", "AD_VIEW", "AD_EXPORT")
                     .param("include_advertising", "true")
                     .param("group_by", "month")
                     .param("format", format))
             .andExpect(status().isOk());
       }
       mvc.perform(
-              request(scope, "", order, "OPERATIONAL_REPORT_VIEW", view)
+              report(scope, "", "ORDER", "VIEW", "AD_VIEW")
                   .param("include_advertising", "true")
                   .param("include_remuneration", "true")
                   .param("group_by", "month"))
           .andExpect(status().isForbidden());
       mvc.perform(
-              request(scope, "", order, "OPERATIONAL_REPORT_VIEW", view, "REMUNERATION_VIEW")
+              report(scope, "", "ORDER", "VIEW", "AD_VIEW", "REMUNERATION")
                   .param("include_advertising", "true")
                   .param("include_remuneration", "true")
                   .param("group_by", "month"))
@@ -442,34 +450,16 @@ class OperationalReportControllerTest {
 
   @Test
   void outOfRangePagingIsNormalizedOrRejectedAndOversizeNeverSetsAttachment() throws Exception {
-    mvc.perform(
-            request("admin", "", "ORDER_SET_VIEW", "OPERATIONAL_REPORT_VIEW").param("size", "101"))
+    mvc.perform(report("admin", "", "VIEW").param("size", "101"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.rows.size").value(100));
-    mvc.perform(
-            request("admin", "", "ORDER_SET_VIEW", "OPERATIONAL_REPORT_VIEW")
-                .param("page", "99999999")
-                .param("size", "100"))
+    mvc.perform(report("admin", "", "VIEW").param("page", "99999999").param("size", "100"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.error").isString());
-    mvc.perform(
-            request(
-                    "admin",
-                    "/exports",
-                    "ORDER_SET_VIEW",
-                    "OPERATIONAL_REPORT_VIEW",
-                    "OPERATIONAL_REPORT_EXPORT")
-                .param("format", "xls"))
+    mvc.perform(report("admin", "/exports", "VIEW", "EXPORT").param("format", "xls"))
         .andExpect(status().isBadRequest());
     properties.getOperationalReport().setMaxBytes(1);
-    mvc.perform(
-            request(
-                    "admin",
-                    "/exports",
-                    "ORDER_SET_VIEW",
-                    "OPERATIONAL_REPORT_VIEW",
-                    "OPERATIONAL_REPORT_EXPORT")
-                .param("format", "xlsx"))
+    mvc.perform(report("admin", "/exports", "VIEW", "EXPORT").param("format", "xlsx"))
         .andExpect(status().isServiceUnavailable())
         .andExpect(jsonPath("$.error").isString())
         .andExpect(header().doesNotExist("Content-Disposition"));

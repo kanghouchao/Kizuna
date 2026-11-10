@@ -86,7 +86,6 @@ Given(
         "CAST_MANAGE",
         "CAST_FIELD_DEF_MANAGE",
         "CAST_FIELD_DEF_VIEW",
-        "STORE_VIEW",
 
       ],
     );
@@ -104,7 +103,7 @@ Given(
       request,
       owner,
       `勤務担当-${suffix}`,
-      ["CAST_FIELD_DEF_VIEW", "STORE_VIEW",],
+      ["CAST_FIELD_DEF_VIEW"],
     );
     const limitedEmail = `field-limited-${suffix}@example.test`;
     await createStoreStaffFixture(

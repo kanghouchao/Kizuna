@@ -106,7 +106,6 @@ Given(
       [
         "ORDER_MANAGE",
         "ORDER_SET_VIEW",
-        "STORE_VIEW",
 
 
         "REMUNERATION_VIEW",

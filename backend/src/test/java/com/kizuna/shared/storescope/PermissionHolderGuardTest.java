@@ -24,7 +24,7 @@ class PermissionHolderGuardTest {
   @DisplayName("PERM_ 権限を 1 つでも持てば true")
   void trueWithAnyPermission() {
     assertThat(guard.check(jwtWith("PERM_ORDER_MANAGE"))).isTrue();
-    assertThat(guard.check(jwtWith("ROLE_CAST", "PERM_STORE_VIEW"))).isTrue();
+    assertThat(guard.check(jwtWith("ROLE_CAST", "PERM_SHIFT_MANAGE"))).isTrue();
   }
 
   @Test

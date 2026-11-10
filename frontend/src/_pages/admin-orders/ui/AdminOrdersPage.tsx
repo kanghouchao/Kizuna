@@ -32,7 +32,10 @@ export default function AdminOrdersPage() {
 
 function OrderList() {
   const list = useListPage(orderApi.adminList);
-  const canReport = hasPermission(useMe().me, 'OPERATIONAL_REPORT_VIEW');
+  const { me } = useMe();
+  const canReport = hasPermission(me, 'OPERATIONAL_REPORT_SET_VIEW');
+  // 月次と訂正履歴は行の店舗の店舗級の端点を読むので、店舗の木の受注の権限を持つ者にだけ出す。
+  const managesOrders = hasPermission(me, 'ORDER_MANAGE');
   const [details, setDetails] = useState<AdminOrder | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -48,15 +51,17 @@ function OrderList() {
                 運営金額集計
               </Button>
             )}
-            <Button
-              variant="outline"
-              render={<Link href={storePath('/orders/monthly-remunerations')} />}
-            >
-              月次給与明細
-            </Button>
+            {managesOrders && (
+              <Button
+                variant="outline"
+                render={<Link href={storePath('/orders/monthly-remunerations')} />}
+              >
+                月次給与明細
+              </Button>
+            )}
           </>
         }
-        description="授権された店舗の受注と訂正履歴を閲覧できます。報酬は支払済み額ではありません。"
+        description="授権された店舗の受注を閲覧できます。報酬は支払済み額ではありません。"
         state={list}
         emptyMessage="受注はありません。"
         errorMessage="受注を取得できませんでした。権限を確認して再試行してください。"
@@ -148,16 +153,18 @@ function OrderList() {
                     >
                       詳細<span className="sr-only">：受注 {order.id}</span>
                     </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelected(order);
-                        setHistoryOpen(true);
-                      }}
-                    >
-                      訂正履歴<span className="sr-only">：受注 {order.id}</span>
-                    </Button>
+                    {managesOrders && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelected(order);
+                          setHistoryOpen(true);
+                        }}
+                      >
+                        訂正履歴<span className="sr-only">：受注 {order.id}</span>
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>

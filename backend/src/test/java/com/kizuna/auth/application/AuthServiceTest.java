@@ -152,7 +152,6 @@ class AuthServiceTest {
             PermissionCode.STORE_MANAGE,
             PermissionCode.ROLE_MANAGE,
             PermissionCode.SYSTEM_CONFIG_MANAGE,
-            PermissionCode.STORE_VIEW,
             PermissionCode.ORDER_SET_VIEW));
   }
 
@@ -196,7 +195,6 @@ class AuthServiceTest {
                 "PERM_ORDER_SET_VIEW",
                 "PERM_ROLE_MANAGE",
                 "PERM_STORE_MANAGE",
-                "PERM_STORE_VIEW",
                 "PERM_SYSTEM_CONFIG_MANAGE"));
     assertThat(claims).doesNotContainKey("userType");
     assertThat(claims).doesNotContainKey("role");
@@ -213,7 +211,7 @@ class AuthServiceTest {
     User staff = storeStaff("staff@kizuna.test", "店舗スタッフ", StoreScopeType.SPECIFIC_STORES);
     stubSuccessfulAuthentication("staff@kizuna.test", "pass", staff);
     stubRolePermissions(
-        STORE_ROLE_ID, "スタッフ", Set.of(PermissionCode.ORDER_MANAGE, PermissionCode.STORE_VIEW));
+        STORE_ROLE_ID, "スタッフ", Set.of(PermissionCode.ORDER_MANAGE, PermissionCode.SHIFT_MANAGE));
     stubIssuer();
 
     authService.login("staff@kizuna.test", "pass");
@@ -223,7 +221,7 @@ class AuthServiceTest {
     Map<String, Object> claims = claimsCaptor.getValue();
     @SuppressWarnings("unchecked")
     List<String> authorities = (List<String>) claims.get("authorities");
-    assertThat(authorities).isEqualTo(List.of("PERM_ORDER_MANAGE", "PERM_STORE_VIEW"));
+    assertThat(authorities).isEqualTo(List.of("PERM_ORDER_MANAGE", "PERM_SHIFT_MANAGE"));
   }
 
   @Test
@@ -492,7 +490,7 @@ class AuthServiceTest {
   void refresh_rebuildsAuthoritiesFromTheDatabaseInTheSameSession() {
     when(sessionTokenDecoder.decodeRefresh("cookie")).thenReturn(refreshJwt(1L, 0L));
     when(userRepository.findById(1L)).thenReturn(Optional.of(hqAdmin()));
-    stubRolePermissions(HQ_ROLE_ID, "HQ管理者", Set.of(PermissionCode.STORE_VIEW));
+    stubRolePermissions(HQ_ROLE_ID, "HQ管理者", Set.of(PermissionCode.STORE_MANAGE));
     stubIssuer();
 
     IssuedSession session = authService.refresh("cookie", null);
@@ -500,7 +498,7 @@ class AuthServiceTest {
     verify(jwtIssuer)
         .issue(
             eq(TokenType.ACCESS), eq("admin@kizuna.test"), claimsCaptor.capture(), eq("session-1"));
-    assertThat(claimsCaptor.getValue().get("authorities")).isEqualTo(List.of("PERM_STORE_VIEW"));
+    assertThat(claimsCaptor.getValue().get("authorities")).isEqualTo(List.of("PERM_STORE_MANAGE"));
     verify(jwtIssuer).issue(eq(TokenType.REFRESH), eq("admin@kizuna.test"), any(), eq("session-1"));
     assertThat(session.userId()).isEqualTo(1L);
     verifyNoInteractions(loginBenefitTrigger);
