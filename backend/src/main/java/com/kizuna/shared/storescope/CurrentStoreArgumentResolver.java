@@ -44,17 +44,14 @@ public class CurrentStoreArgumentResolver implements HandlerMethodArgumentResolv
   }
 
   @Override
-  public @Nullable Long resolveArgument(
+  public Long resolveArgument(
       @NonNull MethodParameter parameter,
       @Nullable ModelAndViewContainer mavContainer,
       @NonNull NativeWebRequest webRequest,
       @Nullable WebDataBinderFactory binderFactory) {
     String header = webRequest.getHeader(HEADER_STORE_ID);
     if (StringUtils.isBlank(header)) {
-      if (parameter.getParameterAnnotation(CurrentStore.class).required()) {
-        throw new ServiceException("店舗を指定してください");
-      }
-      return null;
+      throw new ServiceException("店舗を指定してください");
     }
     long storeId = parseStoreId(header);
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();

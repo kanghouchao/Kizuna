@@ -1,6 +1,7 @@
 package com.kizuna.user.application;
 
 import com.kizuna.audit.recording.AuditActor;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.StoreScopeType;
@@ -8,6 +9,8 @@ import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.util.Collections;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -32,14 +35,37 @@ public class ServiceExecutionIdentityService {
       propagation = Propagation.REQUIRES_NEW,
       isolation = Isolation.READ_COMMITTED)
   public AuditActor requireService(Long id, PermissionCode permission) {
+    return requireServiceScope(id, permission).actor();
+  }
+
+  /** 実行主体と、店舗級のデータを絞る店舗集合を同じ読みから返す。店舗を持たないグループ級のデータはこの集合で絞らない。 */
+  @Transactional(
+      readOnly = true,
+      propagation = Propagation.REQUIRES_NEW,
+      isolation = Isolation.READ_COMMITTED)
+  public ServiceScope requireServiceScope(Long id, PermissionCode permission) {
     var user = users.findById(id).orElseThrow(ServiceExecutionIdentityService::denied);
     if (user.getUserType() != UserType.SERVICE
         || !Boolean.TRUE.equals(user.getEnabled())
-        || user.getStoreScopeType() != StoreScopeType.ALL_STORES
         || !hasPermission(user, permission)) {
       throw denied();
     }
-    return actor(user);
+    return new ServiceScope(actor(user), StoreScopeResolver.scopeOf(user));
+  }
+
+  public record ServiceScope(AuditActor actor, StoreScope stores) {}
+
+  /** 有効なサービス ID のいずれかの店舗集合に入っている店舗。停止中のサービス ID は処理を実行しないので数えない。 */
+  public StoreScope coveredStores() {
+    var services = users.findByUserTypeAndEnabledTrue(UserType.SERVICE);
+    if (services.stream().anyMatch(u -> u.getStoreScopeType() == StoreScopeType.ALL_STORES)) {
+      return new StoreScope(true, Set.of());
+    }
+    return new StoreScope(
+        false,
+        services.stream()
+            .flatMap(u -> u.getStoreIds().stream())
+            .collect(Collectors.toUnmodifiableSet()));
   }
 
   public AuditActor requireOperator(Long id, PermissionCode permission) {
@@ -55,7 +81,6 @@ public class ServiceExecutionIdentityService {
   private AuditActor requireOperator(User user, PermissionCode permission) {
     if (user.getUserType() != UserType.STAFF
         || !Boolean.TRUE.equals(user.getEnabled())
-        || user.getStoreScopeType() != StoreScopeType.ALL_STORES
         || !hasPermission(user, permission)) {
       throw denied();
     }
@@ -75,7 +100,6 @@ public class ServiceExecutionIdentityService {
               return cb.and(
                   cb.equal(root.get("userType"), UserType.SERVICE),
                   cb.isTrue(root.get("enabled")),
-                  cb.equal(root.get("storeScopeType"), StoreScopeType.ALL_STORES),
                   root.join("roleIds").in(roleIds),
                   root.join("roleIds").in(taskRoleIds));
             },

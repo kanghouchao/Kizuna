@@ -7,6 +7,7 @@ import { notify } from '@/shared/notify';
 jest.mock('@/entities/task-execution', () => ({
   taskExecutionApi: {
     taskTypes: jest.fn(),
+    uncoveredStores: jest.fn(),
     list: jest.fn(),
     get: jest.fn(),
     candidates: jest.fn(),
@@ -42,6 +43,32 @@ beforeEach(() => {
     { name: 'POINT_EXPIRY', manual_allowed: true },
   ]);
   tasks.candidates.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
+  tasks.uncoveredStores.mockResolvedValue([]);
+});
+test('どのサービスIDの店舗集合にも入っていない店舗を警告として示す', async () => {
+  tasks.list.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
+  tasks.uncoveredStores.mockResolvedValue([
+    { id: 3, name: '新宿店' },
+    { id: 5, name: '池袋店' },
+  ]);
+  render(<TaskExecutionsPage />);
+  const notice = await screen.findByRole('region', {
+    name: 'どのサービスIDの店舗集合にも入っていない店舗があります',
+  });
+  expect(
+    within(notice)
+      .getAllByRole('listitem')
+      .map(item => item.textContent)
+  ).toEqual(['新宿店', '池袋店']);
+});
+test('全店舗がどれかのサービスIDの店舗集合に入っていれば警告を出さない', async () => {
+  tasks.list.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
+  render(<TaskExecutionsPage />);
+  expect(await screen.findByText('実行履歴がありません')).toBeVisible();
+  await waitFor(() => expect(tasks.uncoveredStores).toHaveBeenCalled());
+  expect(
+    screen.queryByText('どのサービスIDの店舗集合にも入っていない店舗があります')
+  ).not.toBeInTheDocument();
 });
 test('実行要求の応答を受け取れなくても同じ入力の再送には同じ実行キーを使う', async () => {
   tasks.list.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });

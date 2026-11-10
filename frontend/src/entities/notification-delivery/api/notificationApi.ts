@@ -7,8 +7,7 @@ import {
   DeliverySummary,
   DeliveryAttempt,
 } from '../model/types';
-const path = '/notification-deliveries';
-export const notificationApi = {
+const deliveriesAt = (path: string) => ({
   list: async (page: number): Promise<PageResult<DeliverySummary>> =>
     fromSpringPage((await apiClient.get(path, { params: { page, size: 50 } })).data),
   get: async (id: string): Promise<Delivery> => (await apiClient.get(`${path}/${id}`)).data,
@@ -33,4 +32,10 @@ export const notificationApi = {
     fromSpringPage(
       (await apiClient.get(`${path}/${id}/attempts`, { params: { page, size: 50 } })).data
     ),
-};
+});
+export type NotificationApi = ReturnType<typeof deliveriesAt>;
+// 店舗の行は X-Store-ID の店舗で、会員宛（店舗を持たない）の行は別の資源で扱う。
+export const notificationApi: NotificationApi = deliveriesAt('/notification-deliveries');
+export const memberNotificationApi: NotificationApi = deliveriesAt(
+  '/member-notification-deliveries'
+);

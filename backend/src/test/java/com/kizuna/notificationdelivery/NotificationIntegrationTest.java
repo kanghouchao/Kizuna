@@ -176,12 +176,12 @@ class NotificationIntegrationTest {
             suffix + "-other.invalid");
     operatorId =
         jdbc.queryForObject(
-            "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'通知担当','STAFF','ALL_STORES') returning id",
+            "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'通知担当','STAFF','SPECIFIC_STORES') returning id",
             Long.class,
             email);
     serviceId =
         jdbc.queryForObject(
-            "insert into t_users(display_name,user_type,store_scope_type) values ('通知SERVICE','SERVICE','ALL_STORES') returning id",
+            "insert into t_users(display_name,user_type,store_scope_type) values ('通知SERVICE','SERVICE','SPECIFIC_STORES') returning id",
             Long.class);
     Long role =
         jdbc.queryForObject(
@@ -194,7 +194,7 @@ class NotificationIntegrationTest {
             Long.class,
             "通知実行" + suffix);
     jdbc.update(
-        "insert into t_role_permissions(role_id,permission_id) select ?,id from t_permissions where code in ('NOTIFICATION_VIEW','NOTIFICATION_MANAGE','NOTIFICATION_SEND')",
+        "insert into t_role_permissions(role_id,permission_id) select ?,id from t_permissions where code in ('NOTIFICATION_VIEW','NOTIFICATION_MANAGE','NOTIFICATION_SEND','MEMBER_NOTIFICATION_VIEW','MEMBER_NOTIFICATION_MANAGE','MEMBER_NOTIFICATION_SEND')",
         role);
     jdbc.update(
         "insert into t_role_permissions(role_id,permission_id) select ?,id from t_permissions where code in ('TASK_EXECUTE','NOTIFICATION_DELIVER')",
@@ -205,6 +205,15 @@ class NotificationIntegrationTest {
         role,
         serviceId,
         serviceRole);
+    // 操作者も送信の主体も全店舗の授権を持たない。サービス ID の集合は storeId だけで、otherStore の行は送らない。
+    jdbc.update(
+        "insert into t_user_stores(user_id,store_id) values (?,?),(?,?),(?,?)",
+        operatorId,
+        storeId,
+        operatorId,
+        otherStore,
+        serviceId,
+        storeId);
   }
 
   private String guest() {
@@ -274,10 +283,14 @@ class NotificationIntegrationTest {
   }
 
   private DeliveryResponse await(String id, String status) throws Exception {
+    return awaitIn(storeId, id, status);
+  }
+
+  private DeliveryResponse awaitIn(Long store, String id, String status) throws Exception {
     long deadline = System.nanoTime() + Duration.ofSeconds(15).toNanos();
     DeliveryResponse row;
     do {
-      row = get(id);
+      row = DeliveryResponse.of(notifications.get(store, email, id));
       if (row.status().equals(status)) return row;
       Thread.sleep(20);
     } while (System.nanoTime() < deadline);
@@ -792,7 +805,7 @@ class NotificationIntegrationTest {
   }
 
   @Test
-  void serviceCandidatesForGroupWideDeliveryRequireAllStoresWithoutGrantingExecution() {
+  void serviceCandidatesNeedThePermissionNotAllStoresWithoutGrantingExecution() {
     var options = context.getBean(TaskOptions.class);
     assertThat(options.candidates("NOTIFICATION_DELIVER", PageRequest.of(0, 100)).getContent())
         .extracting(ServiceExecutionIdentityService.Candidate::id)
@@ -806,18 +819,18 @@ class NotificationIntegrationTest {
     assertThat(delivery.manualAllowed()).isFalse();
     assertThatThrownBy(() -> options.candidates("MISSING", PageRequest.of(0, 10)))
         .isInstanceOf(ServiceException.class);
-    jdbc.update("update t_users set store_scope_type='SPECIFIC_STORES' where id=?", serviceId);
-    jdbc.update("insert into t_user_stores(user_id,store_id) values (?,?)", serviceId, storeId);
+    jdbc.update("delete from t_user_stores where user_id=?", serviceId);
     assertThat(options.candidates("NOTIFICATION_DELIVER", PageRequest.of(0, 100)).getContent())
         .extracting(ServiceExecutionIdentityService.Candidate::id)
-        .doesNotContain(serviceId);
+        .contains(serviceId);
+    jdbc.update("update t_users set enabled=false where id=?", serviceId);
     assertThat(options.candidates("SERVICE_IDENTITY_CHECK", PageRequest.of(0, 100)).getContent())
         .extracting(ServiceExecutionIdentityService.Candidate::id)
         .doesNotContain(serviceId);
   }
 
   @Test
-  void oneStorelessRunDeliversDueRowsOfEveryStore() throws Exception {
+  void aRunDeliversOnlyStoresInTheServiceStoreSet() throws Exception {
     var here = queue(draft());
     var source =
         tx.execute(
@@ -842,7 +855,12 @@ class NotificationIntegrationTest {
     runTask();
     await(here.id(), "SENT");
     assertThat(DeliveryResponse.of(notifications.get(otherStore, email, there.id())).status())
-        .isEqualTo("SENT");
+        .isEqualTo("QUEUED");
+    assertThat(transport.results).containsExactly("permitted@example.invalid");
+
+    jdbc.update("insert into t_user_stores(user_id,store_id) values (?,?)", serviceId, otherStore);
+    runTask();
+    awaitIn(otherStore, there.id(), "SENT");
     assertThat(transport.results)
         .containsExactlyInAnyOrder("permitted@example.invalid", "other@example.invalid");
   }
@@ -1041,7 +1059,7 @@ class NotificationIntegrationTest {
   }
 
   @Test
-  void groupRowsAreSeparateFromStoreRowsAndNeedAllStores() {
+  void memberRowsAreSeparateFromStoreRowsAndNeedOnlyTheMemberPermissions() {
     var group = groupQueued(member("group@example.invalid", "ALLOWED", null, false));
     var store = draft();
     assertThat(notifications.list(storeId, email, PageRequest.of(0, 50)).getContent())
@@ -1071,21 +1089,43 @@ class NotificationIntegrationTest {
             () -> notifications.queue(storeId, email, group.id(), group.version(), "店舗から操作", true))
         .isInstanceOf(NotFoundException.class);
 
-    var scoped =
+    var storeOnly = staff("store-" + email, "NOTIFICATION_VIEW", "NOTIFICATION_SEND");
+    jdbc.update("insert into t_user_stores(user_id,store_id) values (?,?)", storeOnly, storeId);
+    assertThat(notifications.list(storeId, "store-" + email, PageRequest.of(0, 50))).hasSize(1);
+    assertThatThrownBy(() -> notifications.list(null, "store-" + email, PageRequest.of(0, 50)))
+        .isInstanceOf(AccessDeniedException.class);
+    assertThatThrownBy(() -> notifications.get(null, "store-" + email, group.id()))
+        .isInstanceOf(AccessDeniedException.class);
+
+    // 店舗集合が空でも、会員宛通知の権限があれば会員宛の行を扱える。
+    staff("member-" + email, "MEMBER_NOTIFICATION_VIEW", "MEMBER_NOTIFICATION_SEND");
+    assertThat(notifications.list(null, "member-" + email, PageRequest.of(0, 50)).getContent())
+        .extracting(NotificationDelivery::getId)
+        .containsExactly(group.id());
+    assertThat(notifications.history(null, "member-" + email, group.id(), PageRequest.of(0, 10)))
+        .isNotNull();
+    assertThatThrownBy(() -> notifications.list(storeId, "member-" + email, PageRequest.of(0, 50)))
+        .isInstanceOf(AccessDeniedException.class);
+  }
+
+  /** 指定した権限だけを持つロールを授与した、店舗集合が空の職員。 */
+  private Long staff(String address, String... permissions) {
+    var id =
         jdbc.queryForObject(
-            "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'店舗の通知担当','STAFF','SPECIFIC_STORES') returning id",
+            "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'通知の担当','STAFF','SPECIFIC_STORES') returning id",
             Long.class,
-            "scoped-" + email);
-    jdbc.update("insert into t_user_stores(user_id,store_id) values (?,?)", scoped, storeId);
+            address);
+    var role =
+        jdbc.queryForObject(
+            "insert into t_roles(name,is_system) values (?,false) returning id",
+            Long.class,
+            UUID.randomUUID().toString());
     jdbc.update(
-        "insert into t_user_roles(user_id,role_id) select ?,role_id from t_user_roles where user_id=?",
-        scoped,
-        operatorId);
-    assertThat(notifications.list(storeId, "scoped-" + email, PageRequest.of(0, 50))).hasSize(1);
-    assertThatThrownBy(() -> notifications.list(null, "scoped-" + email, PageRequest.of(0, 50)))
-        .isInstanceOf(AccessDeniedException.class);
-    assertThatThrownBy(() -> notifications.get(null, "scoped-" + email, group.id()))
-        .isInstanceOf(AccessDeniedException.class);
+        "insert into t_role_permissions(role_id,permission_id) select ?,id from t_permissions where code = any(?)",
+        role,
+        permissions);
+    jdbc.update("insert into t_user_roles(user_id,role_id) values (?,?)", id, role);
+    return id;
   }
 
   @Test

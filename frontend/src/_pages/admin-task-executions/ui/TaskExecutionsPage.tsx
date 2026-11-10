@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { taskExecutionApi, ExecutionSummary } from '@/entities/task-execution';
 import { createUuid, getApiErrorMessage, useListPage, useResource } from '@/shared/lib';
+import { TriangleAlertIcon } from 'lucide-react';
 import { notify } from '@/shared/notify';
 import {
   Badge,
@@ -199,6 +200,39 @@ const TASK_COPY: Record<string, { label: string; description: string; action: st
   },
 };
 
+// 定期処理は店舗級のデータを実行するサービス ID の店舗集合で絞るため、どの集合にも無い店舗は処理されない。
+function UncoveredStores() {
+  const headingId = useId();
+  const stores = useResource(taskExecutionApi.uncoveredStores);
+  if (stores.failure)
+    return (
+      <RegionError
+        message="サービスIDの店舗集合を確認できませんでした"
+        onRetry={() => void stores.reload()}
+      />
+    );
+  if (!stores.data?.length) return null;
+  return (
+    <section
+      aria-labelledby={headingId}
+      className="space-y-2 rounded-lg border border-warning/40 bg-warning/10 p-4 text-warning-strong"
+    >
+      <h2 id={headingId} className="flex items-center gap-2 font-medium">
+        <TriangleAlertIcon aria-hidden className="size-5 shrink-0" />
+        どのサービスIDの店舗集合にも入っていない店舗があります
+      </h2>
+      <p className="text-sm">
+        これらの店舗の応募者の匿名化と業務通知の送信は、定期処理で行われません。サービスID管理で店舗集合に加えてください。
+      </p>
+      <ul className="list-disc pl-5 text-sm">
+        {stores.data.map(store => (
+          <li key={store.id}>{store.name}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function taskLabel(name: string) {
   return TASK_COPY[name]?.label ?? name;
 }
@@ -258,6 +292,7 @@ export default function TaskExecutionsPage() {
         title="処理の実行履歴"
         description="サービスIDによる処理結果を確認し、失敗した処理を理由付きで再試行できます。"
       />
+      <UncoveredStores />
       <Card className="p-6 space-y-6">
         <h2 className="text-lg font-medium">処理を実行</h2>
         <div className="max-w-lg space-y-2">

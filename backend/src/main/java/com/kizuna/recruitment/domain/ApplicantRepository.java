@@ -21,11 +21,19 @@ public interface ApplicantRepository
   @Query("select a.enrollmentId from Applicant a where a.enrollmentId in :enrollmentIds")
   Set<String> findReferencedEnrollmentIds(Collection<String> enrollmentIds);
 
-  /** 店舗を跨ぐ照会。グループ全体の匿名化処理だけが使い、以後の操作は各行の店舗で引き直す。終端は一度きりなので遷移履歴は一行に定まる。 */
+  /**
+   * 匿名化処理だけが使う店舗を跨ぐ照会で、境界は実行するサービス ID の店舗集合。全店舗を授権された主体は条件なし、それ以外は集合内の店舗に絞る。
+   * 以後の操作は各行の店舗で引き直す。終端は一度きりなので遷移履歴は一行に定まる。
+   */
   @Query(
       "select new com.kizuna.recruitment.domain.ApplicantAnonymizationTarget(a.id, a.storeId, h.createdAt) from Applicant a, ApplicantStatusHistory h where h.storeId = a.storeId and h.applicantId = a.id and h.newStatus = a.status and a.status = :status and a.anonymizedAt is null and h.createdAt < :before order by h.createdAt, a.id")
   List<ApplicantAnonymizationTarget> findAnonymizationTargets(
       ApplicantStatus status, OffsetDateTime before, Limit limit);
+
+  @Query(
+      "select new com.kizuna.recruitment.domain.ApplicantAnonymizationTarget(a.id, a.storeId, h.createdAt) from Applicant a, ApplicantStatusHistory h where h.storeId = a.storeId and h.applicantId = a.id and h.newStatus = a.status and a.status = :status and a.anonymizedAt is null and h.createdAt < :before and a.storeId in :storeIds order by h.createdAt, a.id")
+  List<ApplicantAnonymizationTarget> findAnonymizationTargetsIn(
+      ApplicantStatus status, OffsetDateTime before, Collection<Long> storeIds, Limit limit);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select a from Applicant a where a.id = :id and a.storeId = :storeId")

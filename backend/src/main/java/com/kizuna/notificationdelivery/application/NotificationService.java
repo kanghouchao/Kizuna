@@ -8,7 +8,6 @@ import com.kizuna.notificationdelivery.domain.NotificationDelivery;
 import com.kizuna.notificationdelivery.domain.NotificationDeliveryRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.persistence.Timestamps;
-import com.kizuna.user.domain.PermissionCode;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.Optional;
@@ -33,7 +32,7 @@ public class NotificationService {
 
   @Transactional
   public Created create(Long storeId, String email, DeliveryContent content) {
-    var actor = actors.require(storeId, email, PermissionCode.NOTIFICATION_MANAGE);
+    var actor = actors.require(storeId, email, NotificationActors.Action.MANAGE);
     var existing = byKey(storeId, content.dedupeKey());
     if (existing.isPresent()) {
       existing.get().requireSame(content);
@@ -49,7 +48,7 @@ public class NotificationService {
 
   @Transactional(readOnly = true)
   public Created replay(Long storeId, String email, DeliveryContent content) {
-    actors.require(storeId, email, PermissionCode.NOTIFICATION_MANAGE);
+    actors.require(storeId, email, NotificationActors.Action.MANAGE);
     var row =
         byKey(storeId, content.dedupeKey()).orElseThrow(() -> new NotFoundException("通知が見つかりません"));
     row.requireSame(content);
@@ -58,7 +57,7 @@ public class NotificationService {
 
   @Transactional(readOnly = true)
   public Page<NotificationDelivery> list(Long storeId, String email, Pageable pageable) {
-    actors.require(storeId, email, PermissionCode.NOTIFICATION_VIEW);
+    actors.require(storeId, email, NotificationActors.Action.VIEW);
     return storeId == null
         ? deliveries.findByAttributedStoreIdIsNull(pageable)
         : deliveries.findByAttributedStoreId(storeId, pageable);
@@ -66,14 +65,14 @@ public class NotificationService {
 
   @Transactional(readOnly = true)
   public DeliveryView get(Long storeId, String email, String id) {
-    actors.require(storeId, email, PermissionCode.NOTIFICATION_VIEW);
+    actors.require(storeId, email, NotificationActors.Action.VIEW);
     return response(storeId, require(storeId, id));
   }
 
   @Transactional
   public DeliveryView queue(
       Long storeId, String email, String id, Long version, String reason, boolean retry) {
-    var actor = actors.require(storeId, email, PermissionCode.NOTIFICATION_SEND);
+    var actor = actors.require(storeId, email, NotificationActors.Action.SEND);
     var row = lock(storeId, id);
     contacts.resolve(storeId, row.content());
     row.queue(version, reason, retry);
@@ -90,7 +89,7 @@ public class NotificationService {
       Long version,
       DeliveryResolution outcome,
       String reason) {
-    var actor = actors.require(storeId, email, PermissionCode.NOTIFICATION_SEND);
+    var actor = actors.require(storeId, email, NotificationActors.Action.SEND);
     var row = lock(storeId, id);
     row.resolve(version, outcome, reason);
     deliveries.flush();
@@ -102,12 +101,12 @@ public class NotificationService {
 
   @Transactional(readOnly = true)
   public Page<DeliveryAttempt> history(Long storeId, String email, String id, Pageable pageable) {
-    actors.require(storeId, email, PermissionCode.NOTIFICATION_VIEW);
+    actors.require(storeId, email, NotificationActors.Action.VIEW);
     require(storeId, id);
     return attempts.findByDeliveryId(id, pageable);
   }
 
-  // storeId が null ならグループ級の行。NotificationActors が ALL_STORES を確かめた後にだけ届く。
+  // storeId が null なら会員宛（店舗を持たない）の行。店舗の行とは別の照会で引く。
   private Optional<NotificationDelivery> byKey(Long storeId, String key) {
     return storeId == null
         ? deliveries.findByAttributedStoreIdIsNullAndDedupeKey(key)

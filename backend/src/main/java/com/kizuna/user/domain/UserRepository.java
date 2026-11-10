@@ -54,6 +54,8 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
   List<User> findAuthorizedByUserTypeOrderByDisplayNameAsc(
       @Param("userType") UserType userType, @Param("storeId") Long storeId);
 
+  List<User> findByUserTypeAndEnabledTrue(UserType userType);
+
   /**
    * email でユーザーを取得し、行に悲観排他ロック（SELECT ... FOR UPDATE）を掛ける。
    *

@@ -3,13 +3,16 @@ package com.kizuna.notificationdelivery.application;
 import com.kizuna.notificationdelivery.domain.DeliveryAttempt;
 import com.kizuna.notificationdelivery.domain.DeliveryAttemptRepository;
 import com.kizuna.notificationdelivery.domain.DeliveryStatus;
+import com.kizuna.notificationdelivery.domain.NotificationDelivery;
 import com.kizuna.notificationdelivery.domain.NotificationDeliveryRepository;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.task.execution.TaskContext;
 import com.kizuna.task.execution.TaskHandler;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
 import com.kizuna.user.domain.PermissionCode;
 import java.time.Clock;
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -48,10 +51,9 @@ public class NotificationDeliveryTask implements TaskHandler {
   @Transactional(propagation = Propagation.MANDATORY)
   public long execute(TaskContext context) {
     identities.requireService(context.serviceUserId(), PermissionCode.TASK_EXECUTE);
-    var actor = identities.requireService(context.serviceUserId(), permission());
-    var rows =
-        deliveries.findByStatusAndScheduledAtLessThanEqualOrderByScheduledAtAscIdAsc(
-            DeliveryStatus.QUEUED, OffsetDateTime.now(clock), Limit.of(100));
+    var service = identities.requireServiceScope(context.serviceUserId(), permission());
+    var actor = service.actor();
+    var rows = due(service.stores(), OffsetDateTime.now(clock), Limit.of(100));
     for (var row : rows) {
       row.dispatch();
       var attempt =
@@ -68,5 +70,16 @@ public class NotificationDeliveryTask implements TaskHandler {
               row.getId(), attempt.getId(), context.serviceUserId(), context.executionId()));
     }
     return rows.size();
+  }
+
+  private List<NotificationDelivery> due(StoreScope stores, OffsetDateTime now, Limit limit) {
+    if (stores.allStores())
+      return deliveries.findByStatusAndScheduledAtLessThanEqualOrderByScheduledAtAscIdAsc(
+          DeliveryStatus.QUEUED, now, limit);
+    if (stores.storeIds().isEmpty())
+      return deliveries
+          .findByStatusAndScheduledAtLessThanEqualAndAttributedStoreIdIsNullOrderByScheduledAtAscIdAsc(
+              DeliveryStatus.QUEUED, now, limit);
+    return deliveries.findDueForStores(DeliveryStatus.QUEUED, now, stores.storeIds(), limit);
   }
 }

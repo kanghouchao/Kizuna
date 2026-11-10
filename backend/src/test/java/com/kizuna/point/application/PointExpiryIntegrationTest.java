@@ -106,7 +106,7 @@ class PointExpiryIntegrationTest {
     operator =
         new AuditActor(
             jdbc.queryForObject(
-                "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'検証担当','STAFF','ALL_STORES') returning id",
+                "insert into t_users(email,display_name,user_type,store_scope_type) values (?,'検証担当','STAFF','SPECIFIC_STORES') returning id",
                 Long.class,
                 UUID.randomUUID() + "@example.test"),
             "STAFF",
@@ -117,8 +117,7 @@ class PointExpiryIntegrationTest {
   void prepare() {
     jdbc.update("delete from t_point_usage_allocations");
     jdbc.update("delete from t_point_entries");
-    jdbc.update(
-        "update t_users set enabled=true, store_scope_type='ALL_STORES' where id=?", serviceId);
+    jdbc.update("update t_users set enabled=true where id=?", serviceId);
     jdbc.update(
         "insert into t_user_roles(user_id,role_id) values (?,?) on conflict do nothing",
         serviceId,
@@ -388,7 +387,7 @@ class PointExpiryIntegrationTest {
   }
 
   @Test
-  void sourceIdentityMustKeepBothPermissionsAndCurrentScopeEvenInsideOneTransaction() {
+  void sourceIdentityMustKeepBothPermissionsAndStayEnabledEvenInsideOneTransaction() {
     credit(memberId, 100, TODAY);
     var identities = first.getBean(ServiceExecutionIdentityService.class);
     assertThatThrownBy(
@@ -399,15 +398,13 @@ class PointExpiryIntegrationTest {
                           identities.requireService(serviceId, PermissionCode.POINT_EXPIRE);
                           second
                               .getBean(JdbcTemplate.class)
-                              .update(
-                                  "update t_users set store_scope_type='SPECIFIC_STORES' where id=?",
-                                  serviceId);
+                              .update("update t_users set enabled=false where id=?", serviceId);
                           identities.requireService(serviceId, PermissionCode.POINT_EXPIRE);
                         }))
         .isInstanceOf(AccessDeniedException.class);
     assertThatThrownBy(() -> first.getBean(TaskExecutor.class).executeScheduled(command()))
         .isInstanceOf(AccessDeniedException.class);
-    jdbc.update("update t_users set store_scope_type='ALL_STORES' where id=?", serviceId);
+    jdbc.update("update t_users set enabled=true where id=?", serviceId);
     jdbc.update("delete from t_user_roles where user_id=? and role_id=?", serviceId, expiryRole);
     assertThatThrownBy(() -> first.getBean(TaskExecutor.class).executeScheduled(command()))
         .isInstanceOf(AccessDeniedException.class);
@@ -422,7 +419,7 @@ class PointExpiryIntegrationTest {
   void independentAuthorizationSeesCommittedRevocationsDespiteRepeatableReadAndLoadedRoles() {
     var external = second.getBean(JdbcTemplate.class);
     var identities = first.getBean(ServiceExecutionIdentityService.class);
-    for (String change : List.of("enabled", "scope", "role", "permission")) {
+    for (String change : List.of("enabled", "role", "permission")) {
       var work = tx(first);
       work.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
       assertThatThrownBy(
@@ -440,10 +437,6 @@ class PointExpiryIntegrationTest {
                           case "enabled" ->
                               external.update(
                                   "update t_users set enabled=false where id=?", serviceId);
-                          case "scope" ->
-                              external.update(
-                                  "update t_users set store_scope_type='SPECIFIC_STORES' where id=?",
-                                  serviceId);
                           case "role" ->
                               external.update(
                                   "delete from t_user_roles where user_id=? and role_id=?",
@@ -457,8 +450,7 @@ class PointExpiryIntegrationTest {
                         identities.requireService(serviceId, PermissionCode.POINT_EXPIRE);
                       }))
           .isInstanceOf(AccessDeniedException.class);
-      external.update(
-          "update t_users set enabled=true, store_scope_type='ALL_STORES' where id=?", serviceId);
+      external.update("update t_users set enabled=true where id=?", serviceId);
       external.update(
           "insert into t_user_roles(user_id,role_id) values (?,?) on conflict do nothing",
           serviceId,
@@ -698,10 +690,11 @@ class PointExpiryIntegrationTest {
     return id;
   }
 
+  /** 店舗集合が空のサービス ID。ポイント失効はグループ級の処理なので、集合に関わらず全会員を扱う。 */
   private long service(String name, long... roles) {
     long id =
         jdbc.queryForObject(
-            "insert into t_users(display_name,user_type,store_scope_type) values (?,'SERVICE','ALL_STORES') returning id",
+            "insert into t_users(display_name,user_type,store_scope_type) values (?,'SERVICE','SPECIFIC_STORES') returning id",
             Long.class,
             name);
     for (long role : roles)

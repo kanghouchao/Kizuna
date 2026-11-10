@@ -70,6 +70,18 @@ databaseChangeLog:
         - insert:
             tableName: t_permissions
             columns:
+              - column: { name: code, value: MEMBER_NOTIFICATION_VIEW }
+        - insert:
+            tableName: t_permissions
+            columns:
+              - column: { name: code, value: MEMBER_NOTIFICATION_MANAGE }
+        - insert:
+            tableName: t_permissions
+            columns:
+              - column: { name: code, value: MEMBER_NOTIFICATION_SEND }
+        - insert:
+            tableName: t_permissions
+            columns:
               - column: { name: code, value: NOTIFICATION_DELIVER }
         - insert:
             tableName: t_permissions
@@ -276,6 +288,21 @@ databaseChangeLog:
             columns:
               - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'NOTIFICATION_DELIVER')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'MEMBER_NOTIFICATION_VIEW')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'MEMBER_NOTIFICATION_MANAGE')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'MEMBER_NOTIFICATION_SEND')" }
         - insert:
             tableName: t_role_permissions
             columns:

@@ -18,6 +18,7 @@ import com.kizuna.settings.application.ApplicantRetentionSettings;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.task.execution.TaskContext;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
 import com.kizuna.user.domain.PermissionCode;
@@ -27,6 +28,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.access.AccessDeniedException;
@@ -53,8 +55,12 @@ class ApplicantAnonymizationTaskTest {
 
   @BeforeEach
   void authorize() {
-    when(identities.requireService(eq(8L), any()))
-        .thenReturn(new AuditActor(8L, "SERVICE", "匿名化処理"));
+    var actor = new AuditActor(8L, "SERVICE", "匿名化処理");
+    when(identities.requireService(eq(8L), any())).thenReturn(actor);
+    when(identities.requireServiceScope(eq(8L), any()))
+        .thenReturn(
+            new ServiceExecutionIdentityService.ServiceScope(
+                actor, new StoreScope(true, Set.of())));
   }
 
   @Test
@@ -92,6 +98,19 @@ class ApplicantAnonymizationTaskTest {
   }
 
   @Test
+  void serviceWithAnEmptyStoreSetQueriesNoStore() {
+    when(identities.requireServiceScope(eq(8L), any()))
+        .thenReturn(
+            new ServiceExecutionIdentityService.ServiceScope(
+                new AuditActor(8L, "SERVICE", "匿名化処理"), new StoreScope(false, Set.of())));
+    when(systemConfigs.applicantRetentionSettings())
+        .thenReturn(new ApplicantRetentionSettings(6, 6, 0));
+    assertThat(task.execute(context)).isZero();
+    verify(applicants, never()).findAnonymizationTargets(any(), any(), any());
+    verify(applicants, never()).findAnonymizationTargetsIn(any(), any(), any(), any());
+  }
+
+  @Test
   void dueDateFollowsMonthEndClampingOfTransitionPlusPeriod() {
     // 1/31 + 1 か月 = 2/28 なので、2/28 時点では 1/31 までの遷移が満了している。
     assertThat(ApplicantAnonymizationTask.transitionedBefore(LocalDate.of(2026, 2, 28), 1, TOKYO))
@@ -119,7 +138,7 @@ class ApplicantAnonymizationTaskTest {
 
   @Test
   void serviceWithoutTheTaskPermissionTouchesNothing() {
-    when(identities.requireService(8L, PermissionCode.APPLICANT_ANONYMIZE))
+    when(identities.requireServiceScope(8L, PermissionCode.APPLICANT_ANONYMIZE))
         .thenThrow(new AccessDeniedException("denied"));
     assertThatThrownBy(() -> task.execute(context)).isInstanceOf(AccessDeniedException.class);
     verifyNoInteractions(applicants, systemConfigs);

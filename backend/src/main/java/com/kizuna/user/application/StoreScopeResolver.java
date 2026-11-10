@@ -29,7 +29,7 @@ public class StoreScopeResolver {
         .orElse(null);
   }
 
-  private static StoreScope scopeOf(User user) {
+  static StoreScope scopeOf(User user) {
     if (user.getStoreScopeType() == StoreScopeType.ALL_STORES) {
       return new StoreScope(true, Set.of());
     }

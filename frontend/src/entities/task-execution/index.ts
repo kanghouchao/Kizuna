@@ -5,4 +5,5 @@ export type {
   ExecutionRequest,
   ServiceCandidate,
   TaskType,
+  UncoveredStore,
 } from './model/types';

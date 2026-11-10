@@ -47,22 +47,16 @@ class CurrentStoreArgumentResolverTest {
 
   /** 引数の形を切り替えて MethodParameter を組み立てるための土台。 */
   static class Handlers {
-    void handle(
-        @CurrentStore Long required,
-        @CurrentStore(required = false) Long optional,
-        Long unannotated,
-        @CurrentStore String wrongType) {}
+    void handle(@CurrentStore Long required, Long unannotated, @CurrentStore String wrongType) {}
   }
 
   private static MethodParameter parameter(int index) throws NoSuchMethodException {
     Method method =
-        Handlers.class.getDeclaredMethod(
-            "handle", Long.class, Long.class, Long.class, String.class);
+        Handlers.class.getDeclaredMethod("handle", Long.class, Long.class, String.class);
     return new MethodParameter(method, index);
   }
 
   private static final int REQUIRED = 0;
-  private static final int OPTIONAL = 1;
 
   private Long resolve(int parameterIndex, String header) throws Exception {
     MockHttpServletRequest request = new MockHttpServletRequest();
@@ -94,11 +88,9 @@ class CurrentStoreArgumentResolverTest {
   }
 
   @Test
-  @DisplayName("ヘッダが無ければ必須の引数は 400、任意の引数は null（実在確認もしない）")
+  @DisplayName("ヘッダが無ければ 400（実在確認もしない）")
   void absentHeader() throws Exception {
     assertBadRequest(REQUIRED, null, "店舗を指定してください");
-    assertThat(resolve(OPTIONAL, null)).isNull();
-    assertThat(ThreadContext.get(CurrentStoreArgumentResolver.MDC_STORE_ID)).isNull();
     verifyNoInteractions(existence);
   }
 
@@ -107,33 +99,29 @@ class CurrentStoreArgumentResolverTest {
   @DisplayName("空白だけのヘッダは無いのと同じ扱い")
   void blankHeaderIsAbsent(String header) throws Exception {
     assertBadRequest(REQUIRED, header, "店舗を指定してください");
-    assertThat(resolve(OPTIONAL, header)).isNull();
     verifyNoInteractions(existence);
   }
 
   @ParameterizedTest
   @ValueSource(strings = {"abc", "-1", "1.5", "99999999999999999999"})
-  @DisplayName("数値でない・long 範囲を超えるヘッダは必須でも任意でも 400")
+  @DisplayName("数値でない・long 範囲を超えるヘッダは400")
   void malformedHeaderIsBadRequest(String header) {
     authenticate(new StoreScope(true, Set.of()), "PERM_ORDER_MANAGE");
     assertBadRequest(REQUIRED, header, "店舗 ID の形式が正しくありません");
-    assertBadRequest(OPTIONAL, header, "店舗 ID の形式が正しくありません");
     verifyNoInteractions(existence);
   }
 
   @Test
-  @DisplayName("未認証（公開サイト）は実在する任意の店舗を名乗れ、任意の引数でも同じ検証を通ること")
+  @DisplayName("未認証（公開サイト）は実在する任意の店舗を名乗れること")
   void anonymousNamesAnyExistingStore() throws Exception {
     when(existence.exists(42L)).thenReturn(true);
     assertThat(resolve(REQUIRED, "42")).isEqualTo(42L);
-    assertThat(resolve(OPTIONAL, "42")).isEqualTo(42L);
   }
 
   @Test
   @DisplayName("未認証が実在しない店舗を名乗ると 400")
   void anonymousNonexistentStoreIsBadRequest() {
     assertBadRequest(REQUIRED, "42", "店舗が見つかりません");
-    assertBadRequest(OPTIONAL, "42", "店舗が見つかりません");
   }
 
   @Test
@@ -231,8 +219,7 @@ class CurrentStoreArgumentResolverTest {
   @DisplayName("@CurrentStore の付いた Long 引数だけを扱うこと")
   void supportsOnlyAnnotatedLongParameters() throws Exception {
     assertThat(resolver.supportsParameter(parameter(0))).isTrue();
-    assertThat(resolver.supportsParameter(parameter(1))).isTrue();
+    assertThat(resolver.supportsParameter(parameter(1))).isFalse();
     assertThat(resolver.supportsParameter(parameter(2))).isFalse();
-    assertThat(resolver.supportsParameter(parameter(3))).isFalse();
   }
 }

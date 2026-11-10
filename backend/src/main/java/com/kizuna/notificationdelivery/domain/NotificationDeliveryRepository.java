@@ -2,6 +2,7 @@ package com.kizuna.notificationdelivery.domain;
 
 import jakarta.persistence.LockModeType;
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Limit;
@@ -37,13 +38,26 @@ public interface NotificationDeliveryRepository extends Repository<NotificationD
   @Query("select d from NotificationDelivery d where d.id=:id and d.attributedStoreId is null")
   Optional<NotificationDelivery> findByIdAndAttributedStoreIdIsNullForUpdate(String id);
 
-  /** 送信の定期処理（グループ全体）が引き渡した行を、その行の ID で取る。店舗を跨ぐのは意図どおり。 */
+  /** 送信の定期処理が引き渡した行を、その行の ID で取る。店舗集合の再検証は送信側が行う。 */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select d from NotificationDelivery d where d.id=:id")
   Optional<NotificationDelivery> findByIdForUpdate(String id);
 
-  /** 送信の定期処理はグループ全体の処理で、全店舗とグループ級の到来分を扱う。 */
+  /**
+   * 送信の定期処理が取る到来分。境界は実行するサービス ID の店舗集合で、店舗を持たないグループ級の行は集合に関わらず取る。 全店舗を授権された主体は条件なし、集合が空なら店舗の行を取らない。
+   */
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   List<NotificationDelivery> findByStatusAndScheduledAtLessThanEqualOrderByScheduledAtAscIdAsc(
       DeliveryStatus status, OffsetDateTime time, Limit limit);
+
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      "select d from NotificationDelivery d where d.status = :status and d.scheduledAt <= :time and (d.attributedStoreId is null or d.attributedStoreId in :storeIds) order by d.scheduledAt, d.id")
+  List<NotificationDelivery> findDueForStores(
+      DeliveryStatus status, OffsetDateTime time, Collection<Long> storeIds, Limit limit);
+
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  List<NotificationDelivery>
+      findByStatusAndScheduledAtLessThanEqualAndAttributedStoreIdIsNullOrderByScheduledAtAscIdAsc(
+          DeliveryStatus status, OffsetDateTime time, Limit limit);
 }

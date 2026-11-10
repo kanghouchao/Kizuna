@@ -5,10 +5,13 @@ import {
   ExecutionRequest,
   ServiceCandidate,
   TaskType,
+  UncoveredStore,
 } from '../model/types';
 const path = '/task-executions';
 export const taskExecutionApi = {
   taskTypes: async (): Promise<TaskType[]> => (await apiClient.get(`${path}/task-types`)).data,
+  uncoveredStores: async (): Promise<UncoveredStore[]> =>
+    (await apiClient.get(`${path}/uncovered-stores`)).data,
   list: async (page: number): Promise<PageResult<ExecutionSummary>> =>
     fromSpringPage((await apiClient.get(path, { params: { page, size: 50 } })).data),
   get: async (id: number): Promise<ExecutionResponse> =>

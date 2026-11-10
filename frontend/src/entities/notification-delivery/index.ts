@@ -1,4 +1,5 @@
-export { notificationApi } from './api/notificationApi';
+export { notificationApi, memberNotificationApi } from './api/notificationApi';
+export type { NotificationApi } from './api/notificationApi';
 export type {
   Delivery,
   DeliveryInput,

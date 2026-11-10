@@ -8,6 +8,8 @@ import {
   DeliveryInput,
   DeliveryResolution,
   DeliveryStatus,
+  NotificationApi,
+  memberNotificationApi,
   notificationApi,
 } from '@/entities/notification-delivery';
 import {
@@ -118,8 +120,8 @@ function useActive() {
   return active;
 }
 
-function History({ id }: { id: string }) {
-  const history = useListPage(page => notificationApi.history(id, page));
+function History({ api, id }: { api: NotificationApi; id: string }) {
+  const history = useListPage(page => api.history(id, page));
   return (
     <section className="space-y-3">
       <h2 className="text-lg font-semibold">送信試行</h2>
@@ -173,10 +175,12 @@ function History({ id }: { id: string }) {
 }
 type ResolutionDraft = { outcome: DeliveryResolution | ''; reason: string };
 function Resolution({
+  api,
   row,
   write,
   onResolved,
 }: {
+  api: NotificationApi;
   row: Delivery;
   write: ReturnType<typeof useVersionedWrite>;
   onResolved: (result: Delivery) => void;
@@ -185,7 +189,7 @@ function Resolution({
   const labelId = useId();
   const resolve = async ({ outcome, reason }: ResolutionDraft) => {
     if (outcome === '') return;
-    await write.write(() => notificationApi.resolve(row.id, row.version, outcome, reason), {
+    await write.write(() => api.resolve(row.id, row.version, outcome, reason), {
       success: '判定を記録しました',
       failure: '判定を記録できませんでした',
       onSuccess: onResolved,
@@ -265,17 +269,19 @@ function Resolution({
   );
 }
 function Detail({
+  api,
   id,
   canSend,
   onChanged,
   onMissing,
 }: {
+  api: NotificationApi;
   id: string;
   canSend: boolean;
   onChanged: () => void;
   onMissing: () => void;
 }) {
-  const detail = useResource(() => notificationApi.get(id), [id]);
+  const detail = useResource(() => api.get(id), [id]);
   const resolution = useVersionedWrite(detail.reload);
   const form = useForm<{ reason: string }>({ defaultValues: { reason: '' } });
   const active = useActive();
@@ -290,7 +296,7 @@ function Detail({
     busy.current = true;
     const row = detail.data;
     try {
-      const result = await (row.status === 'DRAFT' ? notificationApi.queue : notificationApi.retry)(
+      const result = await (row.status === 'DRAFT' ? api.queue : api.retry)(
         id,
         row.version,
         reason
@@ -373,6 +379,7 @@ function Detail({
       </Button>
       {canSend && row.status === 'UNKNOWN' && (
         <Resolution
+          api={api}
           key={row.version}
           row={row}
           write={resolution}
@@ -415,7 +422,7 @@ function Detail({
           </form>
         </Form>
       )}
-      <History key={historyKey} id={id} />
+      <History key={historyKey} api={api} id={id} />
     </div>
   );
 }
@@ -598,7 +605,7 @@ function Create({ onCreated }: { onCreated: (row: Delivery) => void }) {
     </Form>
   );
 }
-// グループの画面は X-Store-ID を付けない要求でグループ級（会員宛）の行を扱う。会員宛の起票は業務の処理が担うので作成口を出さない。
+// グループの画面は会員宛（店舗を持たない）の行を扱う。会員宛の起票は業務の処理が担うので作成口を出さない。
 function Workspace({
   group,
   canManage,
@@ -608,7 +615,8 @@ function Workspace({
   canManage: boolean;
   canSend: boolean;
 }) {
-  const list = useListPage(page => notificationApi.list(page));
+  const api = group ? memberNotificationApi : notificationApi;
+  const list = useListPage(page => api.list(page));
   const [selected, setSelected] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -696,6 +704,7 @@ function Workspace({
         >
           {selected && (
             <Detail
+              api={api}
               key={selected}
               id={selected}
               canSend={canSend}
@@ -715,10 +724,21 @@ function NotificationDeliveriesPage({ group }: { group: boolean }) {
   const storeId = useStoreContext().currentStoreId;
   const { me } = useMe();
   if (me === null) return <MePending />;
-  if (me.user_type !== 'STAFF' || !hasPermission(me, 'NOTIFICATION_VIEW'))
+  const permissions = group
+    ? ({
+        view: 'MEMBER_NOTIFICATION_VIEW',
+        manage: 'MEMBER_NOTIFICATION_MANAGE',
+        send: 'MEMBER_NOTIFICATION_SEND',
+      } as const)
+    : ({
+        view: 'NOTIFICATION_VIEW',
+        manage: 'NOTIFICATION_MANAGE',
+        send: 'NOTIFICATION_SEND',
+      } as const);
+  if (me.user_type !== 'STAFF' || !hasPermission(me, permissions.view))
     return <p role="alert">業務通知の閲覧権限がありません</p>;
-  const manage = hasPermission(me, 'NOTIFICATION_MANAGE'),
-    send = hasPermission(me, 'NOTIFICATION_SEND');
+  const manage = hasPermission(me, permissions.manage),
+    send = hasPermission(me, permissions.send);
   return (
     <Workspace
       key={`${group ? 'group' : storeId}:${manage}:${send}`}
