@@ -109,9 +109,3 @@ test('登録済み・採用前の応募者にはフォームを出さない', as
   expect(await screen.findByText('在籍登録は採用済みの応募者だけに行えます')).toBeVisible();
   expect(screen.queryByLabelText('源氏名 *')).toBeNull();
 });
-test('キャスト管理権限が無ければフォームを出さない', async () => {
-  meWith([]);
-  render(<ApplicantEnrollmentPage />);
-  expect(await screen.findByText('在籍登録にはキャスト管理の権限が必要です')).toBeVisible();
-  expect(screen.queryByLabelText('源氏名 *')).toBeNull();
-});

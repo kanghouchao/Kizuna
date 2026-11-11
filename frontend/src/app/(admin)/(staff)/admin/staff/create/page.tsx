@@ -1,1 +1,10 @@
-export { StaffCreatePage as default } from '@/_pages/admin-staff';
+import { StaffCreatePage } from '@/_pages/admin-staff';
+import { PermissionGate } from '@/widgets/admin-shell';
+
+export default function Page() {
+  return (
+    <PermissionGate codes={['STAFF_MANAGE']}>
+      <StaffCreatePage />
+    </PermissionGate>
+  );
+}

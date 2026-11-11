@@ -1,5 +1,6 @@
-import { expect, type APIRequestContext, type Locator } from '@playwright/test';
+import { expect, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
+import { APP_URL } from '../base-url';
 import {
   ADMIN_PASSWORD,
   authorizedStoreIds,
@@ -145,14 +146,24 @@ Then('店舗のダッシュボードに店舗 {string} が表示される', asyn
 let openedUrl = '';
 let requestedApiPaths: string[] = [];
 
-When('店舗 {string} の {string} を開く', async ({ page, request }, name: string, subPath: string) => {
-  const storeId = await storeIdByName(request, name);
+function recordApiRequests(page: Page) {
   requestedApiPaths = [];
   page.on('request', req => {
     const path = new URL(req.url()).pathname;
     if (path.startsWith('/api/')) requestedApiPaths.push(path);
   });
+}
+
+When('店舗 {string} の {string} を開く', async ({ page, request }, name: string, subPath: string) => {
+  const storeId = await storeIdByName(request, name);
+  recordApiRequests(page);
   await page.goto(storeUrl(storeId, subPath));
+  openedUrl = page.url();
+});
+
+When('管理画面の {string} を開く', async ({ page }, path: string) => {
+  recordApiRequests(page);
+  await page.goto(`${APP_URL}${path}`);
   openedUrl = page.url();
 });
 
@@ -164,13 +175,18 @@ Then('画面の見出しが {string} である', async ({ page }, heading: strin
   await expect(page.getByRole('main').getByRole('heading', { level: 1, name: heading, exact: true })).toBeVisible({ timeout: 15000 });
 });
 
-Then('この店舗の画面は開けないと表示され、ダッシュボードへの導線だけがある', async ({ page }) => {
-  const alert = page.getByRole('main').getByRole('alert');
-  await expect(alert).toContainText('この店舗の画面は開けません', { timeout: 15000 });
-  await expect(alert.getByRole('link', { name: 'ダッシュボードへ', exact: true })).toHaveAttribute('href', '/admin');
-  // 画面自身の取得は 1 件も送らない（シェルの本人・授権店舗・メニューの取得だけが飛ぶ）。
+Then('警告 {string} が出て、店舗 {string} のダッシュボードへ戻る', async ({ page, request }, message: string, name: string) => {
+  const storeId = await storeIdByName(request, name);
+  await expect(page).toHaveURL(storeUrl(storeId, '/dashboard'), { timeout: 15000 });
+  await expect(page.locator('[data-slot=toast]').filter({ hasText: `警告：${message}` })).toBeVisible();
+});
+
+// 開いた画面は描かれずに着地へ置き換わるので、その画面自身の取得は 1 件も飛ばない。着地のダッシュボードと
+// シェル（本人・授権店舗・メニュー）の取得だけが残る。
+Then('開いた画面自身の取得は送られていない', async ({ page }) => {
   await page.waitForLoadState('networkidle');
-  expect(requestedApiPaths.filter(path => !['/api/me', '/api/stores/me', '/api/menus/me', '/api/auth/refresh'].includes(path))).toEqual([]);
+  const shell = ['/api/me', '/api/stores/me', '/api/menus/me', '/api/auth/refresh'];
+  expect(requestedApiPaths.filter(path => !shell.includes(path))).toEqual([]);
 });
 
 // 着地先は作成日の最も新しい授権店舗。店舗 id は作成順に採番されるので、id の最大の店舗がそれに当たる。

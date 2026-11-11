@@ -5,6 +5,10 @@ import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 import StoreOperationalReportsPage from '../StoreOperationalReportsPage';
 
+jest.mock('@/widgets/admin-shell', () => ({
+  DeniedPage: () => <p role="alert">権限の無い画面</p>,
+}));
+
 let mockStoreId = '1';
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
@@ -385,7 +389,7 @@ test('cross-store permissions do not open the current store report', async () =>
     'ADVERTISING_COST_SET_VIEW',
   ]);
   render(<StoreOperationalReportsPage />);
-  expect(await screen.findByRole('alert')).toHaveTextContent('閲覧する権限がありません');
+  expect(await screen.findByRole('alert')).toHaveTextContent('権限の無い画面');
   expect(fetch).not.toHaveBeenCalled();
 });
 test('new dates, group and option discard a late advertising response', async () => {

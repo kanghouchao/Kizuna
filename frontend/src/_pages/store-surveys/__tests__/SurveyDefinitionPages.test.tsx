@@ -12,6 +12,10 @@ import {
   written,
 } from '../testing/survey-test-support';
 
+jest.mock('@/widgets/admin-shell', () => ({
+  DeniedPage: () => <p role="alert">権限の無い画面</p>,
+}));
+
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
   useCurrentStoreId: () => '1',
@@ -64,7 +68,7 @@ describe('作成', () => {
   test('管理権限が無ければ入力を出さない', () => {
     permission('SURVEY_VIEW');
     render(<SurveyCreatePage />);
-    expect(screen.getByRole('alert')).toHaveTextContent('アンケートの管理権限がありません');
+    expect(screen.getByRole('alert')).toHaveTextContent('権限の無い画面');
     expect(screen.queryByLabelText('題名')).not.toBeInTheDocument();
   });
 

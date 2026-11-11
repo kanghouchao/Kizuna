@@ -4,6 +4,10 @@ import { serviceApi } from '@/entities/service';
 import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 
+jest.mock('@/widgets/admin-shell', () => ({
+  DeniedPage: () => <p role="alert">権限の無い画面</p>,
+}));
+
 jest.mock('@/entities/user/model/MeContext', () => ({
   ...jest.requireActual('@/entities/user/model/MeContext'),
   useMe: jest.fn(),
@@ -58,7 +62,7 @@ beforeEach(() => {
 it('権限がない利用者には設定値も操作も取得しない', async () => {
   meWith(['ORDER_MANAGE']);
   render(<ServicesPage />);
-  expect(await screen.findByRole('alert')).toHaveTextContent('サービス設定の権限がありません');
+  expect(await screen.findByRole('alert')).toHaveTextContent('権限の無い画面');
   expect(api.list).not.toHaveBeenCalled();
   expect(screen.queryByRole('button', { name: '新規作成' })).not.toBeInTheDocument();
 });

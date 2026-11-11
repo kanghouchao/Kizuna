@@ -18,12 +18,12 @@ import { statuses, permissions, time } from './labels';
 import { ReviewFilters } from './ReviewFilters';
 import { ReviewWriteFeedback } from './ReviewWriteFeedback';
 import { accessError } from './reviewErrors';
+import { DeniedPage } from '@/widgets/admin-shell';
 export function ReviewsPage() {
   const { me } = useMe();
   const storeId = useStoreContext().currentStoreId;
   if (me === null) return <MePending />;
-  if (me.user_type !== 'STAFF' || !hasPermission(me, 'REVIEW_VIEW'))
-    return <div role="alert">口コミの閲覧権限がありません</div>;
+  if (me.user_type !== 'STAFF' || !hasPermission(me, 'REVIEW_VIEW')) return <DeniedPage />;
   return <Reviews key={storeId} canManage={hasPermission(me, 'REVIEW_MANAGE')} />;
 }
 function Reviews({ canManage }: { canManage: boolean }) {

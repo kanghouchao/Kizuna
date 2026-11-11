@@ -6,6 +6,10 @@ import { notify } from '@/shared/notify';
 import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 
+jest.mock('@/widgets/admin-shell', () => ({
+  DeniedPage: () => <p role="alert">権限の無い画面</p>,
+}));
+
 const mockPush = jest.fn();
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
@@ -70,7 +74,7 @@ describe('一覧', () => {
   test('権限が無ければ取得せず拒否を表示する', () => {
     permission('REVIEW_VIEW');
     render(<ArticlesPage />);
-    expect(screen.getByRole('alert')).toHaveTextContent('記事の管理権限がありません');
+    expect(screen.getByRole('alert')).toHaveTextContent('権限の無い画面');
     expect(api.list).not.toHaveBeenCalled();
   });
 

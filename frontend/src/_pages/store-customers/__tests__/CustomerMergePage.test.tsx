@@ -5,6 +5,10 @@ import type { PermissionCode } from '@/entities/user';
 import { notify } from '@/shared/notify';
 import CustomerMergePage from '../ui/CustomerMergePage';
 
+jest.mock('@/widgets/admin-shell', () => ({
+  DeniedPage: () => <p role="alert">権限の無い画面</p>,
+}));
+
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
   useCurrentStoreId: () => '1',
@@ -123,7 +127,7 @@ it('統合の権限が無ければ読み込まない', async () => {
   meWith(['CUSTOMER_MANAGE']);
   render(<CustomerMergePage />);
 
-  expect(await screen.findByRole('alert')).toHaveTextContent('顧客の管理と統合の権限が必要です。');
+  expect(await screen.findByRole('alert')).toHaveTextContent('権限の無い画面');
   expect(api.mergePreview).not.toHaveBeenCalled();
 });
 

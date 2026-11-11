@@ -27,6 +27,7 @@ import {
   Textarea,
 } from '@/shared/ui';
 import { formatDateTime } from '../lib/formatDateTime';
+import { DeniedPage } from '@/widgets/admin-shell';
 
 export default function OrderCompletionInvalidationPage() {
   const params = useParams();
@@ -34,11 +35,11 @@ export default function OrderCompletionInvalidationPage() {
   const id = params.id as string;
   const { me } = useMe();
   if (me === null) return <MePending />;
+  if (!hasPermission(me, 'ORDER_MANAGE')) return <DeniedPage />;
   return (
     <Invalidation
       key={`${storeId}:${id}`}
       id={id}
-      permitted={hasPermission(me, 'ORDER_MANAGE')}
       canCorrect={hasPermission(me, 'ORDER_CORRECT')}
       canAdjust={hasPermission(me, 'POINT_ADJUST')}
     />
@@ -47,18 +48,16 @@ export default function OrderCompletionInvalidationPage() {
 
 function Invalidation({
   id,
-  permitted,
   canCorrect,
   canAdjust,
 }: {
   id: string;
-  permitted: boolean;
   canCorrect: boolean;
   canAdjust: boolean;
 }) {
   const storeId = useCurrentStoreId();
-  // 取得・送信の 403 でも閉じる（権限が後から外れた場合）。
-  const [allowed, setAllowed] = useState(permitted);
+  // 開いた後に権限が外れた場合は、取得・送信の 403 で閉じる。
+  const [allowed, setAllowed] = useState(true);
   const active = useRef(true);
   useEffect(() => {
     active.current = true;

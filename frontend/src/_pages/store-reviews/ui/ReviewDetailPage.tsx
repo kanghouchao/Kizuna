@@ -16,14 +16,14 @@ import { useReviewWrite } from '../lib/useReviewWrite';
 import { DetailEditor, ReviewDetail, ReviewMissing } from './ReviewDetail';
 import { ReviewEditor, editorTitle } from './ReviewEditor';
 import { ReviewWriteFeedback } from './ReviewWriteFeedback';
+import { DeniedPage } from '@/widgets/admin-shell';
 
 export function ReviewDetailPage() {
   const id = useParams().id as string;
   const { me } = useMe();
   const storeId = useStoreContext().currentStoreId;
   if (me === null) return <MePending />;
-  if (me.user_type !== 'STAFF' || !hasPermission(me, 'REVIEW_VIEW'))
-    return <div role="alert">口コミの閲覧権限がありません</div>;
+  if (me.user_type !== 'STAFF' || !hasPermission(me, 'REVIEW_VIEW')) return <DeniedPage />;
   return (
     <Detail
       key={`${storeId}:${id}`}

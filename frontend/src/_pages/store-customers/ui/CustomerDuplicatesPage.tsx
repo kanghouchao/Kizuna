@@ -30,6 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/ui';
+import { DeniedPage } from '@/widgets/admin-shell';
 
 /** 見比べる対象は 2 行。3 行以上を一度に畳む導線は持たない（ADR 0010 は一括統合を採らない）。 */
 const PAIR_SIZE = 2;
@@ -48,7 +49,7 @@ export default function CustomerDuplicatesPage() {
   const { me } = useMe();
   if (me === null) return <MePending />;
   if (!hasPermission(me, 'CUSTOMER_MANAGE') || !hasPermission(me, 'CUSTOMER_MERGE'))
-    return <p role="alert">顧客の管理と統合の権限が必要です。</p>;
+    return <DeniedPage />;
   return <CustomerDuplicatesContent />;
 }
 

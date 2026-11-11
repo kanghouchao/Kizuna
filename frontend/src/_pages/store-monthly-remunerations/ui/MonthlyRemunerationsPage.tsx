@@ -40,6 +40,7 @@ import {
 import { ListPage } from '@/widgets/list-page';
 import { OrderCorrectionHistoryModal } from '@/widgets/order-correction-history';
 import { PersonPicker } from './PersonPicker';
+import { DeniedPage } from '@/widgets/admin-shell';
 
 interface Criteria {
   person: MonthlyRemunerationCast | null;
@@ -57,8 +58,7 @@ export default function MonthlyRemunerationsPage() {
   const storeId = useStoreContext().currentStoreId;
   const { me } = useMe();
   if (me === null) return <MePending />;
-  if (!hasPermission(me, 'ORDER_MANAGE'))
-    return <p role="alert">給与明細を閲覧する権限がありません。</p>;
+  if (!hasPermission(me, 'ORDER_MANAGE')) return <DeniedPage />;
   return <MonthlyStatement key={storeId} />;
 }
 

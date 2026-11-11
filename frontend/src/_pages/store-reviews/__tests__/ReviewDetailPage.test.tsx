@@ -5,6 +5,10 @@ import { reviewApi, Review } from '@/entities/content/review';
 import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 import { storeSessionToken } from '@/shared/api';
+
+jest.mock('@/widgets/admin-shell', () => ({
+  DeniedPage: () => <p role="alert">権限の無い画面</p>,
+}));
 let mockStoreId = '1';
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
@@ -124,7 +128,7 @@ test('閲覧のみは手動記録と未設定を確認でき、操作を出さ�
 test('閲覧権限がなければ取得しない', () => {
   permission('REVIEW_MANAGE');
   render(<ReviewDetailPage />);
-  expect(screen.getByRole('alert')).toHaveTextContent('閲覧権限がありません');
+  expect(screen.getByRole('alert')).toHaveTextContent('権限の無い画面');
   expect(api.get).not.toHaveBeenCalled();
 });
 test('内部承認は詳細画面の節で理由を入力し、ダイアログを重ねず確認だけを経て反映する', async () => {

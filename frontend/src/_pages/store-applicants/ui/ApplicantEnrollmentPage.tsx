@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { applicantApi, type ApplicantEnrollmentInput } from '@/entities/applicant';
 import type { CastCreateRequest } from '@/entities/cast';
 import { CastForm, type CastFormData, toCastCreateRequest } from '@/features/cast-form';
-import { MePending, hasPermission, useCurrentStoreId, useMe } from '@/entities/user';
+import { useCurrentStoreId } from '@/entities/user';
 import { getApiErrorMessage, storePath, useResource } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { Button, RegionError } from '@/shared/ui';
@@ -25,8 +25,6 @@ export default function ApplicantEnrollmentPage() {
   const router = useRouter();
   const resource = useResource(() => applicantApi.get(id), [id]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { me } = useMe();
-  const canEnroll = hasPermission(me, 'CAST_MANAGE');
   const detailPath = storePath(storeId, `/applicants/${id}`);
   const applicant = resource.data;
   const submit = async (data: CastFormData) => {
@@ -42,7 +40,6 @@ export default function ApplicantEnrollmentPage() {
     }
   };
   const body = () => {
-    if (me === null) return <MePending />;
     if (resource.isLoading) return <p>読み込み中...</p>;
     if (resource.failure !== null || !applicant)
       return resource.failure === 'notFound' ? (
@@ -64,13 +61,6 @@ export default function ApplicantEnrollmentPage() {
             href: storePath(storeId, `/casts/${applicant.enrollment_id}/edit`),
             label: '在籍を開く',
           }}
-        />
-      );
-    if (!canEnroll)
-      return (
-        <RegionError
-          message="在籍登録にはキャスト管理の権限が必要です"
-          fallback={{ href: detailPath, label: '応募者詳細へ' }}
         />
       );
     if (applicant.status !== 'HIRED')

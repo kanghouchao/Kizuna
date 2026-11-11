@@ -13,6 +13,7 @@ import { Button } from '@/shared/ui';
 import { useReviewWrite } from '../lib/useReviewWrite';
 import { ReviewEditor } from './ReviewEditor';
 import { ReviewWriteFeedback } from './ReviewWriteFeedback';
+import { DeniedPage } from '@/widgets/admin-shell';
 
 export function ReviewCreatePage() {
   const { me } = useMe();
@@ -23,7 +24,7 @@ export function ReviewCreatePage() {
     !hasPermission(me, 'REVIEW_VIEW') ||
     !hasPermission(me, 'REVIEW_MANAGE')
   )
-    return <div role="alert">口コミの受付権限がありません</div>;
+    return <DeniedPage />;
   return <Create key={storeId} canOrder={hasPermission(me, 'ORDER_MANAGE')} />;
 }
 

@@ -29,6 +29,7 @@ import {
 } from '@/shared/ui';
 import { ServiceEditor } from './ServiceEditor';
 import { ServiceHistory } from './ServiceHistory';
+import { DeniedPage } from '@/widgets/admin-shell';
 
 export default function ServicesPage() {
   const storeId = useStoreContext().currentStoreId;
@@ -37,8 +38,7 @@ export default function ServicesPage() {
 function AuthorizedServices() {
   const { me } = useMe();
   if (me === null) return <MePending />;
-  if (!hasPermission(me, 'SERVICE_MANAGE'))
-    return <p role="alert">サービス設定の権限がありません。店長に確認してください。</p>;
+  if (!hasPermission(me, 'SERVICE_MANAGE')) return <DeniedPage />;
   return <Services />;
 }
 function Services() {

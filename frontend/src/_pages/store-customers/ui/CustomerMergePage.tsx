@@ -33,6 +33,7 @@ import {
   Textarea,
 } from '@/shared/ui';
 import { MergeSnapshotView, profileFields } from './MergeSnapshotView';
+import { DeniedPage } from '@/widgets/admin-shell';
 
 const listHref = (storeId: string) => storePath(storeId, '/customers');
 const fallback = (storeId: string) => ({ href: listHref(storeId), label: '顧客一覧へ' });
@@ -53,7 +54,7 @@ export default function CustomerMergePage() {
   let body: ReactNode;
   if (me === null) body = <MePending />;
   else if (!hasPermission(me, 'CUSTOMER_MANAGE') || !hasPermission(me, 'CUSTOMER_MERGE'))
-    body = <p role="alert">顧客の管理と統合の権限が必要です。</p>;
+    body = <DeniedPage />;
   else if (!survivingId || !mergedId || survivingId === mergedId)
     body = (
       <RegionError

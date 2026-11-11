@@ -5,6 +5,10 @@ import { Order, OrderPointRollbackPreview, orderApi } from '@/entities/order';
 import { AxiosError } from 'axios';
 import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
+
+jest.mock('@/widgets/admin-shell', () => ({
+  DeniedPage: () => <p role="alert">権限の無い画面</p>,
+}));
 jest.mock('@/entities/user/model/MeContext', () => ({
   ...jest.requireActual('@/entities/user/model/MeContext'),
   useMe: jest.fn(),
@@ -128,7 +132,7 @@ describe('ポイント巻き戻しのページ', () => {
   it('権限不足では担当者と専用入口を示し会員情報を取得しないこと', async () => {
     meWith([]);
     render(<OrderPointRollbackPage />);
-    expect(await screen.findByText(/ポイント救済担当者へ依頼/)).toBeInTheDocument();
+    expect(await screen.findByText('権限の無い画面')).toBeInTheDocument();
     expect(mockedGet).not.toHaveBeenCalled();
     expect(mockedPreview).not.toHaveBeenCalled();
     expect(screen.queryByText(/123456789012/)).not.toBeInTheDocument();
