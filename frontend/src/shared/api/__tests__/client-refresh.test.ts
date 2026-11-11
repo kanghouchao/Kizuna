@@ -2,12 +2,11 @@ import type { AxiosAdapter, InternalAxiosRequestConfig } from 'axios';
 
 const redirectMock = jest.fn();
 const startSessionMock = jest.fn();
-let currentStoreId: string | undefined;
-let onStorePage = false;
+// 画面の URL が名指す店舗。待つ間に画面が別の店舗へ移ることを、この値の書き換えで表す。
+let urlStoreId: string | undefined;
 jest.mock('@/shared/lib', () => ({
   redirectToLogin: (options?: unknown) => redirectMock(options),
-  getCurrentStoreId: () => currentStoreId,
-  isStorePath: () => onStorePage,
+  storeIdOf: () => urlStoreId,
 }));
 jest.mock('@/shared/lib/session', () => ({
   clearSession: jest.fn(),
@@ -64,8 +63,7 @@ describe('apiClient のリフレッシュ経路', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    currentStoreId = undefined;
-    onStorePage = false;
+    urlStoreId = undefined;
     endSession('resume-failed');
     setSessionAlert(null);
   });
@@ -118,10 +116,9 @@ describe('apiClient のリフレッシュ経路', () => {
     ]);
   });
 
-  it('再送は最初の要求の店舗のまま送り、待つ間に別タブで切り替わった現在店舗を付け直さない', async () => {
+  it('再送は最初の要求の店舗のまま送り、待つ間に移った画面の店舗を付け直さない', async () => {
     // 店舗を本文に持たない書き込みは X-Store-ID の店舗へ作られる。付け直すと別の店舗へ書き込む。
-    onStorePage = true;
-    currentStoreId = '1';
+    urlStoreId = '1';
     storeSessionToken({ token: 'old', expires_at: 1, user_id: 7, refresh_expires_at: 1_000 });
     const server = serve({
       '/customers': [{ status: 401 }, { status: 201 }],
@@ -129,10 +126,10 @@ describe('apiClient のリフレッシュ経路', () => {
     });
 
     const pending = apiClient.post('/customers', {});
-    // 最初の要求が出た後、応答を待つ間に別タブで店舗を切り替える
+    // 最初の要求が出た後、応答を待つ間にレールで別の店舗の画面へ移る
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(server.calls('/customers')).toHaveLength(1);
-    currentStoreId = '2';
+    urlStoreId = '2';
     await pending;
 
     expect(server.calls('/customers').map(c => c.headers['X-Store-ID'])).toEqual(['1', '1']);

@@ -14,7 +14,7 @@ import { notify } from '@/shared/notify';
 
 // URL の正本は jsdom の履歴。Next は history.pushState を取り込んで useSearchParams を後の描画で
 // 合わせるので、代役も通知を遅らせる（URL と描画済みの条件がずれる間の操作を再現するため）
-const ORDERS_PATH = '/store/orders';
+const ORDERS_PATH = '/store/1/orders';
 const mockQueryListeners = new Set<() => void>();
 const notifyQuery = () => mockQueryListeners.forEach(listener => listener());
 const originalPushState = window.history.pushState.bind(window.history);
@@ -80,13 +80,13 @@ jest.mock('next/navigation', () => {
 });
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => '1',
   useStoreContext: () => ({
     stores: [{ id: 1, name: 'テスト店舗' }],
     currentStoreId: '1',
     currentStore: { id: 1, name: 'テスト店舗' },
     loadFailed: false,
     reload: jest.fn(),
-    switchStore: jest.fn(),
   }),
 }));
 
@@ -275,14 +275,14 @@ describe('作業キューの描画', () => {
 
     expect(await screen.findByRole('link', { name: '確定' })).toHaveAttribute(
       'href',
-      '/store/orders/applications/a1/confirm?customer_name=%E8%8A%B1%E5%AD%90&sort_key=PAX'
+      '/store/1/orders/applications/a1/confirm?customer_name=%E8%8A%B1%E5%AD%90&sort_key=PAX'
     );
     // 戻る・進むで条件が変われば、運ぶ条件も今の URL に合わせる
     act(() => visit(`${ORDERS_PATH}?desc=true`));
     await waitFor(() =>
       expect(screen.getByRole('link', { name: '確定' })).toHaveAttribute(
         'href',
-        '/store/orders/applications/a1/confirm?desc=true'
+        '/store/1/orders/applications/a1/confirm?desc=true'
       )
     );
   });
@@ -294,7 +294,7 @@ describe('作業キューの描画', () => {
 
     expect(await screen.findByRole('link', { name: '完了' })).toHaveAttribute(
       'href',
-      `/store/orders/${confirmedOrder().id}/completion?customer_name=%E8%8A%B1%E5%AD%90&sort_key=PAX`
+      `/store/1/orders/${confirmedOrder().id}/completion?customer_name=%E8%8A%B1%E5%AD%90&sort_key=PAX`
     );
   });
 
@@ -661,7 +661,7 @@ describe('一覧からの編集', () => {
     fireEvent.click(await screen.findByRole('button', { name: '編集' }));
 
     // 17 欄の編集面は顧客側と同じく専用の頁が持つ。一覧が担うのはそこへの導線だけ
-    expect(mockPush).toHaveBeenCalledWith('/store/orders/o1/edit');
+    expect(mockPush).toHaveBeenCalledWith('/store/1/orders/o1/edit');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
@@ -749,7 +749,7 @@ describe('アーカイブ', () => {
     expect(screen.queryByRole('link', { name: /訂正/ })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'ポイント救済' })).toHaveAttribute(
       'href',
-      '/store/orders/x3/point-rollback'
+      '/store/1/orders/x3/point-rollback'
     );
 
     withoutPermission.unmount();
@@ -759,7 +759,7 @@ describe('アーカイブ', () => {
     fireEvent.click(await screen.findByRole('button', { name: /完了/ }));
     expect(await screen.findByRole('link', { name: /訂正/ })).toHaveAttribute(
       'href',
-      '/store/orders/x3/correction'
+      '/store/1/orders/x3/correction'
     );
   });
 
@@ -810,7 +810,7 @@ describe('オーダー一覧ページ固有の要素', () => {
     expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('オーダー一覧');
     expect(screen.getByRole('link', { name: /新規オーダー登録/ })).toHaveAttribute(
       'href',
-      '/store/orders/create'
+      '/store/1/orders/create'
     );
   });
 });
@@ -864,7 +864,7 @@ describe('運営帳票の入口', () => {
     render(<OrderListPage />);
     expect(await screen.findByRole('link', { name: '運営金額集計' })).toHaveAttribute(
       'href',
-      '/store/operational-reports'
+      '/store/1/operational-reports'
     );
   });
 });

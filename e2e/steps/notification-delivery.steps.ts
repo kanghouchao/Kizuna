@@ -2,7 +2,7 @@ import { expect, type APIRequestContext, type Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
 import { latestMailTo } from './mailpit';
-import { authorizedStoreIds, createConsentingGuestApplication, createPermissionRole, createServiceIdentity, createStaffFixture, expectSidebarLinkAbsentEverywhere, loginInBrowser, loginUser, loginViaUiAndEnterStore, memberIdOf, registerMember, selectRailContext, STORE1_ID, STORE_HEADERS, openLoginForm } from './store-api';
+import { authorizedStoreIds, createConsentingGuestApplication, createPermissionRole, createServiceIdentity, createStaffFixture, expectSidebarLinkAbsentEverywhere, loginInBrowser, loginUser, loginViaUiAndEnterStore, memberIdOf, registerMember, selectRailContext, STORE1_ID, STORE_HEADERS, openLoginForm, storeUrl, waitStaffLanding } from './store-api';
 const { Given, When, Then, After } = createBdd();
 let email = '';
 let password = '';
@@ -40,12 +40,12 @@ async function loginAsOperator(page: Page) {
   await page.getByLabel('メールアドレス', { exact: true }).fill(email);
   await page.getByLabel('パスワード', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();
-  await expect(page).toHaveURL(/\/admin\/dashboard/, { timeout: 15000 });
+  await waitStaffLanding(page);
 }
 
 When('担当者が通知を作成して内容を確認し送信待ちにする', async ({ page, request, $testInfo }) => {
   await loginAsOperator(page);
-  await page.goto(`${APP_URL}/store/notification-deliveries`);
+  await page.goto(storeUrl(STORE1_ID, `/notification-deliveries`));
   await page.getByRole('button', { name: '通知を作成', exact: true }).click();
   const create = page.getByRole('dialog', { name: '業務通知を作成' });
   await create.getByRole('combobox', { name: '起点', exact: true }).click();
@@ -120,7 +120,7 @@ Then('通知は送信済みになり、確認した件名と本文のメール�
   const attempts = (await history.json()).content;
   expect(attempts).toHaveLength(1);
   expect(attempts[0]).toMatchObject({ attempt_number: 1, status: 'SENT', reason: '内容と業務連絡の許可を確認' });
-  await page.goto(`${APP_URL}/store/notification-deliveries`);
+  await page.goto(storeUrl(STORE1_ID, `/notification-deliveries`));
   await page.getByRole('row').filter({ hasText: applicationId }).getByRole('button', { name: '内容・履歴' }).click();
   const detail = page.getByRole('dialog', { name: '通知の内容・送信履歴' });
   await expect(detail.getByText('メール提供元受理', { exact: true }).first()).toBeVisible();
@@ -181,7 +181,7 @@ Then('結果不明の通知を未送達と判定して再試行できる', async
     expect(response.status()).toBe(200);
     return (await response.json()).status;
   }, { timeout: 30000 }).toBe('UNKNOWN');
-  await page.goto(`${APP_URL}/store/notification-deliveries`);
+  await page.goto(storeUrl(STORE1_ID, `/notification-deliveries`));
   await page.getByRole('row').filter({ hasText: applicationId }).getByRole('button', { name: '内容・履歴' }).click();
   const detail = page.getByRole('dialog', { name: '通知の内容・送信履歴' });
   await expect(detail.getByText(/送信結果が不明です/)).toBeVisible();

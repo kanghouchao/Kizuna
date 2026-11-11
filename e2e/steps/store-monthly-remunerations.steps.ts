@@ -1,5 +1,4 @@
 import { expect, type APIRequestContext } from "@playwright/test";
-import { APP_URL } from "../base-url";
 import { expectChange } from "./change-table";
 import { createBdd } from "playwright-bdd";
 import {
@@ -22,6 +21,7 @@ import {
   invalidateOrder,
   cancelOrder,
   monthInTokyo,
+  storeUrl,
 } from "./store-api";
 
 const { Given, When, Then } = createBdd();
@@ -67,7 +67,7 @@ Given("月次明細の本人に完了受注と未完了受注がある", async (
 
 When("店長が月次給与明細で本人と対象月を選ぶ", async ({ page }) => {
   await loginViaUiAndEnterStore(page);
-  await page.goto(`${APP_URL}/store/orders`);
+  await page.goto(storeUrl(STORE1_ID, `/orders`));
   await page.getByRole("link", { name: "月次給与明細", exact: true }).click();
   await page.getByRole("combobox", { name: "キャスト本人" }).click();
   await page.getByPlaceholder("源氏名で検索").fill(name);
@@ -280,7 +280,7 @@ Then(
     ).toBeTruthy();
     await loginViaUiAndEnterStore(page);
     await page.goto(
-      `${APP_URL}/store/orders/monthly-remunerations`,
+      storeUrl(STORE1_ID, `/orders/monthly-remunerations`),
     );
     await page.getByRole("combobox", { name: "キャスト本人" }).click();
     await page.getByPlaceholder("源氏名で検索").fill(`${name}-旧名`);
@@ -502,7 +502,7 @@ Then(
 When("店長が日別給与明細で原営業日を照会する", async ({ page }) => {
   await loginViaUiAndEnterStore(page);
   await page.goto(
-    `${APP_URL}/store/orders/monthly-remunerations`,
+    storeUrl(STORE1_ID, `/orders/monthly-remunerations`),
   );
   await page.getByRole("button", { name: "日別", exact: true }).click();
   await page.getByRole("combobox", { name: "キャスト本人" }).click();

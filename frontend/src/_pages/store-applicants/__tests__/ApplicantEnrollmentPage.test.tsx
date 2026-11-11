@@ -5,6 +5,10 @@ import type { PermissionCode } from '@/entities/user';
 import { notify } from '@/shared/notify';
 import ApplicantEnrollmentPage from '../ui/ApplicantEnrollmentPage';
 const push = jest.fn();
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => '1',
+}));
 jest.mock('next/navigation', () => ({
   useParams: () => ({ id: 'a' }),
   useRouter: () => ({ push, back: jest.fn() }),
@@ -76,7 +80,7 @@ test('取得した版で登録し、詳細へ戻る', async () => {
   const sent = (applicantApi.enroll as jest.Mock).mock.calls[0][2];
   expect(JSON.stringify(sent)).not.toContain('090');
   expect(notify.success).toHaveBeenCalledWith('在籍を登録しました');
-  expect(push).toHaveBeenCalledWith('/store/applicants/a');
+  expect(push).toHaveBeenCalledWith('/store/1/applicants/a');
 });
 test('重複登録の拒否は入力を残して通知する', async () => {
   (applicantApi.enroll as jest.Mock).mockRejectedValue({
@@ -96,7 +100,7 @@ test('登録済み・採用前の応募者にはフォームを出さない', as
   const { unmount } = render(<ApplicantEnrollmentPage />);
   expect(await screen.findByRole('link', { name: '在籍を開く' })).toHaveAttribute(
     'href',
-    '/store/casts/e1/edit'
+    '/store/1/casts/e1/edit'
   );
   expect(screen.queryByLabelText('源氏名 *')).toBeNull();
   unmount();

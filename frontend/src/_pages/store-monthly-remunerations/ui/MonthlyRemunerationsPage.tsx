@@ -1,7 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
+import {
+  MePending,
+  hasPermission,
+  useCurrentStoreId,
+  useMe,
+  useStoreContext,
+} from '@/entities/user';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
@@ -57,6 +63,7 @@ export default function MonthlyRemunerationsPage() {
 }
 
 function MonthlyStatement() {
+  const storeId = useCurrentStoreId();
   const form = useForm<Criteria>({
     defaultValues: {
       person: null,
@@ -121,7 +128,7 @@ function MonthlyStatement() {
         title={title}
         description="原営業日の日別・月別に発生済み固定報酬を確認します。"
         actions={
-          <Button variant="outline" render={<Link href={storePath('/orders')} />}>
+          <Button variant="outline" render={<Link href={storePath(storeId, '/orders')} />}>
             受注一覧
           </Button>
         }
@@ -243,7 +250,7 @@ function MonthlyStatement() {
           statement.failure === 'notFound' ? (
             <RegionError
               message="キャスト本人が見つからないか、閲覧範囲外です。"
-              fallback={{ href: storePath('/orders'), label: '受注一覧へ戻る' }}
+              fallback={{ href: storePath(storeId, '/orders'), label: '受注一覧へ戻る' }}
             />
           ) : query ? (
             `${periodLabel}の完了受注はありません`
@@ -271,7 +278,7 @@ function MonthlyStatement() {
                 <TableCell>
                   <Link
                     className="text-primary-strong underline"
-                    href={storePath(`/orders/${order.order_id}/edit`)}
+                    href={storePath(storeId, `/orders/${order.order_id}/edit`)}
                   >
                     {order.order_id}
                   </Link>

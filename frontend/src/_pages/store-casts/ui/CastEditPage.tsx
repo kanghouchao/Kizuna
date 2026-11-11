@@ -8,9 +8,11 @@ import { CastUpdateRequest, castApi } from '@/entities/cast';
 import { notify } from '@/shared/notify';
 import { storePath, useResource } from '@/shared/lib';
 import { RegionError, Button } from '@/shared/ui';
+import { useCurrentStoreId } from '@/entities/user';
 
 /** キャスト編集ページ */
 export default function CastEditPage() {
+  const storeId = useCurrentStoreId();
   const params = useParams();
   const id = params.id as string;
   const router = useRouter();
@@ -60,7 +62,7 @@ export default function CastEditPage() {
       };
       await castApi.update(id, requestData);
       notify.success('キャスト情報を更新しました');
-      router.push(storePath('/casts'));
+      router.push(storePath(storeId, '/casts'));
     } catch {
       notify.error('キャスト情報の更新に失敗しました');
     } finally {
@@ -83,7 +85,7 @@ export default function CastEditPage() {
           // 404 は何度押しても取れない。再試行ではなく一覧への導線だけを出す
           <RegionError
             message="このキャストは見つかりませんでした"
-            fallback={{ href: storePath('/casts'), label: 'キャスト一覧へ' }}
+            fallback={{ href: storePath(storeId, '/casts'), label: 'キャスト一覧へ' }}
           />
         ) : (
           <RegionError

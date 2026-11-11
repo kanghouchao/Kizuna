@@ -7,6 +7,10 @@ import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 
 const mockPush = jest.fn();
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => '1',
+}));
 jest.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, back: jest.fn() }),
   useParams: () => ({ id: '7' }),
@@ -89,7 +93,7 @@ describe('一覧', () => {
     expect(api.list).toHaveBeenCalledWith(0);
     expect(screen.getByRole('link', { name: '記事を作成' })).toHaveAttribute(
       'href',
-      '/store/articles/create'
+      '/store/1/articles/create'
     );
   });
 });
@@ -122,7 +126,7 @@ describe('作成', () => {
         cover_image_url: null,
       })
     );
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/articles/42/edit'));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/1/articles/42/edit'));
     expect(notify.success).toHaveBeenCalledWith('記事を作成しました');
   });
 });
@@ -217,7 +221,7 @@ describe('編集', () => {
     const confirmation = await screen.findByRole('alertdialog');
     fireEvent.click(within(confirmation).getByRole('button', { name: '削除する' }));
     await waitFor(() => expect(api.remove).toHaveBeenCalledWith('7', 5));
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/articles'));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/1/articles'));
   });
 
   test('409 は競合を表示し、最新の内容を読み込み直してから操作させる', async () => {
@@ -260,7 +264,7 @@ describe('編集', () => {
     expect(await screen.findByText('記事が見つかりません')).toBeVisible();
     expect(screen.getByRole('link', { name: '記事一覧へ' })).toHaveAttribute(
       'href',
-      '/store/articles'
+      '/store/1/articles'
     );
   });
 });

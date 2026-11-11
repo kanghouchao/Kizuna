@@ -5,6 +5,10 @@ import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 import { notify } from '@/shared/notify';
 
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => '1',
+}));
 jest.mock('@/entities/medium', () => ({
   ...jest.requireActual('@/entities/medium/model/types'),
   mediumApi: {

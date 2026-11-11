@@ -67,16 +67,15 @@ describe('LoginForm の利用者種別による分岐', () => {
   afterEach(() => {
     endSession('resume-failed');
     Cookies.remove('session-kind');
-    Cookies.remove('current-store-id');
     window.history.pushState({}, '', '/');
   });
 
-  it('user_type=STAFF は admin セッションを開始し /admin/dashboard/ へ遷移する', async () => {
+  it('user_type=STAFF は admin セッションを開始し /admin（着地の画面）へ遷移する', async () => {
     mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'STAFF' }));
 
     await submitLoginForm();
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/dashboard/'));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin'));
     expect(Cookies.get('session-kind')).toBe('admin');
     expect(getSessionUserId()).toBe(7);
   });
@@ -126,11 +125,11 @@ describe('LoginForm の利用者種別による分岐', () => {
 
   it('従業員も next の画面へ戻ること', async () => {
     mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'STAFF' }));
-    openLogin('?reason=expired&next=%2Fstore%2Fcasts');
+    openLogin('?reason=expired&next=%2Fstore%2F1%2Fcasts');
 
     await submitLoginForm();
 
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/casts'));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/1/casts'));
   });
 
   it('別の本人種別の next は無視し、既定の着地へ進むこと', async () => {

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { orderApplicationApi } from '@/entities/order';
-import { useStoreContext } from '@/entities/user';
+import { useCurrentStoreId, useStoreContext } from '@/entities/user';
 import { notify } from '@/shared/notify';
 import { getApiErrorMessage, useResource } from '@/shared/lib';
 import { RegionError } from '@/shared/ui';
@@ -23,9 +23,10 @@ export default function OrderApplicationConfirmPage() {
  * 申請確定の端点になる。ここに無い項目（割引・キャリアなど）は、確定後の受注を汎用更新で整える。
  */
 function ApplicationConfirm({ id }: { id: string }) {
+  const storeId = useCurrentStoreId();
   const router = useRouter();
   // 一覧から渡された検索条件。戻る・確定後の遷移で同じ条件の作業キューへ帰る
-  const backHref = orderListHref(useSearchParams().toString());
+  const backHref = orderListHref(storeId, useSearchParams().toString());
   const confirmation = useOrderConfirmation(id);
   const {
     data: application,

@@ -7,13 +7,13 @@ import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => '1',
   useStoreContext: () => ({
     stores: [{ id: 1, name: 'テスト店舗' }],
     currentStoreId: '1',
     currentStore: { id: 1, name: 'テスト店舗' },
     loadFailed: false,
     reload: jest.fn(),
-    switchStore: jest.fn(),
   }),
 }));
 
@@ -167,7 +167,7 @@ describe('OrderAttributionPage', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: '会員帰属の訂正' })).toBeInTheDocument();
     expect(await screen.findByText('2026-08-10 / 山田太郎')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: '戻る' })).toHaveAttribute('href', '/store/orders');
+    expect(screen.getByRole('link', { name: '戻る' })).toHaveAttribute('href', '/store/1/orders');
   });
 
   it('帰属している受注では会員コードと成立の機構を出し、理由を添えて無効化できる', async () => {
@@ -358,7 +358,7 @@ describe('OrderAttributionPage', () => {
     expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: '閉じて一覧へ' }));
-    expect(mockReplace).toHaveBeenCalledWith('/store/orders');
+    expect(mockReplace).toHaveBeenCalledWith('/store/1/orders');
   });
 
   it('再読込では再発行した伝票を出し直さない', async () => {
@@ -401,7 +401,7 @@ describe('OrderAttributionPage', () => {
     expect(screen.queryByLabelText('無効化の理由')).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'オーダー一覧へ' })).toHaveAttribute(
       'href',
-      '/store/orders'
+      '/store/1/orders'
     );
   });
 

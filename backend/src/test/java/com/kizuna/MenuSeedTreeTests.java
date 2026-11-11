@@ -117,4 +117,17 @@ class MenuSeedTreeTests {
       assertThat(rootLeaves.getFirst().permission()).as(tree.name()).isNull();
     }
   }
+
+  @Test
+  void グループの木は管理画面の絶対パスを店舗の木は店舗の中のパスを持つ() {
+    for (Row row : rows.values()) {
+      if (row.path() == null) continue;
+      if (treeOf(row) == PermissionTree.GROUP) {
+        assertThat(row.path()).as(row.id()).startsWith("/admin/");
+      } else {
+        assertThat(row.path()).as(row.id()).startsWith("/").doesNotStartWith("/store/");
+        assertThat(row.path()).as(row.id()).doesNotStartWith("/admin/");
+      }
+    }
+  }
 }

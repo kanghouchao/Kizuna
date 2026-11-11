@@ -181,7 +181,7 @@ databaseChangeLog:
               - column: { name: id, value: store-dashboard }
               - column: { name: tree, value: STORE }
               - column: { name: label, value: ダッシュボード }
-              - column: { name: path, value: /admin/dashboard }
+              - column: { name: path, value: /dashboard }
               - column: { name: icon, value: HouseIcon }
               - column: { name: sort_order, valueNumeric: 10 }
         - insert:
@@ -197,7 +197,7 @@ databaseChangeLog:
               - column: { name: id, value: store-orders }
               - column: { name: parent_id, value: store-section-business }
               - column: { name: label, value: 予約・案件管理 }
-              - column: { name: path, value: /store/orders }
+              - column: { name: path, value: /orders }
               - column: { name: icon, value: ClipboardListIcon }
               - column: { name: permission, value: ORDER_MANAGE }
               - column: { name: sort_order, valueNumeric: 1 }
@@ -207,7 +207,7 @@ databaseChangeLog:
               - column: { name: id, value: store-advertising-costs }
               - column: { name: parent_id, value: store-section-business }
               - column: { name: label, value: 広告費管理 }
-              - column: { name: path, value: /store/advertising-costs }
+              - column: { name: path, value: /advertising-costs }
               - column: { name: icon, value: MegaphoneIcon }
               - column: { name: permission, value: ADVERTISING_COST_VIEW }
               - column: { name: sort_order, valueNumeric: 2 }
@@ -217,7 +217,7 @@ databaseChangeLog:
               - column: { name: id, value: store-services }
               - column: { name: parent_id, value: store-section-business }
               - column: { name: label, value: サービス設定 }
-              - column: { name: path, value: /store/services }
+              - column: { name: path, value: /services }
               - column: { name: icon, value: SettingsIcon }
               - column: { name: permission, value: SERVICE_MANAGE }
               - column: { name: sort_order, valueNumeric: 3 }
@@ -234,7 +234,7 @@ databaseChangeLog:
               - column: { name: id, value: store-casts }
               - column: { name: parent_id, value: store-section-cast }
               - column: { name: label, value: キャスト管理 }
-              - column: { name: path, value: /store/casts }
+              - column: { name: path, value: /casts }
               - column: { name: icon, value: SmileIcon }
               - column: { name: permission, value: CAST_MANAGE }
               - column: { name: sort_order, valueNumeric: 1 }
@@ -244,7 +244,7 @@ databaseChangeLog:
               - column: { name: id, value: store-shifts }
               - column: { name: parent_id, value: store-section-cast }
               - column: { name: label, value: 出勤管理 }
-              - column: { name: path, value: /store/shifts }
+              - column: { name: path, value: /shifts }
               - column: { name: icon, value: ClockIcon }
               - column: { name: permission, value: SHIFT_MANAGE }
               - column: { name: sort_order, valueNumeric: 2 }
@@ -254,7 +254,7 @@ databaseChangeLog:
               - column: { name: id, value: store-applicants }
               - column: { name: parent_id, value: store-section-cast }
               - column: { name: label, value: 採用管理 }
-              - column: { name: path, value: /store/applicants }
+              - column: { name: path, value: /applicants }
               - column: { name: icon, value: UsersIcon }
               - column: { name: permission, value: RECRUITMENT_VIEW }
               - column: { name: sort_order, valueNumeric: 3 }
@@ -271,7 +271,7 @@ databaseChangeLog:
               - column: { name: id, value: store-customers }
               - column: { name: parent_id, value: store-section-customer }
               - column: { name: label, value: 顧客一覧 }
-              - column: { name: path, value: /store/customers }
+              - column: { name: path, value: /customers }
               - column: { name: icon, value: UsersRoundIcon }
               - column: { name: permission, value: CUSTOMER_MANAGE }
               - column: { name: sort_order, valueNumeric: 1 }
@@ -281,7 +281,7 @@ databaseChangeLog:
               - column: { name: id, value: store-reviews }
               - column: { name: parent_id, value: store-section-customer }
               - column: { name: label, value: 口コミ管理 }
-              - column: { name: path, value: /store/reviews }
+              - column: { name: path, value: /reviews }
               - column: { name: icon, value: ClipboardListIcon }
               - column: { name: permission, value: REVIEW_VIEW }
               - column: { name: sort_order, valueNumeric: 2 }
@@ -291,7 +291,7 @@ databaseChangeLog:
               - column: { name: id, value: store-surveys }
               - column: { name: parent_id, value: store-section-customer }
               - column: { name: label, value: アンケート管理 }
-              - column: { name: path, value: /store/surveys }
+              - column: { name: path, value: /surveys }
               - column: { name: icon, value: ClipboardListIcon }
               - column: { name: permission, value: SURVEY_VIEW }
               - column: { name: sort_order, valueNumeric: 3 }
@@ -301,7 +301,7 @@ databaseChangeLog:
               - column: { name: id, value: store-notification-deliveries }
               - column: { name: parent_id, value: store-section-customer }
               - column: { name: label, value: 業務通知 }
-              - column: { name: path, value: /store/notification-deliveries }
+              - column: { name: path, value: /notification-deliveries }
               - column: { name: icon, value: MegaphoneIcon }
               - column: { name: permission, value: NOTIFICATION_VIEW }
               - column: { name: sort_order, valueNumeric: 4 }
@@ -318,7 +318,7 @@ databaseChangeLog:
               - column: { name: id, value: store-profile }
               - column: { name: parent_id, value: store-section-operation }
               - column: { name: label, value: 店舗情報 }
-              - column: { name: path, value: /store/settings/profile }
+              - column: { name: path, value: /settings/profile }
               - column: { name: icon, value: StoreIcon }
               - column: { name: permission, value: STORE_PROFILE_MANAGE }
               - column: { name: sort_order, valueNumeric: 1 }
@@ -328,7 +328,7 @@ databaseChangeLog:
               - column: { name: id, value: store-articles }
               - column: { name: parent_id, value: store-section-operation }
               - column: { name: label, value: 記事管理 }
-              - column: { name: path, value: /store/articles }
+              - column: { name: path, value: /articles }
               - column: { name: icon, value: NewspaperIcon }
               - column: { name: permission, value: ARTICLE_MANAGE }
               - column: { name: sort_order, valueNumeric: 2 }

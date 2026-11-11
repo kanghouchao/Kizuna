@@ -6,13 +6,13 @@ import ApplicantDetailPage from '../ui/ApplicantDetailPage';
 jest.mock('next/navigation', () => ({ useParams: () => ({ id: 'a' }) }));
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => '1',
   useStoreContext: () => ({
     stores: [{ id: 1, name: 'テスト店舗' }],
     currentStoreId: '1',
     currentStore: { id: 1, name: 'テスト店舗' },
     loadFailed: false,
     reload: jest.fn(),
-    switchStore: jest.fn(),
   }),
 }));
 jest.mock('@/entities/applicant', () => ({
@@ -240,7 +240,7 @@ test('採用済みで未登録なら CAST_MANAGE 保持者にだけ在籍登録�
   const { unmount } = render(<ApplicantDetailPage />);
   expect(await screen.findByRole('link', { name: '在籍登録' })).toHaveAttribute(
     'href',
-    '/store/applicants/a/enrollment'
+    '/store/1/applicants/a/enrollment'
   );
   unmount();
   meWith(allPermissions.filter(code => code !== 'CAST_MANAGE'));
@@ -257,7 +257,7 @@ test('在籍登録済みなら在籍画面へ移動できる', async () => {
   render(<ApplicantDetailPage />);
   expect(await screen.findByRole('link', { name: '在籍を開く' })).toHaveAttribute(
     'href',
-    '/store/casts/e1/edit'
+    '/store/1/casts/e1/edit'
   );
   expect(screen.queryByRole('link', { name: '在籍登録' })).toBeNull();
 });

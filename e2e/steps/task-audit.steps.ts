@@ -8,6 +8,7 @@ import {
   authorizedStoreIds,
   loginUser,
   revealSidebarLink,
+  waitSidebarReady,
   STORE1_ID,
   openLoginForm,
 } from './store-api';
@@ -61,7 +62,7 @@ When('処理を再送し主体の権限と対象範囲を検証する', async ({
     await restrictedPage.getByLabel('パスワード', { exact: true }).fill(password);
     await restrictedPage.getByRole('button', { name: 'ログイン', exact: true }).click();
     await expect(restrictedPage).toHaveURL(/\/admin\/dashboard/, { timeout: 15000 });
-    await expect(restrictedPage.locator('aside').locator('a[href="/admin/dashboard"]')).toBeVisible();
+    await waitSidebarReady(restrictedPage);
     await expect(await revealSidebarLink(restrictedPage, aside => aside.locator('a[href="/admin/task-executions"]'))).toBeVisible();
     await expect(await revealSidebarLink(restrictedPage, aside => aside.locator('a[href="/admin/audit-events"]'))).toBeVisible();
   } finally {

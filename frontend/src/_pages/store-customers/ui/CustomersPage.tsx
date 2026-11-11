@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { CopyIcon, PlusIcon, SearchIcon, SquarePenIcon, Trash2Icon } from 'lucide-react';
 import { useState } from 'react';
 import { CustomerSummaryResponse, customerApi } from '@/entities/customer';
-import { hasPermission, useMe } from '@/entities/user';
+import { hasPermission, useCurrentStoreId, useMe } from '@/entities/user';
 import { storePath, useDeleteAction, useListPage } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import { CustomerMergePanel } from './CustomerMergePanel';
@@ -52,6 +52,7 @@ const SORT_OPTIONS = [
 
 /** 顧客一覧ページ */
 export default function CustomersPage() {
+  const storeId = useCurrentStoreId();
   const [search, setSearch] = useState('');
   const [classification, setClassification] = useState('');
   const [sort, setSort] = useState(SORT_OPTIONS[0].value);
@@ -103,12 +104,15 @@ export default function CustomersPage() {
         actions={
           <>
             {canMerge && (
-              <Button render={<Link href={storePath('/customers/duplicates')} />} variant="outline">
+              <Button
+                render={<Link href={storePath(storeId, '/customers/duplicates')} />}
+                variant="outline"
+              >
                 <CopyIcon />
                 重複候補
               </Button>
             )}
-            <Button render={<Link href={storePath('/customers/create')} />}>
+            <Button render={<Link href={storePath(storeId, '/customers/create')} />}>
               <PlusIcon />
               新規顧客登録
             </Button>
@@ -268,7 +272,7 @@ export default function CustomersPage() {
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">
                     <Button
-                      render={<Link href={storePath(`/customers/${customer.id}/edit`)} />}
+                      render={<Link href={storePath(storeId, `/customers/${customer.id}/edit`)} />}
                       variant="ghost"
                       size="icon-sm"
                     >

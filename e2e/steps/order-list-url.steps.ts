@@ -1,7 +1,6 @@
 import { expect, type Page, type Request } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { loginViaUiAndEnterStore } from './store-api';
-import { APP_URL } from '../base-url';
+import { loginViaUiAndEnterStore, storeUrl, STORE1_ID } from './store-api';
 
 const { Given, When, Then } = createBdd();
 
@@ -23,7 +22,7 @@ async function workQueueQueryAfter(page: Page, action: () => Promise<unknown>) {
 Given('店長が受注一覧を開いている', async ({ page }) => {
   keyword = `履歴${Date.now()}`;
   await loginViaUiAndEnterStore(page);
-  await page.goto(`${APP_URL}/store/orders`);
+  await page.goto(storeUrl(STORE1_ID, `/orders`));
   await expect(customerInput(page)).toBeVisible({ timeout: 15000 });
 });
 
@@ -64,7 +63,7 @@ Then('URL と入力欄は検索語だけになり、昇順で作業キューを�
 });
 
 Then('URL と入力欄は条件なしに戻る', async ({ page }) => {
-  await expect(page).toHaveURL(url => url.pathname.endsWith('/store/orders') && url.search === '');
+  await expect(page).toHaveURL(url => url.pathname === `/store/${STORE1_ID}/orders` && url.search === '');
   await expect(customerInput(page)).toHaveValue('');
   expect(lastQuery.get('customer_name')).toBeNull();
   expect(lastQuery.get('desc')).not.toBe('true');

@@ -18,7 +18,7 @@ import { ContactSnapshot, CustomerSelection } from '@/entities/order';
 import Link from 'next/link';
 import { useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useStoreContext } from '@/entities/user';
+import { useCurrentStoreId } from '@/entities/user';
 import { useForm } from 'react-hook-form';
 import {
   Order,
@@ -136,7 +136,7 @@ function pickEdited(
 export default function OrderEditPage() {
   const confirmation = useOrderConfirmation();
   const params = useParams();
-  const storeId = useStoreContext().currentStoreId;
+  const storeId = useCurrentStoreId();
   const orderId = params.id as string;
   const router = useRouter();
 
@@ -242,7 +242,7 @@ export default function OrderEditPage() {
       await orderApi.update(orderId, { ...request, confirmation_token: token });
       if (!operation.isCurrent()) return;
       notify.success('受注を更新しました');
-      router.push(storePath('/orders'));
+      router.push(storePath(storeId, '/orders'));
     } catch (error) {
       if (!operation.isCurrent()) return;
       if (orderConflictField(error) === 'confirmation_token') {
@@ -299,14 +299,16 @@ export default function OrderEditPage() {
               </p>
             )}
             <Button
-              render={<Link href={storePath(`/orders/${orderId}/completion-invalidation`)} />}
+              render={
+                <Link href={storePath(storeId, `/orders/${orderId}/completion-invalidation`)} />
+              }
             >
               {current.completion_invalidated ? '無効化詳細・再提供' : '誤完了の無効化'}
             </Button>
           </div>
         )}
         {current?.replacement_for_order_id && (
-          <Link href={storePath(`/orders/${current.replacement_for_order_id}/edit`)}>
+          <Link href={storePath(storeId, `/orders/${current.replacement_for_order_id}/edit`)}>
             再提供の元受注：{current.replacement_for_order_id}
           </Link>
         )}
@@ -341,7 +343,7 @@ export default function OrderEditPage() {
           // 404 は何度押しても取れないので再試行ではなく、一覧へ戻る導線だけを出す
           <RegionError
             message="この受注は見つかりませんでした。"
-            fallback={{ href: storePath('/orders'), label: 'オーダー一覧へ' }}
+            fallback={{ href: storePath(storeId, '/orders'), label: 'オーダー一覧へ' }}
           />
         )}
 
@@ -571,7 +573,7 @@ export default function OrderEditPage() {
                     type="button"
                     variant="outline"
                     disabled={formState.isSubmitting}
-                    onClick={() => router.push(storePath('/orders'))}
+                    onClick={() => router.push(storePath(storeId, '/orders'))}
                   >
                     キャンセル
                   </Button>

@@ -7,6 +7,7 @@ import { useSurveyRefresh } from '../lib/useSurveyRefresh';
 import { useSurveyWrite } from '../lib/useSurveyWrite';
 import { ReasonTask, SurveyReasonDialog } from './SurveyReasonDialog';
 import { SurveyWriteFeedback } from './SurveyWriteFeedback';
+import { useCurrentStoreId } from '@/entities/user';
 
 export type SurveyTask = ReasonTask;
 
@@ -15,6 +16,7 @@ export type SurveyTask = ReasonTask;
  * 今の画面なら読み直す。
  */
 export function useSurveyWorkspace(here: string) {
+  const storeId = useCurrentStoreId();
   const router = useRouter();
   const [epoch, setEpoch] = useState(0);
   const [task, setTask] = useState<SurveyTask | null>(null);
@@ -23,14 +25,14 @@ export function useSurveyWorkspace(here: string) {
   const write = useSurveyWrite(result => {
     setTask(null);
     setOpen(false);
-    const target = writtenHref(result);
+    const target = writtenHref(storeId, result);
     if (target === here) setEpoch(n => n + 1);
     else router.push(target);
   });
   const refresher = useSurveyRefresh(write, () => {
     setTask(null);
     setOpen(false);
-    router.replace(surveyListHref);
+    router.replace(surveyListHref(storeId));
   });
   const refreshing = refresher.refreshing;
   const busy = write.busy || refreshing;

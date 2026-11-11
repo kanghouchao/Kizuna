@@ -2,7 +2,13 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
+import {
+  MePending,
+  hasPermission,
+  useCurrentStoreId,
+  useMe,
+  useStoreContext,
+} from '@/entities/user';
 import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { OrderPointRollbackResult, orderApi } from '@/entities/order';
@@ -61,6 +67,7 @@ export default function OrderPointRollbackPage() {
 }
 
 function RollbackPage({ orderId, permitted }: { orderId: string; permitted: boolean }) {
+  const storeId = useCurrentStoreId();
   // 送信の 403 でも閉じる（権限が後から外れた場合）。
   const [allowed, setAllowed] = useState(permitted);
   const active = useRef(true);
@@ -124,7 +131,7 @@ function RollbackPage({ orderId, permitted }: { orderId: string; permitted: bool
     return (
       <RegionError
         message="受注管理（ORDER_MANAGE）と POINT_ADJUST を持つポイント救済担当者へ依頼してください。この画面が専用のポイント巻き戻し入口です。"
-        fallback={{ href: storePath('/orders'), label: 'オーダー一覧へ' }}
+        fallback={{ href: storePath(storeId, '/orders'), label: 'オーダー一覧へ' }}
       />
     );
 
@@ -145,13 +152,13 @@ function RollbackPage({ orderId, permitted }: { orderId: string; permitted: bool
       {failure === 'notFound' && (
         <RegionError
           message="この受注は見つかりませんでした。"
-          fallback={{ href: storePath('/orders'), label: 'オーダー一覧へ' }}
+          fallback={{ href: storePath(storeId, '/orders'), label: 'オーダー一覧へ' }}
         />
       )}
       {order && order.status !== 'COMPLETED' && (
         <RegionError
           message="完了した受注だけがポイントを巻き戻せます。"
-          fallback={{ href: storePath('/orders'), label: 'オーダー一覧へ' }}
+          fallback={{ href: storePath(storeId, '/orders'), label: 'オーダー一覧へ' }}
         />
       )}
       {history && (
@@ -190,7 +197,9 @@ function RollbackPage({ orderId, permitted }: { orderId: string; permitted: bool
             <div className="space-y-3">
               <p>この受注は既に巻き戻し済みです。二度目は受け付けません。</p>
               <Button
-                render={<Link href={storePath(`/orders/${orderId}/completion-invalidation`)} />}
+                render={
+                  <Link href={storePath(storeId, `/orders/${orderId}/completion-invalidation`)} />
+                }
               >
                 誤完了の無効化へ
               </Button>
@@ -264,7 +273,7 @@ function RollbackPage({ orderId, permitted }: { orderId: string; permitted: bool
           )}
         </>
       )}
-      <Button variant="outline" render={<Link href={storePath('/orders')} />}>
+      <Button variant="outline" render={<Link href={storePath(storeId, '/orders')} />}>
         オーダー一覧へ
       </Button>
       <ConfirmDialog

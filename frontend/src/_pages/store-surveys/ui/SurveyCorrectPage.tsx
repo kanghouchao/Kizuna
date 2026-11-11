@@ -4,15 +4,17 @@ import { surveyApi } from '@/entities/survey';
 import { answerHref } from '../lib/surveyHref';
 import { SurveyAnswerIntake } from './SurveyAnswerIntake';
 import { SurveyGate } from './SurveyGate';
+import { useCurrentStoreId } from '@/entities/user';
 
 export function SurveyCorrectPage() {
+  const storeId = useCurrentStoreId();
   const { aid } = useParams<{ aid: string }>();
   return (
     <SurveyGate target={aid} record>
       {() => (
         <SurveyAnswerIntake
           title="回答を訂正"
-          back={{ href: answerHref(aid), label: '回答へ戻る' }}
+          back={{ href: answerHref(storeId, aid), label: '回答へ戻る' }}
           load={async () => {
             const answer = await surveyApi.answer(aid);
             const revision = await surveyApi.revision(answer.survey_id, answer.revision_id);

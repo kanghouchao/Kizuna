@@ -9,7 +9,7 @@ import { MergeHistorySection } from './MergeHistorySection';
 import { customerApi } from '@/entities/customer';
 import { ORDER_STATUS_LABELS, orderApi } from '@/entities/order';
 import { notify } from '@/shared/notify';
-import { hasPermission, useMe } from '@/entities/user';
+import { hasPermission, useCurrentStoreId, useMe } from '@/entities/user';
 import { storePath, useResource } from '@/shared/lib';
 import {
   RegionError,
@@ -24,6 +24,7 @@ import {
 
 /** 顧客編集ページ（プロフィール編集 + 注文履歴） */
 export default function CustomerEditPage() {
+  const storeId = useCurrentStoreId();
   const params = useParams();
   const id = params.id as string;
   const router = useRouter();
@@ -64,7 +65,7 @@ export default function CustomerEditPage() {
       delete profile.contacts;
       await customerApi.update(resolvedId, profile);
       notify.success('顧客情報を更新しました');
-      router.push(storePath('/customers'));
+      router.push(storePath(storeId, '/customers'));
     } catch {
       notify.error('顧客情報の更新に失敗しました');
     } finally {
@@ -87,7 +88,7 @@ export default function CustomerEditPage() {
           // 404 は何度押しても取れない。再試行ではなく一覧への導線だけを出す
           <RegionError
             message="この顧客は見つかりませんでした"
-            fallback={{ href: storePath('/customers'), label: '顧客一覧へ' }}
+            fallback={{ href: storePath(storeId, '/customers'), label: '顧客一覧へ' }}
           />
         ) : (
           <RegionError

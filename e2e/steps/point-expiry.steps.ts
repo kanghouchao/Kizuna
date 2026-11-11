@@ -1,7 +1,7 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
-import { createPermissionRole, authorizedStoreIds, createServiceIdentity, createStaffFixture, loginUser, openLoginForm } from './store-api';
+import { createPermissionRole, authorizedStoreIds, createServiceIdentity, createStaffFixture, loginUser, openLoginForm, waitStaffLanding } from './store-api';
 const { Given, When, Then } = createBdd();
 let operator = '';
 let viewer = '';
@@ -67,7 +67,7 @@ Then('失効処理を画面から選択して結果を確認できる', async ({
   await page.getByLabel('メールアドレス', { exact: true }).fill(email);
   await page.getByLabel('パスワード', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();
-  await expect(page).toHaveURL(/\/admin\/dashboard/, { timeout: 15000 });
+  await waitStaffLanding(page);
   await page.goto(`${APP_URL}/admin/task-executions`);
   await page.getByRole('combobox', { name: '処理', exact: true }).click();
   await page.getByRole('option', { name: '期限切れポイントの記帳', exact: true }).click();

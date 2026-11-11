@@ -2,7 +2,6 @@ import { expect, type APIRequestContext, type Page } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
 import { randomUUID } from "node:crypto";
 import { Client } from "pg";
-import { APP_URL } from "../base-url";
 import {
   ADMIN_PASSWORD,
   STORE1_ID,
@@ -15,6 +14,8 @@ import {
   loginAsStoreAdmin,
   loginUser,
   openLoginForm,
+  storeUrl,
+  waitStaffLanding,
 } from "./store-api";
 
 const { Given, When, Then, After } = createBdd();
@@ -183,7 +184,7 @@ async function loginAsRecruiter(
   await page.getByLabel("メールアドレス", { exact: true }).fill(email);
   await page.getByLabel("パスワード", { exact: true }).fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();
-  await expect(page).toHaveURL(/\/admin\/dashboard\/?$/, { timeout: 20000 });
+  await waitStaffLanding(page, 20000);
 }
 const RECRUITER_PERMISSIONS = [
   "RECRUITMENT_VIEW",
@@ -211,7 +212,7 @@ Given(
 );
 
 When("応募者の受付と面接を画面で登録する", async ({ page }) => {
-  await page.goto(`${APP_URL}/store/applicants`);
+  await page.goto(storeUrl(storeId, `/applicants`));
   await page.getByRole("link", { name: "応募者を登録" }).click();
   await page.getByLabel("氏名", { exact: true }).fill(applicantName);
   // 採用担当は広告費の権限を持たないまま、媒体の選択肢を取得して選べる。
@@ -277,7 +278,7 @@ Then(
         localStorage.setItem("theme", value);
         document.documentElement.classList.toggle("dark", value === "dark");
       }, theme);
-      await page.goto(`${APP_URL}/store/applicants/${applicantId}`);
+      await page.goto(storeUrl(storeId, `/applicants/${applicantId}`));
       await page.setViewportSize({ width: 1280, height: 960 });
       await expect(
         page.getByRole("heading", { name: applicantName, exact: true }),
@@ -292,7 +293,7 @@ Then(
         path: $testInfo.outputPath(`applicant-detail-${theme}.png`),
         fullPage: true,
       });
-      await page.goto(`${APP_URL}/store/applicants`);
+      await page.goto(storeUrl(storeId, `/applicants`));
       await expect(
         page.getByRole("heading", { name: "応募者管理", exact: true }),
       ).toBeVisible();
@@ -304,7 +305,7 @@ Then(
         path: $testInfo.outputPath(`applicant-list-${theme}.png`),
         fullPage: true,
       });
-      await page.goto(`${APP_URL}/store/applicants/${applicantId}`);
+      await page.goto(storeUrl(storeId, `/applicants/${applicantId}`));
     }
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(
@@ -653,7 +654,7 @@ When(
   "面接済の応募者を画面で採用に確定する",
   async ({ page, request, $testInfo }) => {
     await interviewed(request);
-    await page.goto(`${APP_URL}/store/applicants/${applicantId}`);
+    await page.goto(storeUrl(storeId, `/applicants/${applicantId}`));
     await page.getByLabel("採否", { exact: true }).click();
     await page.getByRole("option", { name: "採用", exact: true }).click();
     await page.getByLabel("確定理由", { exact: true }).fill("面接で入店に合意");
@@ -903,7 +904,7 @@ Then(
         document.documentElement.classList.toggle("dark", mode === "dark");
       }, theme);
       await page.setViewportSize({ width, height: 960 });
-      await page.goto(`${APP_URL}/store/applicants/${applicantId}`);
+      await page.goto(storeUrl(storeId, `/applicants/${applicantId}`));
       await expect(value("不採用")).toHaveText("保持 6 か月");
       await expect(value("辞退")).toHaveText("自動匿名化しない");
       await expect(value("採用")).toHaveText("自動匿名化しない");
@@ -1151,7 +1152,7 @@ Then(
         document.documentElement.classList.toggle("dark", mode === "dark");
       }, theme);
       await page.setViewportSize({ width, height: 960 });
-      await page.goto(`${APP_URL}/store/applicants/${applicantId}`);
+      await page.goto(storeUrl(storeId, `/applicants/${applicantId}`));
       await expect(
         page.getByRole("heading", { name: "匿名化済み応募者", exact: true }),
       ).toBeVisible();
@@ -1167,7 +1168,7 @@ Then(
       });
     }
     await page.setViewportSize({ width: 1280, height: 960 });
-    await page.goto(`${APP_URL}/store/applicants`);
+    await page.goto(storeUrl(storeId, `/applicants`));
     const row = page.getByRole("row").filter({
       has: page.locator(`a[href$="/applicants/${applicantId}"]`),
     });
@@ -1211,7 +1212,7 @@ When(
   "採用済みの応募者から画面で在籍を登録する",
   async ({ page, $testInfo }) => {
     stageName = `在籍検証-${randomUUID().slice(0, 8)}`;
-    await page.goto(`${APP_URL}/store/applicants/${applicantId}`);
+    await page.goto(storeUrl(storeId, `/applicants/${applicantId}`));
     const section = page.locator("section", {
       has: page.getByRole("heading", { name: "在籍", exact: true }),
     });
@@ -1249,7 +1250,7 @@ When(
     await page.setViewportSize({ width: 1280, height: 960 });
     await page.getByRole("button", { name: "保存する", exact: true }).click();
     await expect(page).toHaveURL(
-      new RegExp(`/store/applicants/${applicantId}$`),
+      new RegExp(`/store/${storeId}/applicants/${applicantId}$`),
     );
     await expect(
       page.getByRole("link", { name: "在籍を開く", exact: true }),
@@ -1298,9 +1299,9 @@ Then(
     expect(JSON.stringify(await cast.json())).not.toContain("非公開");
     await page.getByRole("link", { name: "在籍を開く", exact: true }).click();
     await expect(page).toHaveURL(
-      new RegExp(`/store/casts/${enrollmentId}/edit$`),
+      new RegExp(`/store/${storeId}/casts/${enrollmentId}/edit$`),
     );
-    await page.goto(`${APP_URL}/store/casts`);
+    await page.goto(storeUrl(storeId, `/casts`));
     await page.getByPlaceholder("名前で検索...").fill(stageName);
     await page.getByRole("button", { name: "検索", exact: true }).click();
     await expect(

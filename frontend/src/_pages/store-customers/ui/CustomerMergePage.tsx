@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm, useWatch } from 'react-hook-form';
 import { CheckIcon, InfoIcon } from 'lucide-react';
 import { customerApi, MergePreferences, MergePreview, MergeProfile } from '@/entities/customer';
-import { MePending, hasPermission, useMe } from '@/entities/user';
+import { MePending, hasPermission, useCurrentStoreId, useMe } from '@/entities/user';
 import { getApiErrorMessage, isNotFound, storePath, useResource } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import {
@@ -34,8 +34,8 @@ import {
 } from '@/shared/ui';
 import { MergeSnapshotView, profileFields } from './MergeSnapshotView';
 
-const LIST_HREF = storePath('/customers');
-const FALLBACK = { href: LIST_HREF, label: '顧客一覧へ' };
+const listHref = (storeId: string) => storePath(storeId, '/customers');
+const fallback = (storeId: string) => ({ href: listHref(storeId), label: '顧客一覧へ' });
 const CONTACT_TYPES = ['PHONE', 'EMAIL', 'LINE'] as const;
 const CONTACT_LABELS = { PHONE: '電話', EMAIL: 'メール', LINE: 'LINE' };
 const PREFERENCE_KEYS = { PHONE: 'phone', EMAIL: 'email', LINE: 'line' } as const;
@@ -45,6 +45,7 @@ const SECTION = 'space-y-4 rounded-xl border bg-card p-6 text-card-foreground sh
 
 /** 顧客の統合画面。どちらが残るかは URL の surviving / merged が名指す。 */
 export default function CustomerMergePage() {
+  const storeId = useCurrentStoreId();
   const params = useSearchParams();
   const survivingId = params.get('surviving') ?? '';
   const mergedId = params.get('merged') ?? '';
@@ -57,7 +58,7 @@ export default function CustomerMergePage() {
     body = (
       <RegionError
         message="統合する 2 件の顧客を一覧から選び直してください。"
-        fallback={FALLBACK}
+        fallback={fallback(storeId)}
       />
     );
   else
@@ -103,10 +104,11 @@ function MergeLoader({ survivingId, mergedId }: Target) {
 }
 
 function MissingCustomer() {
+  const storeId = useCurrentStoreId();
   return (
     <RegionError
       message="顧客が見つかりません。すでに統合されている可能性があります。"
-      fallback={FALLBACK}
+      fallback={fallback(storeId)}
     />
   );
 }
@@ -118,6 +120,7 @@ interface Values {
 }
 
 function MergeEditor({ initial, survivingId, mergedId }: Target & { initial: MergePreview }) {
+  const storeId = useCurrentStoreId();
   const router = useRouter();
   const [data, setData] = useState<MergePreview | null>(initial);
   const [gone, setGone] = useState(false);
@@ -203,7 +206,7 @@ function MergeEditor({ initial, survivingId, mergedId }: Target & { initial: Mer
       });
       notify.success('顧客を統合しました');
       // 統合した組へ戻るボタンで戻らせない。被統合側はもう存在しない
-      router.replace(LIST_HREF);
+      router.replace(listHref(storeId));
     } catch (error) {
       invalidate();
       fail(error, '顧客の統合に失敗しました');
@@ -497,7 +500,7 @@ function MergeEditor({ initial, survivingId, mergedId }: Target & { initial: Mer
             統合せずに戻る
           </Button>
         ) : (
-          <Button variant="outline" render={<Link href={LIST_HREF} />}>
+          <Button variant="outline" render={<Link href={listHref(storeId)} />}>
             統合せずに戻る
           </Button>
         )}

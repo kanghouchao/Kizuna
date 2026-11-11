@@ -41,13 +41,11 @@ describe('endSession の終了理由ごとの消す範囲', () => {
     broadcasts.length = 0;
     storeSessionToken({ token: 'tkn', expires_at: 1, user_id: 7, refresh_expires_at: 2 });
     Cookies.set('session-kind', 'member');
-    Cookies.set('current-store-id', '1');
     sessionStorage.setItem('pending-operation:slot', '{}');
   });
 
   afterEach(() => {
     Cookies.remove('session-kind');
-    Cookies.remove('current-store-id');
     sessionStorage.clear();
   });
 
@@ -56,7 +54,6 @@ describe('endSession の終了理由ごとの消す範囲', () => {
 
     expect(getSessionUserId()).toBeUndefined();
     expect(Cookies.get('session-kind')).toBe(expected.cookies ? undefined : 'member');
-    expect(Cookies.get('current-store-id')).toBe(expected.cookies ? undefined : '1');
     expect(sessionStorage.getItem('pending-operation:slot')).toBe(
       expected.operations ? null : '{}'
     );
@@ -73,12 +70,12 @@ describe('landSession の着地', () => {
 
   it('本人種別の戻り先があればそこへ、断片ごと着地する', () => {
     expect(landSession('member', LATER, '/member/receipts#tok3n')).toBe('/member/receipts#tok3n');
-    expect(landSession('admin', LATER, '/store/casts')).toBe('/store/casts');
+    expect(landSession('admin', LATER, '/store/12/casts')).toBe('/store/12/casts');
     expect(landSession('cast', LATER, '/cast/schedule')).toBe('/cast/schedule');
   });
 
   it.each([
-    ['admin', '/member/receipts', '/admin/dashboard/'],
+    ['admin', '/member/receipts', '/admin'],
     ['member', 'https://evil.test/', '/member/'],
     ['cast', '//evil.test/cast/', '/cast/'],
     ['member', undefined, '/member/'],

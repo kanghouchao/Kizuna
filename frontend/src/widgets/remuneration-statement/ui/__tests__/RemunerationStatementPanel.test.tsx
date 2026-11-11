@@ -1,6 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { remunerationApi, type Statement } from '../../api';
-import { setCurrentStore } from '@/shared/lib';
 import { useMe } from '@/entities/user';
 import { storeSessionToken } from '@/shared/api';
 import type { PermissionCode } from '@/entities/user';
@@ -73,7 +72,6 @@ const data: Statement = {
 };
 beforeEach(() => {
   jest.clearAllMocks();
-  setCurrentStore('1');
   meAs(7, []);
   statement.mockResolvedValue(data);
   jest.mocked(remunerationApi.guarantees).mockResolvedValue({ version: 0, entries: page });

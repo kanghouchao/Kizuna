@@ -23,6 +23,7 @@ import {
   Textarea,
   ConfirmDialog,
 } from '@/shared/ui';
+import { useCurrentStoreId } from '@/entities/user';
 interface Values {
   category: Category;
   medium_id: string;
@@ -43,6 +44,7 @@ export function CostEditor({
   disabled: boolean;
   onSubmit: (m: Mutation) => Promise<void>;
 }) {
+  const storeId = useCurrentStoreId();
   const [confirmation, setConfirmation] = useState<Mutation | null>(null);
   const options = useResource(remove ? null : () => mediumApi.options(), []);
   // 停止中の媒体は選択肢に出ないため、編集中の行が持つ媒体は値を保てるよう候補へ足す。
@@ -172,7 +174,7 @@ export function CostEditor({
                         <Button
                           variant="link"
                           className="px-0"
-                          render={<Link href={storePath('/advertising-costs/media')} />}
+                          render={<Link href={storePath(storeId, '/advertising-costs/media')} />}
                         >
                           媒体を管理
                         </Button>

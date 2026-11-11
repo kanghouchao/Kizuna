@@ -11,7 +11,7 @@ import {
   type ApplicantStatus,
   type ApplicantSummary,
 } from '@/entities/applicant';
-import { hasPermission, useMe } from '@/entities/user';
+import { hasPermission, useCurrentStoreId, useMe } from '@/entities/user';
 import { storePath, useListPage } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import {
@@ -32,6 +32,7 @@ import {
 } from '@/shared/ui';
 
 export default function ApplicantsPage() {
+  const storeId = useCurrentStoreId();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<ApplicantStatus | ''>('');
   const { me } = useMe();
@@ -53,7 +54,9 @@ export default function ApplicantsPage() {
       description="受付・面接・選考の記録を担当店舗で管理します。"
       actions={
         canManage && (
-          <Button render={<Link href={storePath('/applicants/new')} />}>応募者を登録</Button>
+          <Button render={<Link href={storePath(storeId, '/applicants/new')} />}>
+            応募者を登録
+          </Button>
         )
       }
       search={{
@@ -133,7 +136,7 @@ export default function ApplicantsPage() {
               <TableCell>
                 <Button
                   variant="outline"
-                  render={<Link href={storePath(`/applicants/${row.id}`)} />}
+                  render={<Link href={storePath(storeId, `/applicants/${row.id}`)} />}
                 >
                   詳細
                 </Button>

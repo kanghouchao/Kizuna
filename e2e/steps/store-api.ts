@@ -45,10 +45,35 @@ export async function openLoginForm(page: Page): Promise<void> {
   await page.goto(`${APP_URL}/auth/login`);
 }
 
+/** 店舗の画面のパス。subPath は '/' 始まりの店舗の中のパス（例 '/casts/create'）。 */
+export function storePath(storeId: string | number, subPath: string): string {
+  return `/store/${storeId}${subPath}`;
+}
+
+export function storeUrl(storeId: string | number, subPath: string): string {
+  return `${APP_URL}${storePath(storeId, subPath)}`;
+}
+
+/** 店舗の画面の URL なら、その店舗 id を返す。 */
+export function storeIdOfUrl(url: string): string | undefined {
+  return /\/store\/(\d+)(?:\/|$)/.exec(new URL(url).pathname)?.[1];
+}
+
+/** 従業員の着地先（グループまたは店舗のダッシュボード）。どちらになるかは本人のメニューの木と店舗集合で決まる。 */
+const STAFF_LANDING = /\/(admin|store\/\d+)\/dashboard\/?$/;
+
 /**
- * 統一ログイン UI から店長（ADMIN_EMAIL・2 店舗授権）で入り、ダッシュボードへの着地を待つ共通手順。
- * 店舗業務 URL は店舗 id を持たず、現在店舗は授権店舗の先頭（Sample = STORE1_ID）が自動選択されるため、
- * UI と API（STORE_HEADERS）の店舗文脈を揃える id として STORE1_ID を返す。
+ * ログインした従業員の着地を待つ。着地先の種類を断言しない手順の前提用で、着地先そのものを確かめるシナリオは
+ * 「グループのダッシュボードへ遷移する」「店舗のダッシュボードへ遷移する」を使う。
+ */
+export async function waitStaffLanding(page: Page, timeout = 15000): Promise<void> {
+  await expect(page).toHaveURL(STAFF_LANDING, { timeout });
+}
+
+/**
+ * 統一ログイン UI から店長（ADMIN_EMAIL・2 店舗授権）で入り、グループのダッシュボードへの着地を待つ共通手順。
+ * 店長はグループの木を持つのでグループへ着地する。店舗の画面は URL の店舗 id が文脈と X-Store-ID を決めるため、
+ * 呼び手は返す STORE1_ID で storeUrl を組み、API（STORE_HEADERS）と同じ店舗を開く。
  */
 export async function loginViaUiAndEnterStore(page: Page): Promise<string> {
   await openLoginForm(page);
@@ -61,70 +86,92 @@ export async function loginViaUiAndEnterStore(page: Page): Promise<string> {
 
 const sidebar = (page: Page): Locator => page.locator("aside");
 
-// レールのボタン（グループと各店舗）。文脈が 1 つしか無い利用者にはレールが無く、0 件になる。
-const railButtons = (page: Page): Locator =>
-  sidebar(page).locator("button[aria-pressed]");
+/** 左端の文脈レール（グループと各店舗へのリンク）。文脈が 1 つしか無い利用者には無い。 */
+export const sidebarRail = (page: Page): Locator =>
+  sidebar(page).getByRole("navigation", { name: "文脈", exact: true });
+
+/** レールの右のパネル（見出しとメニュー）。レールと同じ名前のリンクを拾わないよう、断言はここに絞る。 */
+export const sidebarPanel = (page: Page): Locator =>
+  sidebar(page).locator(":scope > div");
 
 /**
- * メニューとレールが出揃うまで待つ。ダッシュボードは文脈に関係なく最上段に出るので、
- * パネルが描かれた（授権店舗の解決後）ことの目印にできる。
+ * メニューとレールが出揃うまで待つ。パネルの最上段のダッシュボードは文脈によらず必ず出る
+ * （木が無い利用者にも全員の着地先として出る）ので、パネルが描かれたことの目印にできる。
  */
-async function waitSidebarReady(page: Page): Promise<void> {
+export async function waitSidebarReady(page: Page): Promise<void> {
   await expect(
-    sidebar(page).locator('a[href="/admin/dashboard"]'),
+    sidebarPanel(page).getByRole("link", { name: "ダッシュボード", exact: true }),
   ).toBeVisible({ timeout: 15000 });
 }
 
-/** レールで文脈（"グループ" または店名）を選び、選択表示になるまで待つ。 */
+/** レールの項目を選ぶ。項目はその文脈のダッシュボードへのリンクなので、選択表示と移動先の描画まで待つ。 */
+async function clickRailEntry(page: Page, entry: Locator): Promise<void> {
+  await entry.click();
+  await expect(entry).toHaveAttribute("aria-current", "page");
+  await expect(page).toHaveURL(STAFF_LANDING);
+  await waitSidebarReady(page);
+}
+
+/** レールで文脈（"グループ" または店名）を選び、その文脈のダッシュボードへ移る。 */
 export async function selectRailContext(
   page: Page,
   label: string,
 ): Promise<void> {
   await waitSidebarReady(page);
-  const button = sidebar(page).getByRole("button", {
-    name: label,
-    exact: true,
-  });
-  await button.click();
-  await expect(button).toHaveAttribute("aria-pressed", "true");
+  await clickRailEntry(
+    page,
+    sidebarRail(page).getByRole("link", { name: label, exact: true }),
+  );
 }
 
-/** レールで現在店舗を変える。同じ画面が再マウントされるので、選択表示で完了を待つ。 */
-export const switchStoreOnRail = selectRailContext;
+/**
+ * レールで店舗を選び、その店舗のダッシュボードへ移って店舗 id を返す。元の画面には留まらないので、
+ * 店舗の別の画面を見るなら呼び手がパネルのリンクか storeUrl で開き直す。
+ */
+export async function switchStoreOnRail(
+  page: Page,
+  storeName: string,
+): Promise<string> {
+  await selectRailContext(page, storeName);
+  const storeId = storeIdOfUrl(page.url());
+  expect(storeId, `店舗 ${storeName} のダッシュボードへ移っていない`).toBeDefined();
+  return storeId!;
+}
 
 /**
  * 指定のリンクを含む文脈を選んで、そのリンクの Locator を返す。
- * 表示中のパネル、グループ、各店舗の順に探す（店舗の切替は現在店舗を変えるので最後に回す）。
+ * 表示中のパネル、レールの上から（グループ、作成日の新しい店舗の順）の順に探す。レールの項目は
+ * その文脈のダッシュボードへ移るので、見つかったときは見つけた文脈のダッシュボードに居る。
  */
 export async function revealSidebarLink(
   page: Page,
-  link: (aside: Locator) => Locator,
+  link: (panel: Locator) => Locator,
 ): Promise<Locator> {
   await waitSidebarReady(page);
-  const aside = sidebar(page);
-  if ((await link(aside).count()) > 0) return link(aside);
-  const buttons = railButtons(page);
-  const count = await buttons.count();
+  const panel = sidebarPanel(page);
+  if ((await link(panel).count()) > 0) return link(panel);
+  const entries = sidebarRail(page).getByRole("link");
+  const count = await entries.count();
   for (let i = 0; i < count; i++) {
-    await buttons.nth(i).click();
-    if ((await link(aside).count()) > 0) return link(aside);
+    await clickRailEntry(page, entries.nth(i));
+    if ((await link(panel).count()) > 0) return link(panel);
   }
-  return link(aside);
+  return link(panel);
 }
 
 /** どの文脈のパネルにも、そのリンクが無いことを断言する。 */
 export async function expectSidebarLinkAbsentEverywhere(
   page: Page,
-  link: (aside: Locator) => Locator,
+  link: (panel: Locator) => Locator,
 ): Promise<void> {
   await waitSidebarReady(page);
-  const aside = sidebar(page);
-  await expect(link(aside)).toHaveCount(0);
-  const buttons = railButtons(page);
-  const count = await buttons.count();
+  const panel = sidebarPanel(page);
+  await expect(link(panel)).toHaveCount(0);
+  const entries = sidebarRail(page).getByRole("link");
+  const count = await entries.count();
   for (let i = 0; i < count; i++) {
-    await buttons.nth(i).click();
-    await expect(link(aside)).toHaveCount(0);
+    await clickRailEntry(page, entries.nth(i));
+    await expect(link(panel)).toHaveCount(0);
   }
 }
 

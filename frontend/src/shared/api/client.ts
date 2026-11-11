@@ -1,6 +1,6 @@
 import axios from 'axios';
 import type { AxiosError, AxiosHeaders, InternalAxiosRequestConfig } from 'axios';
-import { getCurrentStoreId, isStorePath, redirectToLogin } from '@/shared/lib';
+import { redirectToLogin, storeIdOf } from '@/shared/lib';
 import {
   endSession,
   extendSession,
@@ -37,27 +37,20 @@ apiClient.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
-    // 店舗文脈は X-Store-ID だけで名乗る。従業員の店舗級画面（/store 配下）からの要求には宛先を問わず現在店舗
-    // （current-store-id cookie）を付け、現在店舗を受けない端点はこれを読まない。/admin 配下の画面は何も付けず、
-    // /files は全店共有領域へ保存され、横断一覧が行の店舗を名指す X-Store-ID はそのまま届く。キャスト・会員の
-    // portal は cookie が残っていても付けない。判定はこのタブの画面だけで行い、別タブのログインが書き換える
-    // session-kind cookie は見ない（/store 配下を描くのは従業員のシェルだけ）。公開店舗サイトの匿名要求は呼び出し元が店舗を明示して渡す。
+    // 店舗文脈は X-Store-ID だけで名乗る。店舗の文脈の画面（/store/{storeId}/**）からの要求には宛先を問わず URL の
+    // 店舗 id を付け、現在店舗を受けない端点はこれを読まない。/admin 配下・キャスト・会員の画面は何も付けず、/files は
+    // 全店共有領域へ保存され、横断一覧が行の店舗を名指す X-Store-ID はそのまま届く。URL はタブごとなので、別タブの
+    // 画面がこのタブの店舗を変えることはない。公開店舗サイトの匿名要求は呼び出し元が店舗を明示して渡す。
     // 受け入れの可否はバックエンドが授権店舗集合で判定する。
     try {
-      // 再送と、店舗を名指した要求（結果不明の操作は起こした店舗に固定する）はその店舗のまま送る。待つ間に
-      // 別タブで切り替わった現在店舗を付け直すと、別の店舗へ書き込む。
+      // 再送と、店舗を名指した要求（結果不明の操作は起こした店舗に固定する）はその店舗のまま送る。
       const headers = config.headers as AxiosHeaders;
-      const storeId = getCurrentStoreId();
-      if (
-        !config.authRetried &&
-        !headers.has('X-Store-ID') &&
-        storeId &&
-        isStorePath(window.location.pathname)
-      ) {
+      const storeId = storeIdOf(window.location.pathname);
+      if (!config.authRetried && !headers.has('X-Store-ID') && storeId) {
         headers.set('X-Store-ID', storeId);
       }
     } catch {
-      // cookie が読めない環境ではヘッダ無しで送る（受け入れの可否はバックエンドが fail-closed に判定する）
+      // location が読めない環境ではヘッダ無しで送る（受け入れの可否はバックエンドが fail-closed に判定する）
     }
     return config;
   },

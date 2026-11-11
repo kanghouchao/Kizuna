@@ -7,13 +7,15 @@ import { storePath } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { Button } from '@/shared/ui';
 import { ApplicantIntakeForm } from './ApplicantIntakeForm';
+import { useCurrentStoreId } from '@/entities/user';
 export default function ApplicantCreatePage() {
+  const storeId = useCurrentStoreId();
   const router = useRouter();
   const save = async (data: ApplicantIntake) => {
     try {
       const result = await applicantApi.create(data);
       notify.success('応募者を登録しました');
-      router.push(storePath(`/applicants/${result.id}`));
+      router.push(storePath(storeId, `/applicants/${result.id}`));
     } catch (error) {
       notify.error(getApiErrorMessage(error, '応募者の登録に失敗しました'));
     }
@@ -22,7 +24,7 @@ export default function ApplicantCreatePage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">応募者登録</h1>
-        <Button variant="outline" render={<Link href={storePath('/applicants')} />}>
+        <Button variant="outline" render={<Link href={storePath(storeId, '/applicants')} />}>
           一覧へ
         </Button>
       </div>

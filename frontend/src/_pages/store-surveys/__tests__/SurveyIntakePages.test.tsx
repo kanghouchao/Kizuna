@@ -13,13 +13,13 @@ import {
 
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => '1',
   useStoreContext: () => ({
     stores: [{ id: 1, name: 'テスト店舗' }],
     currentStoreId: '1',
     currentStore: { id: 1, name: 'テスト店舗' },
     loadFailed: false,
     reload: jest.fn(),
-    switchStore: jest.fn(),
   }),
 }));
 jest.mock('@/entities/survey', () => ({
@@ -91,7 +91,7 @@ describe('回答の受付画面', () => {
     expect(api.revision).toHaveBeenCalledWith('10', '20');
     expect(screen.getByRole('link', { name: '設問版へ戻る' })).toHaveAttribute(
       'href',
-      '/store/surveys/10/revisions/20'
+      '/store/1/surveys/10/revisions/20'
     );
     fireEvent.change(screen.getByLabelText('担当者が入力した質問（必須）'), {
       target: { value: '  入力した原文  ' },
@@ -105,7 +105,7 @@ describe('回答の受付画面', () => {
       rid: '20',
       input: { revision_version: 1, answers: [{ question_key: 'q1', text: '  入力した原文  ' }] },
     });
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/store/surveys/responses/30'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/store/1/surveys/responses/30'));
   });
 
   test('受付中でない版では入力を出さない', async () => {
@@ -165,7 +165,7 @@ describe('回答の受付画面', () => {
     fireEvent.click(screen.getByRole('button', { name: '同じ要求で結果を確認' }));
     await waitFor(() => expect(api.write).toHaveBeenCalledTimes(2));
     expect(api.write.mock.calls[1][0]).toEqual(api.write.mock.calls[0][0]);
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/store/surveys/responses/30'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/store/1/surveys/responses/30'));
   });
 
   test('契約で許可された設問キーをフォーム内部のプロパティと混同しない', async () => {
@@ -218,7 +218,7 @@ describe('回答の受付画面', () => {
     expect(screen.queryByRole('button', { name: /再試行/ })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: '一覧へ戻る' })).toHaveAttribute(
       'href',
-      '/store/surveys'
+      '/store/1/surveys'
     );
   });
 });
@@ -245,7 +245,7 @@ describe('回答の訂正画面', () => {
       await shown();
       expect(screen.getByRole('link', { name: '回答へ戻る' })).toHaveAttribute(
         'href',
-        '/store/surveys/responses/30'
+        '/store/1/surveys/responses/30'
       );
       expect(screen.getByLabelText('担当者が入力した質問（必須）')).toHaveValue('保護された原回答');
       fireEvent.change(screen.getByLabelText('担当者が入力した質問（必須）'), {
@@ -274,7 +274,9 @@ describe('回答の訂正画面', () => {
           answers: [{ question_key: 'q1', text: '訂正後の回答' }],
         },
       });
-      await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/store/surveys/responses/31'));
+      await waitFor(() =>
+        expect(mockReplace).toHaveBeenCalledWith('/store/1/surveys/responses/31')
+      );
     }
   );
 
@@ -305,7 +307,7 @@ describe('回答の訂正画面', () => {
       written('CORRECTION_RECEIVED', { answer: { ...answer, id: '31', supersedes_id: '30' } })
     );
     fireEvent.click(screen.getByRole('button', { name: '同じ要求で結果を確認' }));
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/store/surveys/responses/31'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/store/1/surveys/responses/31'));
   });
 
   test('権限拒否で機密の回答と編集中の内容を破棄する', async () => {
@@ -330,7 +332,7 @@ describe('回答の訂正画面', () => {
     expect(await screen.findByText('回答が見つかりません')).toBeVisible();
     expect(screen.getByRole('link', { name: '一覧へ戻る' })).toHaveAttribute(
       'href',
-      '/store/surveys'
+      '/store/1/surveys'
     );
   });
 });

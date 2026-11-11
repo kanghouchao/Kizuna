@@ -11,13 +11,13 @@ import {
 
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => '1',
   useStoreContext: () => ({
     stores: [{ id: 1, name: 'テスト店舗' }],
     currentStoreId: '1',
     currentStore: { id: 1, name: 'テスト店舗' },
     loadFailed: false,
     reload: jest.fn(),
-    switchStore: jest.fn(),
   }),
 }));
 jest.mock('@/entities/survey', () => ({
@@ -59,11 +59,11 @@ test('URL の回答を直接表示し、閲覧のみでは記録の操作を持�
   expect(screen.getByText('保護された原回答')).toBeVisible();
   expect(screen.getByRole('link', { name: '設問版へ戻る' })).toHaveAttribute(
     'href',
-    '/store/surveys/10/revisions/20'
+    '/store/1/surveys/10/revisions/20'
   );
   expect(screen.getByRole('link', { name: '訂正元を表示' })).toHaveAttribute(
     'href',
-    '/store/surveys/responses/29'
+    '/store/1/surveys/responses/29'
   );
   expect(screen.queryByRole('button', { name: '回答を訂正' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '回答を取り下げ' })).not.toBeInTheDocument();
@@ -113,7 +113,7 @@ test('回答の404は再試行を出さず一覧へのリンクを出す', async
   expect(screen.queryByRole('button', { name: /再試行/ })).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: '一覧へ戻る' })).toHaveAttribute(
     'href',
-    '/store/surveys'
+    '/store/1/surveys'
   );
 });
 
@@ -124,7 +124,7 @@ test('訂正は訂正画面へのリンクで移り、訂正済みの回答に�
   await shown();
   expect(screen.getByRole('link', { name: '回答を訂正' })).toHaveAttribute(
     'href',
-    '/store/surveys/responses/30/correct'
+    '/store/1/surveys/responses/30/correct'
   );
   unmount();
   api.answer.mockResolvedValue({ ...answer, superseded_by_id: '31' });

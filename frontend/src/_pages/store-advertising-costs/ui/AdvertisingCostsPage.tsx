@@ -1,5 +1,5 @@
 'use client';
-import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
+import { MePending, hasPermission, useCurrentStoreId, useMe } from '@/entities/user';
 import { useEffect, useRef, useState } from 'react';
 import { advertisingApi, validMonth, type Cost, type Mutation } from '../api/advertising';
 import Link from 'next/link';
@@ -28,7 +28,7 @@ import { MediaSummaryPage } from './MediaSummaryPage';
 import { OrderCostPage } from './OrderCostPage';
 import { RecruitmentEffectPage } from './RecruitmentEffectPage';
 export default function AdvertisingCostsPage() {
-  const storeId = useStoreContext().currentStoreId;
+  const storeId = useCurrentStoreId();
   const { me } = useMe();
   if (me === null) return <MePending />;
   // 未確認の操作は操作者（このタブのトークンの利用者 ID）と店舗ごとにタブ内へ預ける。
@@ -38,7 +38,7 @@ export default function AdvertisingCostsPage() {
   return (
     <StorePage
       key={JSON.stringify([userId, storeId])}
-      store={storeId ?? ''}
+      store={storeId}
       manage={hasPermission(me, 'ADVERTISING_COST_MANAGE')}
       canExport={hasPermission(me, 'ADVERTISING_COST_EXPORT')}
       canReadOrders={hasPermission(me, 'ORDER_MANAGE')}
@@ -101,7 +101,10 @@ function StorePage({
           </div>
           <Button type="submit">表示</Button>
         </form>
-        <Button variant="outline" render={<Link href={storePath('/advertising-costs/media')} />}>
+        <Button
+          variant="outline"
+          render={<Link href={storePath(store, '/advertising-costs/media')} />}
+        >
           媒体を管理
         </Button>
       </div>

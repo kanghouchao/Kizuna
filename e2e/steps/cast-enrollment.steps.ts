@@ -8,6 +8,8 @@ import {
   loginAsStoreAdmin,
   loginViaUiAndEnterStore,
   todayInTokyo,
+  storeUrl,
+  STORE1_ID,
 } from './store-api';
 
 const { Given, When, Then } = createBdd();
@@ -16,7 +18,7 @@ Given('在籍操作用のキャスト編集画面を開く', async ({ page, requ
   await loginViaUiAndEnterStore(page);
   const token = await loginAsStoreAdmin(request);
   const id = await createCast(request, token, `在籍操作-${Date.now()}`);
-  await page.goto(`${APP_URL}/store/casts/${id}/edit`);
+  await page.goto(storeUrl(STORE1_ID, `/casts/${id}/edit`));
   await expect(page.getByText('在籍状態: 在籍中', { exact: true })).toBeVisible();
 });
 
@@ -57,13 +59,13 @@ Given('招待発行済みのキャスト編集画面を開く', async ({ page, r
   invitedCastName = `招待不可-${Date.now()}`;
   const id = await createCast(request, token, invitedCastName);
   withdrawnInvitation = await issueCastInvitation(request, token, id);
-  await page.goto(`${APP_URL}/store/casts/${id}/edit`);
+  await page.goto(storeUrl(STORE1_ID, `/casts/${id}/edit`));
   await expect(page.getByText('在籍状態: 在籍中', { exact: true })).toBeVisible();
 });
 
 Then('管理一覧は招待不可を表示し招待ページは受諾を案内しない', async ({ page }) => {
   await expect(page.getByText('在籍状態: 退店', { exact: true })).toBeVisible();
-  await page.goto(`${APP_URL}/store/casts`);
+  await page.goto(storeUrl(STORE1_ID, `/casts`));
   await page.getByPlaceholder('名前で検索...').fill(invitedCastName);
   await page.getByRole('button', { name: '検索', exact: true }).click();
   const row = page.getByRole('row').filter({ hasText: invitedCastName });
@@ -82,7 +84,7 @@ const FUTURE_STARTED_ON = '2099-04-01';
 
 Given('キャスト新規登録画面を開く', async ({ page }) => {
   await loginViaUiAndEnterStore(page);
-  await page.goto(`${APP_URL}/store/casts/create`);
+  await page.goto(storeUrl(STORE1_ID, `/casts/create`));
   await expect(page.getByRole('heading', { name: '新規キャスト登録' })).toBeVisible();
 });
 
@@ -95,7 +97,7 @@ When('入店日を未来日にしてキャストを登録する', async ({ page 
   await page.getByLabel('源氏名 *').fill(startedOnCastName);
   await page.getByLabel('入店日 *').fill(FUTURE_STARTED_ON);
   await page.getByRole('button', { name: '保存する', exact: true }).click();
-  await page.waitForURL(/\/store\/casts$/);
+  await page.waitForURL(/\/store\/\d+\/casts$/);
 });
 
 Then('キャスト一覧に登録した入店日が表示される', async ({ page }) => {

@@ -11,13 +11,13 @@ jest.mock('@/shared/lib', () => ({
 
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => '1',
   useStoreContext: () => ({
     stores: [{ id: 1, name: 'テスト店舗' }],
     currentStoreId: '1',
     currentStore: { id: 1, name: 'テスト店舗' },
     loadFailed: false,
     reload: jest.fn(),
-    switchStore: jest.fn(),
   }),
 }));
 
@@ -56,7 +56,7 @@ const mockedComplete = orderApi.complete as jest.Mock;
 const mockedPreview = orderApi.completionPreview as jest.Mock;
 
 const LIST_QUERY = 'customer_name=%E5%B1%B1%E7%94%B0&sort_key=PAX&desc=true';
-const LIST_HREF = `/store/orders?${LIST_QUERY}`;
+const LIST_HREF = `/store/1/orders?${LIST_QUERY}`;
 
 const confirmedOrder: Order = {
   business_contact_permissions: [],

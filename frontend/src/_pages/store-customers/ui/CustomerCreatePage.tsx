@@ -6,9 +6,11 @@ import { CustomerForm, CustomerFormData, toCustomerRequest } from './CustomerFor
 import { customerApi } from '@/entities/customer';
 import { notify } from '@/shared/notify';
 import { getApiErrorMessage, storePath } from '@/shared/lib';
+import { useCurrentStoreId } from '@/entities/user';
 
 /** 新規顧客登録ページ */
 export default function CustomerCreatePage() {
+  const storeId = useCurrentStoreId();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -17,7 +19,7 @@ export default function CustomerCreatePage() {
       setIsSubmitting(true);
       await customerApi.create(toCustomerRequest(data));
       notify.success('顧客を登録しました');
-      router.push(storePath('/customers'));
+      router.push(storePath(storeId, '/customers'));
     } catch (error) {
       notify.error(getApiErrorMessage(error, '顧客の登録に失敗しました'));
     } finally {

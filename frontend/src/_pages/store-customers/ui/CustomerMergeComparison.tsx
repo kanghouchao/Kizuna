@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { CustomerMergeComparisonResponse } from '@/entities/customer';
 import { Button, Label, RadioGroup, RadioGroupItem } from '@/shared/ui';
 import { customerMergeHref } from '../lib/mergeHref';
+import { useCurrentStoreId } from '@/entities/user';
 
 /** 見比べる項目。値の取り出しは行ごとに同じ関数を通し、左右で違う整形にならないようにする。 */
 const FIELDS: { label: string; value: (row: CustomerMergeComparisonResponse) => string }[] = [
@@ -56,6 +57,7 @@ export function CustomerMergeComparison({
   survivingId,
   onSurvivingChange,
 }: CustomerMergeComparisonProps) {
+  const storeId = useCurrentStoreId();
   const surviving = rows.find(row => row.id === survivingId);
   const merged = rows.find(row => row.id !== survivingId);
   return (
@@ -114,7 +116,7 @@ export function CustomerMergeComparison({
           <p className="text-sm text-muted-foreground">台帳に残す行を選んでください。</p>
         )}
         {surviving?.id && merged?.id ? (
-          <Button render={<Link href={customerMergeHref(surviving.id, merged.id)} />}>
+          <Button render={<Link href={customerMergeHref(storeId, surviving.id, merged.id)} />}>
             統合する
           </Button>
         ) : (

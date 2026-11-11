@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { ArrowLeftIcon, PlusIcon } from 'lucide-react';
 import { useState } from 'react';
 import { mediumApi, type MediumSummary } from '@/entities/medium';
-import { MePending, hasPermission, useMe } from '@/entities/user';
+import { MePending, hasPermission, useCurrentStoreId, useMe } from '@/entities/user';
 import {
   storePath,
   useDeleteAction,
@@ -36,6 +36,7 @@ export default function MediaPage() {
 }
 
 function MediaList({ manage }: { manage: boolean }) {
+  const storeId = useCurrentStoreId();
   const { data, setData, isLoading, failure, reload } = useResource<MediumSummary[]>(() =>
     mediumApi.list()
   );
@@ -103,7 +104,7 @@ function MediaList({ manage }: { manage: boolean }) {
       <Button
         variant="link"
         className="mb-2 px-0"
-        render={<Link href={storePath('/advertising-costs')} />}
+        render={<Link href={storePath(storeId, '/advertising-costs')} />}
       >
         <ArrowLeftIcon />
         広告費へ戻る

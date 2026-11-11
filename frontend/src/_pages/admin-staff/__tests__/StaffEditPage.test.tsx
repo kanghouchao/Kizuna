@@ -49,7 +49,6 @@ describe('従業員の権限編集ページ', () => {
       currentStoreId: undefined,
       loadFailed: false,
       reload: jest.fn(),
-      switchStore: jest.fn(),
     } as unknown as ReturnType<typeof useStoreContext>);
     mockedStaffApi.grantableRoles.mockResolvedValue([
       {
@@ -196,7 +195,6 @@ describe('従業員の権限編集ページ', () => {
       currentStoreId: undefined,
       loadFailed: true,
       reload: jest.fn(),
-      switchStore: jest.fn(),
     } as unknown as ReturnType<typeof useStoreContext>);
     render(<StaffEditPage />);
 
@@ -215,7 +213,6 @@ describe('従業員の権限編集ページ', () => {
       currentStoreId: undefined,
       loadFailed: false,
       reload: jest.fn(),
-      switchStore: jest.fn(),
     } as unknown as ReturnType<typeof useStoreContext>);
     render(<StaffEditPage />);
 

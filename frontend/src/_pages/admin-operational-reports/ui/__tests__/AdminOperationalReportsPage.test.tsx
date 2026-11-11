@@ -147,24 +147,8 @@ test.each([
   }
 );
 
-test('店舗集合を跨ぐ集計だけを読める者には現在店舗の集計への入口を出さない', async () => {
-  render(<AdminOperationalReportsPage />);
-  expect(await screen.findByRole('button', { name: '照会' })).toBeInTheDocument();
-  expect(screen.queryByRole('link', { name: '現在店舗の集計' })).not.toBeInTheDocument();
-});
-
-test('現在店舗の集計も読める者には入口を出す', async () => {
-  meWith(['OPERATIONAL_REPORT_SET_VIEW', 'OPERATIONAL_REPORT_VIEW', 'ORDER_MANAGE']);
-  render(<AdminOperationalReportsPage />);
-  expect(await screen.findByRole('link', { name: '現在店舗の集計' })).toHaveAttribute(
-    'href',
-    '/store/operational-reports'
-  );
-});
-
-test('閲覧権限の無い者には現在店舗の集計への入口を出さない', async () => {
+test('店舗集合を跨ぐ集計の閲覧権限が無ければ集計を出さない', async () => {
   meWith(['ORDER_MANAGE', 'OPERATIONAL_REPORT_VIEW']);
   render(<AdminOperationalReportsPage />);
   expect(await screen.findByRole('alert')).toHaveTextContent('閲覧する権限がありません');
-  expect(screen.queryByRole('link', { name: '現在店舗の集計' })).not.toBeInTheDocument();
 });

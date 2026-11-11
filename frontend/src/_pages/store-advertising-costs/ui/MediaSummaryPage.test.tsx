@@ -8,7 +8,6 @@ import {
   within,
 } from '@testing-library/react';
 import { storeSessionToken } from '@/shared/api';
-import { setCurrentStore } from '@/shared/lib';
 import { useAdvertisingOperation } from '../model/operation';
 import { advertisingApi, type MediaReport } from '../api/advertising';
 import { MediaSummaryPage } from './MediaSummaryPage';
@@ -134,7 +133,6 @@ it('空になった二ページ目を月全体の未登録と表示しない', a
 
 it('費用記録の画面で同じ月の操作が終わると集計を読み直す', async () => {
   storeSessionToken({ token: 't', expires_at: 1, user_id: 7, refresh_expires_at: 2 });
-  setCurrentStore('1');
   jest.mocked(advertisingApi.media).mockResolvedValue(report());
   jest.mocked(advertisingApi.mutate).mockResolvedValue(undefined as never);
   const operation = renderHook(() => useAdvertisingOperation('1', '2026-09'));

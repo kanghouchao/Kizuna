@@ -28,6 +28,7 @@ import { SurveyHistory } from './SurveyHistory';
 import { SurveyTableSection } from './SurveyTableSection';
 import { Choice, answerLabels, revisionLabels, time, useGuardedRead, viaLabels } from './surveyUi';
 import { SurveyTask, useSurveyWorkspace } from './useSurveyWorkspace';
+import { useCurrentStoreId } from '@/entities/user';
 
 export function SurveyRevisionPage() {
   const { sid, rid } = useParams<{ sid: string; rid: string }>();
@@ -47,7 +48,8 @@ interface DetailProps extends SurveyCapabilities {
 }
 
 function RevisionScreen({ sid, rid, ...caps }: SurveyCapabilities & { sid: string; rid: string }) {
-  const workspace = useSurveyWorkspace(revisionHref(sid, rid));
+  const storeId = useCurrentStoreId();
+  const workspace = useSurveyWorkspace(revisionHref(storeId, sid, rid));
   if (workspace.denied) return <SurveyDenied message={workspace.denied} />;
   return (
     <div className="space-y-6">
@@ -67,6 +69,7 @@ function RevisionScreen({ sid, rid, ...caps }: SurveyCapabilities & { sid: strin
 }
 
 function RevisionDetail({ sid, rid, ...props }: DetailProps) {
+  const storeId = useCurrentStoreId();
   const guard = useGuardedRead(props.deny);
   const detail = useResource(
     () =>
@@ -84,7 +87,7 @@ function RevisionDetail({ sid, rid, ...props }: DetailProps) {
     return (
       <div role="alert" className="space-y-3">
         <p>設問版が見つかりません</p>
-        <Button variant="outline" render={<Link href={surveyListHref} />}>
+        <Button variant="outline" render={<Link href={surveyListHref(storeId)} />}>
           一覧へ戻る
         </Button>
       </div>
@@ -95,7 +98,7 @@ function RevisionDetail({ sid, rid, ...props }: DetailProps) {
   const { revision, series, counts } = detail.data;
   return (
     <div className="space-y-6">
-      <Button variant="outline" render={<Link href={surveyListHref} />}>
+      <Button variant="outline" render={<Link href={surveyListHref(storeId)} />}>
         アンケート一覧へ
       </Button>
       <div className="space-y-2">
@@ -145,12 +148,13 @@ function RevisionActions({
   edit,
   disabled,
 }: DetailProps & { revision: Revision; series: Survey }) {
+  const storeId = useCurrentStoreId();
   if (!canManage) return null;
   return (
     <div className="flex flex-wrap gap-3">
       {revision.status === 'DRAFT' && (
         <>
-          <Button variant="outline" render={<Link href={revisionEditHref(sid, rid)} />}>
+          <Button variant="outline" render={<Link href={revisionEditHref(storeId, sid, rid)} />}>
             下書きを編集
           </Button>
           <Button
@@ -171,7 +175,7 @@ function RevisionActions({
         </Button>
       )}
       {revision.id === series.latest_revision_id && !series.draft_revision_id && (
-        <Button variant="outline" render={<Link href={reviseHref(sid, rid)} />}>
+        <Button variant="outline" render={<Link href={reviseHref(storeId, sid, rid)} />}>
           新しい版を作成
         </Button>
       )}
@@ -180,6 +184,7 @@ function RevisionActions({
 }
 
 function AnswerList({ revision, sid, rid, ...props }: DetailProps & { revision: Revision }) {
+  const storeId = useCurrentStoreId();
   const guard = useGuardedRead(props.deny);
   const [search, setSearch] = useState<AnswerSearch>({});
   const list = useListPage(
@@ -193,7 +198,7 @@ function AnswerList({ revision, sid, rid, ...props }: DetailProps & { revision: 
       actions={
         props.canRecord &&
         revision.status === 'OPEN' && (
-          <Button render={<Link href={receiveHref(sid, rid)} />}>回答を受付</Button>
+          <Button render={<Link href={receiveHref(storeId, sid, rid)} />}>回答を受付</Button>
         )
       }
       state={list}
@@ -248,7 +253,7 @@ function AnswerList({ revision, sid, rid, ...props }: DetailProps & { revision: 
               <TableCell>{viaLabels[row.received_via]}</TableCell>
               <TableCell>{answerLabels[row.status]}</TableCell>
               <TableCell>
-                <Button variant="outline" render={<Link href={answerHref(row.id)} />}>
+                <Button variant="outline" render={<Link href={answerHref(storeId, row.id)} />}>
                   回答・履歴
                 </Button>
               </TableCell>
@@ -269,6 +274,7 @@ function RevisionList({
   rid: string;
   deny: (message: string) => void;
 }) {
+  const storeId = useCurrentStoreId();
   const guard = useGuardedRead(deny);
   const list = useListPage(page => guard(() => surveyApi.revisions(sid, page)));
   return (
@@ -298,7 +304,10 @@ function RevisionList({
                 {row.id === rid ? (
                   <span className="text-muted-foreground">表示中</span>
                 ) : (
-                  <Button variant="outline" render={<Link href={revisionHref(sid, row.id)} />}>
+                  <Button
+                    variant="outline"
+                    render={<Link href={revisionHref(storeId, sid, row.id)} />}
+                  >
                     設問・回答
                   </Button>
                 )}

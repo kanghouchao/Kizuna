@@ -26,6 +26,7 @@ import {
   FormMessage,
   Textarea,
 } from '@/shared/ui';
+import { useCurrentStoreId } from '@/entities/user';
 
 /** 取消の理由の上限。サーバ側の列長（500）と揃える。 */
 const CANCEL_REASON_MAX_LENGTH = 500;
@@ -69,6 +70,7 @@ function CardMeta({ order }: { order: OrderWorkQueueRow }) {
  * <p>取消はモーダルを開かず、カードがその場で理由入力に変わる（二段）。一覧の中で完結させるのが この画面の主張なので、確認だけを外へ出さない。
  */
 export function OrderQueueCard({ order, onProcessed, completionHref }: OrderQueueCardProps) {
+  const storeId = useCurrentStoreId();
   const router = useRouter();
   const [processing, setProcessing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -152,7 +154,7 @@ export function OrderQueueCard({ order, onProcessed, completionHref }: OrderQueu
               variant="ghost"
               size="sm"
               disabled={processing}
-              onClick={() => router.push(storePath(`/orders/${order.id}/edit`))}
+              onClick={() => router.push(storePath(storeId, `/orders/${order.id}/edit`))}
             >
               <SquarePenIcon aria-hidden="true" />
               編集

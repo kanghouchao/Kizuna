@@ -5,7 +5,6 @@ import { useSyncExternalStore } from 'react';
 import { getSessionUserId } from '@/shared/api/session';
 import { ClientDataError } from '../apiError';
 import { hasMemoryOperations, type OperationStore, type SavedOperation } from '../operation-store';
-import { getCurrentStoreId } from '../session';
 import { createUuid } from '../uuid';
 
 export interface PendingOperation<P> extends SavedOperation<P> {
@@ -40,7 +39,7 @@ const preventUnload = (event: BeforeUnloadEvent) => {
 
 /**
  * 本人（このタブのトークンの利用者 ID）と、画面が表示している店舗。電子メールは再利用されうるので本人は ID で
- * 表す。店舗は全タブ共有の cookie ではなく画面の店舗で決める（別タブの切替で作用域が動かないように）。
+ * 表す。店舗は画面の URL が名指す店舗。
  */
 function slotOf(name: string, storeId: string | null | undefined) {
   if (typeof window === 'undefined') return null;
@@ -89,8 +88,8 @@ async function execute<P, R>(
   const existing = store.read(slot) as SavedOperation<P> | null;
   const replay = !created;
   if (replay ? !existing : existing) return null;
-  // 現在店舗の cookie は別タブの切替で変わる。画面の店舗と食い違うか本人が変わったら、送らずに止める。
-  if (slotOf(name, storeId) !== slot || getCurrentStoreId() !== storeId)
+  // 起こした後に本人か画面の店舗が変わったら、送らずに止める。
+  if (slotOf(name, storeId) !== slot)
     throw new ClientDataError(
       'ログイン中のアカウントか店舗が変わりました。画面を開き直してください。'
     );

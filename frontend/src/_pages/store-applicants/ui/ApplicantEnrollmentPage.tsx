@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { applicantApi, type ApplicantEnrollmentInput } from '@/entities/applicant';
 import type { CastCreateRequest } from '@/entities/cast';
 import { CastForm, type CastFormData, toCastCreateRequest } from '@/features/cast-form';
-import { MePending, hasPermission, useMe } from '@/entities/user';
+import { MePending, hasPermission, useCurrentStoreId, useMe } from '@/entities/user';
 import { getApiErrorMessage, storePath, useResource } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { Button, RegionError } from '@/shared/ui';
@@ -20,13 +20,14 @@ const enrollmentMirrorsCastCreation: SameKeys<ApplicantEnrollmentInput, CastCrea
   ([ApplicantEnrollmentInput] extends [CastCreateRequest] ? true : false) = true;
 void enrollmentMirrorsCastCreation;
 export default function ApplicantEnrollmentPage() {
+  const storeId = useCurrentStoreId();
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const resource = useResource(() => applicantApi.get(id), [id]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { me } = useMe();
   const canEnroll = hasPermission(me, 'CAST_MANAGE');
-  const detailPath = storePath(`/applicants/${id}`);
+  const detailPath = storePath(storeId, `/applicants/${id}`);
   const applicant = resource.data;
   const submit = async (data: CastFormData) => {
     if (!applicant || isSubmitting) return;
@@ -47,7 +48,7 @@ export default function ApplicantEnrollmentPage() {
       return resource.failure === 'notFound' ? (
         <RegionError
           message="応募者が見つかりませんでした"
-          fallback={{ href: storePath('/applicants'), label: '一覧へ' }}
+          fallback={{ href: storePath(storeId, '/applicants'), label: '一覧へ' }}
         />
       ) : (
         <RegionError
@@ -60,7 +61,7 @@ export default function ApplicantEnrollmentPage() {
         <RegionError
           message="この応募者は既に在籍登録されています"
           fallback={{
-            href: storePath(`/casts/${applicant.enrollment_id}/edit`),
+            href: storePath(storeId, `/casts/${applicant.enrollment_id}/edit`),
             label: '在籍を開く',
           }}
         />

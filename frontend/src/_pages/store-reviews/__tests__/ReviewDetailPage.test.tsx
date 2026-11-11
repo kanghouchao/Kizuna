@@ -5,17 +5,16 @@ import { reviewApi, Review } from '@/entities/content/review';
 import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 import { storeSessionToken } from '@/shared/api';
-import { setCurrentStore } from '@/shared/lib';
 let mockStoreId = '1';
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => mockStoreId,
   useStoreContext: () => ({
     stores: [{ id: 1, name: 'テスト店舗' }],
     currentStoreId: mockStoreId,
     currentStore: { id: 1, name: 'テスト店舗' },
     loadFailed: false,
     reload: jest.fn(),
-    switchStore: jest.fn(),
   }),
 }));
 jest.mock('@/entities/content/review', () => ({
@@ -78,7 +77,6 @@ beforeEach(() => {
   jest.resetAllMocks();
   mockStoreId = '1';
   storeSessionToken({ token: 't', expires_at: 1, user_id: 7, refresh_expires_at: 2 });
-  setCurrentStore('1');
   permission('REVIEW_VIEW');
   api.get.mockResolvedValue(row);
   api.history.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
@@ -118,7 +116,7 @@ test('閲覧のみは手動記録と未設定を確認でき、操作を出さ�
   expect(screen.getByText('公開連携は未設定')).toBeVisible();
   expect(screen.getByRole('link', { name: '一覧へ戻る' })).toHaveAttribute(
     'href',
-    '/store/reviews'
+    '/store/1/reviews'
   );
   expect(screen.queryByRole('button', { name: '内部承認' })).not.toBeInTheDocument();
   expect(screen.queryByRole('link', { name: '訂正再受付' })).not.toBeInTheDocument();
@@ -228,7 +226,7 @@ test('訂正再受付は訂正画面へのリンクにする', async () => {
   render(<ReviewDetailPage />);
   expect(await screen.findByRole('link', { name: '訂正再受付' })).toHaveAttribute(
     'href',
-    '/store/reviews/10/edit'
+    '/store/1/reviews/10/edit'
   );
 });
 test('409は再送せず最新状態を確認して操作を選び直す', async () => {
@@ -254,7 +252,7 @@ test('操作が404なら口コミの失効を表示し、一覧へのリンク�
   const missing = await screen.findByText('口コミが見つかりません');
   expect(within(missing.parentElement!).getByRole('link', { name: '一覧へ戻る' })).toHaveAttribute(
     'href',
-    '/store/reviews'
+    '/store/1/reviews'
   );
   expect(screen.queryByText('保護された本文')).not.toBeInTheDocument();
 });
@@ -331,5 +329,5 @@ test('結果不明の操作は詳細でも新しい操作を止め、再確認�
   render(<ReviewDetailPage />);
   expect(await screen.findByRole('button', { name: '内部承認' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: '同じ要求で結果を確認' }));
-  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/reviews/12'));
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/1/reviews/12'));
 });

@@ -58,7 +58,7 @@ describe('SessionResume（ログイン画面を開いたときの継続ログイ
 
     render(<SessionResume>フォーム</SessionResume>);
 
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/admin/dashboard/'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/admin'));
     expect(screen.queryByText('フォーム')).not.toBeInTheDocument();
     expect(Cookies.get('session-kind')).toBe('admin');
   });
@@ -86,7 +86,7 @@ describe('SessionResume（ログイン画面を開いたときの継続ログイ
 
     render(<SessionResume>フォーム</SessionResume>);
 
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/admin/dashboard/'));
+    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/admin'));
   });
 
   it.each(['STAFF', 'CAST'] as const)(

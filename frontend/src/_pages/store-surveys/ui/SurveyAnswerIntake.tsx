@@ -10,6 +10,7 @@ import { SurveyEditFrame, editCard } from './SurveyEditFrame';
 import { SurveyDenied } from './SurveyGate';
 import { SurveyWriteFeedback } from './SurveyWriteFeedback';
 import { useGuardedRead } from './surveyUi';
+import { useCurrentStoreId } from '@/entities/user';
 
 /**
  * 回答の受付・訂正の画面。読み直しは入力を残したまま対象だけを差し替え、操作できない状態になれば
@@ -29,8 +30,9 @@ export function SurveyAnswerIntake({
   unavailable: (target: AnswerTarget) => string | null;
   notFoundMessage: string;
 }) {
+  const storeId = useCurrentStoreId();
   const router = useRouter();
-  const write = useSurveyWrite(result => router.replace(writtenHref(result)));
+  const write = useSurveyWrite(result => router.replace(writtenHref(storeId, result)));
   const [gone, setGone] = useState(false);
   const refresher = useSurveyRefresh(write, () => setGone(true));
   const guard = useGuardedRead(write.deny);
@@ -63,7 +65,7 @@ export function SurveyAnswerIntake({
       {gone || detail.failure === 'notFound' ? (
         <RegionError
           message={notFoundMessage}
-          fallback={{ href: surveyListHref, label: '一覧へ戻る' }}
+          fallback={{ href: surveyListHref(storeId), label: '一覧へ戻る' }}
         />
       ) : detail.failure ? (
         <RegionError message={`${title}の対象を取得できませんでした`} onRetry={detail.reload} />

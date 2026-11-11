@@ -13,6 +13,8 @@ import {
   acceptExistingCastInvitation,
   withdrawCast,
   openLoginForm,
+  storeUrl,
+  waitSidebarReady,
 } from "./store-api";
 
 const { Given, When, Then, After } = createBdd();
@@ -55,7 +57,7 @@ Given("公開切替用のキャスト編集画面を開く", async ({ page, requ
   castName = `公開切替-${randomUUID()}`;
   castId = await createCast(request, adminToken, castName, store);
   storefrontCast = { id: castId, storeId: store };
-  await page.goto(`${APP_URL}/store/casts/${castId}/edit`);
+  await page.goto(storeUrl(store, `/casts/${castId}/edit`));
   await expect(page.getByRole("heading", { name: "在籍履歴", level: 2 })).toBeVisible();
   await expect(page.getByRole("heading", { name: "内部情報の編集履歴", level: 2 })).toBeVisible();
   await expect(
@@ -238,9 +240,7 @@ Then(
     // 受諾がトークンを発行・消去しないこと: 管理者の token のままで GET /me と授権店舗が通り、
     // ログイン画面へ差し戻されない
     await page.goto(`${APP_URL}/admin/dashboard`);
-    await expect(
-      page.locator("aside").locator('a[href="/admin/dashboard"]'),
-    ).toBeVisible({ timeout: 15000 });
+    await waitSidebarReady(page);
     await expect(page).toHaveURL(/\/admin\/dashboard\/?$/);
   },
 );

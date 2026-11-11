@@ -1,21 +1,22 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
 import { createContext, useContext, useEffect, useState } from 'react';
-import { getCurrentStoreId, setCurrentStore } from '@/shared/lib';
+import { storeIdOf } from '@/shared/lib';
 import { authApi } from '../api/auth';
 import { AuthorizedStore } from './types';
 
 /**
- * 店舗コンテキスト（授権店舗・現在店舗・切替）を一手に担う deep module。管理画面シェルに1つだけ搭載し、
+ * 店舗コンテキスト（授権店舗・現在店舗）を一手に担う deep module。管理画面シェルに1つだけ搭載し、
  * stores() を provider で1回だけ呼ぶ（消費者ごとの重複取得を無くす）。
- * 現在店舗は current-store-id cookie に置く — apiClient がそこから X-Store-ID を同期に読むため、
- * cookie を書いてから state へ出す（逆順だと店舗級ページの初回取得がヘッダ無しで飛ぶ）。
+ * 現在店舗は URL の店舗 id（storeIdOf）で、apiClient の X-Store-ID と同じ読みに従う。状態としては持たない。
  */
 interface StoreContextValue {
   /** null = 読み込み中（または取得失敗）、[] = 授権店舗なし、非空 = 授権店舗一覧。 */
   stores: AuthorizedStore[] | null;
-  /** 現在店舗 id。前回選択 cookie が授権店舗を指していればそれ、無ければ授権店舗の先頭。 */
+  /** URL が名指す店舗 id。店舗の文脈の画面でだけ定まり、授権店舗に含まれるかは問わない。 */
   currentStoreId: string | undefined;
+  /** currentStoreId の授権店舗。一覧の取得前・授権外の店舗では無い。 */
   currentStore: AuthorizedStore | undefined;
   /**
    * 取得そのものが失敗した（通信断・5xx）。「店舗が無い」という授権の答えとは区別される。
@@ -24,8 +25,6 @@ interface StoreContextValue {
   loadFailed: boolean;
   /** 授権店舗を取り直す。一覧は置き換わるまで保持し、取り直し中に店舗級ページを畳まない。 */
   reload: () => void;
-  /** 現在店舗を切り替える。遷移はしない（シェルが現在店舗をキーにページを再マウントする）。 */
-  switchStore: (id: number) => void;
 }
 
 const StoreContext = createContext<StoreContextValue | undefined>(undefined);
@@ -39,8 +38,8 @@ export function useStoreContext(): StoreContextValue {
 }
 
 export function StoreContextProvider({ children }: { children: React.ReactNode }) {
+  const currentStoreId = storeIdOf(usePathname());
   const [stores, setStores] = useState<AuthorizedStore[] | null>(null);
-  const [currentStoreId, setCurrentStoreId] = useState<string | undefined>(undefined);
   const [loadFailed, setLoadFailed] = useState(false);
   const [loadAttempt, setLoadAttempt] = useState(0);
 
@@ -49,16 +48,7 @@ export function StoreContextProvider({ children }: { children: React.ReactNode }
     authApi.stores().then(
       list => {
         if (!active) return;
-        // cookie は利用者が任意値を書けるため、授権店舗に含まれるときだけ採る。
-        const lastUsed = getCurrentStoreId();
-        const resolved = list.some(store => String(store.id) === lastUsed)
-          ? lastUsed
-          : list[0]?.id !== undefined
-            ? String(list[0].id)
-            : undefined;
-        if (resolved !== undefined) setCurrentStore(resolved);
         setStores(list);
-        setCurrentStoreId(resolved);
       },
       (reason: unknown) => {
         if (!active) return;
@@ -77,18 +67,23 @@ export function StoreContextProvider({ children }: { children: React.ReactNode }
     setLoadAttempt(count => count + 1);
   };
 
-  const switchStore = (id: number) => {
-    setCurrentStore(id);
-    setCurrentStoreId(String(id));
-  };
-
   const currentStore = stores?.find(store => String(store.id) === currentStoreId);
 
   return (
-    <StoreContext.Provider
-      value={{ stores, currentStoreId, currentStore, loadFailed, reload, switchStore }}
-    >
+    <StoreContext.Provider value={{ stores, currentStoreId, currentStore, loadFailed, reload }}>
       {children}
     </StoreContext.Provider>
   );
+}
+
+/**
+ * 店舗の文脈の画面（/store/{storeId}/**）が表示している店舗 id。シェルはこの店舗が授権店舗に含まれると
+ * 確かめてから店舗の画面を描くので、店舗の画面の中では必ず定まる。それ以外の画面から呼ぶのは誤り。
+ */
+export function useCurrentStoreId(): string {
+  const { currentStoreId } = useStoreContext();
+  if (currentStoreId === undefined) {
+    throw new Error('useCurrentStoreId must be used on a store page (/store/{storeId}/**)');
+  }
+  return currentStoreId;
 }

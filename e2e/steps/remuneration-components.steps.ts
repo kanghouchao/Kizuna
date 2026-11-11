@@ -28,6 +28,7 @@ import {
   getAuthorizedStores,
   openLoginForm,
   dayLabel,
+  storeUrl,
 } from "./store-api";
 const { Given, When, Then, After } = createBdd();
 let token = "",
@@ -193,7 +194,7 @@ When(
     await page.getByRole("button", { name: "ログイン", exact: true }).click();
     await page.waitForURL((url) => url.pathname !== "/auth/login");
     await page.goto(
-      `${APP_URL}/store/orders/monthly-remunerations`,
+      storeUrl(STORE1_ID, `/orders/monthly-remunerations`),
     );
     await page.getByRole("combobox", { name: "キャスト本人" }).click();
     await page.getByPlaceholder("源氏名で検索").fill(name);
@@ -330,7 +331,7 @@ Then(
   "本人も原月の最新内訳を安全に参照できる",
   async ({ request, browser, page: adminPage, $testInfo }) => {
     await adminPage.goto(
-      APP_URL + "/store/orders/monthly-remunerations",
+      storeUrl(STORE1_ID, "/orders/monthly-remunerations"),
     );
     await adminPage
       .getByRole("combobox", { name: "キャスト本人", exact: true })
@@ -535,7 +536,7 @@ When("ボーナスが保存された直後に応答を失う", async ({ page, re
   await page.getByRole("button", { name: "ログイン", exact: true }).click();
   await page.waitForURL((url) => url.pathname !== "/auth/login");
   await page.goto(
-    `${APP_URL}/store/orders/monthly-remunerations`,
+    storeUrl(STORE1_ID, `/orders/monthly-remunerations`),
   );
   await selectPerson(page, name);
   await page.getByLabel("対象月").fill(month);

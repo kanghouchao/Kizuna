@@ -2,7 +2,13 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
+import {
+  MePending,
+  hasPermission,
+  useCurrentStoreId,
+  useMe,
+  useStoreContext,
+} from '@/entities/user';
 import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { orderApi, type OrderCorrectionHistoryEntry } from '@/entities/order';
@@ -50,6 +56,7 @@ function Invalidation({
   canCorrect: boolean;
   canAdjust: boolean;
 }) {
+  const storeId = useCurrentStoreId();
   // 取得・送信の 403 でも閉じる（権限が後から外れた場合）。
   const [allowed, setAllowed] = useState(permitted);
   const active = useRef(true);
@@ -133,7 +140,7 @@ function Invalidation({
     return (
       <RegionError
         message="ORDER_MANAGE と ORDER_CORRECT を持つ訂正担当者へ依頼してください。"
-        fallback={{ href: storePath('/orders'), label: 'オーダー一覧へ' }}
+        fallback={{ href: storePath(storeId, '/orders'), label: 'オーダー一覧へ' }}
       />
     );
   return (
@@ -146,7 +153,7 @@ function Invalidation({
       {failure === 'notFound' && (
         <RegionError
           message="受注が見つかりません。"
-          fallback={{ href: storePath('/orders'), label: 'オーダー一覧へ' }}
+          fallback={{ href: storePath(storeId, '/orders'), label: 'オーダー一覧へ' }}
         />
       )}
       {order && !failure && !isLoading && (
@@ -188,6 +195,7 @@ function Invalidation({
                 render={
                   <Link
                     href={storePath(
+                      storeId,
                       `/orders/create?replacement_for_order_id=${encodeURIComponent(id)}`
                     )}
                   />
@@ -207,7 +215,7 @@ function Invalidation({
                 残っています。ポイント救済担当者が利用取消を完了した後、ここで再取得して無効化を再実行してください。
               </p>
               {canAdjust ? (
-                <Button render={<Link href={storePath(`/orders/${id}/point-rollback`)} />}>
+                <Button render={<Link href={storePath(storeId, `/orders/${id}/point-rollback`)} />}>
                   ポイント救済へ
                 </Button>
               ) : (
@@ -254,7 +262,7 @@ function Invalidation({
         </>
       )}
       {error && <p role="alert">{error} 内容を再確認してから操作してください。</p>}
-      <Button variant="outline" render={<Link href={storePath(`/orders/${id}/edit`)} />}>
+      <Button variant="outline" render={<Link href={storePath(storeId, `/orders/${id}/edit`)} />}>
         受注詳細へ
       </Button>
       <ConfirmDialog

@@ -1,6 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { advertisingApi, type Change } from '../api/advertising';
 import { CostHistory } from './CostHistory';
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => '1',
+}));
 jest.mock('../api/advertising', () => ({
   ...jest.requireActual('../api/advertising'),
   advertisingApi: { changes: jest.fn(), change: jest.fn() },

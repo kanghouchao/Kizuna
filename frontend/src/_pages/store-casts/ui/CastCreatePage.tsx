@@ -6,9 +6,11 @@ import { CastForm, type CastFormData, toCastCreateRequest } from '@/features/cas
 import { castApi } from '@/entities/cast';
 import { notify } from '@/shared/notify';
 import { storePath } from '@/shared/lib';
+import { useCurrentStoreId } from '@/entities/user';
 
 /** 新規キャスト登録ページ */
 export default function CastCreatePage() {
+  const storeId = useCurrentStoreId();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -17,7 +19,7 @@ export default function CastCreatePage() {
       setIsSubmitting(true);
       await castApi.create(toCastCreateRequest(data));
       notify.success('キャストを登録しました');
-      router.push(storePath('/casts'));
+      router.push(storePath(storeId, '/casts'));
     } catch {
       notify.error('キャストの登録に失敗しました');
     } finally {

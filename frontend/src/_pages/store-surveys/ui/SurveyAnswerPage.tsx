@@ -9,6 +9,7 @@ import { SurveyCapabilities, SurveyDenied, SurveyGate } from './SurveyGate';
 import { SurveyHistory } from './SurveyHistory';
 import { answerLabels, time, useGuardedRead, viaLabels } from './surveyUi';
 import { SurveyTask, useSurveyWorkspace } from './useSurveyWorkspace';
+import { useCurrentStoreId } from '@/entities/user';
 
 export function SurveyAnswerPage() {
   const { aid } = useParams<{ aid: string }>();
@@ -16,7 +17,8 @@ export function SurveyAnswerPage() {
 }
 
 function AnswerScreen({ aid, ...caps }: SurveyCapabilities & { aid: string }) {
-  const workspace = useSurveyWorkspace(answerHref(aid));
+  const storeId = useCurrentStoreId();
+  const workspace = useSurveyWorkspace(answerHref(storeId, aid));
   if (workspace.denied) return <SurveyDenied message={workspace.denied} />;
   return (
     <div className="space-y-6">
@@ -46,6 +48,7 @@ function AnswerDetail({
   deny: (message: string) => void;
   disabled: boolean;
 }) {
+  const storeId = useCurrentStoreId();
   const guard = useGuardedRead(deny);
   const detail = useResource(
     () =>
@@ -60,7 +63,7 @@ function AnswerDetail({
     return (
       <div role="alert" className="space-y-3">
         <p>回答が見つかりません</p>
-        <Button variant="outline" render={<Link href={surveyListHref} />}>
+        <Button variant="outline" render={<Link href={surveyListHref(storeId)} />}>
           一覧へ戻る
         </Button>
       </div>
@@ -73,7 +76,7 @@ function AnswerDetail({
     <div className="space-y-6">
       <Button
         variant="outline"
-        render={<Link href={revisionHref(answer.survey_id, answer.revision_id)} />}
+        render={<Link href={revisionHref(storeId, answer.survey_id, answer.revision_id)} />}
       >
         設問版へ戻る
       </Button>
@@ -99,19 +102,25 @@ function AnswerDetail({
               </Button>
             )}
             {!answer.superseded_by_id && (
-              <Button variant="outline" render={<Link href={correctHref(answer.id)} />}>
+              <Button variant="outline" render={<Link href={correctHref(storeId, answer.id)} />}>
                 回答を訂正
               </Button>
             )}
           </>
         )}
         {answer.supersedes_id && (
-          <Button variant="outline" render={<Link href={answerHref(answer.supersedes_id)} />}>
+          <Button
+            variant="outline"
+            render={<Link href={answerHref(storeId, answer.supersedes_id)} />}
+          >
             訂正元を表示
           </Button>
         )}
         {answer.superseded_by_id && (
-          <Button variant="outline" render={<Link href={answerHref(answer.superseded_by_id)} />}>
+          <Button
+            variant="outline"
+            render={<Link href={answerHref(storeId, answer.superseded_by_id)} />}
+          >
             訂正先を表示
           </Button>
         )}

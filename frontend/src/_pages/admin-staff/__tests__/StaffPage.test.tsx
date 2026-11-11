@@ -60,7 +60,6 @@ const givenStores = (
     currentStoreId: undefined,
     loadFailed: override.loadFailed ?? false,
     reload,
-    switchStore: jest.fn(),
   } as unknown as ReturnType<typeof useStoreContext>);
   return reload;
 };

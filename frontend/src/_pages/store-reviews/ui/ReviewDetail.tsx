@@ -8,6 +8,7 @@ import { statuses, permissions, viaLabels, basisLabels, time } from './labels';
 import { ReviewHistory } from './ReviewHistory';
 import { accessError } from './reviewErrors';
 import { Editor } from './ReviewEditor';
+import { useCurrentStoreId } from '@/entities/user';
 
 /** 詳細画面の節で入力する操作。受付は受付画面、訂正再受付は訂正画面で行う。 */
 export type DetailEditor = Exclude<Editor, { action: 'CREATE' | 'CORRECT' }>;
@@ -26,6 +27,7 @@ export function ReviewDetail({
   busy: boolean;
   onEdit: (editor: DetailEditor) => void;
 }) {
+  const storeId = useCurrentStoreId();
   const [access, setAccess] = useState<string | null>(null);
   const consumed = useRef<Review | undefined>(undefined);
   const detail = useResource(() => {
@@ -164,7 +166,10 @@ export function ReviewDetail({
             </Button>
           )}
           {!row.superseded_by_id && (
-            <Button variant="outline" render={<Link href={storePath(`/reviews/${id}/edit`)} />}>
+            <Button
+              variant="outline"
+              render={<Link href={storePath(storeId, `/reviews/${id}/edit`)} />}
+            >
               訂正再受付
             </Button>
           )}
@@ -188,10 +193,11 @@ export function ReviewDetail({
 }
 
 export function ReviewMissing() {
+  const storeId = useCurrentStoreId();
   return (
     <RegionError
       message="口コミが見つかりません"
-      fallback={{ href: storePath('/reviews'), label: '一覧へ戻る' }}
+      fallback={{ href: storePath(storeId, '/reviews'), label: '一覧へ戻る' }}
     />
   );
 }

@@ -7,6 +7,11 @@ jest.mock('@/entities/order', () => ({
   ...jest.requireActual('@/entities/order'),
   orderApi: { correctionHistory: jest.fn() },
 }));
+let mockCurrentStoreId: string | undefined = '1';
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({ currentStoreId: mockCurrentStoreId }),
+}));
 const fetchHistory = jest.mocked(orderApi.correctionHistory);
 const snapshot = {
   completion_invalidated: false,
@@ -79,6 +84,17 @@ it('横断一覧から行の店舗を名指して読み、権限不足は空履�
   await waitFor(() => expect(fetchHistory).toHaveBeenCalledWith('o1', 0, 2));
   expect(await screen.findByRole('alert')).toHaveTextContent('履歴を閲覧する権限がありません');
   expect(screen.queryByText('訂正履歴はありません')).not.toBeInTheDocument();
+});
+
+it.each([
+  ['店舗の画面では URL の店舗の受注一覧', '1', undefined, '/store/1/orders'],
+  ['横断一覧から開けば横断一覧', undefined, 2, '/admin/orders'],
+])('404 の戻り先は%sへ向く', async (_, current, storeId, href) => {
+  mockCurrentStoreId = current;
+  fetchHistory.mockRejectedValue({ response: { status: 404 } });
+  render(<OrderCorrectionHistory orderId="o1" storeId={storeId} />);
+  expect(await screen.findByRole('link', { name: '一覧へ戻る' })).toHaveAttribute('href', href);
+  mockCurrentStoreId = '1';
 });
 
 it('対象切替後に旧対象の遅い応答を表示しない', async () => {
