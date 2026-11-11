@@ -26,6 +26,7 @@ import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.SelfPasswordResetNotAllowedException;
 import com.kizuna.user.domain.SelfStopNotAllowedException;
+import com.kizuna.user.domain.SelfStoreRemovalNotAllowedException;
 import com.kizuna.user.domain.StaffOutOfDelegationScopeException;
 import com.kizuna.user.domain.StaleStaffUpdateException;
 import com.kizuna.user.domain.User;
@@ -435,6 +436,24 @@ class AdminStaffServiceTest {
     order.verify(roleRepository).lockIdsForGrant(Set.of(MANAGER_ROLE));
     order.verify(roleManageHolderGuard).requireAfterGrantChange(target, Set.of(MANAGER_ROLE));
     order.verify(repository).saveAndFlush(target);
+  }
+
+  @Test
+  @DisplayName("更新: 自分自身の担当店舗は外せない（外すと付与も一覧も届かなくなり、画面から戻せない）")
+  void updateRefusesRemovingOwnStores() {
+    User me = actor(Set.of(ADMIN_ROLE), Set.of(1L, 2L));
+    when(repository.findById(1L)).thenReturn(Optional.of(me));
+
+    for (Set<Long> narrowed : List.of(Set.of(1L), Set.<Long>of())) {
+      assertThatThrownBy(
+              () -> service.update(1L, updateCommand(Set.of(ADMIN_ROLE), narrowed), ACTOR))
+          .isInstanceOf(SelfStoreRemovalNotAllowedException.class);
+    }
+    assertThat(me.getStoreIds()).containsExactlyInAnyOrder(1L, 2L);
+    verify(repository, never()).saveAndFlush(any());
+
+    service.update(1L, updateCommand(Set.of(ADMIN_ROLE), Set.of(1L, 2L)), ACTOR);
+    verify(repository).saveAndFlush(me);
   }
 
   @Test

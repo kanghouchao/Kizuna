@@ -18,6 +18,7 @@ import com.kizuna.user.domain.Role;
 import com.kizuna.user.domain.RoleRepository;
 import com.kizuna.user.domain.SelfPasswordResetNotAllowedException;
 import com.kizuna.user.domain.SelfStopNotAllowedException;
+import com.kizuna.user.domain.SelfStoreRemovalNotAllowedException;
 import com.kizuna.user.domain.StaffOutOfDelegationScopeException;
 import com.kizuna.user.domain.StaleStaffUpdateException;
 import com.kizuna.user.domain.User;
@@ -56,7 +57,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>委譲の守衛は 2 条のみ — 付与するロールの権限並集 ⊆ 行使者の権限並集、対象の店舗集合 ⊆ 行使者の店舗集合。編集・停止・再開・再設定の対象も 同じ 2 条（{@link
  * #editableBy}）で判定する。同格の相互保護のような硬い規則は置かず、既定ロールの編集で運用が決める。
  *
- * <p>残る名指しの守衛は 3 つ: 自分自身の停止と再設定、最後の ROLE_MANAGE 保持者の停止・降格（{@link RoleManageHolderGuard}）、
+ * <p>残る名指しの守衛は 3 つ: 自分自身の停止・再設定・担当店舗の除去、最後の ROLE_MANAGE 保持者の停止・降格（{@link RoleManageHolderGuard}）、
  * 管理者（ROLE_MANAGE 保持者）のパスワード代理再設定。
  */
 @Service
@@ -219,6 +220,11 @@ public class AdminStaffService {
     Map<Long, Role> roles = requireRoles(command.roleIds());
     requireGrantable(roles.values(), actor);
     requireStoresWithinActorScope(command.storeIds(), actor.scope());
+    // 付与は自分の店舗集合の内側に限られるため、自分から外した店舗はこの画面から誰も戻せなくなる。
+    if (user.getId().equals(actor.user().getId())
+        && !command.storeIds().containsAll(user.getStoreIds())) {
+      throw new SelfStoreRemovalNotAllowedException("自分自身の担当店舗は外せません");
+    }
     // 供給ロールの追加は並行しうるため、ロック前は要求に既存ロールの除去があるかだけで判断する。
     if (user.getEnabled() && !command.roleIds().containsAll(user.getRoleIds())) {
       roleManageHolderGuard.requireAfterGrantChange(user, command.roleIds());
