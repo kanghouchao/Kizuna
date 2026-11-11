@@ -262,6 +262,7 @@ server の details は現行クライアントでは field error に戻さず、
 | notify.error   | 失敗し、画面に入力等が残って失敗を理解できる                   | 5000ms   |
 | notify.warning | 失敗後に値が置換される等、画面だけでは失われた事実が分からない | 10000ms  |
 
+- 従業員の管理画面で開けない画面（権限外・集合外の店舗）は描かずに着地へ置き換えるため、開こうとした事実が画面に残らない。warning の対象とし、`LeaveToLanding` だけが出す。
 - 呼び出しは `@/shared/notify` の三メソッドへ事実の一文だけを渡す。色・時間・icon・例外変換を持ち込まない。warning の「警告：」は語義層が付ける。
 - Base UI toast manager への直接アクセスは禁止。import の例外は notify と shared/ui/toast.tsx だけ。動的 import・require・mock も同じ規則で読む。
 - 描画は toast.tsx に集約する。success/error/warning は各対比表の単色と foreground、icon は CircleCheckIcon / CircleXIcon / TriangleAlertIcon、20px・currentColor・shrink-0。

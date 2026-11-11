@@ -181,8 +181,8 @@ Then('警告 {string} が出て、店舗 {string} のダッシュボードへ戻
   await expect(page.locator('[data-slot=toast]').filter({ hasText: `警告：${message}` })).toBeVisible();
 });
 
-// 開いた画面は描かれずに着地へ置き換わるので、その画面自身の取得は 1 件も飛ばない。着地のダッシュボードと
-// シェル（本人・授権店舗・メニュー）の取得だけが残る。
+// 開いた画面は描かれずに着地へ置き換わるので、その画面自身の取得は 1 件も飛ばない。残るのはシェル（本人・
+// 授権店舗・メニュー）の取得だけ。着地の店舗ダッシュボードが取得を持つようになったら、その端点もここで除く。
 Then('開いた画面自身の取得は送られていない', async ({ page }) => {
   await page.waitForLoadState('networkidle');
   const shell = ['/api/me', '/api/stores/me', '/api/menus/me', '/api/auth/refresh'];

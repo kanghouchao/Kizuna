@@ -5,7 +5,7 @@ import { MenuProvider } from '@/entities/menu';
 import { MeProvider, StoreContextProvider, useStoreContext } from '@/entities/user';
 import { isStorePath } from '@/shared/lib';
 import { RegionError } from '@/shared/ui';
-import { LeaveToLanding } from './DeniedPage';
+import { LeaveToLanding } from './LeaveToLanding';
 
 interface AdminShellProps {
   /** サイドバーとヘッダーは同じ層の別 widget なので、組み立てる app 層から差し込む。 */
