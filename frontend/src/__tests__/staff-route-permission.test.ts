@@ -11,7 +11,7 @@ const STAFF_GROUP = join(__dirname, '..', 'app', '(admin)', '(staff)');
 /** 権限を要さない画面（着地・ダッシュボード・本人のアカウント設定）。 */
 const OPEN = ['admin', 'admin/dashboard', 'admin/settings/account', 'store/[storeId]/dashboard'];
 
-/** ページ自身が権限を判定し、拒めば DeniedPage を描く画面。 */
+/** ページ自身が権限を判定し、拒めば DeniedPage を描く画面。ページ側の判定はここでは確かめず、各ページのテストが持つ。 */
 const GATED_IN_PAGE = [
   'admin/notification-deliveries',
   'admin/operational-reports',

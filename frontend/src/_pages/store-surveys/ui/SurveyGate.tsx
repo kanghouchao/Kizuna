@@ -24,9 +24,13 @@ export function SurveyGate({
   const { me } = useMe();
   const storeId = useStoreContext().currentStoreId;
   if (me === null) return <MePending />;
-  if (me.user_type !== 'STAFF' || !hasPermission(me, 'SURVEY_VIEW')) return <DeniedPage />;
-  if (manage && !hasPermission(me, 'SURVEY_MANAGE')) return <DeniedPage />;
-  if (record && !hasPermission(me, 'SURVEY_RECORD')) return <DeniedPage />;
+  if (
+    me.user_type !== 'STAFF' ||
+    !hasPermission(me, 'SURVEY_VIEW') ||
+    (manage && !hasPermission(me, 'SURVEY_MANAGE')) ||
+    (record && !hasPermission(me, 'SURVEY_RECORD'))
+  )
+    return <DeniedPage />;
   return (
     <Fragment key={`${storeId}:${target}`}>
       {children({

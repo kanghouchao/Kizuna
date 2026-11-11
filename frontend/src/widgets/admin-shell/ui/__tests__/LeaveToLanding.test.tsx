@@ -3,7 +3,7 @@ import { StrictMode } from 'react';
 import type { useMe } from '@/entities/user';
 import { notify } from '@/shared/notify';
 import { useLandingPath } from '../../model/landing';
-import { DeniedPage, LeaveToLanding, PermissionGate } from '../DeniedPage';
+import { DeniedPage, LeaveToLanding, PermissionGate } from '../LeaveToLanding';
 
 const replace = jest.fn();
 let mockPathname = '/admin/staff';
