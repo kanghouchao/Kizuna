@@ -1,8 +1,11 @@
 package com.kizuna.menu.domain;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.kizuna.user.domain.PermissionTree;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
@@ -20,7 +23,7 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
-/** 統合メニュー木の 1 ノード（Central/Store の別なく単一集約として扱う）。 */
+/** メニューの 1 節。根はグループか店舗のどちらかの木に属し、子はその木の区分見出しの下の項目。 */
 @Getter
 @Setter
 @Entity
@@ -33,6 +36,11 @@ public class Menu {
   @JoinColumn(name = "parent_id")
   @JsonIgnore
   private Menu parent;
+
+  /** 根の節だけが属する木を持つ。子は親の木に属し、この列は NULL。 */
+  @Setter(AccessLevel.NONE)
+  @Enumerated(EnumType.STRING)
+  private PermissionTree tree;
 
   @OneToMany(mappedBy = "parent", fetch = FetchType.LAZY)
   @OrderBy("sortOrder ASC")

@@ -2,8 +2,8 @@ databaseChangeLog:
   - changeSet:
       id: platform-v0100-004-menu-schema
       author: kanghouchao
-      # Menu は単一のプラットフォーム集約（店舗次元を持たない）。可視性は permission に
-      # 置いた PermissionCode 名で決まり、プラットフォーム／店舗コンソールの出し分けもここで行う。
+      # Menu は単一のプラットフォーム集約（店舗次元を持たない）。根はグループか店舗の木（tree）に属し、
+      # 木はその木の権限を持つ者にだけ出る。木の中の可視性は permission に置いた PermissionCode 名で決まる。
       preConditions:
         - dbms:
             type: postgresql
@@ -22,7 +22,11 @@ databaseChangeLog:
               - column:
                   name: parent_id
                   type: VARCHAR(64)
-                  remarks: 親メニュー（NULL = グループ根。階層は 2 段まで）
+                  remarks: 親メニュー（NULL = 木の根の節。階層は 2 段まで）
+              - column:
+                  name: tree
+                  type: VARCHAR(16)
+                  remarks: 根の節が属する木（GROUP / STORE = PermissionTree）。子は親の木に属し NULL
               - column:
                   name: label
                   type: VARCHAR(100)
@@ -74,3 +78,10 @@ databaseChangeLog:
             referencedTableName: t_menus
             referencedColumnNames: id
             onDelete: CASCADE
+        # 木は根だけが持つ。子に木を持たせると親の木と食い違う行が書けるため、根と子で列の有無を固定する。
+        - sql:
+            sql: >-
+              ALTER TABLE t_menus
+              ADD CONSTRAINT ck_t_menus_tree CHECK (
+                (parent_id IS NULL AND tree IN ('GROUP', 'STORE'))
+                OR (parent_id IS NOT NULL AND tree IS NULL))

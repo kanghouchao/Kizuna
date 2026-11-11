@@ -13,7 +13,7 @@ public class MenuService {
   private final MenuRepository menuRepository;
 
   @Transactional(readOnly = true)
-  public List<MenuNode> getMyMenus() {
+  public List<MenuTree> getMyMenus() {
     return MenuTreeAssembler.assemble(menuRepository.findByParentIsNullOrderBySortOrderAsc());
   }
 }

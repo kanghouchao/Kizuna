@@ -1,8 +1,8 @@
 import { apiClient } from '@/shared/api';
-import { MenuVO } from '../model/types';
+import { MenuTree } from '../model/types';
 
 export const menuApi = {
-  getMenus: async (): Promise<MenuVO[]> => {
+  getMenus: async (): Promise<MenuTree[]> => {
     const response = await apiClient.get('/menus/me');
     return response.data;
   },
