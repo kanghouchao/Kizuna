@@ -44,6 +44,7 @@ import {
   RegionError,
   Textarea,
 } from '@/shared/ui';
+import { DeniedPage } from '@/widgets/admin-shell';
 
 interface OrderCorrectionFormValues {
   actual_arrival_time: string;
@@ -117,7 +118,7 @@ export default function OrderCorrectionPage() {
   const { me } = useMe();
   if (me === null) return <MePending />;
   if (!hasPermission(me, 'ORDER_MANAGE') || !hasPermission(me, 'ORDER_CORRECT'))
-    return <p role="alert">完了後訂正を行う権限がありません。</p>;
+    return <DeniedPage />;
   return <CorrectionEditor />;
 }
 

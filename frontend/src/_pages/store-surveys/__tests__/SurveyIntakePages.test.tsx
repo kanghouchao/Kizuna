@@ -11,6 +11,10 @@ import {
   written,
 } from '../testing/survey-test-support';
 
+jest.mock('@/widgets/admin-shell', () => ({
+  DeniedPage: () => <p role="alert">権限の無い画面</p>,
+}));
+
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
   useCurrentStoreId: () => '1',
@@ -66,7 +70,7 @@ describe('回答の受付画面', () => {
   test('受付権限が無ければ入力を出さない', async () => {
     permission('SURVEY_VIEW', 'SURVEY_MANAGE');
     render(<SurveyReceivePage />);
-    expect(await screen.findByRole('alert')).toHaveTextContent('回答の記録権限がありません');
+    expect(await screen.findByRole('alert')).toHaveTextContent('権限の無い画面');
     expect(screen.queryByLabelText('受領日時')).not.toBeInTheDocument();
     expect(api.revision).not.toHaveBeenCalled();
   });

@@ -5,6 +5,10 @@ import { reviewApi, Review } from '@/entities/content/review';
 import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 import { storeSessionToken } from '@/shared/api';
+
+jest.mock('@/widgets/admin-shell', () => ({
+  DeniedPage: () => <p role="alert">権限の無い画面</p>,
+}));
 let mockStoreId = '1';
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
@@ -83,7 +87,7 @@ beforeEach(() => {
 test('閲覧権限がなければ取得せず、閲覧のみは詳細へのリンクだけを出す', async () => {
   permission('REVIEW_MANAGE');
   const view = render(<ReviewsPage />);
-  expect(screen.getByRole('alert')).toHaveTextContent('閲覧権限がありません');
+  expect(screen.getByRole('alert')).toHaveTextContent('権限の無い画面');
   expect(api.list).not.toHaveBeenCalled();
   permission('REVIEW_VIEW');
   view.rerender(<ReviewsPage />);

@@ -1,11 +1,11 @@
 'use client';
 
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { MenuProvider } from '@/entities/menu';
-import { MeProvider, StoreContextProvider, useAuth, useStoreContext } from '@/entities/user';
+import { MeProvider, StoreContextProvider, useStoreContext } from '@/entities/user';
 import { isStorePath } from '@/shared/lib';
-import { Button, RegionError } from '@/shared/ui';
+import { RegionError } from '@/shared/ui';
+import { LeaveToLanding } from './DeniedPage';
 
 interface AdminShellProps {
   /** サイドバーとヘッダーは同じ層の別 widget なので、組み立てる app 層から差し込む。 */
@@ -50,11 +50,11 @@ export function AdminShell({ sidebar, header, children }: AdminShellProps) {
 
 /**
  * 店舗の画面（/store/{storeId} 配下）は URL の店舗が授権店舗に含まれると確かめてから描く。授権外の店舗を
- * 名指す取得を飛ばさないため。店舗をキーにして、レールで別の店舗へ移ったら丸ごと描き直させる。
+ * 名指す取得を飛ばさないため。集合外（集合が空の者を含む）は警告して着地へ戻す。店舗をキーにして、
+ * レールで別の店舗へ移ったら丸ごと描き直させる。
  */
 function StoreScopedContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { logout } = useAuth();
   const { stores, currentStoreId, currentStore, loadFailed, reload } = useStoreContext();
 
   if (!isStorePath(pathname)) {
@@ -69,30 +69,8 @@ function StoreScopedContent({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (stores.length === 0) {
-    // 行き止まりは読まれてから終わる。自動でログアウトすると説明が読まれないまま消えるので、
-    // セッションを畳むかは利用者がボタンで決める。
-    return (
-      <div role="alert" className="mx-auto max-w-md space-y-3">
-        <p className="text-sm text-foreground">
-          アクセス可能な店舗がありません。管理者にお問い合わせください
-        </p>
-        <Button type="button" variant="outline" onClick={() => logout()}>
-          ログアウト
-        </Button>
-      </div>
-    );
-  }
-
   if (currentStore === undefined) {
-    return (
-      <div role="alert" className="mx-auto max-w-md space-y-3">
-        <p className="text-sm text-foreground">この店舗の画面は開けません</p>
-        <Button variant="outline" render={<Link href="/admin" />}>
-          ダッシュボードへ
-        </Button>
-      </div>
-    );
+    return <LeaveToLanding message="この店舗の画面は開けません" />;
   }
 
   return <div key={currentStoreId}>{children}</div>;

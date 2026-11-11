@@ -4,6 +4,10 @@ import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 import AdminOperationalReportsPage from '../AdminOperationalReportsPage';
 
+jest.mock('@/widgets/admin-shell', () => ({
+  DeniedPage: () => <p role="alert">権限の無い画面</p>,
+}));
+
 jest.mock('@/entities/operational-report', () => ({
   ...jest.requireActual('@/entities/operational-report'),
   fetchReport: jest.fn(),
@@ -150,5 +154,5 @@ test.each([
 test('店舗集合を跨ぐ集計の閲覧権限が無ければ集計を出さない', async () => {
   meWith(['ORDER_MANAGE', 'OPERATIONAL_REPORT_VIEW']);
   render(<AdminOperationalReportsPage />);
-  expect(await screen.findByRole('alert')).toHaveTextContent('閲覧する権限がありません');
+  expect(await screen.findByRole('alert')).toHaveTextContent('権限の無い画面');
 });

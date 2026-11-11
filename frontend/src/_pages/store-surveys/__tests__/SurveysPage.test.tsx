@@ -3,6 +3,10 @@ import { SurveysPage } from '../ui/SurveysPage';
 import { useMe } from '@/entities/user';
 import { api, fixtures, permission, resetSurveyTest } from '../testing/survey-test-support';
 
+jest.mock('@/widgets/admin-shell', () => ({
+  DeniedPage: () => <p role="alert">権限の無い画面</p>,
+}));
+
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
   useCurrentStoreId: () => '1',
@@ -62,7 +66,7 @@ test('管理権限があれば作成画面へのリンクを出す', async () =>
 test('閲覧権限なしでは取得せず、閲覧のみでは設問作成を表示しない', async () => {
   permission('SURVEY_MANAGE');
   const view = render(<SurveysPage />);
-  expect(screen.getByRole('alert')).toHaveTextContent('閲覧権限がありません');
+  expect(screen.getByRole('alert')).toHaveTextContent('権限の無い画面');
   expect(api.list).not.toHaveBeenCalled();
   permission('SURVEY_VIEW');
   view.rerender(<SurveysPage />);

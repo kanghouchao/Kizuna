@@ -1,5 +1,6 @@
 import { Fragment, ReactNode } from 'react';
 import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
+import { DeniedPage } from '@/widgets/admin-shell';
 
 export interface SurveyCapabilities {
   canManage: boolean;
@@ -23,12 +24,9 @@ export function SurveyGate({
   const { me } = useMe();
   const storeId = useStoreContext().currentStoreId;
   if (me === null) return <MePending />;
-  if (me.user_type !== 'STAFF' || !hasPermission(me, 'SURVEY_VIEW'))
-    return <div role="alert">アンケートの閲覧権限がありません</div>;
-  if (manage && !hasPermission(me, 'SURVEY_MANAGE'))
-    return <div role="alert">アンケートの管理権限がありません</div>;
-  if (record && !hasPermission(me, 'SURVEY_RECORD'))
-    return <div role="alert">アンケートの回答の記録権限がありません</div>;
+  if (me.user_type !== 'STAFF' || !hasPermission(me, 'SURVEY_VIEW')) return <DeniedPage />;
+  if (manage && !hasPermission(me, 'SURVEY_MANAGE')) return <DeniedPage />;
+  if (record && !hasPermission(me, 'SURVEY_RECORD')) return <DeniedPage />;
   return (
     <Fragment key={`${storeId}:${target}`}>
       {children({

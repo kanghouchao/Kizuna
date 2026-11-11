@@ -24,7 +24,7 @@ describe('管理画面シェルの搭載位置', () => {
 
   it('AdminShell を描くのは route group の layout だけである', () => {
     const mounts = collect(APP_ROOT)
-      .filter(file => readFileSync(file, 'utf8').includes('@/widgets/admin-shell'))
+      .filter(file => readFileSync(file, 'utf8').includes('<AdminShell'))
       .map(file => relative(APP_ROOT, file));
     expect(mounts).toEqual([join('(admin)', '(staff)', 'layout.tsx')]);
   });

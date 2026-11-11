@@ -27,14 +27,14 @@ import { CopyPreview } from './CopyPreview';
 import { MediaSummaryPage } from './MediaSummaryPage';
 import { OrderCostPage } from './OrderCostPage';
 import { RecruitmentEffectPage } from './RecruitmentEffectPage';
+import { DeniedPage } from '@/widgets/admin-shell';
 export default function AdvertisingCostsPage() {
   const storeId = useCurrentStoreId();
   const { me } = useMe();
   if (me === null) return <MePending />;
   // 未確認の操作は操作者（このタブのトークンの利用者 ID）と店舗ごとにタブ内へ預ける。
   const userId = getSessionUserId();
-  if (userId === undefined || !hasPermission(me, 'ADVERTISING_COST_VIEW'))
-    return <p role="alert">広告費を閲覧する権限がありません。</p>;
+  if (userId === undefined || !hasPermission(me, 'ADVERTISING_COST_VIEW')) return <DeniedPage />;
   return (
     <StorePage
       key={JSON.stringify([userId, storeId])}

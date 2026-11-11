@@ -3,6 +3,7 @@ import { MePending } from '@/entities/user';
 import { Form } from '@/shared/ui';
 import { ListPage } from '@/widgets/list-page';
 import { useOperationalReportPage, ReportSearch, ReportTable } from '@/widgets/operational-report';
+import { DeniedPage } from '@/widgets/admin-shell';
 export default function AdminOperationalReportsPage() {
   return <ReportPage />;
 }
@@ -10,7 +11,7 @@ function ReportPage() {
   const model = useOperationalReportPage('admin');
   const { form, access, query, report, result, paging, submit, setQuery } = model;
   if (!access.ready) return <MePending />;
-  if (!access.view) return <p role="alert">運営金額集計を閲覧する権限がありません。</p>;
+  if (!access.view) return <DeniedPage />;
   return (
     <Form {...form}>
       <ListPage

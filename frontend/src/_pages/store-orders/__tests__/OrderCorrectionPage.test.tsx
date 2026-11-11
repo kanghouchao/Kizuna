@@ -6,6 +6,10 @@ import { Order, orderApi } from '@/entities/order';
 import { AxiosError } from 'axios';
 import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
+
+jest.mock('@/widgets/admin-shell', () => ({
+  DeniedPage: () => <p role="alert">権限の無い画面</p>,
+}));
 jest.mock('@/entities/user/model/MeContext', () => ({
   ...jest.requireActual('@/entities/user/model/MeContext'),
   useMe: jest.fn(),
@@ -543,7 +547,7 @@ test('帰属取得が未着でも訂正成功を通知し、詳細を更新し�
 it('訂正権限がない利用者には詳細も編集フォームも取得・表示しない', async () => {
   meWith([]);
   render(<OrderCorrectionPage />);
-  expect(await screen.findByRole('alert')).toHaveTextContent('完了後訂正を行う権限がありません');
+  expect(await screen.findByRole('alert')).toHaveTextContent('権限の無い画面');
   expect(mockedOrderApi.get).not.toHaveBeenCalled();
   expect(screen.queryByRole('button', { name: '訂正を保存' })).not.toBeInTheDocument();
 });

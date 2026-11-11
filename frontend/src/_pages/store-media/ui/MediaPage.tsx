@@ -25,13 +25,13 @@ import {
 } from '@/shared/ui';
 import { ListPage } from '@/widgets/list-page';
 import { MediumNameModal } from './MediumNameModal';
+import { DeniedPage } from '@/widgets/admin-shell';
 
 /** 広告費・受注・応募者が指す、店舗の媒体一覧の管理ページ。 */
 export default function MediaPage() {
   const { me } = useMe();
   if (me === null) return <MePending />;
-  if (!hasPermission(me, 'ADVERTISING_COST_VIEW'))
-    return <p role="alert">媒体を閲覧する権限がありません。</p>;
+  if (!hasPermission(me, 'ADVERTISING_COST_VIEW')) return <DeniedPage />;
   return <MediaList manage={hasPermission(me, 'ADVERTISING_COST_MANAGE')} />;
 }
 

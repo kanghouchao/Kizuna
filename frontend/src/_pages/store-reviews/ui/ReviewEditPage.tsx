@@ -17,6 +17,7 @@ import { ReviewMissing } from './ReviewDetail';
 import { ReviewEditor } from './ReviewEditor';
 import { ReviewWriteFeedback } from './ReviewWriteFeedback';
 import { accessError } from './reviewErrors';
+import { DeniedPage } from '@/widgets/admin-shell';
 
 export function ReviewEditPage() {
   const id = useParams().id as string;
@@ -28,7 +29,7 @@ export function ReviewEditPage() {
     !hasPermission(me, 'REVIEW_VIEW') ||
     !hasPermission(me, 'REVIEW_MANAGE')
   )
-    return <div role="alert">口コミの訂正権限がありません</div>;
+    return <DeniedPage />;
   return <Edit key={`${storeId}:${id}`} id={id} canOrder={hasPermission(me, 'ORDER_MANAGE')} />;
 }
 

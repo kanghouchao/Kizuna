@@ -4,6 +4,10 @@ import { orderApi, type AdminOrder } from '@/entities/order';
 import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 
+jest.mock('@/widgets/admin-shell', () => ({
+  DeniedPage: () => <p role="alert">権限の無い画面</p>,
+}));
+
 jest.mock('@/entities/user/model/MeContext', () => ({
   ...jest.requireActual('@/entities/user/model/MeContext'),
   useMe: jest.fn(),
@@ -86,7 +90,7 @@ it('店舗の受注の権限も持つ参照者は行の店舗で履歴を開き�
 it('権限のない利用者には一覧を取得せず拒否を示す', async () => {
   meWith([]);
   render(<AdminOrdersPage />);
-  expect(await screen.findByRole('alert')).toHaveTextContent('受注を閲覧する権限がありません');
+  expect(await screen.findByRole('alert')).toHaveTextContent('権限の無い画面');
   expect(orderApi.adminList).not.toHaveBeenCalled();
 });
 

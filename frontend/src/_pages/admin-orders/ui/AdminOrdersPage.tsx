@@ -21,12 +21,12 @@ import {
 } from '@/shared/ui';
 import { ListPage } from '@/widgets/list-page';
 import { OrderCorrectionHistoryModal } from '@/widgets/order-correction-history';
+import { DeniedPage } from '@/widgets/admin-shell';
 
 export default function AdminOrdersPage() {
   const { me } = useMe();
   if (me === null) return <MePending />;
-  if (!hasPermission(me, 'ORDER_SET_VIEW'))
-    return <p role="alert">受注を閲覧する権限がありません。</p>;
+  if (!hasPermission(me, 'ORDER_SET_VIEW')) return <DeniedPage />;
   return <OrderList />;
 }
 

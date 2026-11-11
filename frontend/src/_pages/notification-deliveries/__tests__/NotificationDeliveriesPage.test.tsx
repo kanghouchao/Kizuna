@@ -9,6 +9,10 @@ import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 import { notify } from '@/shared/notify';
 import { storeSessionToken } from '@/shared/api';
+
+jest.mock('@/widgets/admin-shell', () => ({
+  DeniedPage: () => <p role="alert">権限の無い画面</p>,
+}));
 let mockStoreId = '1';
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
@@ -99,7 +103,7 @@ async function detail() {
 test('閲覧権限がなければ通知を取得しない', () => {
   permission('NOTIFICATION_SEND');
   render(<StoreNotificationDeliveriesPage />);
-  expect(screen.getByRole('alert')).toHaveTextContent('閲覧権限がありません');
+  expect(screen.getByRole('alert')).toHaveTextContent('権限の無い画面');
   expect(api.list).not.toHaveBeenCalled();
 });
 test('閲覧のみの担当者は本文を確認できるが作成や送信はできない', async () => {
@@ -417,7 +421,7 @@ describe('グループのコンテキスト', () => {
   test('店舗の通知の権限だけでは会員宛の通知を開けない', async () => {
     permission('NOTIFICATION_VIEW', 'NOTIFICATION_MANAGE', 'NOTIFICATION_SEND');
     render(<GroupNotificationDeliveriesPage />);
-    expect(await screen.findByRole('alert')).toHaveTextContent('業務通知の閲覧権限がありません');
+    expect(await screen.findByRole('alert')).toHaveTextContent('権限の無い画面');
     expect(memberApi.list).not.toHaveBeenCalled();
     expect(api.list).not.toHaveBeenCalled();
   });

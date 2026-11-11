@@ -1,1 +1,10 @@
-export { OrderEditPage as default } from '@/_pages/store-orders';
+import { OrderEditPage } from '@/_pages/store-orders';
+import { PermissionGate } from '@/widgets/admin-shell';
+
+export default function Page() {
+  return (
+    <PermissionGate codes={['ORDER_MANAGE']}>
+      <OrderEditPage />
+    </PermissionGate>
+  );
+}

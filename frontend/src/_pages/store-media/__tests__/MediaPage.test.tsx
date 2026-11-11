@@ -5,6 +5,10 @@ import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 import { notify } from '@/shared/notify';
 
+jest.mock('@/widgets/admin-shell', () => ({
+  DeniedPage: () => <p role="alert">権限の無い画面</p>,
+}));
+
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
   useCurrentStoreId: () => '1',
@@ -60,7 +64,7 @@ const openRename = async () => {
 test('閲覧権限が無ければ一覧を取りに行かない', () => {
   permission();
   render(<MediaPage />);
-  expect(screen.getByRole('alert')).toHaveTextContent('媒体を閲覧する権限がありません。');
+  expect(screen.getByRole('alert')).toHaveTextContent('権限の無い画面');
   expect(api.list).not.toHaveBeenCalled();
 });
 

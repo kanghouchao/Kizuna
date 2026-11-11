@@ -6,6 +6,10 @@ import { reviewApi, Review } from '@/entities/content/review';
 import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 import { storeSessionToken } from '@/shared/api';
+
+jest.mock('@/widgets/admin-shell', () => ({
+  DeniedPage: () => <p role="alert">権限の無い画面</p>,
+}));
 let mockStoreId = '1';
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
@@ -127,7 +131,7 @@ test.each([
 ] as const)('%s画面は閲覧と管理の両権限がなければ出さない', (_, Page, only) => {
   permission(only);
   render(<Page />);
-  expect(screen.getByRole('alert')).toHaveTextContent('権限がありません');
+  expect(screen.getByRole('alert')).toHaveTextContent('権限の無い画面');
   expect(screen.queryByLabelText('口コミ本文')).not.toBeInTheDocument();
   expect(api.get).not.toHaveBeenCalled();
 });

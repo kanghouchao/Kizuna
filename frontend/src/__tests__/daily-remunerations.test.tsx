@@ -4,6 +4,10 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import MonthlyRemunerationsPage from '@/_pages/store-monthly-remunerations/ui/MonthlyRemunerationsPage';
 import { dailyRemunerationApi, monthlyRemunerationApi } from '@/entities/order';
 
+jest.mock('@/widgets/admin-shell', () => ({
+  DeniedPage: () => <p role="alert">権限の無い画面</p>,
+}));
+
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
   useCurrentStoreId: () => '1',
@@ -175,6 +179,6 @@ describe('店舗の日別給与明細', () => {
 it('受注の権限を持たない利用者には給与明細を出さない', async () => {
   granted = new Set(['ORDER_SET_VIEW']);
   render(<MonthlyRemunerationsPage />);
-  expect(screen.getByRole('alert')).toHaveTextContent('給与明細を閲覧する権限がありません');
+  expect(screen.getByRole('alert')).toHaveTextContent('権限の無い画面');
   expect(screen.queryByRole('button', { name: '照会' })).not.toBeInTheDocument();
 });

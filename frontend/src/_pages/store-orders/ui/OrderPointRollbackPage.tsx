@@ -27,6 +27,7 @@ import {
   Textarea,
 } from '@/shared/ui';
 import { customerHeadingText } from '../lib/customerLabel';
+import { DeniedPage } from '@/widgets/admin-shell';
 
 interface RollbackFormValues {
   reason: string;
@@ -57,19 +58,15 @@ export default function OrderPointRollbackPage() {
   const orderId = params.id as string;
   const { me } = useMe();
   if (me === null) return <MePending />;
-  return (
-    <RollbackPage
-      key={`${storeId}:${orderId}`}
-      orderId={orderId}
-      permitted={hasPermission(me, 'ORDER_MANAGE') && hasPermission(me, 'POINT_ADJUST')}
-    />
-  );
+  if (!hasPermission(me, 'ORDER_MANAGE') || !hasPermission(me, 'POINT_ADJUST'))
+    return <DeniedPage />;
+  return <RollbackPage key={`${storeId}:${orderId}`} orderId={orderId} />;
 }
 
-function RollbackPage({ orderId, permitted }: { orderId: string; permitted: boolean }) {
+function RollbackPage({ orderId }: { orderId: string }) {
   const storeId = useCurrentStoreId();
-  // 送信の 403 でも閉じる（権限が後から外れた場合）。
-  const [allowed, setAllowed] = useState(permitted);
+  // 開いた後に権限が外れた場合は、取得・送信の 403 で閉じる。
+  const [allowed, setAllowed] = useState(true);
   const active = useRef(true);
   useEffect(() => {
     active.current = true;

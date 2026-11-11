@@ -1,12 +1,21 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { useEffect } from 'react';
-import { useAuth, useStoreContext } from '@/entities/user';
+import { useStoreContext } from '@/entities/user';
+import { notify } from '@/shared/notify';
 import { AdminShell } from '../AdminShell';
 
 let mockPathname = '/store/1/orders';
+const replace = jest.fn();
 jest.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
+  useRouter: () => ({ replace }),
 }));
+
+jest.mock('@/shared/notify', () => ({
+  notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
+}));
+
+jest.mock('../../model/landing', () => ({ useLandingPath: () => '/admin/dashboard' }));
 
 jest.mock('@/entities/menu', () => ({
   MenuProvider: ({ children }: { children: React.ReactNode }) => children,
@@ -16,12 +25,9 @@ jest.mock('@/entities/user', () => ({
   StoreContextProvider: ({ children }: { children: React.ReactNode }) => children,
   MeProvider: ({ children }: { children: React.ReactNode }) => children,
   useStoreContext: jest.fn(),
-  useAuth: jest.fn(),
 }));
 
 const mockedUseStoreContext = useStoreContext as jest.MockedFunction<typeof useStoreContext>;
-const mockedUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
-const logout = jest.fn();
 const reload = jest.fn();
 
 type StoreContextValue = ReturnType<typeof useStoreContext>;
@@ -53,7 +59,6 @@ describe('AdminShell', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockPathname = '/store/1/orders';
-    mockedUseAuth.mockReturnValue({ logout } as unknown as ReturnType<typeof useAuth>);
     mockedUseStoreContext.mockReturnValue(storeContext({}));
   });
 
@@ -95,39 +100,22 @@ describe('AdminShell', () => {
       expect(screen.queryByText('本文')).not.toBeInTheDocument();
     });
 
-    it('授権店舗ゼロは行き止まりを名乗り、ログアウトは利用者が押す', () => {
-      mockedUseStoreContext.mockReturnValue(
-        storeContext({ stores: [], currentStoreId: undefined, currentStore: undefined })
-      );
-
-      renderShell();
-
-      expect(screen.getByRole('alert')).toHaveTextContent(
-        'アクセス可能な店舗がありません。管理者にお問い合わせください'
-      );
-      expect(logout).not.toHaveBeenCalled();
-      fireEvent.click(screen.getByRole('button', { name: 'ログアウト' }));
-      expect(logout).toHaveBeenCalled();
-      expect(screen.queryByText('本文')).not.toBeInTheDocument();
-    });
-
     it.each([
-      ['授権店舗に無い店舗の', '/store/99/orders', '99'],
-      ['店舗 id の無い', '/store/orders', undefined],
-    ])('%s画面は本文を描かず、開けないことと着地への導線を出す', (_, pathname, id) => {
+      ['授権店舗に無い店舗の', '/store/99/orders', [{ id: 1, name: '店舗A' }], '99'],
+      ['店舗 id の無い', '/store/orders', [{ id: 1, name: '店舗A' }], undefined],
+      ['授権店舗が空の者が開いた店舗の', '/store/1/orders', [], '1'],
+    ])('%s画面は本文を描かず、警告して着地へ戻す', (_, pathname, stores, id) => {
       mockPathname = pathname;
       mockedUseStoreContext.mockReturnValue(
-        storeContext({ currentStoreId: id, currentStore: undefined })
+        storeContext({ stores, currentStoreId: id, currentStore: undefined })
       );
 
       renderShell();
 
-      expect(screen.getByRole('alert')).toHaveTextContent('この店舗の画面は開けません');
-      expect(screen.getByRole('link', { name: 'ダッシュボードへ' })).toHaveAttribute(
-        'href',
-        '/admin'
-      );
+      expect(replace).toHaveBeenCalledWith('/admin/dashboard');
+      expect(notify.warning).toHaveBeenCalledWith('この店舗の画面は開けません');
       expect(screen.queryByText('本文')).not.toBeInTheDocument();
+      expect(mounts).not.toHaveBeenCalled();
     });
 
     it('現在店舗が替わるとページを再マウントする', () => {

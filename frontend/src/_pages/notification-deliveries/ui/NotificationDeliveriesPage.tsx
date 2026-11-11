@@ -57,6 +57,7 @@ import {
   TableRow,
 } from '@/shared/ui';
 import { ListPage } from '@/widgets/list-page';
+import { DeniedPage } from '@/widgets/admin-shell';
 
 const statuses: Record<DeliveryStatus, string> = {
   DRAFT: '下書き',
@@ -735,8 +736,7 @@ function NotificationDeliveriesPage({ group }: { group: boolean }) {
         manage: 'NOTIFICATION_MANAGE',
         send: 'NOTIFICATION_SEND',
       } as const);
-  if (me.user_type !== 'STAFF' || !hasPermission(me, permissions.view))
-    return <p role="alert">業務通知の閲覧権限がありません</p>;
+  if (me.user_type !== 'STAFF' || !hasPermission(me, permissions.view)) return <DeniedPage />;
   const manage = hasPermission(me, permissions.manage),
     send = hasPermission(me, permissions.send);
   return (

@@ -4,6 +4,10 @@ import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 import OrderCompletionInvalidationPage from '../ui/OrderCompletionInvalidationPage';
 
+jest.mock('@/widgets/admin-shell', () => ({
+  DeniedPage: () => <p role="alert">権限の無い画面</p>,
+}));
+
 jest.mock('@/entities/order', () => ({
   orderApi: { get: jest.fn(), invalidateCompletion: jest.fn(), correctionHistory: jest.fn() },
 }));
@@ -109,7 +113,7 @@ test('利用が残る場合は救済担当者を示し無効化を送れない',
 test('権限不足で受注を取得せず必要な担当者を示す', async () => {
   meWith([]);
   render(<OrderCompletionInvalidationPage />);
-  expect(await screen.findByText(/ORDER_CORRECT を持つ訂正担当者/)).toBeInTheDocument();
+  expect(await screen.findByText('権限の無い画面')).toBeInTheDocument();
   expect(orderApi.get).not.toHaveBeenCalled();
 });
 

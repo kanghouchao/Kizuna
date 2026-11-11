@@ -1,1 +1,10 @@
-export { ApplicantsPage as default } from '@/_pages/store-applicants';
+import { ApplicantsPage } from '@/_pages/store-applicants';
+import { PermissionGate } from '@/widgets/admin-shell';
+
+export default function Page() {
+  return (
+    <PermissionGate codes={['RECRUITMENT_VIEW']}>
+      <ApplicantsPage />
+    </PermissionGate>
+  );
+}

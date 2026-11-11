@@ -1,1 +1,10 @@
-export { AdminCastsPage as default } from '@/_pages/admin-casts';
+import { AdminCastsPage } from '@/_pages/admin-casts';
+import { PermissionGate } from '@/widgets/admin-shell';
+
+export default function Page() {
+  return (
+    <PermissionGate codes={['CAST_PERSON_VIEW']}>
+      <AdminCastsPage />
+    </PermissionGate>
+  );
+}
