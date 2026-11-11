@@ -178,6 +178,11 @@ services:
       - "--ping=true"
       - "--entryPoints.web.address=:80"
       - "--entryPoints.internal.address=:8081"
+      # ping 用に暗黙で作られる traefik 入口も含め、名前が既存ヘッダの別名になるヘッダは捨てる
+      - "--entryPoints.traefik.address=:8080"
+      - "--entryPoints.web.http.aliasHeadersStrategy=delete"
+      - "--entryPoints.internal.http.aliasHeadersStrategy=delete"
+      - "--entryPoints.traefik.http.aliasHeadersStrategy=delete"
       - "--providers.file.filename=/etc/traefik/dynamic.yml"
     volumes:
       - "./traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro"
