@@ -34,6 +34,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -62,7 +63,8 @@ class StoreRegistryServiceTest {
   @Test
   void list_returnsPage() {
     Page<Store> page = new PageImpl<>(List.of(new Store()));
-    when(storeRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
+    when(storeRepository.findAll(ArgumentMatchers.<Specification<Store>>any(), any(Pageable.class)))
+        .thenReturn(page);
     assertThat(storeRegistryService.list(ALL, "test", PageRequest.of(0, 10)).getContent())
         .hasSize(1);
   }
@@ -135,7 +137,8 @@ class StoreRegistryServiceTest {
   @Test
   void list_handlesNullSearch() {
     Page<Store> page = new PageImpl<>(List.of());
-    when(storeRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
+    when(storeRepository.findAll(ArgumentMatchers.<Specification<Store>>any(), any(Pageable.class)))
+        .thenReturn(page);
 
     assertThat(storeRegistryService.list(ALL, null, PageRequest.of(0, 10)).getContent()).isEmpty();
   }
@@ -331,7 +334,7 @@ class StoreRegistryServiceTest {
 
   @Test
   void count_returnsStoreCount() {
-    when(storeRepository.count(any(Specification.class))).thenReturn(5L);
+    when(storeRepository.count(ArgumentMatchers.<Specification<Store>>any())).thenReturn(5L);
 
     assertThat(storeRegistryService.count(ALL)).isEqualTo(5L);
   }
@@ -339,14 +342,15 @@ class StoreRegistryServiceTest {
   @Test
   void count_emptyScopeIsZeroWithoutQuerying() {
     assertThat(storeRegistryService.count(new StoreScope(Set.of()))).isZero();
-    verify(storeRepository, never()).count(any(Specification.class));
+    verify(storeRepository, never()).count(ArgumentMatchers.<Specification<Store>>any());
   }
 
   @Test
   void list_emptyScopeIsEmptyWithoutQuerying() {
     assertThat(storeRegistryService.list(new StoreScope(Set.of()), null, PageRequest.of(0, 10)))
         .isEmpty();
-    verify(storeRepository, never()).findAll(any(Specification.class), any(Pageable.class));
+    verify(storeRepository, never())
+        .findAll(ArgumentMatchers.<Specification<Store>>any(), any(Pageable.class));
   }
 
   // 集合外の店舗は、稼働中かどうか・略称が重複するかを確かめる前に 404 にする。先に業務検証すると応答から存在が漏れる。
