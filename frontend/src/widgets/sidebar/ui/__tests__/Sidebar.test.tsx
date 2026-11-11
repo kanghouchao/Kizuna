@@ -38,23 +38,36 @@ function withStores(stores: typeof STORES | null, currentStoreId = '1', loadFail
   });
 }
 
-// seed の見出し構成を縮めた写し。業務・キャスト・顧客は両文脈に項目を持ち、組織はグループだけ。
+// seed の二つの木を縮めた写し。木は応答に含まれる者（その木の権限を持つ者）にだけ出る。
 const item = (name: string, path: string) => ({ name, path, icon: 'HouseIcon' });
-const fullMenu = [
-  { name: 'ダッシュボード', path: '/admin/dashboard', icon: 'HouseIcon', items: [] },
-  {
-    name: '業務',
-    items: [item('受注照会', '/admin/orders'), item('予約・案件管理', '/store/orders')],
-  },
-  { name: '組織', items: [item('店舗一覧', '/admin/stores'), item('従業員管理', '/admin/staff')] },
-  { name: '運用', items: [item('店舗情報', '/store/profile')] },
-];
-const storeOnlyMenu = [
-  fullMenu[0],
-  { name: '業務', items: [item('予約・案件管理', '/store/orders')] },
-  fullMenu[3],
-];
-const groupOnlyMenu = [fullMenu[0], fullMenu[2]];
+const dashboard = {
+  name: 'ダッシュボード',
+  path: '/admin/dashboard',
+  icon: 'HouseIcon',
+  items: [],
+};
+const groupTree = {
+  tree: 'GROUP' as const,
+  items: [
+    dashboard,
+    { name: '業務', items: [item('受注照会', '/admin/orders')] },
+    {
+      name: '組織',
+      items: [item('店舗一覧', '/admin/stores'), item('従業員管理', '/admin/staff')],
+    },
+  ],
+};
+const storeTree = {
+  tree: 'STORE' as const,
+  items: [
+    dashboard,
+    { name: '業務', items: [item('予約・案件管理', '/store/orders')] },
+    { name: '運用', items: [item('店舗情報', '/store/profile')] },
+  ],
+};
+const fullMenu = [groupTree, storeTree];
+const storeOnlyMenu = [storeTree];
+const groupOnlyMenu = [groupTree];
 
 const rail = () => screen.queryByRole('button', { name: 'グループ' });
 const headings = () => screen.getAllByRole('heading').map(h => h.textContent);
@@ -76,6 +89,19 @@ describe('Sidebar', () => {
       '/store/orders'
     );
     expect(menuApi.getMenus).toHaveBeenCalledTimes(1);
+  });
+
+  it('どの木も返らない利用者には全員の着地先（ダッシュボード）への導線だけを出す', async () => {
+    mockedGetMenus.mockResolvedValue([]);
+
+    render(<Sidebar />);
+
+    expect(await screen.findByRole('link', { name: 'ダッシュボード' })).toHaveAttribute(
+      'href',
+      '/admin/dashboard'
+    );
+    expect(screen.queryByRole('heading')).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
   });
 
   it('メニュー取得が失敗したら全員の着地先（ダッシュボード）への導線だけを出す', async () => {
@@ -158,7 +184,7 @@ describe('Sidebar', () => {
       expect(screen.getByRole('button', { name: '新宿店' })).toHaveTextContent('新宿店');
     });
 
-    it('グループ級の項目が無い利用者には「グループ」を出さない', async () => {
+    it('店舗の木だけを持つ利用者には「グループ」を出さない', async () => {
       mockedGetMenus.mockResolvedValue(storeOnlyMenu);
 
       render(<Sidebar />);
@@ -168,7 +194,7 @@ describe('Sidebar', () => {
       expect(screen.getByRole('button', { name: '銀座本店' })).toBeInTheDocument();
     });
 
-    it('店舗が 1 件でグループ級の項目も無ければレールを出さず、パネルは 256px', async () => {
+    it('店舗が 1 件でグループの木も無ければレールを出さず、パネルは 256px', async () => {
       mockedGetMenus.mockResolvedValue(storeOnlyMenu);
       withStores([STORES[0]]);
 
@@ -180,7 +206,7 @@ describe('Sidebar', () => {
       expect(container.querySelector('.w-\\[200px\\]')).toBeNull();
     });
 
-    it('グループ級の項目だけを持ち授権店舗が無い利用者にはレールを出さない', async () => {
+    it('グループの木だけを持ち授権店舗が無い利用者にはレールを出さない', async () => {
       mockedGetMenus.mockResolvedValue(groupOnlyMenu);
       withStores([]);
 
@@ -190,22 +216,18 @@ describe('Sidebar', () => {
       expect(screen.queryByRole('button')).toBeNull();
     });
 
-    it('店舗級の項目が無くても授権店舗はすべてレールに並び、既定はグループの文脈', async () => {
+    it('店舗の木が無い利用者には授権店舗があっても店舗のボタンを出さず、グループの文脈になる', async () => {
       mockedGetMenus.mockResolvedValue(groupOnlyMenu);
 
       render(<Sidebar />);
 
       expect(await screen.findByRole('link', { name: '店舗一覧' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'グループ' })).toHaveAttribute(
-        'aria-pressed',
-        'true'
-      );
-      expect(screen.getByRole('button', { name: '銀座本店' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: '新宿店' })).toBeInTheDocument();
+      expect(screen.queryByRole('button')).toBeNull();
+      expect(screen.getByText('グループ', { selector: 'span' })).toBeInTheDocument();
     });
 
-    it('店舗級の項目が無い利用者が店舗の文脈を選ぶと、パネルはダッシュボードだけになる', async () => {
-      mockedGetMenus.mockResolvedValue(groupOnlyMenu);
+    it('店舗の木がダッシュボードだけでも店舗のボタンを出し、選ぶとパネルはダッシュボードだけになる', async () => {
+      mockedGetMenus.mockResolvedValue([groupTree, { tree: 'STORE', items: [dashboard] }]);
       render(<Sidebar />);
       await screen.findByRole('link', { name: '店舗一覧' });
 
@@ -216,7 +238,7 @@ describe('Sidebar', () => {
       expect(switchStore).toHaveBeenCalledWith(2);
     });
 
-    it('店舗 1 件とグループ級の項目を持つ利用者にはレールが出て、パネルは 200px', async () => {
+    it('店舗 1 件と両方の木を持つ利用者にはレールが出て、パネルは 200px', async () => {
       withStores([STORES[0]]);
 
       const { container } = render(<Sidebar />);
@@ -228,7 +250,7 @@ describe('Sidebar', () => {
   });
 
   describe('パネル', () => {
-    it('既定では現在店舗の文脈で、店舗級の項目と見出しだけを出す', async () => {
+    it('既定では現在店舗の文脈で、店舗の木の項目と見出しだけを出す', async () => {
       render(<Sidebar />);
 
       await screen.findByRole('link', { name: '予約・案件管理' });
@@ -239,7 +261,7 @@ describe('Sidebar', () => {
       expect(screen.getByText('銀座本店', { selector: 'span' })).toBeInTheDocument();
     });
 
-    it('グループを選ぶとグループ級の項目と見出しだけを出す（組織は店舗の文脈に出ない）', async () => {
+    it('グループを選ぶとグループの木の項目と見出しだけを出す（組織は店舗の文脈に出ない）', async () => {
       render(<Sidebar />);
       await screen.findByRole('link', { name: '予約・案件管理' });
 
@@ -262,12 +284,31 @@ describe('Sidebar', () => {
       expect(firstLink()).toHaveTextContent('ダッシュボード');
     });
 
+    it('項目はパスの接頭辞でなく、属する木の文脈に出る', async () => {
+      mockedGetMenus.mockResolvedValue([
+        { tree: 'GROUP', items: [dashboard, { name: '業務', items: [item('X', '/store/x')] }] },
+        { tree: 'STORE', items: [dashboard, { name: '業務', items: [item('Y', '/admin/y')] }] },
+      ]);
+      render(<Sidebar />);
+
+      expect(await screen.findByRole('link', { name: 'Y' })).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'X' })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'グループ' }));
+      expect(screen.getByRole('link', { name: 'X' })).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: 'Y' })).toBeNull();
+    });
+
     it('見出しと項目の順は seed のまま', async () => {
       mockedGetMenus.mockResolvedValue([
-        fullMenu[0],
-        { name: '業務', items: [item('A', '/store/a'), item('B', '/store/b')] },
-        { name: '運用', items: [item('C', '/store/c')] },
-        { name: '顧客', items: [item('D', '/store/d')] },
+        {
+          tree: 'STORE',
+          items: [
+            dashboard,
+            { name: '業務', items: [item('A', '/store/a'), item('B', '/store/b')] },
+            { name: '運用', items: [item('C', '/store/c')] },
+            { name: '顧客', items: [item('D', '/store/d')] },
+          ],
+        },
       ]);
       withStores([STORES[0]]);
 
@@ -350,9 +391,9 @@ describe('Sidebar', () => {
     });
 
     it('店舗級の画面へ移ると文脈が現在店舗に合い、グループ級へ戻っても戻らない', async () => {
-      mockedGetMenus.mockResolvedValue(groupOnlyMenu);
       const { rerender } = render(<Sidebar />);
-      await screen.findByRole('link', { name: '店舗一覧' });
+      await screen.findByRole('link', { name: '予約・案件管理' });
+      fireEvent.click(screen.getByRole('button', { name: 'グループ' }));
       expect(screen.getByRole('button', { name: 'グループ' })).toHaveAttribute(
         'aria-pressed',
         'true'

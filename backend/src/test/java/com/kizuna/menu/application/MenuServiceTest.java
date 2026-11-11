@@ -1,11 +1,12 @@
 package com.kizuna.menu.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.menu.domain.Menu;
 import com.kizuna.menu.domain.MenuRepository;
+import com.kizuna.user.domain.PermissionTree;
+import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -13,20 +14,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 class MenuServiceTest {
 
   @Mock private MenuRepository menuRepository;
-  @Mock private SecurityContext securityContext;
-  @Mock private Authentication authentication;
 
   @InjectMocks private MenuService menuService;
 
@@ -35,190 +30,121 @@ class MenuServiceTest {
     SecurityContextHolder.clearContext();
   }
 
-  /** 遷移先を持つ葉。path の無い節は可視な子が無ければ木から落ちるため、葉には必ず path を持たせる。 */
-  private Menu menu(String label, String permission) {
+  private static void authenticate(String... authorities) {
+    SecurityContextHolder.getContext()
+        .setAuthentication(new TestingAuthenticationToken("staff", null, authorities));
+  }
+
+  private static Menu leaf(String label, String permission) {
     Menu menu = new Menu();
     menu.setLabel(label);
-    menu.setPermission(permission);
     menu.setPath("/" + label);
+    menu.setPermission(permission);
     menu.setChildren(List.of());
     return menu;
   }
 
-  @Test
-  void getMyMenus_filtersRootsByPermission() {
-    SecurityContextHolder.setContext(securityContext);
-    when(securityContext.getAuthentication()).thenReturn(authentication);
+  private static Menu section(PermissionTree tree, String label, Menu... children) {
+    Menu menu = new Menu();
+    ReflectionTestUtils.setField(menu, "tree", tree);
+    menu.setLabel(label);
+    menu.setChildren(Arrays.asList(children));
+    return menu;
+  }
 
-    List<? extends GrantedAuthority> authorities =
-        List.of(
-            new SimpleGrantedAuthority("ROLE_USER"), new SimpleGrantedAuthority("PERM_ORDER_READ"));
-    doReturn(authorities).when(authentication).getAuthorities();
+  private static Menu dashboard(PermissionTree tree) {
+    Menu menu = leaf("ダッシュボード", null);
+    ReflectionTestUtils.setField(menu, "tree", tree);
+    return menu;
+  }
 
-    Menu visible = menu("Orders", "ORDER_READ"); // PERM_ORDER_READ として評価される
-    Menu hidden = menu("Secret", "SECRET_READ"); // 権限に存在しない
+  private void seed(Menu... roots) {
+    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(List.of(roots));
+  }
 
-    when(menuRepository.findByParentIsNullOrderBySortOrderAsc())
-        .thenReturn(List.of(visible, hidden));
-
-    List<MenuNode> result = menuService.getMyMenus();
-
-    assertThat(result).hasSize(1);
-    assertThat(result.get(0).name()).isEqualTo("Orders");
+  private static List<Menu> bothTrees() {
+    return List.of(
+        dashboard(PermissionTree.GROUP),
+        section(PermissionTree.GROUP, "組織", leaf("従業員管理", "STAFF_MANAGE")),
+        dashboard(PermissionTree.STORE),
+        section(
+            PermissionTree.STORE,
+            "キャスト",
+            leaf("キャスト管理", "CAST_MANAGE"),
+            leaf("出勤管理", "SHIFT_MANAGE")));
   }
 
   @Test
-  void getMyMenus_returnsAllWhenNoPermissionRequired() {
-    SecurityContextHolder.setContext(securityContext);
-    when(securityContext.getAuthentication()).thenReturn(authentication);
-    doReturn(List.of()).when(authentication).getAuthorities();
+  void 店舗の木の権限だけを持つ者には店舗の木だけを返す() {
+    authenticate("PERM_CAST_MANAGE");
+    seed(bothTrees().toArray(Menu[]::new));
 
-    when(menuRepository.findByParentIsNullOrderBySortOrderAsc())
-        .thenReturn(List.of(menu("Public", null)));
+    List<MenuTree> result = menuService.getMyMenus();
 
-    List<MenuNode> result = menuService.getMyMenus();
-
-    assertThat(result).hasSize(1);
-  }
-
-  @Test
-  void getMyMenus_filtersChildrenByPermission() {
-    SecurityContextHolder.setContext(securityContext);
-    when(securityContext.getAuthentication()).thenReturn(authentication);
-    doReturn(List.of(new SimpleGrantedAuthority("PERM_CAST_MANAGE")))
-        .when(authentication)
-        .getAuthorities();
-
-    Menu visibleChild = menu("キャスト管理", "CAST_MANAGE");
-    Menu hiddenChild = menu("出勤管理", "SHIFT_MANAGE"); // 権限に存在しない
-    Menu root = new Menu();
-    root.setLabel("HRM");
-    root.setPermission(null); // グループ見出しは無条件可視
-    root.setChildren(List.of(visibleChild, hiddenChild));
-
-    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(List.of(root));
-
-    List<MenuNode> result = menuService.getMyMenus();
-
-    assertThat(result).hasSize(1);
-    assertThat(result.get(0).items()).hasSize(1);
-    assertThat(result.get(0).items().get(0).name()).isEqualTo("キャスト管理");
-  }
-
-  @Test
-  void getMyMenus_groupHeadingIgnoresItsOwnPermissionWhenAChildIsVisible() {
-    SecurityContextHolder.setContext(securityContext);
-    when(securityContext.getAuthentication()).thenReturn(authentication);
-    doReturn(List.of(new SimpleGrantedAuthority("PERM_CAST_MANAGE")))
-        .when(authentication)
-        .getAuthorities();
-
-    Menu root = new Menu();
-    root.setLabel("HRM");
-    root.setPermission("SOMETHING_NOBODY_HOLDS"); // 節の permission は見ない — 子に見えるものがあれば出す
-    root.setChildren(List.of(menu("キャスト管理", "CAST_MANAGE")));
-
-    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(List.of(root));
-
-    List<MenuNode> result = menuService.getMyMenus();
-
-    assertThat(result).hasSize(1);
-    assertThat(result.get(0).items()).extracting(MenuNode::name).containsExactly("キャスト管理");
-  }
-
-  @Test
-  void getMyMenus_dropsGroupHeadingWhoseChildrenAreAllFiltered() {
-    SecurityContextHolder.setContext(securityContext);
-    when(securityContext.getAuthentication()).thenReturn(authentication);
-    doReturn(List.of(new SimpleGrantedAuthority("PERM_CUSTOMER_MANAGE")))
-        .when(authentication)
-        .getAuthorities();
-
-    Menu emptied = new Menu();
-    emptied.setLabel("HRM");
-    emptied.setPermission(null); // 見出し自体は無条件可視
-    emptied.setChildren(List.of(menu("キャスト管理", "CAST_MANAGE")));
-
-    Menu kept = new Menu();
-    kept.setLabel("CRM");
-    kept.setPermission(null);
-    kept.setChildren(List.of(menu("顧客一覧", "CUSTOMER_MANAGE")));
-
-    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(List.of(emptied, kept));
-
-    List<MenuNode> result = menuService.getMyMenus();
-
-    // 子が全て濾過された見出しは、空の見出しとして残さず木ごと落とす
-    assertThat(result).hasSize(1);
-    assertThat(result.get(0).name()).isEqualTo("CRM");
-  }
-
-  @Test
-  void getMyMenus_keepsRootThatHasItsOwnPath() {
-    SecurityContextHolder.setContext(securityContext);
-    when(securityContext.getAuthentication()).thenReturn(authentication);
-    doReturn(List.of()).when(authentication).getAuthorities();
-
-    Menu link = menu("直リンク", null);
-
-    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(List.of(link));
-
-    List<MenuNode> result = menuService.getMyMenus();
-
-    // 子を持たない根でも、自身が遷移先を持つなら到達可能なので残る
-    assertThat(result).hasSize(1);
-    assertThat(result.get(0).path()).isEqualTo("/直リンク");
-  }
-
-  @Test
-  void getMyMenus_returnsEmptyWhenAuthenticationMissing() {
-    SecurityContextHolder.clearContext();
-    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(List.of());
-
-    List<MenuNode> result = menuService.getMyMenus();
-
-    assertThat(result).isEmpty();
-  }
-
-  @Test
-  void getMyMenus_showsOperationsByPermissionAlone() {
-    authenticateTaskOperator();
-    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(taskMenus());
-
-    var result = menuService.getMyMenus();
-    assertThat(result).extracting(MenuNode::name).containsExactly("Dashboard", "Operations");
-    assertThat(result.get(1).items())
+    assertThat(result).extracting(MenuTree::tree).containsExactly(PermissionTree.STORE);
+    assertThat(result.getFirst().items())
         .extracting(MenuNode::name)
-        .containsExactly("Executions", "Audit");
+        .containsExactly("ダッシュボード", "キャスト");
+    assertThat(result.getFirst().items().get(1).items())
+        .extracting(MenuNode::name)
+        .containsExactly("キャスト管理");
   }
 
   @Test
-  void getMyMenus_hidesOperationsWithoutTheirPermissions() {
-    authenticateTaskOperator();
-    var auth = (JwtAuthenticationToken) SecurityContextHolder.getContext().getAuthentication();
-    SecurityContextHolder.getContext()
-        .setAuthentication(new JwtAuthenticationToken(auth.getToken(), List.of()));
-    when(menuRepository.findByParentIsNullOrderBySortOrderAsc()).thenReturn(taskMenus());
+  void グループの木の権限だけを持つ者にはグループの木だけを返す() {
+    authenticate("PERM_STAFF_MANAGE");
+    seed(bothTrees().toArray(Menu[]::new));
 
-    assertThat(menuService.getMyMenus()).extracting(MenuNode::name).containsExactly("Dashboard");
+    assertThat(menuService.getMyMenus())
+        .extracting(MenuTree::tree)
+        .containsExactly(PermissionTree.GROUP);
   }
 
-  private void authenticateTaskOperator() {
-    var builder =
-        Jwt.withTokenValue("menu-fixture").header("alg", "none").subject("operator@kizuna.test");
-    SecurityContextHolder.getContext()
-        .setAuthentication(
-            new JwtAuthenticationToken(
-                builder.build(),
-                List.of(
-                    new SimpleGrantedAuthority("PERM_TASK_MANAGE"),
-                    new SimpleGrantedAuthority("PERM_AUDIT_VIEW"))));
+  @Test
+  void 両方の木の権限を持つ者にはグループ店舗の順で両方を返す() {
+    authenticate("PERM_SHIFT_MANAGE", "PERM_STAFF_MANAGE");
+    seed(bothTrees().toArray(Menu[]::new));
+
+    assertThat(menuService.getMyMenus())
+        .extracting(MenuTree::tree)
+        .containsExactly(PermissionTree.GROUP, PermissionTree.STORE);
   }
 
-  private List<Menu> taskMenus() {
-    var group = new Menu();
-    group.setLabel("Operations");
-    group.setChildren(List.of(menu("Executions", "TASK_MANAGE"), menu("Audit", "AUDIT_VIEW")));
-    return List.of(menu("Dashboard", null), group);
+  @Test
+  void メニュー項目の無い権限でもその木は出てダッシュボードだけが並ぶ() {
+    authenticate("PERM_MEMBER_WITHDRAW");
+    seed(bothTrees().toArray(Menu[]::new));
+
+    List<MenuTree> result = menuService.getMyMenus();
+
+    assertThat(result).extracting(MenuTree::tree).containsExactly(PermissionTree.GROUP);
+    assertThat(result.getFirst().items()).extracting(MenuNode::name).containsExactly("ダッシュボード");
+  }
+
+  @Test
+  void どの木の権限も持たない者には何も返さない() {
+    authenticate("ROLE_USER", "PERM_NOT_A_PERMISSION_CODE");
+    seed(bothTrees().toArray(Menu[]::new));
+
+    assertThat(menuService.getMyMenus()).isEmpty();
+  }
+
+  @Test
+  void 認証が無ければ何も返さない() {
+    seed(bothTrees().toArray(Menu[]::new));
+
+    assertThat(menuService.getMyMenus()).isEmpty();
+  }
+
+  @Test
+  void 見出しの権限は見ず可視な子があれば出し子が全て落ちた見出しは出さない() {
+    authenticate("PERM_CAST_MANAGE");
+    Menu heading = section(PermissionTree.STORE, "キャスト", leaf("キャスト管理", "CAST_MANAGE"));
+    heading.setPermission("SOMETHING_NOBODY_HOLDS");
+    seed(heading, section(PermissionTree.STORE, "顧客", leaf("顧客一覧", "CUSTOMER_MANAGE")));
+
+    assertThat(menuService.getMyMenus().getFirst().items())
+        .extracting(MenuNode::name)
+        .containsExactly("キャスト");
   }
 }

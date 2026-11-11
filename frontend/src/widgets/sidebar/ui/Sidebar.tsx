@@ -28,7 +28,7 @@ import {
   UsersRoundIcon,
   type LucideIcon,
 } from 'lucide-react';
-import { menuApi, MenuVO } from '@/entities/menu';
+import { menuApi, type MenuTree, type MenuVO } from '@/entities/menu';
 import { useStoreContext } from '@/entities/user';
 import { isStorePath } from '@/shared/lib';
 import { RegionError } from '@/shared/ui';
@@ -75,6 +75,11 @@ interface NavigationSection {
   items: NavigationItem[];
 }
 
+interface Navigation {
+  group?: NavigationSection[];
+  store?: NavigationSection[];
+}
+
 function resolveIcon(icon?: string): LucideIcon {
   return icon && ICON_MAP[icon] ? ICON_MAP[icon] : HouseIcon;
 }
@@ -104,23 +109,38 @@ function NavLink({ item, isActive }: { item: NavigationItem; isActive: boolean }
   );
 }
 
-// 見出しの順と見出し内の項目の順はメニュー（seed）のまま、項目のパスで文脈に振り分ける。
-// 項目が 1 つも残らない見出しは出さない。
-function sectionsFor(navigation: NavigationSection[], storeLevel: boolean): NavigationSection[] {
-  return navigation
-    .filter(section => !section.href)
-    .map(section => ({
-      ...section,
-      items: section.items.filter(item => isStorePath(item.href) === storeLevel),
-    }))
-    .filter(section => section.items.length > 0);
+function toSections(roots: MenuVO[]): NavigationSection[] {
+  return roots.map(section => ({
+    name: section.name,
+    href: section.path,
+    icon: resolveIcon(section.icon),
+    items: (section.items || []).map(item => ({
+      name: item.name,
+      href: item.path || '#',
+      icon: resolveIcon(item.icon),
+    })),
+  }));
 }
+
+// 文脈はメニューの木で分ける（項目のパスでは分けない）。応答に無い木は、その木の権限を持たない利用者。
+function toNavigation(trees: MenuTree[]): Navigation {
+  const sectionsOf = (tree: MenuTree['tree']) => {
+    const found = trees.find(t => t.tree === tree);
+    return found && toSections(found.items);
+  };
+  return { group: sectionsOf('GROUP'), store: sectionsOf('STORE') };
+}
+
+// どの文脈も出せない利用者（権限が無い・取得に失敗した）にも全員の着地先への導線だけは残す。
+const FALLBACK: NavigationSection[] = [
+  { name: 'ダッシュボード', href: '/admin/dashboard', icon: HouseIcon, items: [] },
+];
 
 export function Sidebar() {
   const pathname = usePathname();
   const { stores, currentStoreId, loadFailed, reload, switchStore } = useStoreContext();
-  const [navigation, setNavigation] = useState<NavigationSection[]>([]);
-  // 利用者が選んだ文脈。未選択の間は既定（店舗級の項目を見られるなら現在店舗、無ければグループ）に従う。
+  const [navigation, setNavigation] = useState<Navigation | null>(null);
+  // 利用者が選んだ文脈。未選択の間は既定（店舗の木を持てば現在店舗、無ければグループ）に従う。
   const [picked, setPicked] = useState<'group' | 'store' | undefined>(
     isStorePath(pathname) ? 'store' : undefined
   );
@@ -135,26 +155,10 @@ export function Sidebar() {
   useEffect(() => {
     const fetchMenus = async () => {
       try {
-        const menus: MenuVO[] = await menuApi.getMenus();
-
-        const mappedNavigation = menus.map(section => ({
-          name: section.name,
-          href: section.path,
-          icon: resolveIcon(section.icon),
-          items: (section.items || []).map(item => ({
-            name: item.name,
-            href: item.path || '#',
-            icon: resolveIcon(item.icon),
-          })),
-        }));
-
-        setNavigation(mappedNavigation);
+        setNavigation(toNavigation(await menuApi.getMenus()));
       } catch (error) {
         console.error('Failed to fetch menus', error);
-        // メニュー取得に失敗したら最低限の導線（全員の着地先）に落とす。
-        setNavigation([
-          { name: 'ダッシュボード', href: '/admin/dashboard', icon: HouseIcon, items: [] },
-        ]);
+        setNavigation({});
       }
     };
 
@@ -162,32 +166,40 @@ export function Sidebar() {
   }, []);
 
   // 授権店舗が解決する前に描くと、店舗の文脈が既定の利用者に一瞬グループのメニューを見せてしまう。
-  // 取得失敗は解決済みとして扱い、グループ級だけで描く。一度解決したら戻さない —
+  // 取得失敗は解決済みとして扱い、グループの木だけで描く。一度解決したら戻さない —
   // 失敗後の再試行で reload が loadFailed を下ろしても、描いた項目を応答まで消さないため。
   const [storesSettled, setStoresSettled] = useState(false);
   if (!storesSettled && (stores !== null || loadFailed)) setStoresSettled(true);
-  const ready = navigation.length > 0 && storesSettled;
-
-  const groupSections = sectionsFor(navigation, false);
-  const storeSections = sectionsFor(navigation, true);
+  const ready = navigation !== null && storesSettled;
   const railStores: RailStore[] = (stores ?? []).flatMap(store =>
     store.id === undefined
       ? []
       : [{ id: store.id, name: store.name ?? '', shortName: store.short_name ?? '' }]
   );
 
-  const hasGroup = groupSections.length > 0;
-  const hasStore = railStores.length > 0;
+  // グループはグループの木を、各店舗のボタンは店舗の木を持つ者にだけ出す。
+  const groupRoots = navigation?.group;
+  const storeRoots = navigation?.store;
+  const hasGroup = groupRoots !== undefined;
+  const hasStore = storeRoots !== undefined && railStores.length > 0;
   const showRail = (hasGroup ? 1 : 0) + (hasStore ? railStores.length : 0) >= 2;
-  const showing: 'group' | 'store' = !hasStore
-    ? 'group'
+  const showing: 'group' | 'store' | undefined = !hasStore
+    ? hasGroup
+      ? 'group'
+      : undefined
     : !hasGroup
       ? 'store'
-      : (picked ?? (storeSections.length > 0 ? 'store' : 'group'));
+      : (picked ?? (storeRoots.some(section => !section.href) ? 'store' : 'group'));
 
   const currentName = railStores.find(store => String(store.id) === currentStoreId)?.name;
-  const heading = showing === 'group' ? 'グループ' : (currentName ?? '');
-  const dashboards = ready ? navigation.filter(section => section.href) : [];
+  const heading = showing === 'group' ? 'グループ' : showing === 'store' ? (currentName ?? '') : '';
+  const roots = !ready
+    ? []
+    : ((showing === 'group' ? groupRoots : showing === 'store' ? storeRoots : undefined) ??
+      FALLBACK);
+  const dashboards = roots.filter(section => section.href);
+  // 項目が 1 つも無い見出しは出さない。
+  const sections = roots.filter(section => !section.href && section.items.length > 0);
 
   return (
     <aside className="flex shrink-0 bg-card">
@@ -229,7 +241,7 @@ export function Sidebar() {
                 isActive={pathname === section.href}
               />
             ))}
-            {(!ready ? [] : showing === 'group' ? groupSections : storeSections).map(section => (
+            {sections.map(section => (
               <div key={section.name}>
                 <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-4 px-3">
                   {section.name}

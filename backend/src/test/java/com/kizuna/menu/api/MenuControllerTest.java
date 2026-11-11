@@ -7,9 +7,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.menu.application.MenuNode;
 import com.kizuna.menu.application.MenuService;
+import com.kizuna.menu.application.MenuTree;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
+import com.kizuna.user.domain.PermissionTree;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,17 +35,20 @@ class MenuControllerTest {
 
   // 見出し節は path を持たない。応答は null の項目を書かないため、節の JSON に path が現れないことまで固定する。
   @Test
-  @DisplayName("GET /menus/me はメニュー木を name・path・icon・items の入れ子で返すこと")
+  @DisplayName("GET /menus/me は木ごとに tree と、name・path・icon・items の入れ子の節を返すこと")
   @WithMockUser
   void returnsMenuTree() throws Exception {
     when(menuService.getMyMenus())
         .thenReturn(
             List.of(
-                new MenuNode(
-                    "CRM",
-                    null,
-                    "users",
-                    List.of(new MenuNode("顧客", "/customers", "user", List.of())))));
+                new MenuTree(
+                    PermissionTree.STORE,
+                    List.of(
+                        new MenuNode(
+                            "CRM",
+                            null,
+                            "users",
+                            List.of(new MenuNode("顧客", "/customers", "user", List.of())))))));
 
     mockMvc
         .perform(get("/menus/me"))
@@ -52,8 +57,8 @@ class MenuControllerTest {
             content()
                 .json(
                     """
-                    [{"name":"CRM","icon":"users","items":[
-                      {"name":"顧客","path":"/customers","icon":"user","items":[]}]}]
+                    [{"tree":"STORE","items":[{"name":"CRM","icon":"users","items":[
+                      {"name":"顧客","path":"/customers","icon":"user","items":[]}]}]}]
                     """,
                     JsonCompareMode.STRICT));
   }

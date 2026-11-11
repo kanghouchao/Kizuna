@@ -1,6 +1,6 @@
 package com.kizuna.menu.api;
 
-import com.kizuna.menu.api.dto.MenuVO;
+import com.kizuna.menu.api.dto.MenuTreeResponse;
 import com.kizuna.menu.application.MenuService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +19,7 @@ public class MenuController {
 
   @GetMapping("/me")
   @PreAuthorize("isAuthenticated()")
-  public ResponseEntity<List<MenuVO>> getMyMenus() {
-    return ResponseEntity.ok(menuService.getMyMenus().stream().map(MenuVO::of).toList());
+  public ResponseEntity<List<MenuTreeResponse>> getMyMenus() {
+    return ResponseEntity.ok(menuService.getMyMenus().stream().map(MenuTreeResponse::of).toList());
   }
 }
