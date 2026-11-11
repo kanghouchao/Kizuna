@@ -1,7 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { APP_URL } from '../base-url';
-import { ADMIN_PASSWORD, STORE_HEADERS, createPermissionRole, authorizedStoreIds, createStaffFixture, loginUser, loginViaUiAndEnterStore, openLoginForm } from './store-api';
+import { ADMIN_PASSWORD, STORE_HEADERS, createPermissionRole, authorizedStoreIds, createStaffFixture, loginUser, loginViaUiAndEnterStore, openLoginForm, storeUrl, STORE1_ID, waitStaffLanding } from './store-api';
 const { Given, When, Then } = createBdd();
 let email = '';
 let password = '';
@@ -37,10 +36,10 @@ When('担当者が口コミを受付し公開許可なしで内部承認する',
   await page.getByLabel('メールアドレス', { exact: true }).fill(email);
   await page.getByLabel('パスワード', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();
-  await expect(page).toHaveURL(/\/admin\/dashboard/, { timeout: 15000 });
-  await page.goto(`${APP_URL}/store/reviews`);
+  await waitStaffLanding(page);
+  await page.goto(storeUrl(STORE1_ID, `/reviews`));
   await page.getByRole('link', { name: '口コミを受付', exact: true }).click();
-  await expect(page).toHaveURL(/\/store\/reviews\/create$/);
+  await expect(page).toHaveURL(/\/store\/\d+\/reviews\/create$/);
   const intake = page.getByRole('main');
   await intake.getByLabel('口コミ本文').fill('  受付時の原文をそのまま保存します。\n二行目の長い本文です。  ');
   await intake.getByLabel('表示名（空欄は匿名）').fill('表示名');
@@ -51,7 +50,7 @@ When('担当者が口コミを受付し公開許可なしで内部承認する',
     intake.getByRole('button', { name: '受付を記録', exact: true }).click(),
   ]);
   expect(missingOrigin.status()).toBe(404);
-  await expect(page).toHaveURL(/\/store\/reviews\/create$/);
+  await expect(page).toHaveURL(/\/store\/\d+\/reviews\/create$/);
   await expect(intake.getByLabel('口コミ本文')).toHaveValue('  受付時の原文をそのまま保存します。\n二行目の長い本文です。  ');
   await intake.getByLabel('関連受注ID（任意）').fill('');
   const [created] = await Promise.all([
@@ -66,7 +65,7 @@ When('担当者が口コミを受付し公開許可なしで内部承認する',
   expect(result.review.permission_status).toBe('NOT_GRANTED');
   expect(result.review).not.toHaveProperty('verified_customer');
   expect(result.review.publication_connection).toBe('NOT_CONFIGURED');
-  await expect(page).toHaveURL(new RegExp(`/store/reviews/${reviewId}$`));
+  await expect(page).toHaveURL(new RegExp(`/store/${STORE1_ID}/reviews/${reviewId}$`));
   const detail = page.getByRole('main');
   await expect(detail.getByRole('heading', { level: 1, name: '口コミの内容・履歴' })).toBeVisible();
   await expect(detail.getByText('スタッフによる記録', { exact: true })).toBeVisible();
@@ -127,7 +126,7 @@ When('口コミの公開許可を記録して撤回する', async ({ page, reque
 
 Then('訂正先は審査待ちと許可未取得になり旧記録の履歴が残る', async ({ page, request, $testInfo }) => {
   await page.getByRole('main').getByRole('link', { name: '訂正再受付', exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/store/reviews/${reviewId}/edit$`));
+  await expect(page).toHaveURL(new RegExp(`/store/${STORE1_ID}/reviews/${reviewId}/edit$`));
   const correction = page.getByRole('main');
   await expect(correction.getByText(/公開許可は引き継ぎません/)).toBeVisible();
   await correction.getByLabel('口コミ本文').fill('訂正後の新しい文面');
@@ -139,7 +138,7 @@ Then('訂正先は審査待ちと許可未取得になり旧記録の履歴が�
     confirm(page),
   ]);
   expect(missingOrigin.status()).toBe(404);
-  await expect(page).toHaveURL(new RegExp(`/store/reviews/${reviewId}/edit$`));
+  await expect(page).toHaveURL(new RegExp(`/store/${STORE1_ID}/reviews/${reviewId}/edit$`));
   await expect(correction.getByLabel('口コミ本文')).toHaveValue('訂正後の新しい文面');
   await expect(correction.getByLabel('判断・変更の理由')).toHaveValue('原文の誤記を訂正');
   await expect(page.getByText('口コミが見つかりません', { exact: true })).toHaveCount(0);
@@ -152,7 +151,7 @@ Then('訂正先は審査待ちと許可未取得になり旧記録の履歴が�
   expect(corrected.ok()).toBeTruthy();
   const successor = (await corrected.json()).review.id;
   expect(successor).not.toBe(reviewId);
-  await expect(page).toHaveURL(new RegExp(`/store/reviews/${successor}$`));
+  await expect(page).toHaveURL(new RegExp(`/store/${STORE1_ID}/reviews/${successor}$`));
   const detail = page.getByRole('main');
   await expect(detail.getByText('訂正後の新しい文面', { exact: true })).toBeVisible();
   await expect(detail.getByText('審査待ち', { exact: true })).toBeVisible();

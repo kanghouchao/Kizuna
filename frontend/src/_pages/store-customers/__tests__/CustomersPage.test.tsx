@@ -32,13 +32,13 @@ jest.mock('next/navigation', () => ({
 }));
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => '1',
   useStoreContext: () => ({
     stores: [{ id: 1, name: 'テスト店舗' }],
     currentStoreId: '1',
     currentStore: { id: 1, name: 'テスト店舗' },
     loadFailed: false,
     reload: jest.fn(),
-    switchStore: jest.fn(),
   }),
 }));
 
@@ -242,7 +242,7 @@ describe('顧客一覧ページ固有の要素', () => {
     expect(screen.getByText('顧客情報の登録・編集ができます。')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '新規顧客登録' })).toHaveAttribute(
       'href',
-      '/store/customers/create'
+      '/store/1/customers/create'
     );
   });
 
@@ -315,7 +315,7 @@ describe('顧客一覧ページ固有の要素', () => {
 
     expect(screen.getByRole('link', { name: '重複候補' })).toHaveAttribute(
       'href',
-      '/store/customers/duplicates'
+      '/store/1/customers/duplicates'
     );
   });
 });
@@ -444,7 +444,7 @@ describe('顧客一覧からの統合', () => {
     // 「統合する」は画面へ移るだけで、ここでは何も確定しない
     expect(screen.getByRole('link', { name: '統合する' })).toHaveAttribute(
       'href',
-      `/store/customers/merge?${query}`
+      `/store/1/customers/merge?${query}`
     );
     expect(mockedCustomerApi.merge).not.toHaveBeenCalled();
   });

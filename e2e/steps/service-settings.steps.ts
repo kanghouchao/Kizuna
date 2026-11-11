@@ -1,13 +1,13 @@
 import { expect, test } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { loginViaUiAndEnterStore } from './store-api';
+import { loginViaUiAndEnterStore, storeUrl } from './store-api';
 
 const { Given, When, Then } = createBdd();
 let serviceName = '';
 
 Given('店長がサービス設定を開いている', async ({ page }) => {
-  await loginViaUiAndEnterStore(page);
-  await page.getByRole('link', { name: 'サービス設定', exact: true }).click();
+  const storeId = await loginViaUiAndEnterStore(page);
+  await page.goto(storeUrl(storeId, '/services'));
   await expect(page.getByRole('heading', { name: 'サービス設定', exact: true })).toBeVisible();
   serviceName = `E2Eコース-${Date.now()}`;
 });

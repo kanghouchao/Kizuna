@@ -2,6 +2,10 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import { mediumApi } from '@/entities/medium';
 import { CostEditor } from './CostEditor';
 import { Dialog, DialogFrame } from '@/shared/ui';
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => '1',
+}));
 jest.mock('@/entities/medium', () => ({ mediumApi: { options: jest.fn() } }));
 const options = jest.mocked(mediumApi.options);
 // 保存ボタンは外枠の操作帯へ置かれるので、外枠の中で描く
@@ -135,6 +139,6 @@ it('媒体の選択肢を取得できなければ再試行でき、媒体が無�
   expect(await screen.findByText(/選択できる媒体がありません/)).toBeVisible();
   expect(screen.getByRole('link', { name: '媒体を管理' })).toHaveAttribute(
     'href',
-    '/store/advertising-costs/media'
+    '/store/1/advertising-costs/media'
   );
 });

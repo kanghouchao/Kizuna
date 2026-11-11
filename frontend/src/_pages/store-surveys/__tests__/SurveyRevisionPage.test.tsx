@@ -12,13 +12,13 @@ import {
 
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => '1',
   useStoreContext: () => ({
     stores: [{ id: 1, name: 'テスト店舗' }],
     currentStoreId: '1',
     currentStore: { id: 1, name: 'テスト店舗' },
     loadFailed: false,
     reload: jest.fn(),
-    switchStore: jest.fn(),
   }),
 }));
 jest.mock('@/entities/survey', () => ({
@@ -64,18 +64,18 @@ test('URL の版を直接表示し、一覧・ほかの版・回答の詳細へ�
   expect(api.revision).toHaveBeenCalledWith('10', '20');
   expect(screen.getByRole('link', { name: 'アンケート一覧へ' })).toHaveAttribute(
     'href',
-    '/store/surveys'
+    '/store/1/surveys'
   );
   const versions = screen.getByRole('heading', { level: 2, name: '設問版' }).closest('section')!;
   expect(
     (await within(versions).findAllByRole('link', { name: '設問・回答' })).map(link =>
       link.getAttribute('href')
     )
-  ).toEqual(['/store/surveys/10/revisions/21']);
+  ).toEqual(['/store/1/surveys/10/revisions/21']);
   expect(within(versions).getByText('表示中')).toBeVisible();
   expect(await screen.findByRole('link', { name: '回答・履歴' })).toHaveAttribute(
     'href',
-    '/store/surveys/responses/30'
+    '/store/1/surveys/responses/30'
   );
   expect(screen.getByText(/回答者数や回答率ではありません/)).toBeVisible();
   expect(screen.queryByRole('link', { name: '回答を受付' })).not.toBeInTheDocument();
@@ -202,7 +202,7 @@ test('受付権限は設問管理を含まず、回答の受付は受付画面�
   expect(screen.queryByRole('button', { name: '受付を終了' })).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: '回答を受付' })).toHaveAttribute(
     'href',
-    '/store/surveys/10/revisions/20/responses/new'
+    '/store/1/surveys/10/revisions/20/responses/new'
   );
 });
 
@@ -215,11 +215,11 @@ test('下書きの版は差替画面へ、最新版は改訂画面へリンク�
   await shown();
   expect(screen.getByRole('link', { name: '下書きを編集' })).toHaveAttribute(
     'href',
-    '/store/surveys/10/revisions/20/edit'
+    '/store/1/surveys/10/revisions/20/edit'
   );
   expect(screen.getByRole('link', { name: '新しい版を作成' })).toHaveAttribute(
     'href',
-    '/store/surveys/10/revisions/new?from=20'
+    '/store/1/surveys/10/revisions/new?from=20'
   );
 });
 
@@ -231,6 +231,6 @@ test('版の404は再試行を出さず一覧へのリンクを出す', async ()
   expect(screen.queryByRole('button', { name: /再試行/ })).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: '一覧へ戻る' })).toHaveAttribute(
     'href',
-    '/store/surveys'
+    '/store/1/surveys'
   );
 });

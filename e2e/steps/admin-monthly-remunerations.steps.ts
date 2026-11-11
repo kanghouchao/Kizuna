@@ -1,13 +1,12 @@
 import { expect, type APIRequestContext } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { APP_URL } from '../base-url';
 import { expectChange } from './change-table';
 import {
   createStaffAccount,
   acceptCastInvitation, acceptExistingCastInvitation, cancelOrder,
   completeAgreedOrder, correctOrderExtension, createAgreedOrder, createCast, createCourse,
   getAuthorizedStores, getOrder, invalidateOrder, issueCastInvitation,
-  loginAsStoreAdmin, loginUser, STORE1_ID, suspendCast, switchStoreOnRail, withdrawCast,
+  loginAsStoreAdmin, loginUser, STORE1_ID, storeUrl, suspendCast, switchStoreOnRail, waitStaffLanding, withdrawCast,
   openLoginForm,
   monthInTokyo,
 } from './store-api';
@@ -24,7 +23,6 @@ let setOnlyReader = '';
 let readerEmail = '';
 let twoStoreReaderEmail = '';
 let password = '';
-let storeName = '';
 let secondStore = '';
 let secondStoreName = '';
 let personId = 0;
@@ -52,7 +50,6 @@ Given('月次受注照会用の本人と異なる授権集合の照会者がい�
   manager = await loginAsStoreAdmin(request);
   const admin = await loginUser(request, 'admin@kizuna.test', 'pass1234');
   const stores = await getAuthorizedStores(request, manager);
-  storeName = stores.find(s => String(s.id) === STORE1_ID)!.name;
   const other = stores.find(s => String(s.id) !== STORE1_ID)!;
   secondStore = String(other.id);
   secondStoreName = other.name;
@@ -127,16 +124,16 @@ Given('月次受注照会用の本人と異なる授権集合の照会者がい�
   foreignPersonId = (await foreignCandidates.json()).content[0].person_id;
 });
 
-When('受注照会者が受注照会から現在店舗の月次給与明細で本人と原月を選択する', async ({ page }) => {
+When('受注照会者が店舗の受注一覧から月次給与明細を開き本人と原月を選択する', async ({ page }) => {
   await openLoginForm(page);
   await page.getByLabel('メールアドレス', { exact: true }).fill(readerEmail);
   await page.getByLabel('パスワード', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();
-  await expect(page).not.toHaveURL(/\/login$/, { timeout: 15000 });
-  await page.goto(APP_URL + '/admin/orders');
+  await waitStaffLanding(page);
+  // 月次給与明細は店舗の画面。照会する原月の受注がある店舗 1 の受注一覧から開く。
+  await page.goto(storeUrl(STORE1_ID, '/orders'));
   await page.getByRole('link', { name: '月次給与明細', exact: true }).click();
-  await expect(page).toHaveURL(/\/store\/orders\/monthly-remunerations$/);
-  if (readerEmail === twoStoreReaderEmail) await switchStoreOnRail(page, storeName);
+  await expect(page).toHaveURL(new RegExp(`/store/${STORE1_ID}/orders/monthly-remunerations$`));
   await page.getByRole('button', { name: '照会', exact: true }).click();
   await expect(page.getByText('キャスト本人を選択してください', { exact: true })).toBeVisible();
   await page.getByRole('combobox', { name: 'キャスト本人', exact: true }).click();
@@ -287,7 +284,12 @@ Then('受注照会の月次画面は失敗から再試行でき店舗切替で�
   await page.unroute(path);
   await page.getByRole('button', { name: '再試行', exact: true }).click();
   await expect(page.getByLabel('月次報酬合計')).toHaveText('¥14,000');
-  await switchStoreOnRail(page, secondStoreName);
+  // レールで店舗を移るとその店舗のダッシュボードへ移るので、画面内の遷移で他店の月次給与明細を開き直す。
+  const shownStore = await switchStoreOnRail(page, secondStoreName);
+  expect(shownStore).toBe(secondStore);
+  await page.locator('aside').getByRole('link', { name: '予約・案件管理', exact: true }).click();
+  await page.getByRole('link', { name: '月次給与明細', exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/store/${secondStore}/orders/monthly-remunerations$`));
   await expect(page.getByLabel('月次報酬合計')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '訂正履歴', exact: true })).toHaveCount(0);
   await expect(page.getByRole('combobox', { name: 'キャスト本人', exact: true })).toContainText('源氏名で検索');

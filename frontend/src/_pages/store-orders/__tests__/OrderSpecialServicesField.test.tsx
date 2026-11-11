@@ -5,13 +5,13 @@ import { Form, Button } from '@/shared/ui';
 import { OrderSpecialServicesField } from '../ui/OrderSpecialServicesField';
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => '1',
   useStoreContext: () => ({
     stores: [{ id: 1, name: 'テスト店舗' }],
     currentStoreId: '1',
     currentStore: { id: 1, name: 'テスト店舗' },
     loadFailed: false,
     reload: jest.fn(),
-    switchStore: jest.fn(),
   }),
 }));
 

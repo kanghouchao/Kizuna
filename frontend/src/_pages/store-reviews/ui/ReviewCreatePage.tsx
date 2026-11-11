@@ -1,7 +1,13 @@
 'use client';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
+import {
+  MePending,
+  hasPermission,
+  useCurrentStoreId,
+  useMe,
+  useStoreContext,
+} from '@/entities/user';
 import { storePath } from '@/shared/lib';
 import { Button } from '@/shared/ui';
 import { useReviewWrite } from '../lib/useReviewWrite';
@@ -22,13 +28,16 @@ export function ReviewCreatePage() {
 }
 
 function Create({ canOrder }: { canOrder: boolean }) {
+  const storeId = useCurrentStoreId();
   const router = useRouter();
-  const write = useReviewWrite(review => router.replace(storePath(`/reviews/${review.id}`)));
+  const write = useReviewWrite(review =>
+    router.replace(storePath(storeId, `/reviews/${review.id}`))
+  );
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <h1 className="text-2xl font-bold text-foreground">口コミを受付</h1>
-        <Button variant="outline" render={<Link href={storePath('/reviews')} />}>
+        <Button variant="outline" render={<Link href={storePath(storeId, '/reviews')} />}>
           一覧へ戻る
         </Button>
       </div>

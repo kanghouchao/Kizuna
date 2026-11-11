@@ -2,7 +2,13 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
+import {
+  MePending,
+  hasPermission,
+  useCurrentStoreId,
+  useMe,
+  useStoreContext,
+} from '@/entities/user';
 import { ReviewSearch, reviewApi } from '@/entities/content/review';
 import { GENERATED_ID_PATTERN, storePath, useListPage } from '@/shared/lib';
 import { Button, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/ui';
@@ -21,6 +27,7 @@ export function ReviewsPage() {
   return <Reviews key={storeId} canManage={hasPermission(me, 'REVIEW_MANAGE')} />;
 }
 function Reviews({ canManage }: { canManage: boolean }) {
+  const storeId = useCurrentStoreId();
   const router = useRouter();
   const [filters, setFilters] = useState<ReviewSearch>({});
   const [filterError, setFilterError] = useState<string | null>(null);
@@ -40,7 +47,7 @@ function Reviews({ canManage }: { canManage: boolean }) {
       review_id: filters.review_id || undefined,
     });
   };
-  const write = useReviewWrite(review => router.push(storePath(`/reviews/${review.id}`)));
+  const write = useReviewWrite(review => router.push(storePath(storeId, `/reviews/${review.id}`)));
   return (
     <>
       <ReviewWriteFeedback write={write} />
@@ -49,7 +56,9 @@ function Reviews({ canManage }: { canManage: boolean }) {
         description="スタッフが受け付けた口コミを審査し、公開許可を別途記録します。"
         actions={
           canManage && (
-            <Button render={<Link href={storePath('/reviews/create')} />}>口コミを受付</Button>
+            <Button render={<Link href={storePath(storeId, '/reviews/create')} />}>
+              口コミを受付
+            </Button>
           )
         }
         search={{
@@ -85,7 +94,10 @@ function Reviews({ canManage }: { canManage: boolean }) {
                 <TableCell>{permissions[r.permission_status]}</TableCell>
                 <TableCell>{r.displayed ? '掲出対象' : '—'}</TableCell>
                 <TableCell>
-                  <Button variant="outline" render={<Link href={storePath(`/reviews/${r.id}`)} />}>
+                  <Button
+                    variant="outline"
+                    render={<Link href={storePath(storeId, `/reviews/${r.id}`)} />}
+                  >
                     内容・履歴
                   </Button>
                 </TableCell>

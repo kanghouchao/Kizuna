@@ -41,13 +41,13 @@ jest.mock('next/navigation', () => ({
 }));
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => '1',
   useStoreContext: () => ({
     stores: [{ id: 1, name: 'テスト店舗' }],
     currentStoreId: '1',
     currentStore: { id: 1, name: 'テスト店舗' },
     loadFailed: false,
     reload: jest.fn(),
-    switchStore: jest.fn(),
   }),
 }));
 
@@ -238,7 +238,7 @@ describe('CustomerDuplicatesPage', () => {
     expect(within(comparison).getAllByText('9 件')).toHaveLength(2);
     expect(screen.getByRole('link', { name: '統合する' })).toHaveAttribute(
       'href',
-      '/store/customers/merge?surviving=c1&merged=c2'
+      '/store/1/customers/merge?surviving=c1&merged=c2'
     );
   });
 
@@ -365,7 +365,7 @@ describe('CustomerDuplicatesPage', () => {
     async (name, query) => {
       render(<CustomerDuplicatesPage />);
 
-      expect(await mergeLink(name)).toHaveAttribute('href', `/store/customers/merge?${query}`);
+      expect(await mergeLink(name)).toHaveAttribute('href', `/store/1/customers/merge?${query}`);
       expect(mockedMerge).not.toHaveBeenCalled();
     }
   );

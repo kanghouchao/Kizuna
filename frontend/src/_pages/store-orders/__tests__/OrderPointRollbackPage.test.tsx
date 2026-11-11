@@ -42,13 +42,13 @@ jest.mock('next/navigation', () => ({
 }));
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => mockStoreId,
   useStoreContext: () => ({
     stores: [{ id: 1, name: 'テスト店舗' }],
     currentStoreId: mockStoreId,
     currentStore: { id: 1, name: 'テスト店舗' },
     loadFailed: false,
     reload: jest.fn(),
-    switchStore: jest.fn(),
   }),
 }));
 

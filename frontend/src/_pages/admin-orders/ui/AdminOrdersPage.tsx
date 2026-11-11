@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { orderApi, ORDER_STATUS_LABELS, type AdminOrder } from '@/entities/order';
 import { MePending, hasPermission, useMe } from '@/entities/user';
-import { storePath, useListPage } from '@/shared/lib';
+import { useListPage } from '@/shared/lib';
 import {
   Badge,
   Button,
@@ -34,7 +34,7 @@ function OrderList() {
   const list = useListPage(orderApi.adminList);
   const { me } = useMe();
   const canReport = hasPermission(me, 'OPERATIONAL_REPORT_SET_VIEW');
-  // 月次と訂正履歴は行の店舗の店舗級の端点を読むので、店舗の木の受注の権限を持つ者にだけ出す。
+  // 訂正履歴は行の店舗の店舗級の端点を読むので、店舗の木の受注の権限を持つ者にだけ出す。
   const managesOrders = hasPermission(me, 'ORDER_MANAGE');
   const [details, setDetails] = useState<AdminOrder | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -45,21 +45,11 @@ function OrderList() {
       <ListPage
         title="受注照会"
         actions={
-          <>
-            {canReport && (
-              <Button variant="outline" render={<Link href="/admin/operational-reports" />}>
-                運営金額集計
-              </Button>
-            )}
-            {managesOrders && (
-              <Button
-                variant="outline"
-                render={<Link href={storePath('/orders/monthly-remunerations')} />}
-              >
-                月次給与明細
-              </Button>
-            )}
-          </>
+          canReport && (
+            <Button variant="outline" render={<Link href="/admin/operational-reports" />}>
+              運営金額集計
+            </Button>
+          )
         }
         description="授権された店舗の受注を閲覧できます。報酬は支払済み額ではありません。"
         state={list}

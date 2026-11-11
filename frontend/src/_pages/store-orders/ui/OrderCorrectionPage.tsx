@@ -7,7 +7,7 @@ import { OrderSpecialServicesField } from './OrderSpecialServicesField';
 
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
+import { MePending, hasPermission, useCurrentStoreId, useMe } from '@/entities/user';
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import {
@@ -124,7 +124,7 @@ export default function OrderCorrectionPage() {
 function CorrectionEditor() {
   const confirmation = useOrderConfirmation();
   const params = useParams();
-  const storeId = useStoreContext().currentStoreId;
+  const storeId = useCurrentStoreId();
   const orderId = params.id as string;
   const router = useRouter();
 
@@ -247,7 +247,7 @@ function CorrectionEditor() {
         {failure === 'notFound' && (
           <RegionError
             message="この受注は見つかりませんでした。"
-            fallback={{ href: storePath('/orders'), label: 'オーダー一覧へ' }}
+            fallback={{ href: storePath(storeId, '/orders'), label: 'オーダー一覧へ' }}
           />
         )}
 
@@ -269,7 +269,7 @@ function CorrectionEditor() {
             <Button
               variant="outline"
               size="sm"
-              render={<Link href={storePath(`/orders/${orderId}/point-rollback`)} />}
+              render={<Link href={storePath(storeId, `/orders/${orderId}/point-rollback`)} />}
             >
               <ExternalLinkIcon aria-hidden="true" />
               ポイントの巻き戻しへ
@@ -281,7 +281,7 @@ function CorrectionEditor() {
         {seeded && !completed && (
           <RegionError
             message="完了した受注だけが訂正できます。未完了の受注は編集画面から、取消済みの受注は同じ内容で起こし直してください。"
-            fallback={{ href: storePath('/orders'), label: 'オーダー一覧へ' }}
+            fallback={{ href: storePath(storeId, '/orders'), label: 'オーダー一覧へ' }}
           />
         )}
 
@@ -370,7 +370,7 @@ function CorrectionEditor() {
                   type="button"
                   variant="outline"
                   disabled={formState.isSubmitting}
-                  onClick={() => router.push(storePath('/orders'))}
+                  onClick={() => router.push(storePath(storeId, '/orders'))}
                 >
                   一覧へ戻る
                 </Button>

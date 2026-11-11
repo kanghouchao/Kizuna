@@ -28,7 +28,7 @@ export default async function Home() {
   const sessionKind = cookieStore.get('session-kind')?.value;
   if (sessionKind) {
     if (sessionKind === 'admin') {
-      redirect('/admin/dashboard/');
+      redirect('/admin');
     }
     if (sessionKind === 'cast') {
       redirect('/cast/');

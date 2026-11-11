@@ -9,13 +9,13 @@ jest.mock('next/navigation', () => ({
 }));
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => '1',
   useStoreContext: () => ({
     stores: [{ id: 1, name: 'テスト店舗' }],
     currentStoreId: '1',
     currentStore: { id: 1, name: 'テスト店舗' },
     loadFailed: false,
     reload: jest.fn(),
-    switchStore: jest.fn(),
   }),
 }));
 jest.mock('@/entities/customer', () => ({ customerApi: { create: jest.fn() } }));
@@ -39,7 +39,7 @@ test('連絡先の登録エラーを具体的に伝え、入力を修正して�
   expect(screen.getByLabelText('連絡先の値')).toHaveValue('+12025550123');
   fireEvent.change(screen.getByLabelText('連絡先の値'), { target: { value: '09012345678' } });
   fireEvent.click(screen.getByRole('button', { name: '保存する' }));
-  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/customers'));
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/1/customers'));
   expect(customerApi.create).toHaveBeenLastCalledWith(
     expect.objectContaining({
       contacts: [{ type: 'PHONE', value: '09012345678' }],

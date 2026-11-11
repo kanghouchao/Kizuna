@@ -13,6 +13,7 @@ import { SurveyEditFrame, editCard } from './SurveyEditFrame';
 import { SurveyDenied, SurveyGate } from './SurveyGate';
 import { SurveyWriteFeedback } from './SurveyWriteFeedback';
 import { useGuardedRead } from './surveyUi';
+import { useCurrentStoreId } from '@/entities/user';
 
 export function SurveyReplacePage() {
   const { sid, rid } = useParams<{ sid: string; rid: string }>();
@@ -34,10 +35,11 @@ export function SurveyRevisePage() {
 }
 
 function RevisionMissing() {
+  const storeId = useCurrentStoreId();
   return (
     <div role="alert" className="space-y-3">
       <p>設問版が見つかりません</p>
-      <Button variant="outline" render={<Link href={surveyListHref} />}>
+      <Button variant="outline" render={<Link href={surveyListHref(storeId)} />}>
         一覧へ戻る
       </Button>
     </div>
@@ -46,14 +48,15 @@ function RevisionMissing() {
 
 /** DRAFT の版を直す。読み直した版が DRAFT でなくなっていれば、入力を残して保存だけを止める。 */
 function Replace({ sid, rid }: { sid: string; rid: string }) {
+  const storeId = useCurrentStoreId();
   const router = useRouter();
-  const write = useSurveyWrite(result => router.replace(writtenHref(result)));
-  const refresher = useSurveyRefresh(write, () => router.replace(surveyListHref));
+  const write = useSurveyWrite(result => router.replace(writtenHref(storeId, result)));
+  const refresher = useSurveyRefresh(write, () => router.replace(surveyListHref(storeId)));
   const guard = useGuardedRead(write.deny);
   const detail = useResource(() => guard(() => surveyApi.revision(sid, rid)), [sid, rid]);
   const [latest, setLatest] = useState<Revision | null>(null);
   if (write.denied) return <SurveyDenied message={write.denied} />;
-  const back = { href: revisionHref(sid, rid), label: '設問版へ戻る' };
+  const back = { href: revisionHref(storeId, sid, rid), label: '設問版へ戻る' };
   const opened = detail.data;
   const current = latest ?? opened;
   const allowed = current?.status === 'DRAFT';
@@ -111,9 +114,10 @@ function Replace({ sid, rid }: { sid: string; rid: string }) {
  * 示し、入力を保ったまま改版元を差し替えるかは利用者が選ぶ。
  */
 function Revise({ sid, from }: { sid: string; from: string | null }) {
+  const storeId = useCurrentStoreId();
   const router = useRouter();
-  const write = useSurveyWrite(result => router.replace(writtenHref(result)));
-  const refresher = useSurveyRefresh(write, () => router.replace(surveyListHref));
+  const write = useSurveyWrite(result => router.replace(writtenHref(storeId, result)));
+  const refresher = useSurveyRefresh(write, () => router.replace(surveyListHref(storeId)));
   const guard = useGuardedRead(write.deny);
   const detail = useResource(
     from
@@ -132,8 +136,8 @@ function Revise({ sid, from }: { sid: string; from: string | null }) {
   const [candidate, setCandidate] = useState<{ revision: Revision; draftId?: string } | null>(null);
   if (write.denied) return <SurveyDenied message={write.denied} />;
   const back = from
-    ? { href: revisionHref(sid, from), label: '設問版へ戻る' }
-    : { href: surveyListHref, label: 'アンケート一覧へ' };
+    ? { href: revisionHref(storeId, sid, from), label: '設問版へ戻る' }
+    : { href: surveyListHref(storeId), label: 'アンケート一覧へ' };
   const opened = detail.data;
   const current = base ?? opened?.revision;
   const refresh = () => {

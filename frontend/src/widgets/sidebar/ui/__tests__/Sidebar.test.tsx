@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import { Sidebar } from '../Sidebar';
-import { menuApi } from '@/entities/menu';
+import { useMenuTrees, type MenuTree } from '@/entities/menu';
 import { useStoreContext } from '@/entities/user';
 
 let mockPathname = '/admin/dashboard';
@@ -9,16 +9,15 @@ jest.mock('next/navigation', () => ({
 }));
 
 jest.mock('@/entities/menu', () => ({
-  menuApi: { getMenus: jest.fn() },
+  useMenuTrees: jest.fn(),
 }));
 
 jest.mock('@/entities/user', () => ({
   useStoreContext: jest.fn(),
 }));
 
-const mockedGetMenus = menuApi.getMenus as jest.Mock;
+const mockedUseMenuTrees = useMenuTrees as jest.MockedFunction<typeof useMenuTrees>;
 const mockedUseStoreContext = useStoreContext as jest.MockedFunction<typeof useStoreContext>;
-const switchStore = jest.fn();
 
 const STORES = [
   { id: 1, name: '銀座本店', short_name: '銀' },
@@ -27,29 +26,29 @@ const STORES = [
 
 const reload = jest.fn();
 
-function withStores(stores: typeof STORES | null, currentStoreId = '1', loadFailed = false) {
+function withStores(stores: typeof STORES | null, loadFailed = false) {
   mockedUseStoreContext.mockReturnValue({
     stores,
-    currentStoreId,
-    currentStore: stores?.find(store => String(store.id) === currentStoreId),
+    currentStoreId: undefined,
+    currentStore: undefined,
     loadFailed,
     reload,
-    switchStore,
   });
 }
 
 // seed の二つの木を縮めた写し。木は応答に含まれる者（その木の権限を持つ者）にだけ出る。
+// 店舗の木の path は店舗の中のパス。
 const item = (name: string, path: string) => ({ name, path, icon: 'HouseIcon' });
-const dashboard = {
+const dashboard = (path: string) => ({
   name: 'ダッシュボード',
-  path: '/admin/dashboard',
+  path,
   icon: 'HouseIcon',
   items: [],
-};
-const groupTree = {
-  tree: 'GROUP' as const,
+});
+const groupTree: MenuTree = {
+  tree: 'GROUP',
   items: [
-    dashboard,
+    dashboard('/admin/dashboard'),
     { name: '業務', items: [item('受注照会', '/admin/orders')] },
     {
       name: '組織',
@@ -57,384 +56,304 @@ const groupTree = {
     },
   ],
 };
-const storeTree = {
-  tree: 'STORE' as const,
+const storeTree: MenuTree = {
+  tree: 'STORE',
   items: [
-    dashboard,
-    { name: '業務', items: [item('予約・案件管理', '/store/orders')] },
-    { name: '運用', items: [item('店舗情報', '/store/profile')] },
+    dashboard('/dashboard'),
+    { name: '業務', items: [item('予約・案件管理', '/orders')] },
+    { name: '運用', items: [item('店舗情報', '/settings/profile')] },
   ],
 };
 const fullMenu = [groupTree, storeTree];
 const storeOnlyMenu = [storeTree];
 const groupOnlyMenu = [groupTree];
 
-const rail = () => screen.queryByRole('button', { name: 'グループ' });
+const railLink = (name: string) =>
+  within(screen.getByRole('navigation', { name: '文脈' })).getByRole('link', { name });
+const groupLink = () => screen.queryByRole('link', { name: 'グループ' });
 const headings = () => screen.getAllByRole('heading').map(h => h.textContent);
+const panelLinks = () =>
+  screen
+    .getAllByRole('navigation')
+    .filter(nav => nav.getAttribute('aria-label') !== '文脈')
+    .flatMap(nav => within(nav).getAllByRole('link'));
 
 describe('Sidebar', () => {
   beforeEach(() => {
     mockPathname = '/admin/dashboard';
-    mockedGetMenus.mockResolvedValue(fullMenu);
+    mockedUseMenuTrees.mockReturnValue(fullMenu);
     withStores(STORES);
   });
 
   afterEach(() => jest.clearAllMocks());
 
-  it('メニューの path をそのままリンク先にする', async () => {
+  it('グループの木の path はそのまま、店舗の木の path は URL の店舗の中のパスとしてリンク先にする', () => {
     render(<Sidebar />);
+    expect(screen.getByRole('link', { name: '受注照会' })).toHaveAttribute('href', '/admin/orders');
 
-    expect(await screen.findByRole('link', { name: '予約・案件管理' })).toHaveAttribute(
+    mockPathname = '/store/2/orders';
+    render(<Sidebar />);
+    expect(screen.getByRole('link', { name: '予約・案件管理' })).toHaveAttribute(
       'href',
-      '/store/orders'
+      '/store/2/orders'
     );
-    expect(menuApi.getMenus).toHaveBeenCalledTimes(1);
   });
 
-  it('どの木も返らない利用者には全員の着地先（ダッシュボード）への導線だけを出す', async () => {
-    mockedGetMenus.mockResolvedValue([]);
+  it.each([
+    ['どの木も返らない', [] as MenuTree[]],
+    ['店舗の木だけで店舗の画面にいない', storeOnlyMenu],
+  ])('%s利用者には全員の着地先（ダッシュボード）への導線だけを出す', (_, trees) => {
+    mockedUseMenuTrees.mockReturnValue(trees);
+    withStores([STORES[0]]);
 
     render(<Sidebar />);
 
-    expect(await screen.findByRole('link', { name: 'ダッシュボード' })).toHaveAttribute(
-      'href',
-      '/admin/dashboard'
-    );
-    expect(screen.queryByRole('heading')).toBeNull();
-    expect(screen.queryByRole('button')).toBeNull();
-  });
-
-  it('メニュー取得が失敗したら全員の着地先（ダッシュボード）への導線だけを出す', async () => {
-    jest.spyOn(console, 'error').mockImplementation(() => {});
-    mockedGetMenus.mockRejectedValue(new Error('network'));
-
-    render(<Sidebar />);
-
-    expect(await screen.findByRole('link', { name: 'ダッシュボード' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'ダッシュボード' })).toHaveAttribute(
       'href',
       '/admin/dashboard'
     );
     expect(screen.queryByRole('heading')).toBeNull();
-    expect(rail()).toBeNull();
   });
 
-  it('授権店舗が解決するまでは項目もレールも出さない', async () => {
-    withStores(null);
-
-    render(<Sidebar />);
-
-    await waitFor(() => expect(menuApi.getMenus).toHaveBeenCalled());
+  it('メニューか授権店舗が解決するまでは項目もレールも出さない', () => {
+    mockedUseMenuTrees.mockReturnValue(null);
+    const { unmount } = render(<Sidebar />);
     expect(screen.queryByRole('link')).toBeNull();
-    expect(rail()).toBeNull();
+    unmount();
+
+    mockedUseMenuTrees.mockReturnValue(fullMenu);
+    withStores(null);
+    render(<Sidebar />);
+    expect(screen.queryByRole('link')).toBeNull();
   });
 
-  it('授権店舗の取得に失敗したらグループ級の項目だけで描き、失敗と再試行を出す', async () => {
-    withStores(null, undefined, true);
+  it('授権店舗の取得に失敗したらグループの木だけで描き、失敗と再試行を出す', () => {
+    withStores(null, true);
 
     render(<Sidebar />);
 
-    expect(await screen.findByRole('link', { name: '受注照会' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: '予約・案件管理' })).toBeNull();
+    expect(screen.getByRole('link', { name: '受注照会' })).toBeInTheDocument();
+    expect(groupLink()).toBeNull();
     const alert = screen.getByRole('alert');
     expect(alert).toHaveTextContent('店舗一覧の取得に失敗しました');
     fireEvent.click(within(alert).getByRole('button', { name: '再試行' }));
     expect(reload).toHaveBeenCalledTimes(1);
   });
 
-  it('初回の失敗後に再試行している間も、描いたグループ級の項目を消さない', async () => {
-    withStores(null, undefined, true);
+  it('初回の失敗後に再試行している間も、描いたグループの項目を消さない', () => {
+    withStores(null, true);
     const { rerender } = render(<Sidebar />);
-    expect(await screen.findByRole('link', { name: '受注照会' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '受注照会' })).toBeInTheDocument();
 
-    withStores(null, undefined, false);
+    withStores(null, false);
     rerender(<Sidebar />);
 
     expect(screen.getByRole('link', { name: '受注照会' })).toBeInTheDocument();
   });
 
-  it('取り直しに失敗したら直前の一覧のレールを残したまま、失敗と再試行を出す', async () => {
-    withStores(STORES, '1', true);
+  it('取り直しに失敗したら直前の一覧のレールを残したまま、失敗と再試行を出す', () => {
+    withStores(STORES, true);
 
     render(<Sidebar />);
 
-    expect(await screen.findByRole('button', { name: '新宿店' })).toBeInTheDocument();
-    const alert = screen.getByRole('alert');
-    expect(alert).toHaveTextContent('店舗一覧の取得に失敗しました');
-    fireEvent.click(within(alert).getByRole('button', { name: '再試行' }));
-    expect(reload).toHaveBeenCalledTimes(1);
+    expect(railLink('新宿店')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('店舗一覧の取得に失敗しました');
   });
 
-  it('取得に成功している間は失敗を出さない', async () => {
+  it('取得に成功している間は失敗を出さない', () => {
     render(<Sidebar />);
 
-    expect(await screen.findByRole('link', { name: '予約・案件管理' })).toBeInTheDocument();
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
   describe('レール', () => {
-    it('グループと各店舗が並び、店舗ボタンは略称を表示して店名を名乗る', async () => {
+    it('グループと各店舗が並び、それぞれの文脈のダッシュボードへのリンクになる', () => {
       render(<Sidebar />);
 
-      await screen.findByRole('link', { name: '予約・案件管理' });
-      const group = screen.getByRole('button', { name: 'グループ' });
-      const ginza = screen.getByRole('button', { name: '銀座本店' });
-      expect(group).toHaveAttribute('title', 'グループ');
-      expect(ginza).toHaveAttribute('title', '銀座本店');
-      expect(ginza).toHaveTextContent('銀');
-      expect(screen.getByRole('button', { name: '新宿店' })).toHaveTextContent('新宿店');
+      expect(railLink('グループ')).toHaveAttribute('href', '/admin/dashboard');
+      expect(railLink('銀座本店')).toHaveAttribute('href', '/store/1/dashboard');
+      expect(railLink('新宿店')).toHaveAttribute('href', '/store/2/dashboard');
+      expect(railLink('銀座本店')).toHaveAttribute('title', '銀座本店');
+      expect(railLink('銀座本店')).toHaveTextContent('銀');
     });
 
-    it('店舗の木だけを持つ利用者には「グループ」を出さない', async () => {
-      mockedGetMenus.mockResolvedValue(storeOnlyMenu);
+    it('店舗の木だけを持つ利用者には「グループ」を出さない', () => {
+      mockedUseMenuTrees.mockReturnValue(storeOnlyMenu);
+      mockPathname = '/store/1/orders';
 
       render(<Sidebar />);
 
-      await screen.findByRole('link', { name: '予約・案件管理' });
-      expect(rail()).toBeNull();
-      expect(screen.getByRole('button', { name: '銀座本店' })).toBeInTheDocument();
+      expect(groupLink()).toBeNull();
+      expect(railLink('新宿店')).toBeInTheDocument();
     });
 
-    it('店舗が 1 件でグループの木も無ければレールを出さず、パネルは 256px', async () => {
-      mockedGetMenus.mockResolvedValue(storeOnlyMenu);
+    it('店舗が 1 件でグループの木も無ければレールを出さず、パネルは 256px', () => {
+      mockedUseMenuTrees.mockReturnValue(storeOnlyMenu);
       withStores([STORES[0]]);
+      mockPathname = '/store/1/orders';
 
       const { container } = render(<Sidebar />);
 
-      await screen.findByRole('link', { name: '予約・案件管理' });
-      expect(screen.queryByRole('button')).toBeNull();
+      expect(screen.getByRole('link', { name: '予約・案件管理' })).toBeInTheDocument();
+      expect(screen.queryByRole('navigation', { name: '文脈' })).toBeNull();
       expect(container.querySelector('.w-64')).not.toBeNull();
-      expect(container.querySelector('.w-\\[200px\\]')).toBeNull();
     });
 
-    it('グループの木だけを持ち授権店舗が無い利用者にはレールを出さない', async () => {
-      mockedGetMenus.mockResolvedValue(groupOnlyMenu);
+    it('グループの木だけを持ち授権店舗が無い利用者にはレールを出さない', () => {
+      mockedUseMenuTrees.mockReturnValue(groupOnlyMenu);
       withStores([]);
 
       render(<Sidebar />);
 
-      await screen.findByRole('link', { name: '店舗一覧' });
-      expect(screen.queryByRole('button')).toBeNull();
+      expect(screen.getByRole('link', { name: '店舗一覧' })).toBeInTheDocument();
+      expect(screen.queryByRole('navigation', { name: '文脈' })).toBeNull();
     });
 
-    it('店舗の木が無い利用者には授権店舗があっても店舗のボタンを出さず、グループの文脈になる', async () => {
-      mockedGetMenus.mockResolvedValue(groupOnlyMenu);
+    it('店舗の木が無い利用者には授権店舗があっても店舗を出さず、グループの文脈になる', () => {
+      mockedUseMenuTrees.mockReturnValue(groupOnlyMenu);
 
       render(<Sidebar />);
 
-      expect(await screen.findByRole('link', { name: '店舗一覧' })).toBeInTheDocument();
-      expect(screen.queryByRole('button')).toBeNull();
+      expect(screen.getByRole('link', { name: '店舗一覧' })).toBeInTheDocument();
+      expect(screen.queryByRole('navigation', { name: '文脈' })).toBeNull();
       expect(screen.getByText('グループ', { selector: 'span' })).toBeInTheDocument();
     });
 
-    it('店舗の木がダッシュボードだけでも店舗のボタンを出し、選ぶとパネルはダッシュボードだけになる', async () => {
-      mockedGetMenus.mockResolvedValue([groupTree, { tree: 'STORE', items: [dashboard] }]);
-      render(<Sidebar />);
-      await screen.findByRole('link', { name: '店舗一覧' });
-
-      fireEvent.click(screen.getByRole('button', { name: '新宿店' }));
-
-      expect(screen.getAllByRole('link').map(l => l.textContent)).toEqual(['ダッシュボード']);
-      expect(screen.queryByRole('heading')).toBeNull();
-      expect(switchStore).toHaveBeenCalledWith(2);
-    });
-
-    it('店舗 1 件と両方の木を持つ利用者にはレールが出て、パネルは 200px', async () => {
+    it('店舗 1 件と両方の木を持つ利用者にはレールが出て、パネルは 200px', () => {
       withStores([STORES[0]]);
 
       const { container } = render(<Sidebar />);
 
-      await screen.findByRole('link', { name: '予約・案件管理' });
-      expect(rail()).not.toBeNull();
+      expect(railLink('グループ')).toBeInTheDocument();
       expect(container.querySelector('.w-\\[200px\\]')).not.toBeNull();
     });
   });
 
-  describe('パネル', () => {
-    it('既定では現在店舗の文脈で、店舗の木の項目と見出しだけを出す', async () => {
+  describe('文脈は URL が決める', () => {
+    it('/admin の画面はグループの文脈で、グループの木の項目と見出しだけを出す', () => {
       render(<Sidebar />);
 
-      await screen.findByRole('link', { name: '予約・案件管理' });
-      expect(screen.getByRole('link', { name: '店舗情報' })).toBeInTheDocument();
-      expect(screen.queryByRole('link', { name: '受注照会' })).toBeNull();
-      expect(screen.queryByRole('link', { name: '店舗一覧' })).toBeNull();
-      expect(headings()).toEqual(['業務', '運用']);
-      expect(screen.getByText('銀座本店', { selector: 'span' })).toBeInTheDocument();
-    });
-
-    it('グループを選ぶとグループの木の項目と見出しだけを出す（組織は店舗の文脈に出ない）', async () => {
-      render(<Sidebar />);
-      await screen.findByRole('link', { name: '予約・案件管理' });
-
-      fireEvent.click(screen.getByRole('button', { name: 'グループ' }));
-
-      expect(screen.getByRole('link', { name: '受注照会' })).toBeInTheDocument();
       expect(screen.getByRole('link', { name: '従業員管理' })).toBeInTheDocument();
       expect(screen.queryByRole('link', { name: '予約・案件管理' })).toBeNull();
       expect(headings()).toEqual(['業務', '組織']);
       expect(screen.getByText('グループ', { selector: 'span' })).toBeInTheDocument();
+      expect(railLink('グループ')).toHaveAttribute('aria-current', 'page');
+      expect(railLink('銀座本店')).not.toHaveAttribute('aria-current');
     });
 
-    it('ダッシュボードはどの文脈でも最上段にある', async () => {
+    it('店舗の画面はその店舗の文脈で、店舗の木の項目と店名を出し、その店舗だけを選択表示にする', () => {
+      mockPathname = '/store/2/orders/5/edit';
+
       render(<Sidebar />);
-      await screen.findByRole('link', { name: '予約・案件管理' });
 
-      const firstLink = () => within(screen.getByRole('navigation')).getAllByRole('link')[0];
-      expect(firstLink()).toHaveTextContent('ダッシュボード');
-      fireEvent.click(screen.getByRole('button', { name: 'グループ' }));
-      expect(firstLink()).toHaveTextContent('ダッシュボード');
+      expect(screen.getByRole('link', { name: '店舗情報' })).toHaveAttribute(
+        'href',
+        '/store/2/settings/profile'
+      );
+      expect(screen.queryByRole('link', { name: '受注照会' })).toBeNull();
+      expect(headings()).toEqual(['業務', '運用']);
+      expect(screen.getByText('新宿店', { selector: 'span' })).toBeInTheDocument();
+      expect(railLink('新宿店')).toHaveAttribute('aria-current', 'page');
+      expect(railLink('銀座本店')).not.toHaveAttribute('aria-current');
+      expect(railLink('グループ')).not.toHaveAttribute('aria-current');
     });
 
-    it('項目はパスの接頭辞でなく、属する木の文脈に出る', async () => {
-      mockedGetMenus.mockResolvedValue([
-        { tree: 'GROUP', items: [dashboard, { name: '業務', items: [item('X', '/store/x')] }] },
-        { tree: 'STORE', items: [dashboard, { name: '業務', items: [item('Y', '/admin/y')] }] },
+    it('URL が変わると文脈も替わる（レールの選択を状態として持たない）', () => {
+      mockPathname = '/store/1/orders';
+      const { rerender } = render(<Sidebar />);
+      expect(screen.getByText('銀座本店', { selector: 'span' })).toBeInTheDocument();
+
+      mockPathname = '/admin/orders';
+      rerender(<Sidebar />);
+      expect(screen.getByRole('link', { name: '受注照会' })).toBeInTheDocument();
+      expect(railLink('グループ')).toHaveAttribute('aria-current', 'page');
+
+      mockPathname = '/store/2/dashboard';
+      rerender(<Sidebar />);
+      expect(railLink('新宿店')).toHaveAttribute('aria-current', 'page');
+    });
+
+    it('授権店舗に無い店舗の画面ではどの文脈も選ばず、着地先への導線だけを出す', () => {
+      mockPathname = '/store/99/orders';
+
+      render(<Sidebar />);
+
+      expect(panelLinks().map(link => link.getAttribute('href'))).toEqual(['/admin/dashboard']);
+      expect(railLink('グループ')).not.toHaveAttribute('aria-current');
+    });
+
+    it('ダッシュボードはどの文脈でも最上段にある', () => {
+      render(<Sidebar />);
+      expect(panelLinks()[0]).toHaveAttribute('href', '/admin/dashboard');
+
+      mockPathname = '/store/1/orders';
+      render(<Sidebar />);
+      expect(screen.getAllByRole('link', { name: 'ダッシュボード' }).at(-1)).toHaveAttribute(
+        'href',
+        '/store/1/dashboard'
+      );
+    });
+
+    it('項目はパスの接頭辞でなく、属する木の文脈に出る', () => {
+      mockedUseMenuTrees.mockReturnValue([
+        {
+          tree: 'GROUP',
+          items: [dashboard('/admin/dashboard'), { name: '業務', items: [item('X', '/admin/x')] }],
+        },
+        {
+          tree: 'STORE',
+          items: [dashboard('/dashboard'), { name: '業務', items: [item('Y', '/admin/y')] }],
+        },
       ]);
+      mockPathname = '/store/1/orders';
+
       render(<Sidebar />);
 
-      expect(await screen.findByRole('link', { name: 'Y' })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'Y' })).toHaveAttribute('href', '/store/1/admin/y');
       expect(screen.queryByRole('link', { name: 'X' })).toBeNull();
-      fireEvent.click(screen.getByRole('button', { name: 'グループ' }));
-      expect(screen.getByRole('link', { name: 'X' })).toBeInTheDocument();
-      expect(screen.queryByRole('link', { name: 'Y' })).toBeNull();
     });
 
-    it('見出しと項目の順は seed のまま', async () => {
-      mockedGetMenus.mockResolvedValue([
+    it('見出しと項目の順は seed のまま', () => {
+      mockedUseMenuTrees.mockReturnValue([
         {
           tree: 'STORE',
           items: [
-            dashboard,
-            { name: '業務', items: [item('A', '/store/a'), item('B', '/store/b')] },
-            { name: '運用', items: [item('C', '/store/c')] },
-            { name: '顧客', items: [item('D', '/store/d')] },
+            dashboard('/dashboard'),
+            { name: '業務', items: [item('A', '/a'), item('B', '/b')] },
+            { name: '運用', items: [item('C', '/c')] },
+            { name: '顧客', items: [item('D', '/d')] },
           ],
         },
       ]);
       withStores([STORES[0]]);
+      mockPathname = '/store/1/a';
 
       render(<Sidebar />);
 
-      await screen.findByRole('link', { name: 'A' });
       expect(headings()).toEqual(['業務', '運用', '顧客']);
-      expect(screen.getAllByRole('link').map(l => l.textContent)).toEqual([
-        'ダッシュボード',
-        'A',
-        'B',
-        'C',
-        'D',
-      ]);
+      expect(panelLinks().map(l => l.textContent)).toEqual(['ダッシュボード', 'A', 'B', 'C', 'D']);
     });
 
-    it('長い店名は見出しで省略表示にし、全文を title に持つ', async () => {
+    it('長い店名は見出しで省略表示にし、全文を title に持つ', () => {
       const longName = '長'.repeat(200);
       withStores([{ id: 1, name: longName, short_name: '長' }]);
+      mockPathname = '/store/1/orders';
 
       render(<Sidebar />);
 
-      await screen.findByRole('link', { name: '予約・案件管理' });
       const heading = screen.getByText(longName, { selector: 'span' });
       expect(heading).toHaveClass('truncate');
       expect(heading).toHaveAttribute('title', longName);
     });
 
-    it('現在地の項目だけが他項目と異なる見えになる', async () => {
-      mockPathname = '/store/profile';
+    it('現在地の項目だけが他項目と異なる見えになる', () => {
+      mockPathname = '/store/1/settings/profile';
 
       render(<Sidebar />);
 
-      const active = await screen.findByRole('link', { name: '店舗情報' });
+      const active = screen.getByRole('link', { name: '店舗情報' });
       const inactive = screen.getByRole('link', { name: '予約・案件管理' });
       expect(active.className).not.toBe(inactive.className);
-    });
-  });
-
-  describe('文脈の切替', () => {
-    it('店舗を選ぶと switchStore を呼び、パネルは遷移なしに店舗の文脈へ替わる', async () => {
-      render(<Sidebar />);
-      await screen.findByRole('link', { name: '予約・案件管理' });
-      fireEvent.click(screen.getByRole('button', { name: 'グループ' }));
-      expect(screen.queryByRole('link', { name: '予約・案件管理' })).toBeNull();
-
-      fireEvent.click(screen.getByRole('button', { name: '新宿店' }));
-
-      expect(switchStore).toHaveBeenCalledWith(2);
-      expect(screen.getByRole('link', { name: '予約・案件管理' })).toBeInTheDocument();
-    });
-
-    it('選択中の文脈だけが選択表示（aria-pressed）になる', async () => {
-      render(<Sidebar />);
-      await screen.findByRole('link', { name: '予約・案件管理' });
-
-      expect(screen.getByRole('button', { name: '銀座本店' })).toHaveAttribute(
-        'aria-pressed',
-        'true'
-      );
-      expect(screen.getByRole('button', { name: '新宿店' })).toHaveAttribute(
-        'aria-pressed',
-        'false'
-      );
-      expect(screen.getByRole('button', { name: 'グループ' })).toHaveAttribute(
-        'aria-pressed',
-        'false'
-      );
-
-      fireEvent.click(screen.getByRole('button', { name: 'グループ' }));
-
-      expect(screen.getByRole('button', { name: 'グループ' })).toHaveAttribute(
-        'aria-pressed',
-        'true'
-      );
-      expect(screen.getByRole('button', { name: '銀座本店' })).toHaveAttribute(
-        'aria-pressed',
-        'false'
-      );
-    });
-
-    it('店舗級の画面へ移ると文脈が現在店舗に合い、グループ級へ戻っても戻らない', async () => {
-      const { rerender } = render(<Sidebar />);
-      await screen.findByRole('link', { name: '予約・案件管理' });
-      fireEvent.click(screen.getByRole('button', { name: 'グループ' }));
-      expect(screen.getByRole('button', { name: 'グループ' })).toHaveAttribute(
-        'aria-pressed',
-        'true'
-      );
-
-      mockPathname = '/store/orders/monthly-remunerations';
-      rerender(<Sidebar />);
-
-      expect(screen.getByRole('button', { name: '銀座本店' })).toHaveAttribute(
-        'aria-pressed',
-        'true'
-      );
-
-      mockPathname = '/admin/orders';
-      rerender(<Sidebar />);
-
-      expect(screen.getByRole('button', { name: '銀座本店' })).toHaveAttribute(
-        'aria-pressed',
-        'true'
-      );
-    });
-
-    it('店舗級の画面にいる間もレールで「グループ」を選べる', async () => {
-      mockPathname = '/store/orders';
-      render(<Sidebar />);
-      await screen.findByRole('link', { name: '予約・案件管理' });
-
-      fireEvent.click(screen.getByRole('button', { name: 'グループ' }));
-
-      expect(screen.getByRole('link', { name: '受注照会' })).toBeInTheDocument();
-    });
-
-    it('グループ級の画面どうしの遷移では選んだ文脈が保たれる', async () => {
-      const { rerender } = render(<Sidebar />);
-      await screen.findByRole('link', { name: '予約・案件管理' });
-      fireEvent.click(screen.getByRole('button', { name: 'グループ' }));
-
-      mockPathname = '/admin/orders';
-      rerender(<Sidebar />);
-
-      expect(screen.getByRole('link', { name: '受注照会' })).toBeInTheDocument();
     });
   });
 });

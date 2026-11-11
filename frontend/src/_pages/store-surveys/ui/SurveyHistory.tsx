@@ -4,6 +4,7 @@ import { useListPage } from '@/shared/lib';
 import { Button, Pager, RegionError } from '@/shared/ui';
 import { answerHref } from '../lib/surveyHref';
 import { operationLabels, time, useGuardedRead } from './surveyUi';
+import { useCurrentStoreId } from '@/entities/user';
 
 export function SurveyHistory({
   target,
@@ -12,6 +13,7 @@ export function SurveyHistory({
   target: { sid: string; rid: string } | { aid: string };
   denied: (message: string) => void;
 }) {
+  const storeId = useCurrentStoreId();
   const guard = useGuardedRead(denied);
   const history = useListPage(page => guard(() => surveyApi.history(target, page)));
   return (
@@ -32,7 +34,7 @@ export function SurveyHistory({
               {row.related_response_id && (
                 <Button
                   variant="outline"
-                  render={<Link href={answerHref(row.related_response_id)} />}
+                  render={<Link href={answerHref(storeId, row.related_response_id)} />}
                 >
                   関連回答 #{row.related_response_id}
                 </Button>

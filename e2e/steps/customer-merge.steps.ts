@@ -1,7 +1,6 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { addCustomerContact, preferCustomerContact, createCustomer, loginAsStoreAdmin, loginViaUiAndEnterStore, updateCustomer } from './store-api';
-import { APP_URL } from '../base-url';
+import { addCustomerContact, preferCustomerContact, createCustomer, loginAsStoreAdmin, loginViaUiAndEnterStore, updateCustomer, storeUrl, STORE1_ID } from './store-api';
 
 const { Given, When, Then } = createBdd();
 let survivingId = '';
@@ -25,13 +24,13 @@ Given('統合の比較用に長い注意事項と同値連絡先を持つ二顧�
   await loginViaUiAndEnterStore(page);
 });
 When('顧客一覧の二行から統合資料を選ぶ', async ({ page }) => {
-  await page.goto(`${APP_URL}/store/customers`);
+  await page.goto(storeUrl(STORE1_ID, `/customers`));
   await page.getByPlaceholder('名前・電話・メール・LINE ID で検索...').fill(marker);
   await page.getByRole('button', { name: '検索', exact: true }).click();
   for (const suffix of ['甲', '乙']) await page.getByRole('checkbox', { name: `${marker}${suffix}${longName} を見比べる` }).click();
   await page.getByRole('radio', { name: `${marker}甲${longName} を残す` }).check();
   await page.getByRole('link', { name: '統合する', exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/store/customers/merge\\?surviving=${survivingId}&merged=${mergedId}$`));
+  await expect(page).toHaveURL(new RegExp(`/store/${STORE1_ID}/customers/merge\\?surviving=${survivingId}&merged=${mergedId}$`));
   await expect(page.getByRole('heading', { level: 1, name: '顧客の統合' })).toBeVisible();
   await page.getByRole('button', { name: '被統合側の氏名を採用' }).click();
   await page.getByLabel('統合理由').fill(reason);
@@ -89,10 +88,10 @@ When('最新資料を再確認して統合を確定する', async ({ page }) => 
   await page.getByRole('checkbox', { name: '双方の注意事項・確定資料・優先指定・会員への影響を確認しました' }).check();
   await page.getByRole('button', { name: '統合する', exact: true }).click();
   await page.getByRole('button', { name: '統合を確定' }).click();
-  await expect(page).toHaveURL(/\/store\/customers$/);
+  await expect(page).toHaveURL(/\/store\/\d+\/customers$/);
 });
 Then('統合前後の資料と連絡先の移動を監査で確認できる', async ({ page }) => {
-  await page.goto(`${APP_URL}/store/customers/${survivingId}/edit`);
+  await page.goto(storeUrl(STORE1_ID, `/customers/${survivingId}/edit`));
   await page.getByRole('button', { name: '監査記録を確認' }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByText(reason, { exact: true })).toBeVisible();

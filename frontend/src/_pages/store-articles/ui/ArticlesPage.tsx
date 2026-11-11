@@ -8,6 +8,7 @@ import { Button, Table, TableBody, TableCell, TableHead, TableHeader, TableRow }
 import { ListPage } from '@/widgets/list-page';
 import { ArticleAccess } from './ArticleAccess';
 import { DisplayedBadge } from './DisplayedBadge';
+import { useCurrentStoreId } from '@/entities/user';
 
 export function ArticlesPage() {
   return (
@@ -18,13 +19,14 @@ export function ArticlesPage() {
 }
 
 function Articles() {
+  const storeId = useCurrentStoreId();
   const list = useListPage((page: number) => articleApi.list(page));
   return (
     <ListPage
       title="記事管理"
       description="公式サイトに載せる記事を作成し、公開設定を管理します。"
       actions={
-        <Button render={<Link href={storePath('/articles/create')} />}>
+        <Button render={<Link href={storePath(storeId, '/articles/create')} />}>
           <PlusIcon />
           記事を作成
         </Button>
@@ -48,7 +50,7 @@ function Articles() {
             <TableRow key={row.id}>
               <TableCell className="max-w-80">
                 <Link
-                  href={storePath(`/articles/${row.id}/edit`)}
+                  href={storePath(storeId, `/articles/${row.id}/edit`)}
                   className="font-medium text-primary-strong hover:underline wrap-anywhere focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 >
                   {row.title}

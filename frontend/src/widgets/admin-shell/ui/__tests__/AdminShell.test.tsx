@@ -3,9 +3,13 @@ import { useEffect } from 'react';
 import { useAuth, useStoreContext } from '@/entities/user';
 import { AdminShell } from '../AdminShell';
 
-let mockPathname = '/store/orders';
+let mockPathname = '/store/1/orders';
 jest.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
+}));
+
+jest.mock('@/entities/menu', () => ({
+  MenuProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 jest.mock('@/entities/user', () => ({
@@ -27,7 +31,6 @@ const storeContext = (overrides: Partial<StoreContextValue>): StoreContextValue 
   currentStore: { id: 1, name: '店舗A', status: 'ACTIVE' },
   loadFailed: false,
   reload,
-  switchStore: jest.fn(),
   ...overrides,
 });
 
@@ -49,7 +52,7 @@ const renderShell = () =>
 describe('AdminShell', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockPathname = '/store/orders';
+    mockPathname = '/store/1/orders';
     mockedUseAuth.mockReturnValue({ logout } as unknown as ReturnType<typeof useAuth>);
     mockedUseStoreContext.mockReturnValue(storeContext({}));
   });
@@ -108,12 +111,39 @@ describe('AdminShell', () => {
       expect(screen.queryByText('本文')).not.toBeInTheDocument();
     });
 
+    it.each([
+      ['授権店舗に無い店舗の', '/store/99/orders', '99'],
+      ['店舗 id の無い', '/store/orders', undefined],
+    ])('%s画面は本文を描かず、開けないことと着地への導線を出す', (_, pathname, id) => {
+      mockPathname = pathname;
+      mockedUseStoreContext.mockReturnValue(
+        storeContext({ currentStoreId: id, currentStore: undefined })
+      );
+
+      renderShell();
+
+      expect(screen.getByRole('alert')).toHaveTextContent('この店舗の画面は開けません');
+      expect(screen.getByRole('link', { name: 'ダッシュボードへ' })).toHaveAttribute(
+        'href',
+        '/admin'
+      );
+      expect(screen.queryByText('本文')).not.toBeInTheDocument();
+    });
+
     it('現在店舗が替わるとページを再マウントする', () => {
       const { rerender } = renderShell();
       expect(mounts).toHaveBeenCalledTimes(1);
 
+      mockPathname = '/store/2/orders';
       mockedUseStoreContext.mockReturnValue(
-        storeContext({ currentStoreId: '2', currentStore: { id: 2, name: '店舗B' } })
+        storeContext({
+          stores: [
+            { id: 1, name: '店舗A' },
+            { id: 2, name: '店舗B' },
+          ],
+          currentStoreId: '2',
+          currentStore: { id: 2, name: '店舗B' },
+        })
       );
       rerender(
         <AdminShell sidebar={<nav>サイドバー</nav>} header={<header>ヘッダー</header>}>
@@ -143,19 +173,6 @@ describe('AdminShell', () => {
       renderShell();
 
       expect(screen.getByText('本文')).toBeInTheDocument();
-    });
-
-    it('現在店舗が替わってもページを再マウントしない', () => {
-      const { rerender } = renderShell();
-
-      mockedUseStoreContext.mockReturnValue(storeContext({ currentStoreId: '2' }));
-      rerender(
-        <AdminShell sidebar={<nav>サイドバー</nav>} header={<header>ヘッダー</header>}>
-          <Page />
-        </AdminShell>
-      );
-
-      expect(mounts).toHaveBeenCalledTimes(1);
     });
   });
 });

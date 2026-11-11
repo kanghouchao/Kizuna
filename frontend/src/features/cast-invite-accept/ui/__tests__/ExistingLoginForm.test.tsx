@@ -5,7 +5,7 @@ import { ExistingLoginForm } from '../ExistingLoginForm';
 import { castInvitationAcceptanceApi } from '@/entities/cast';
 import { authApi } from '@/entities/user';
 import { endSession, getSessionUserId, storeSessionToken } from '@/shared/api';
-import { getSessionKind, getCurrentStoreId, setCurrentStore } from '@/shared/lib';
+import { getSessionKind } from '@/shared/lib';
 
 jest.mock('@/entities/cast', () => {
   const actual = jest.requireActual('@/entities/cast');
@@ -45,7 +45,6 @@ function submitForm(password = 'pass') {
 function expectPreviousSessionIntact() {
   expect(getSessionUserId()).toBe(3);
   expect(getSessionKind()).toBe('admin');
-  expect(getCurrentStoreId()).toBe('7');
 }
 
 describe('ExistingLoginForm', () => {
@@ -59,12 +58,10 @@ describe('ExistingLoginForm', () => {
       refresh_expires_at: 2,
     });
     Cookies.set('session-kind', 'admin');
-    setCurrentStore('7');
   });
 
   afterEach(() => {
     Cookies.remove('session-kind');
-    Cookies.remove('current-store-id');
     endSession('resume-failed');
   });
 

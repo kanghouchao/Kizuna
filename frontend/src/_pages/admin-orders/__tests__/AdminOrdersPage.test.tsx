@@ -8,6 +8,11 @@ jest.mock('@/entities/user/model/MeContext', () => ({
   ...jest.requireActual('@/entities/user/model/MeContext'),
   useMe: jest.fn(),
 }));
+// 横断一覧は店舗の画面ではないので、URL の店舗は定まらない。
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useStoreContext: () => ({ currentStoreId: undefined }),
+}));
 jest.mock('@/entities/order', () => ({
   ...jest.requireActual('@/entities/order'),
   orderApi: { adminList: jest.fn(), correctionHistory: jest.fn() },
@@ -93,7 +98,7 @@ it('帳票閲覧権限のない注文参照者には帳票入口を表示しな�
   expect(screen.queryByRole('link', { name: '運営金額集計' })).not.toBeInTheDocument();
 });
 
-it('店舗集合を跨ぐ照会の権限だけでは店舗級の月次と訂正履歴への入口を出さない', async () => {
+it('店舗集合を跨ぐ照会の権限だけでは店舗級の訂正履歴への入口を出さない', async () => {
   jest.mocked(orderApi.adminList).mockResolvedValue({
     rows: [row],
     total: 1,
@@ -103,6 +108,5 @@ it('店舗集合を跨ぐ照会の権限だけでは店舗級の月次と訂正�
   render(<AdminOrdersPage />);
   expect(await screen.findByRole('button', { name: /詳細.*受注 o1/ })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /訂正履歴/ })).not.toBeInTheDocument();
-  expect(screen.queryByRole('link', { name: '月次給与明細' })).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: '運営金額集計' })).toBeInTheDocument();
 });

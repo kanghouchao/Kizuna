@@ -5,6 +5,10 @@ import type { PermissionCode } from '@/entities/user';
 import { notify } from '@/shared/notify';
 import CustomerMergePage from '../ui/CustomerMergePage';
 
+jest.mock('@/entities/user', () => ({
+  ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => '1',
+}));
 jest.mock('@/entities/customer', () => ({
   customerApi: { mergePreview: jest.fn(), merge: jest.fn() },
 }));
@@ -95,7 +99,7 @@ it('URL の surviving を存続側として読み込み、離れても何も確�
   expect(screen.getByText(/途中で画面を離れても、何も確定しません/)).toBeInTheDocument();
   expect(screen.getByRole('link', { name: '統合せずに戻る' })).toHaveAttribute(
     'href',
-    '/store/customers'
+    '/store/1/customers'
   );
 });
 
@@ -110,7 +114,7 @@ it.each([
   expect(await screen.findByRole('alert')).toHaveTextContent('統合する 2 件の顧客');
   expect(screen.getByRole('link', { name: '顧客一覧へ' })).toHaveAttribute(
     'href',
-    '/store/customers'
+    '/store/1/customers'
   );
   expect(api.mergePreview).not.toHaveBeenCalled();
 });
@@ -132,7 +136,7 @@ it('対象が見つからなければ再試行や統合を出さず一覧へ帰�
   expect(screen.queryByRole('button', { name: '統合する' })).not.toBeInTheDocument();
   expect(screen.getByRole('link', { name: '顧客一覧へ' })).toHaveAttribute(
     'href',
-    '/store/customers'
+    '/store/1/customers'
   );
 });
 
@@ -226,7 +230,7 @@ it('項目ごとに被統合側の値を採用し、理由・プレビュー・�
     )
   );
   expect(notify.success).toHaveBeenCalledWith('顧客を統合しました');
-  expect(mockReplace).toHaveBeenCalledWith('/store/customers');
+  expect(mockReplace).toHaveBeenCalledWith('/store/1/customers');
 });
 
 it('競合後も入力を保持し、再確認するまで実行を止める', async () => {

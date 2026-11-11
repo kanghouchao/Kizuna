@@ -7,13 +7,13 @@ import { OrderApplicationDetail, orderApi, orderApplicationApi } from '@/entitie
 
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => '1',
   useStoreContext: () => ({
     stores: [{ id: 1, name: 'テスト店舗' }],
     currentStoreId: '1',
     currentStore: { id: 1, name: 'テスト店舗' },
     loadFailed: false,
     reload: jest.fn(),
-    switchStore: jest.fn(),
   }),
 }));
 jest.mock('@/entities/user/model/MeContext', () => ({
@@ -180,7 +180,7 @@ describe('予約申請の確定画面', () => {
     // 確定後の戻るで処理済みの申請の画面へ戻さない
     await waitFor(() =>
       expect(mockReplace).toHaveBeenCalledWith(
-        '/store/orders?customer_name=%E8%8A%B1%E5%AD%90&sort_key=PAX&desc=true'
+        '/store/1/orders?customer_name=%E8%8A%B1%E5%AD%90&sort_key=PAX&desc=true'
       )
     );
     expect(mockPush).not.toHaveBeenCalled();
@@ -208,7 +208,7 @@ describe('予約申請の確定画面', () => {
     expect(screen.queryByRole('button', { name: '確定する' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'オーダー一覧へ' })).toHaveAttribute(
       'href',
-      '/store/orders?sort_key=PAX'
+      '/store/1/orders?sort_key=PAX'
     );
   });
 
@@ -228,7 +228,7 @@ describe('予約申請の確定画面', () => {
     renderPage(guestApplication());
     expect(await screen.findByRole('link', { name: '戻る' })).toHaveAttribute(
       'href',
-      '/store/orders?business_date=2026-08-25'
+      '/store/1/orders?business_date=2026-08-25'
     );
     expect(screen.queryByLabelText('住所')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('キャスト・ドライバーへのメッセージ')).not.toBeInTheDocument();

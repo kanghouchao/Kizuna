@@ -25,6 +25,7 @@ import { PageHeader } from '@/widgets/page-header';
 import { ArticleAccess } from './ArticleAccess';
 import { ArticleForm } from './ArticleForm';
 import { DisplayedBadge } from './DisplayedBadge';
+import { useCurrentStoreId } from '@/entities/user';
 
 export function ArticleEditPage() {
   return (
@@ -35,6 +36,7 @@ export function ArticleEditPage() {
 }
 
 function ArticleEdit() {
+  const storeId = useCurrentStoreId();
   const id = useParams<{ id: string }>().id;
   const router = useRouter();
   const detail = useResource(() => articleApi.get(id), [id]);
@@ -49,7 +51,7 @@ function ArticleEdit() {
         {detail.failure === 'notFound' ? (
           <RegionError
             message="記事が見つかりません"
-            fallback={{ href: storePath('/articles'), label: '記事一覧へ' }}
+            fallback={{ href: storePath(storeId, '/articles'), label: '記事一覧へ' }}
           />
         ) : (
           <RegionError message="記事を取得できませんでした" onRetry={() => void detail.reload()} />
@@ -142,7 +144,7 @@ function ArticleEdit() {
           void writer.write(() => articleApi.remove(id, article.version), {
             success: '記事を削除しました',
             failure: '記事を削除できませんでした',
-            onSuccess: () => router.push(storePath('/articles')),
+            onSuccess: () => router.push(storePath(storeId, '/articles')),
           })
         }
       />

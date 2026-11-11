@@ -2,7 +2,13 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
+import {
+  MePending,
+  hasPermission,
+  useCurrentStoreId,
+  useMe,
+  useStoreContext,
+} from '@/entities/user';
 import { Review } from '@/entities/content/review';
 import { storePath } from '@/shared/lib';
 import { Button } from '@/shared/ui';
@@ -41,6 +47,7 @@ function Detail({
   canManage: boolean;
   canOrder: boolean;
 }) {
+  const storeId = useCurrentStoreId();
   const router = useRouter();
   const [editor, setEditor] = useState<DetailEditor | null>(null);
   const [latest, setLatest] = useState<Review | undefined>();
@@ -53,7 +60,7 @@ function Detail({
     setEditor(null);
     // 同じ要求の再確認は別の口コミ（受付・訂正先）の結果を返しうる
     if (review.id === id) setLatest(review);
-    else router.push(storePath(`/reviews/${review.id}`));
+    else router.push(storePath(storeId, `/reviews/${review.id}`));
   });
   const settled = !write.denied && !write.conflict;
   return (
@@ -65,7 +72,7 @@ function Detail({
             受付本文と判断、公開許可の記録を確認します。
           </p>
         </div>
-        <Button variant="outline" render={<Link href={storePath('/reviews')} />}>
+        <Button variant="outline" render={<Link href={storePath(storeId, '/reviews')} />}>
           一覧へ戻る
         </Button>
       </div>

@@ -54,13 +54,13 @@ const meWith = (permissions: PermissionCode[]) =>
 beforeEach(() => meWith([]));
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => mockStoreId,
   useStoreContext: () => ({
     stores: [{ id: 1, name: 'テスト店舗' }],
     currentStoreId: mockStoreId,
     currentStore: { id: 1, name: 'テスト店舗' },
     loadFailed: false,
     reload: jest.fn(),
-    switchStore: jest.fn(),
   }),
 }));
 
@@ -326,7 +326,7 @@ describe('受注の編集ページ', () => {
       confirmation_token: 'confirmed',
     });
     // 保存し終えたこの頁に留まる理由は無い。出口は一覧
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/orders'));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/1/orders'));
   });
 
   it('停止中の媒体を持つ受注は値を保ち、媒体だけを替えても経路と組で送ること', async () => {
@@ -387,7 +387,7 @@ describe('受注の編集ページ', () => {
     fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
 
     expect(mockedOrderApi.update).not.toHaveBeenCalled();
-    expect(mockPush).toHaveBeenCalledWith('/store/orders');
+    expect(mockPush).toHaveBeenCalledWith('/store/1/orders');
   });
 
   it('保存の最中は出口を塞ぐこと', async () => {
@@ -445,7 +445,7 @@ describe('受注の編集ページ', () => {
     expect(within(region).queryByRole('button', { name: '再試行' })).not.toBeInTheDocument();
     expect(within(region).getByRole('link', { name: 'オーダー一覧へ' })).toHaveAttribute(
       'href',
-      '/store/orders'
+      '/store/1/orders'
     );
   });
 

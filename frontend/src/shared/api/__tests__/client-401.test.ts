@@ -5,7 +5,7 @@ let sessionKindValue: string | undefined;
 jest.mock('@/shared/lib', () => ({
   // 引数をそのまま渡す。握り潰すと理由コードが未配線でもテストが緑のままになる。
   redirectToLogin: (options?: unknown) => redirectMock(options),
-  getCurrentStoreId: () => undefined,
+  storeIdOf: () => undefined,
 }));
 jest.mock('@/shared/lib/session', () => ({
   clearSession: () => clearSessionMock(),

@@ -5,17 +5,16 @@ import { reviewApi, Review } from '@/entities/content/review';
 import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 import { storeSessionToken } from '@/shared/api';
-import { setCurrentStore } from '@/shared/lib';
 let mockStoreId = '1';
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => mockStoreId,
   useStoreContext: () => ({
     stores: [{ id: 1, name: 'テスト店舗' }],
     currentStoreId: mockStoreId,
     currentStore: { id: 1, name: 'テスト店舗' },
     loadFailed: false,
     reload: jest.fn(),
-    switchStore: jest.fn(),
   }),
 }));
 jest.mock('@/entities/content/review', () => ({
@@ -78,7 +77,6 @@ beforeEach(() => {
   jest.resetAllMocks();
   mockStoreId = '1';
   storeSessionToken({ token: 't', expires_at: 1, user_id: 7, refresh_expires_at: 2 });
-  setCurrentStore('1');
   permission('REVIEW_VIEW');
   api.list.mockResolvedValue({ rows: [row], page: 0, pageCount: 1, total: 1 });
 });
@@ -91,7 +89,7 @@ test('閲覧権限がなければ取得せず、閲覧のみは詳細へのリ�
   view.rerender(<ReviewsPage />);
   expect(await screen.findByRole('link', { name: '内容・履歴' })).toHaveAttribute(
     'href',
-    '/store/reviews/10'
+    '/store/1/reviews/10'
   );
   expect(screen.queryByRole('link', { name: '口コミを受付' })).not.toBeInTheDocument();
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
@@ -101,7 +99,7 @@ test('管理権限があれば受付画面へのリンクを出す', async () =>
   render(<ReviewsPage />);
   expect(await screen.findByRole('link', { name: '口コミを受付' })).toHaveAttribute(
     'href',
-    '/store/reviews/create'
+    '/store/1/reviews/create'
   );
 });
 test('受付画面で結果不明になった操作は一覧でも案内し、再確認の結果の詳細へ移る', async () => {
@@ -128,7 +126,7 @@ test('受付画面で結果不明になった操作は一覧でも案内し、�
   const notice = await screen.findByRole('alert');
   expect(notice).toHaveTextContent('結果が確認できません');
   fireEvent.click(within(notice).getByRole('button', { name: '同じ要求で結果を確認' }));
-  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/reviews/12'));
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/1/reviews/12'));
   expect(api.write).toHaveBeenCalledTimes(2);
   expect(api.write.mock.calls[1][1]).toBe(api.write.mock.calls[0][1]);
 });

@@ -32,36 +32,24 @@ describe('apiClient session branch', () => {
     window.history.pushState({}, '', originalHref);
   });
 
-  const session = (storeId?: string, kind = 'admin') =>
-    (Cookies.get as jest.Mock).mockImplementation((key: string) => {
-      if (key === 'session-kind') return kind;
-      if (key === 'current-store-id') return storeId;
-      return undefined;
-    });
+  const session = (kind = 'admin') =>
+    (Cookies.get as jest.Mock).mockImplementation((key: string) =>
+      key === 'session-kind' ? kind : undefined
+    );
 
-  it.each(['/orders', '/files'])(
-    'injects X-Store-ID from the current-store cookie for %s requests from a store page',
+  it.each(['/orders', '/files', '/me', '/stores/me', '/menus/me'])(
+    'injects X-Store-ID from the URL store id for %s requests from a store page (the API path does not decide)',
     async url => {
-      window.history.pushState({}, '', '/store/orders');
-      session('2');
+      window.history.pushState({}, '', '/store/2/orders');
+      session();
       const headers = await requestTo(url);
       expect(headers['X-Store-ID']).toBe('2');
     }
   );
 
-  it.each(['/me', '/stores/me', '/menus/me'])(
-    'injects X-Store-ID for the group-level URL %s from a store page (the URL does not decide)',
-    async url => {
-      window.history.pushState({}, '', '/store/orders');
-      session('2');
-      const headers = await requestTo(url);
-      expect(headers['X-Store-ID']).toBe('2');
-    }
-  );
-
-  it('injects X-Store-ID on the /store page itself', async () => {
-    window.history.pushState({}, '', '/store');
-    session('2');
+  it.each(['/store/2', '/store/2/'])('injects X-Store-ID on the store root %s', async pathname => {
+    window.history.pushState({}, '', pathname);
+    session();
     const headers = await requestTo('/orders');
     expect(headers['X-Store-ID']).toBe('2');
   });
@@ -70,17 +58,17 @@ describe('apiClient session branch', () => {
     'does not inject X-Store-ID for %s requests from a /admin page (group-wide assets stay in the shared area)',
     async url => {
       window.history.pushState({}, '', '/admin/settings');
-      session('2');
+      session();
       const headers = await requestTo(url);
       expect(headers['X-Store-ID']).toBeUndefined();
     }
   );
 
-  it.each(['/', '/stores', '/storefront/orders'])(
-    'does not inject X-Store-ID from %s, which is not under /store',
+  it.each(['/', '/stores', '/storefront/2/orders', '/store', '/store/abc/orders'])(
+    'does not inject X-Store-ID from %s, which names no store',
     async pathname => {
       window.history.pushState({}, '', pathname);
-      session('2');
+      session();
       const headers = await requestTo('/orders');
       expect(headers['X-Store-ID']).toBeUndefined();
     }
@@ -89,19 +77,19 @@ describe('apiClient session branch', () => {
   it.each(['cast', 'member'])(
     'injects X-Store-ID from a store page even when the shared session-kind cookie reads %s (another tab rewrote it)',
     async kind => {
-      // session-kind は全タブ共有で、別タブのログインが書き換える。このタブの画面（/store 配下は従業員のシェルだけ）で決める。
-      window.history.pushState({}, '', '/store/orders');
-      session('2', kind);
+      // session-kind は全タブ共有で、別タブのログインが書き換える。このタブの URL（/store 配下は従業員のシェルだけ）で決める。
+      window.history.pushState({}, '', '/store/2/orders');
+      session(kind);
       const headers = await requestTo('/customers');
       expect(headers['X-Store-ID']).toBe('2');
     }
   );
 
   it.each(['/cast/schedule', '/member/'])(
-    'does not inject a leftover current-store cookie from the portal page %s',
+    'does not inject X-Store-ID from the portal page %s',
     async pathname => {
       window.history.pushState({}, '', pathname);
-      session('2', 'admin');
+      session();
       const headers = await requestTo('/me');
       expect(headers['X-Store-ID']).toBeUndefined();
     }
@@ -109,45 +97,24 @@ describe('apiClient session branch', () => {
 
   it('keeps the store a cross-store list names explicitly from a /admin page', async () => {
     window.history.pushState({}, '', '/admin/orders');
-    session('2');
+    session();
     const headers = await requestTo('/orders/o1/corrections', { 'X-Store-ID': '5' });
     expect(headers['X-Store-ID']).toBe('5');
   });
 
-  it('keeps an explicitly named store on a /store page instead of the current-store cookie', async () => {
-    // 結果不明の操作は起こした店舗に固定して送る。別タブの切替で変わった cookie で上書きしない。
-    window.history.pushState({}, '', '/store/reviews');
-    session('2');
+  it('keeps an explicitly named store on a store page instead of the URL store', async () => {
+    // 結果不明の操作は起こした店舗に固定して送る。
+    window.history.pushState({}, '', '/store/2/reviews');
+    session();
     const headers = await requestTo('/reviews', { 'X-Store-ID': '5' });
     expect(headers['X-Store-ID']).toBe('5');
   });
 
-  it('does not inject X-Store-ID while no current store is resolved', async () => {
-    window.history.pushState({}, '', '/store/orders');
-    session(undefined);
-    const headers = await requestTo('/orders');
-    expect(headers['X-Store-ID']).toBeUndefined();
-  });
-
-  it('ignores a store id in the URL path: the cookie, not the path, is the store context', async () => {
-    window.history.pushState({}, '', '/store/9/orders');
-    session('2');
-    const headers = await requestTo('/orders');
-    expect(headers['X-Store-ID']).toBe('2');
-  });
-
-  it('does not write the current-store cookie from a response', async () => {
-    window.history.pushState({}, '', '/store/orders');
-    session('2');
+  it('reads no current-store cookie and writes no cookie', async () => {
+    window.history.pushState({}, '', '/store/2/orders');
+    session();
     await requestTo('/stores/me');
+    expect(Cookies.get).not.toHaveBeenCalledWith('current-store-id');
     expect(Cookies.set).not.toHaveBeenCalled();
-  });
-
-  it('does not take a store from cookies when no session is active', async () => {
-    (Cookies.get as jest.Mock).mockImplementation((key: string) =>
-      key === 'session-kind' ? undefined : '7'
-    );
-    const headers = await requestTo('/casts/public');
-    expect(headers['X-Store-ID']).toBeUndefined();
   });
 });

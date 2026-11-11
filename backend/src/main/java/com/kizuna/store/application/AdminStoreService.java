@@ -23,7 +23,8 @@ public class AdminStoreService {
   private final StoreRepository storeRepository;
   private final StoreScopeHolder storeScopeHolder;
 
-  /** 授権店舗集合内の店舗を id 昇順で返す。空集合なら空（findAllById は空の id 集合で照会しない）。 */
+  // 作成日の新しい順（同時刻は id の降順）。管理画面のレールの並びとログイン直後の着地（先頭の店舗）がこの順に従う。
+  // 空集合なら空（findAllById は空の id 集合で照会しない）。
   @Transactional(readOnly = true)
   public List<StoreView> listAuthorizedStores() {
     StoreScope scope = storeScopeHolder.current();
@@ -32,7 +33,7 @@ public class AdminStoreService {
     }
     Iterable<Store> stores = storeRepository.findAllById(scope.storeIds());
     return StreamSupport.stream(stores.spliterator(), false)
-        .sorted(Comparator.comparing(Store::getId))
+        .sorted(Comparator.comparing(Store::getCreatedAt).thenComparing(Store::getId).reversed())
         .map(StoreView::of)
         .toList();
   }

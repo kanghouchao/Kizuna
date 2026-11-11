@@ -1,6 +1,5 @@
 import { expect, type Page } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
-import { APP_URL } from "../base-url";
 import {
   ADMIN_PASSWORD,
   STORE_HEADERS,
@@ -10,6 +9,9 @@ import {
   loginUser,
   loginViaUiAndEnterStore,
   openLoginForm,
+  storeUrl,
+  STORE1_ID,
+  waitStaffLanding,
 } from "./store-api";
 const { Given, When, Then } = createBdd();
 const questionPrompt =
@@ -82,12 +84,12 @@ When(
     await page.getByLabel("メールアドレス", { exact: true }).fill(email);
     await page.getByLabel("パスワード", { exact: true }).fill(secret);
     await page.getByRole("button", { name: "ログイン", exact: true }).click();
-    await expect(page).toHaveURL(/\/admin\/dashboard/, { timeout: 15000 });
-    await page.goto(`${APP_URL}/store/surveys`);
+    await waitStaffLanding(page);
+    await page.goto(storeUrl(STORE1_ID, `/surveys`));
     await page
       .getByRole("link", { name: "アンケートを作成", exact: true })
       .click();
-    await expect(page).toHaveURL(`${APP_URL}/store/surveys/create`);
+    await expect(page).toHaveURL(storeUrl(STORE1_ID, `/surveys/create`));
     await expect(
       page.getByRole("heading", { level: 1, name: "アンケートを作成" }),
     ).toBeVisible();
@@ -164,7 +166,7 @@ When(
     revisionId = result.revision.id;
     await page.unroute("**/api/surveys");
     await expect(page).toHaveURL(
-      `${APP_URL}/store/surveys/${surveyId}/revisions/${revisionId}`,
+      storeUrl(STORE1_ID, `/surveys/${surveyId}/revisions/${revisionId}`),
     );
     await page.getByRole("button", { name: "受付を開始", exact: true }).click();
     const opening = page.getByRole("dialog", {
@@ -189,7 +191,7 @@ When(
   async ({ page, request, $testInfo }) => {
     await page.getByRole("link", { name: "回答を受付", exact: true }).click();
     await expect(page).toHaveURL(
-      `${APP_URL}/store/surveys/${surveyId}/revisions/${revisionId}/responses/new`,
+      storeUrl(STORE1_ID, `/surveys/${surveyId}/revisions/${revisionId}/responses/new`),
     );
     const intake = page.getByRole("main");
     await expect(
@@ -234,7 +236,7 @@ When(
     expect(row).not.toHaveProperty("customer_id");
     expect(row).not.toHaveProperty("anonymous");
     await expect(page).toHaveURL(
-      `${APP_URL}/store/surveys/responses/${answerId}`,
+      storeUrl(STORE1_ID, `/surveys/responses/${answerId}`),
     );
     // 回答の詳細は画面の状態ではなく URL で着けることを、開き直して確かめる
     await page.reload();
@@ -243,7 +245,7 @@ When(
     ).toBeVisible();
     await page.getByRole("link", { name: "設問版へ戻る", exact: true }).click();
     await expect(page).toHaveURL(
-      `${APP_URL}/store/surveys/${surveyId}/revisions/${revisionId}`,
+      storeUrl(STORE1_ID, `/surveys/${surveyId}/revisions/${revisionId}`),
     );
     await page.getByRole("button", { name: "受付を終了", exact: true }).click();
     await confirmWithReason(page, "受付を終了", "今回の受付を終了");
@@ -292,15 +294,15 @@ Then(
   "終了した版の回答を訂正して原文と記録件数を確認できる",
   async ({ page, request, $testInfo }) => {
     await page.goto(
-      `${APP_URL}/store/surveys/${surveyId}/revisions/${revisionId}`,
+      storeUrl(STORE1_ID, `/surveys/${surveyId}/revisions/${revisionId}`),
     );
     await page.getByRole("link", { name: "回答・履歴", exact: true }).click();
     await expect(page).toHaveURL(
-      `${APP_URL}/store/surveys/responses/${answerId}`,
+      storeUrl(STORE1_ID, `/surveys/responses/${answerId}`),
     );
     await page.getByRole("link", { name: "回答を訂正", exact: true }).click();
     await expect(page).toHaveURL(
-      `${APP_URL}/store/surveys/responses/${answerId}/correct`,
+      storeUrl(STORE1_ID, `/surveys/responses/${answerId}/correct`),
     );
     const correction = page.getByRole("main");
     await expect(
@@ -376,7 +378,7 @@ Then(
     for (const summary of list.content)
       expect(summary).not.toHaveProperty("answers");
     await expect(page).not.toHaveURL(
-      `${APP_URL}/store/surveys/responses/${answerId}`,
+      storeUrl(STORE1_ID, `/surveys/responses/${answerId}`),
     );
     await page
       .getByRole("button", { name: "回答を取り下げ", exact: true })

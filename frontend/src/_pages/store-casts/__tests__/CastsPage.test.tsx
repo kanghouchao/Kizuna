@@ -6,13 +6,13 @@ import type { PermissionCode } from '@/entities/user';
 
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => '1',
   useStoreContext: () => ({
     stores: [{ id: 1, name: 'テスト店舗' }],
     currentStoreId: '1',
     currentStore: { id: 1, name: 'テスト店舗' },
     loadFailed: false,
     reload: jest.fn(),
-    switchStore: jest.fn(),
   }),
 }));
 
@@ -170,14 +170,14 @@ describe('カスタムフィールド管理への入口リンクは CAST_FIELD_D
     mockedCastApi.list.mockResolvedValue(toPage([cast]));
   });
 
-  it('CAST_FIELD_DEF_MANAGE 能力があれば定義管理ページ(/store/casts/fields)への入口リンクが表示されること', async () => {
+  it('CAST_FIELD_DEF_MANAGE 能力があれば定義管理ページ(/store/1/casts/fields)への入口リンクが表示されること', async () => {
     meWith(['CAST_MANAGE', 'CAST_FIELD_DEF_MANAGE']);
 
     render(<CastListPage />);
     await screen.findByText('花子');
 
     const link = await screen.findByRole('link', { name: 'カスタムフィールド管理' });
-    expect(link).toHaveAttribute('href', '/store/casts/fields');
+    expect(link).toHaveAttribute('href', '/store/1/casts/fields');
   });
 
   it('CAST_FIELD_DEF_MANAGE 能力が無ければ定義管理ページへの入口リンクが表示されないこと', async () => {
@@ -205,7 +205,7 @@ describe('キャスト一覧ページ固有の要素', () => {
     expect(screen.getByText('キャスト情報の登録・編集ができます。')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: '新規キャスト登録' })).toHaveAttribute(
       'href',
-      '/store/casts/create'
+      '/store/1/casts/create'
     );
   });
 

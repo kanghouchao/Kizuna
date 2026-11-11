@@ -1,7 +1,7 @@
 import { expect, Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
-import { getStoreConfig, loginAsStoreAdmin, loginViaUiAndEnterStore, setCustomTexts } from './store-api';
+import { getStoreConfig, loginAsStoreAdmin, loginViaUiAndEnterStore, setCustomTexts, storeUrl, STORE1_ID } from './store-api';
 
 const { Given, When, Then, After } = createBdd();
 
@@ -30,7 +30,7 @@ Given('店舗設定の現在値を退避する', async ({ request }) => {
 When('店舗情報ページでアクセス補足を一意な検証値に変更して保存する', async ({ page }) => {
   testValue = `E2E設定保存-${Date.now()}`;
   // ログイン済みセッション（リフレッシュ cookie）はアプリドメインにあるため管理画面も APP_URL で開く。
-  await page.goto(`${APP_URL}/store/settings/profile`);
+  await page.goto(storeUrl(STORE1_ID, `/settings/profile`));
   await accessNoteTextarea(page).fill(testValue);
   await page.getByRole('button', { name: '設定を保存する', exact: true }).click();
 });

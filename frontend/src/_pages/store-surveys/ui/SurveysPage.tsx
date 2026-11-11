@@ -21,14 +21,16 @@ import { useSurveyWrite } from '../lib/useSurveyWrite';
 import { SurveyCapabilities, SurveyDenied, SurveyGate } from './SurveyGate';
 import { Choice, revisionLabels, useGuardedRead } from './surveyUi';
 import { SurveyWriteFeedback } from './SurveyWriteFeedback';
+import { useCurrentStoreId } from '@/entities/user';
 
 export function SurveysPage() {
   return <SurveyGate target="catalogue">{caps => <Catalogue {...caps} />}</SurveyGate>;
 }
 
 function Catalogue({ canManage }: SurveyCapabilities) {
+  const storeId = useCurrentStoreId();
   const router = useRouter();
-  const write = useSurveyWrite(result => router.push(writtenHref(result)));
+  const write = useSurveyWrite(result => router.push(writtenHref(storeId, result)));
   const guard = useGuardedRead(write.deny);
   const [search, setSearch] = useState<SurveySearch>({});
   const list = useListPage(
@@ -43,7 +45,9 @@ function Catalogue({ canManage }: SurveyCapabilities) {
         title="アンケート管理"
         description="設問を版管理し、スタッフが既に受け取った回答を記録します。保持期限は未設定です。"
         actions={
-          canManage && <Button render={<Link href={surveyCreateHref} />}>アンケートを作成</Button>
+          canManage && (
+            <Button render={<Link href={surveyCreateHref(storeId)} />}>アンケートを作成</Button>
+          )
         }
         state={list}
         search={{
@@ -110,7 +114,7 @@ function Catalogue({ canManage }: SurveyCapabilities) {
                 <TableCell>
                   <Button
                     variant="outline"
-                    render={<Link href={revisionHref(row.id, row.latest_revision_id)} />}
+                    render={<Link href={revisionHref(storeId, row.id, row.latest_revision_id)} />}
                   >
                     版と回答
                   </Button>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { orderApi, OrderCorrectionSnapshot, ORDER_FEE_LINE_KIND_LABELS } from '@/entities/order';
+import { useStoreContext } from '@/entities/user';
 import { storePath, useListPage } from '@/shared/lib';
 import {
   Button,
@@ -117,6 +118,8 @@ function correctionRows(
 }
 
 export function OrderCorrectionHistory({ orderId, storeId }: Props) {
+  // /admin からも開かれるので useCurrentStoreId は使えない。店舗の画面でだけ URL の店舗が定まる。
+  const { currentStoreId } = useStoreContext();
   const [status, setStatus] = useState<number>();
   const history = useListPage(page =>
     orderApi.correctionHistory(orderId, page, storeId).catch(error => {
@@ -137,7 +140,10 @@ export function OrderCorrectionHistory({ orderId, storeId }: Props) {
         {...(status === 404
           ? {
               fallback: {
-                href: storeId === undefined ? storePath('/orders') : '/admin/orders',
+                href:
+                  storeId === undefined && currentStoreId !== undefined
+                    ? storePath(currentStoreId, '/orders')
+                    : '/admin/orders',
                 label: '一覧へ戻る',
               },
             }

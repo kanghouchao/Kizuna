@@ -17,6 +17,7 @@ import {
   createCourse,
   STORE_HEADERS,
   openLoginForm,
+  storeUrl,
 } from "./store-api";
 
 const { Given, When, Then, After } = createBdd();
@@ -197,7 +198,7 @@ Then(
 When("店舗管理者が受付箱で予約を確定する", async ({ page, request }) => {
   const storeId = await loginViaUiAndEnterStore(page);
   // 確定画面からは一覧の検索条件を持って戻る。並び順を既定から外して、戻り先の URL で確かめる
-  await page.goto(`${APP_URL}/store/orders?sort_key=PAX`);
+  await page.goto(storeUrl(storeId, `/orders?sort_key=PAX`));
   const adminToken = await loginAsStoreAdmin(request);
   const courseName = `申請確定コース-${Date.now()}`;
   await createCourse(request, adminToken, courseName, storeId);
@@ -210,7 +211,7 @@ When("店舗管理者が受付箱で予約を確定する", async ({ page, reque
   // 確定は申請内容を事前入力した独立画面（受注の作成操作）。内容はそのまま確定する。
   await application.getByRole("link", { name: "確定" }).click();
   await expect(page).toHaveURL(
-    /\/store\/orders\/applications\/[^/]+\/confirm\?sort_key=PAX$/,
+    /\/store\/\d+\/orders\/applications\/[^/]+\/confirm\?sort_key=PAX$/,
   );
   await expect(
     page.getByRole("heading", { level: 1, name: "予約申請を確定" }),
@@ -228,7 +229,7 @@ When("店舗管理者が受付箱で予約を確定する", async ({ page, reque
     ),
     page.getByRole("button", { name: "この内容を確認して保存" }).click(),
   ]);
-  await expect(page).toHaveURL(/\/store\/orders\?sort_key=PAX$/);
+  await expect(page).toHaveURL(/\/store\/\d+\/orders\?sort_key=PAX$/);
   // 後片付けは受注を理由付き取消で終端へ送るため、生成された受注の id を控える。
   const body = await response.json();
   createdOrderId = body.id as string;

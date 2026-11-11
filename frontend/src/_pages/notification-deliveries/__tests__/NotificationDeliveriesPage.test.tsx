@@ -9,17 +9,16 @@ import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 import { notify } from '@/shared/notify';
 import { storeSessionToken } from '@/shared/api';
-import { setCurrentStore } from '@/shared/lib';
 let mockStoreId = '1';
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => mockStoreId,
   useStoreContext: () => ({
     stores: [{ id: 1, name: 'テスト店舗' }],
     currentStoreId: mockStoreId,
     currentStore: { id: 1, name: 'テスト店舗' },
     loadFailed: false,
     reload: jest.fn(),
-    switchStore: jest.fn(),
   }),
 }));
 jest.mock('@/entities/notification-delivery', () => ({
@@ -88,7 +87,6 @@ beforeEach(() => {
   mockStoreId = '1';
   // 結果不明の操作は、このタブの本人と現在店舗の作用域でだけ起こせる
   storeSessionToken({ token: 't', expires_at: 1, user_id: 7, refresh_expires_at: 2 });
-  setCurrentStore('1');
   permission('NOTIFICATION_VIEW', 'NOTIFICATION_MANAGE', 'NOTIFICATION_SEND');
   api.list.mockResolvedValue({ rows: [row], page: 0, pageCount: 1, total: 1 });
   api.get.mockResolvedValue(row);

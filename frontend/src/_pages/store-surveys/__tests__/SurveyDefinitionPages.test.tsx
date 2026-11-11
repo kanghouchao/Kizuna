@@ -14,13 +14,13 @@ import {
 
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => '1',
   useStoreContext: () => ({
     stores: [{ id: 1, name: 'テスト店舗' }],
     currentStoreId: '1',
     currentStore: { id: 1, name: 'テスト店舗' },
     loadFailed: false,
     reload: jest.fn(),
-    switchStore: jest.fn(),
   }),
 }));
 jest.mock('@/entities/survey', () => ({
@@ -74,7 +74,7 @@ describe('作成', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'アンケートを作成' })).toBeVisible();
     expect(screen.getByRole('link', { name: 'アンケート一覧へ' })).toHaveAttribute(
       'href',
-      '/store/surveys'
+      '/store/1/surveys'
     );
   });
 
@@ -95,7 +95,9 @@ describe('作成', () => {
     fireEvent.change(screen.getByLabelText('選択肢 2'), { target: { value: '二つ目' } });
     api.write.mockResolvedValue(written('DRAFT_CREATED', { revision }));
     fireEvent.click(screen.getByRole('button', { name: '下書きを保存' }));
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/store/surveys/10/revisions/20'));
+    await waitFor(() =>
+      expect(mockReplace).toHaveBeenCalledWith('/store/1/surveys/10/revisions/20')
+    );
     expect(api.write.mock.calls[0][0]).toMatchObject({
       kind: 'CREATE',
       input: {
@@ -121,7 +123,9 @@ describe('作成', () => {
     expect(api.write.mock.calls[1][0]).toEqual(api.write.mock.calls[0][0]);
     expect(api.write.mock.calls[1][1]).toBe(api.write.mock.calls[0][1]);
     expect(api.write.mock.calls[0][2]).toEqual({ headers: { 'X-Store-ID': '1' } });
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/store/surveys/10/revisions/20'));
+    await waitFor(() =>
+      expect(mockReplace).toHaveBeenCalledWith('/store/1/surveys/10/revisions/20')
+    );
   });
 
   test('画面を離れても結果不明の操作は残り、一覧から同じ要求で確かめる', async () => {
@@ -140,7 +144,7 @@ describe('作成', () => {
     fireEvent.click(screen.getByRole('button', { name: '同じ要求で結果を確認' }));
     await waitFor(() => expect(api.write).toHaveBeenCalledTimes(2));
     expect(api.write.mock.calls[1][0]).toEqual(api.write.mock.calls[0][0]);
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/surveys/10/revisions/20'));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/1/surveys/10/revisions/20'));
   });
 });
 
@@ -156,7 +160,7 @@ describe('差替', () => {
     expect(await screen.findByRole('heading', { level: 1, name: '下書きを編集' })).toBeVisible();
     expect(screen.getByRole('link', { name: '設問版へ戻る' })).toHaveAttribute(
       'href',
-      '/store/surveys/10/revisions/20'
+      '/store/1/surveys/10/revisions/20'
     );
     expect(await screen.findByLabelText('題名')).toHaveValue('店舗の問票');
     expect(screen.getByLabelText('設問文')).toHaveValue('担当者が入力した質問');
@@ -169,7 +173,9 @@ describe('差替', () => {
       rid: '20',
       input: { title: '直した題名', version: 3 },
     });
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/store/surveys/10/revisions/20'));
+    await waitFor(() =>
+      expect(mockReplace).toHaveBeenCalledWith('/store/1/surveys/10/revisions/20')
+    );
   });
 
   test('下書きでない版では入力を出さない', async () => {
@@ -213,7 +219,7 @@ describe('改訂', () => {
     expect(await screen.findByRole('heading', { level: 1, name: '新しい版を作成' })).toBeVisible();
     expect(screen.getByRole('link', { name: '設問版へ戻る' })).toHaveAttribute(
       'href',
-      '/store/surveys/10/revisions/20'
+      '/store/1/surveys/10/revisions/20'
     );
     expect(await screen.findByLabelText('題名')).toHaveValue('店舗の問票');
     fireEvent.click(screen.getByRole('button', { name: '下書きを保存' }));
@@ -223,7 +229,9 @@ describe('改訂', () => {
       sid: '10',
       input: { based_on_revision_id: '20', title: '店舗の問票' },
     });
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/store/surveys/10/revisions/22'));
+    await waitFor(() =>
+      expect(mockReplace).toHaveBeenCalledWith('/store/1/surveys/10/revisions/22')
+    );
   });
 
   test('最新版でない版や下書きが既にある系列からは作らない', async () => {
@@ -290,7 +298,9 @@ describe('改訂', () => {
     expect(api.write.mock.calls[1][0]).toMatchObject({
       input: { based_on_revision_id: '21', title: '自分の改版案' },
     });
-    await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/store/surveys/10/revisions/22'));
+    await waitFor(() =>
+      expect(mockReplace).toHaveBeenCalledWith('/store/1/surveys/10/revisions/22')
+    );
   });
 
   test('改版元が不在でも系列確認の通信障害で入力を消さない', async () => {

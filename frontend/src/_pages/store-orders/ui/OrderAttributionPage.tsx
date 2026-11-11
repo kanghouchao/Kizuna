@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
-import { hasPermission, useMe, useStoreContext } from '@/entities/user';
+import { hasPermission, useCurrentStoreId, useMe, useStoreContext } from '@/entities/user';
 import { notify } from '@/shared/notify';
 import { Order, OrderAttribution, OrderAttributionSource, orderApi } from '@/entities/order';
 import {
@@ -42,8 +42,6 @@ const SOURCE_LABELS: Record<OrderAttributionSource, string> = {
 const CORRECTION_NOTE =
   '無効化しても付与済みのポイントは自動では戻りません。無効化のあと、この帰属の会員から差し引く手続きへ進みます。';
 
-const LIST_HREF = storePath('/orders');
-
 interface InvalidationFormValues {
   reason: string;
 }
@@ -75,7 +73,8 @@ export default function OrderAttributionPage() {
  */
 function Attribution({ id }: { id: string }) {
   const router = useRouter();
-  const storeId = useStoreContext().currentStoreId;
+  const storeId = useCurrentStoreId();
+  const listHref = storePath(storeId, '/orders');
   const form = useForm<InvalidationFormValues>({ defaultValues: { reason: '' } });
   const {
     control,
@@ -146,7 +145,7 @@ function Attribution({ id }: { id: string }) {
   };
 
   const isBusy = isSubmitting || isReissuing || isCorrectingBusy;
-  const fallback = { href: LIST_HREF, label: 'オーダー一覧へ' };
+  const fallback = { href: listHref, label: 'オーダー一覧へ' };
   const missing = orderFailure === 'notFound' || failure === 'notFound';
   const notCompleted = order !== null && order.status !== 'COMPLETED';
   const heading = `${order?.business_date ?? '-'} / ${customerHeadingText(order)}`;
@@ -162,7 +161,7 @@ function Attribution({ id }: { id: string }) {
       戻る
     </Button>
   ) : (
-    <Button variant="outline" render={<Link href={LIST_HREF} />}>
+    <Button variant="outline" render={<Link href={listHref} />}>
       戻る
     </Button>
   );
@@ -173,7 +172,7 @@ function Attribution({ id }: { id: string }) {
         token={receiptToken}
         description={heading}
         claimNote="正しいお客様が読み取ると、この来店をご自身のポイントと履歴に取り込めます（再発行から 90 日以内）。"
-        onClose={() => router.replace(LIST_HREF)}
+        onClose={() => router.replace(listHref)}
       />
       <div className="space-y-6">
         <div>

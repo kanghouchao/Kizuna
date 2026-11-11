@@ -1,5 +1,4 @@
 import { act, renderHook } from '@testing-library/react';
-import Cookies from 'js-cookie';
 import { useOperation, useOperationRevision } from '../hooks/useOperation';
 import {
   memoryOperationStore,
@@ -8,10 +7,10 @@ import {
 } from '../operation-store';
 import { ClientDataError } from '../apiError';
 
-jest.mock('js-cookie');
 let userId: number | undefined = 7;
 jest.mock('@/shared/api/session', () => ({ getSessionUserId: () => userId }));
 
+// 画面が表示している店舗（URL の店舗 id）。
 let store = '1';
 let sequence = 0;
 const fail = (status?: number) =>
@@ -20,9 +19,6 @@ const fail = (status?: number) =>
 beforeEach(() => {
   userId = 7;
   store = '1';
-  (Cookies.get as jest.Mock).mockImplementation((key: string) =>
-    key === 'current-store-id' ? store : undefined
-  );
 });
 
 const opened: {
@@ -32,7 +28,7 @@ const opened: {
 function setup(operationStore: OperationStore = memoryOperationStore, name = `test-${++sequence}`) {
   const send = jest.fn();
   const hook = renderHook(() =>
-    useOperation<{ amount: number }, string>(name, { storeId: '1', store: operationStore, send })
+    useOperation<{ amount: number }, string>(name, { storeId: store, store: operationStore, send })
   );
   const current = () => hook.result.current;
   opened.push({ send, current });
@@ -156,44 +152,19 @@ it('同じ操作は単飛し、結果不明の間は新しい操作を起こさ�
   expect(send).toHaveBeenCalledTimes(1);
 });
 
-it.each([
-  ['店舗', () => (store = '2')],
-  ['本人', () => (userId = 8)],
-])('起こした後に%sが変わったら送らずに止める', async (_, change) => {
+it('起こした後に本人が変わったら送らずに止める', async () => {
   const { send, current, hook } = setup();
   send.mockRejectedValueOnce(fail());
   await attempt(() => current().start({ amount: 1 }));
   const { replay } = current();
-  change();
+  userId = 8;
   const error = await attempt(replay);
   expect(error).toBeInstanceOf(ClientDataError);
   expect(send).toHaveBeenCalledTimes(1);
-  // 元の作用域に戻れば、結果不明の操作はそのまま残っている
-  store = '1';
+  // 元の本人に戻れば、結果不明の操作はそのまま残っている
   userId = 7;
   hook.rerender();
   expect(current().pending?.phase).toBe('unknown');
-});
-
-it('別タブで現在店舗が切り替わった後に描き直しても、画面の店舗の操作として扱い新しい店舗へは送らない', async () => {
-  const { send, current, hook } = setup();
-  send.mockRejectedValueOnce(fail());
-  await attempt(() => current().start({ amount: 1 }));
-  store = '2';
-  hook.rerender();
-  expect(current().pending?.phase).toBe('unknown');
-  expect(await attempt(() => current().replay())).toBeInstanceOf(ClientDataError);
-  expect(send).toHaveBeenCalledTimes(1);
-  store = '1';
-});
-
-it('別タブで現在店舗が切り替わった後は、新しい操作も送らない', async () => {
-  const { send, current, hook } = setup();
-  store = '2';
-  hook.rerender();
-  expect(await attempt(() => current().start({ amount: 1 }))).toBeInstanceOf(ClientDataError);
-  expect(send).not.toHaveBeenCalled();
-  expect(current().pending).toBeNull();
 });
 
 it('本人か店舗が確定するまで操作を起こさない', async () => {

@@ -1,6 +1,5 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
-import { APP_URL } from '../base-url';
 import {
   createCast,
   createCourse,
@@ -15,6 +14,7 @@ import {
   STORE1_ID,
   STORE_HEADERS,
   todayInTokyo,
+  storeUrl,
 } from './store-api';
 
 const { Given, When, Then } = createBdd();
@@ -43,7 +43,7 @@ async function prepareLinkedCustomer(request: Parameters<typeof loginAsStoreAdmi
 }
 
 async function expectBalance(page: import('@playwright/test').Page, points: number) {
-  await page.goto(`${APP_URL}/store/customers/${customerId}/edit`);
+  await page.goto(storeUrl(STORE1_ID, `/customers/${customerId}/edit`));
   await expect(page.getByText(`${points} ポイント`, { exact: true })).toBeVisible({ timeout: 15000 });
 }
 
@@ -112,13 +112,13 @@ Given('会員に帰属した完了受注を用意する', async ({ page, request
 });
 
 When('完了アーカイブから会員帰属を開いて無効化し付与分を差し引く', async ({ page }) => {
-  await page.goto(`${APP_URL}/store/orders`);
+  await page.goto(storeUrl(STORE1_ID, `/orders`));
   await page.getByLabel('お客様名', { exact: true }).fill(customerName);
   await page.getByRole('button', { name: '検索', exact: true }).click();
   await page.getByRole('button', { name: /^完了 \d+ 件$/ }).click();
   await page.getByRole('link', { name: '会員帰属', exact: true }).click();
 
-  await expect(page).toHaveURL(new RegExp(`/store/orders/${orderId}/attribution$`));
+  await expect(page).toHaveURL(new RegExp(`/store/${STORE1_ID}/orders/${orderId}/attribution$`));
   await expect(page.getByRole('heading', { level: 1, name: '会員帰属の訂正' })).toBeVisible();
   await page.getByLabel('無効化の理由', { exact: true }).fill('別の会員の来店として記録された');
   await page.getByRole('button', { name: '無効化する', exact: true }).click();

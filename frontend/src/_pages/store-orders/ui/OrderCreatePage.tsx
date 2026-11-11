@@ -7,7 +7,7 @@ import { toOrderRequestBody } from '../lib/orderFormAssembly';
 import { RegionError } from '@/shared/ui';
 import { notify } from '@/shared/notify';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useStoreContext } from '@/entities/user';
+import { useCurrentStoreId, useStoreContext } from '@/entities/user';
 import { useState } from 'react';
 import { OrderCreateRequest, orderApi } from '@/entities/order';
 import { getApiErrorMessage, storePath, useResource } from '@/shared/lib';
@@ -21,7 +21,7 @@ export default function CreateOrderPage() {
 function CreateOrder({ replacement }: { replacement?: string }) {
   const confirmation = useOrderConfirmation();
   const router = useRouter();
-  const storeId = useStoreContext().currentStoreId;
+  const storeId = useCurrentStoreId();
   const original = useResource(replacement ? () => orderApi.get(replacement) : null, [
     replacement,
     storeId,
@@ -41,7 +41,7 @@ function CreateOrder({ replacement }: { replacement?: string }) {
       await orderApi.create({ ...request, confirmation_token: token });
 
       notify.success('オーダーを登録しました');
-      router.push(storePath('/orders'));
+      router.push(storePath(storeId, '/orders'));
     } catch (error) {
       notify.error(getApiErrorMessage(error, 'オーダーの登録に失敗しました'));
     } finally {
@@ -72,7 +72,7 @@ function CreateOrder({ replacement }: { replacement?: string }) {
             {original.failure === 'notFound' && (
               <RegionError
                 message="元受注が見つかりません。"
-                fallback={{ href: storePath('/orders'), label: 'オーダー一覧へ' }}
+                fallback={{ href: storePath(storeId, '/orders'), label: 'オーダー一覧へ' }}
               />
             )}
             {original.data &&

@@ -32,13 +32,13 @@ let mockParams = { id: 'o1' };
 jest.mock('next/navigation', () => ({ useParams: () => mockParams }));
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => mockStoreId,
   useStoreContext: () => ({
     stores: [{ id: 1, name: 'テスト店舗' }],
     currentStoreId: mockStoreId,
     currentStore: { id: 1, name: 'テスト店舗' },
     loadFailed: false,
     reload: jest.fn(),
-    switchStore: jest.fn(),
   }),
 }));
 jest.mock('@/shared/notify', () => ({
@@ -156,7 +156,7 @@ test('ORDER_MANAGE だけでも無効化済み受注から再提供できる', a
   });
   render(<OrderCompletionInvalidationPage />);
   const link = await screen.findByRole('link', { name: '関連する新受注で再提供' });
-  expect(link).toHaveAttribute('href', '/store/orders/create?replacement_for_order_id=o1');
+  expect(link).toHaveAttribute('href', '/store/1/orders/create?replacement_for_order_id=o1');
   expect(screen.queryByLabelText('理由')).not.toBeInTheDocument();
 });
 

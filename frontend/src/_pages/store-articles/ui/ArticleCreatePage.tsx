@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/shared/ui';
 import { PageHeader } from '@/widgets/page-header';
 import { ArticleAccess } from './ArticleAccess';
 import { ArticleForm } from './ArticleForm';
+import { useCurrentStoreId } from '@/entities/user';
 
 export function ArticleCreatePage() {
   return (
@@ -18,6 +19,7 @@ export function ArticleCreatePage() {
 }
 
 function ArticleCreate() {
+  const storeId = useCurrentStoreId();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const submit = async (input: ArticleInput) => {
@@ -25,7 +27,7 @@ function ArticleCreate() {
     try {
       const { id } = await articleApi.create(input);
       notify.success('記事を作成しました');
-      router.push(storePath(`/articles/${id}/edit`));
+      router.push(storePath(storeId, `/articles/${id}/edit`));
     } catch (error) {
       notify.error(getApiErrorMessage(error, '記事を作成できませんでした'));
       setBusy(false);

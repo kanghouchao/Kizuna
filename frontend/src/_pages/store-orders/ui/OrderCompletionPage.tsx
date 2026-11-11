@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useForm, useWatch } from 'react-hook-form';
-import { useStoreContext } from '@/entities/user';
+import { useCurrentStoreId, useStoreContext } from '@/entities/user';
 import { notify } from '@/shared/notify';
 import {
   Order,
@@ -68,9 +68,9 @@ export default function OrderCompletionPage() {
  */
 function Completion({ id }: { id: string }) {
   const router = useRouter();
-  const storeId = useStoreContext().currentStoreId;
+  const storeId = useCurrentStoreId();
   // 一覧から渡された検索条件。戻る・完了後の遷移で同じ条件の作業キューへ帰る
-  const backHref = orderListHref(useSearchParams().toString());
+  const backHref = orderListHref(storeId, useSearchParams().toString());
   const confirmation = useOrderConfirmation(id);
   const form = useForm<OrderCompletionFormValues>({
     defaultValues: { fee_lines: [], use_points: NaN },

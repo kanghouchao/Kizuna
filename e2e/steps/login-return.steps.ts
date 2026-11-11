@@ -1,6 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
+import { STORE1_ID, storePath } from './store-api';
 
 const { When, Then } = createBdd();
 
@@ -45,3 +46,23 @@ When(
     await loginButton(page).click();
   },
 );
+
+// 店舗の画面のパスは店舗 id を含むので、実行時の id から組む。
+When('未ログインで店舗1の {string} を開く', async ({ page }, subPath: string) => {
+  await page.context().clearCookies();
+  await page.goto(`${APP_URL}${storePath(STORE1_ID, subPath)}`, { waitUntil: 'domcontentloaded' });
+});
+
+Then('ログイン画面へ移り、next に店舗1の {string} が載っている', async ({ page }, subPath: string) => {
+  const path = storePath(STORE1_ID, subPath);
+  await expect(page).toHaveURL(
+    (url) => url.pathname === '/auth/login' && url.searchParams.get('next') === path,
+    { timeout: 15000 },
+  );
+  await expect(loginButton(page)).toBeVisible({ timeout: 15000 });
+});
+
+Then('店舗1の {string} へ戻る', async ({ page }, subPath: string) => {
+  const path = storePath(STORE1_ID, subPath);
+  await expect(page).toHaveURL((url) => url.pathname === path, { timeout: 15000 });
+});

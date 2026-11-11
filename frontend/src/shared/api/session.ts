@@ -33,8 +33,8 @@ export function landSession(kind: SessionKind, refreshExpiresAt: number, next?: 
   startSession(kind, refreshExpiresAt);
   const returnTo = resolveNext(kind, next);
   if (returnTo) return returnTo;
-  // 従業員は一つの管理画面へ入り、着地は全員ダッシュボード（集計カードは権限で出し分ける）。
-  if (kind === 'admin') return '/admin/dashboard/';
+  // 従業員の着地はメニューの木と授権店舗で決まるため、管理画面シェルの中の着地の画面に任せる。
+  if (kind === 'admin') return '/admin';
   if (kind === 'cast') return '/cast/';
   return '/member/';
 }

@@ -89,14 +89,15 @@ Then(
 );
 
 When('元のタブで {string} を開くと、その要求でアクセストークンが期限切れになる', async ({ page }, linkName: string) => {
+  // レールでの文脈の選び直しは画面を移すので、リンクを出してから 1 回だけの 401 を仕掛ける。
+  const link = await revealSidebarLink(page, panel =>
+    panel.getByRole('link', { name: linkName, exact: true })
+  );
   // 15 分を待たずに期限切れを再現する。リフレッシュ自身は本物のバックエンドへ届く。
   await page.route(
     url => url.pathname.startsWith('/api/') && url.pathname !== '/api/auth/refresh',
     route => route.fulfill({ status: 401, body: '' }),
     { times: 1 }
-  );
-  const link = await revealSidebarLink(page, aside =>
-    aside.getByRole('link', { name: linkName, exact: true })
   );
   const refresh = page.waitForResponse(r => r.url().endsWith('/api/auth/refresh'));
   await link.click();

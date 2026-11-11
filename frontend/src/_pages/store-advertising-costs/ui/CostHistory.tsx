@@ -14,8 +14,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/shared/ui';
+import { useCurrentStoreId } from '@/entities/user';
 const actions = { CREATED: '登録', UPDATED: '変更', DELETED: '削除', COPIED: '前月コピー' };
 export function CostHistory({ month }: { month: string }) {
+  const storeId = useCurrentStoreId();
   const list = useListPage<Change>(async page =>
     fromSpringPage(await advertisingApi.changes(month, page))
   );
@@ -77,7 +79,7 @@ export function CostHistory({ month }: { month: string }) {
             <RegionError
               message="変更履歴が見つかりません。"
               fallback={{
-                href: storePath('/advertising-costs'),
+                href: storePath(storeId, '/advertising-costs'),
                 label: '広告費一覧へ戻る',
               }}
             />

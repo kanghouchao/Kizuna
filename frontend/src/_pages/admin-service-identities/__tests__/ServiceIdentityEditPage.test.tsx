@@ -47,7 +47,6 @@ describe('サービスIDの権限編集ページ', () => {
       currentStoreId: undefined,
       loadFailed: false,
       reload: jest.fn(),
-      switchStore: jest.fn(),
     } as unknown as ReturnType<typeof useStoreContext>);
     mockedApi.grantableRoles.mockResolvedValue([
       { id: 20, name: '失効バッチ', system: false, permission_count: 3 },

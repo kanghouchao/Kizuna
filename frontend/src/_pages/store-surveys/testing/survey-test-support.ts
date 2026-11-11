@@ -2,7 +2,6 @@ import { surveyApi, Answer, Operation, Revision, Survey, WriteResponse } from '@
 import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 import { storeSessionToken } from '@/shared/api';
-import { setCurrentStore } from '@/shared/lib';
 
 export const api = jest.mocked(surveyApi);
 
@@ -89,11 +88,10 @@ export function fixtures() {
   api.history.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
 }
 
-/** 結果不明の操作は、このタブの本人と現在店舗の作用域でだけ起こせる。 */
+/** 結果不明の操作は、このタブの本人の作用域でだけ起こせる。 */
 export function resetSurveyTest() {
   jest.resetAllMocks();
   storeSessionToken({ token: 't', expires_at: 1, user_id: 7, refresh_expires_at: 2 });
-  setCurrentStore('1');
   permission('SURVEY_VIEW');
   api.list.mockResolvedValue({ rows: [], page: 0, pageCount: 0, total: 0 });
 }

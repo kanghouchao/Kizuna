@@ -5,13 +5,13 @@ import { api, fixtures, permission, resetSurveyTest } from '../testing/survey-te
 
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => '1',
   useStoreContext: () => ({
     stores: [{ id: 1, name: 'テスト店舗' }],
     currentStoreId: '1',
     currentStore: { id: 1, name: 'テスト店舗' },
     loadFailed: false,
     reload: jest.fn(),
-    switchStore: jest.fn(),
   }),
 }));
 jest.mock('@/entities/survey', () => ({
@@ -45,7 +45,7 @@ test('一覧の行は最新版の詳細へのリンクを持つ', async () => {
   render(<SurveysPage />);
   expect(await screen.findByRole('link', { name: '版と回答' })).toHaveAttribute(
     'href',
-    '/store/surveys/10/revisions/20'
+    '/store/1/surveys/10/revisions/20'
   );
 });
 
@@ -55,7 +55,7 @@ test('管理権限があれば作成画面へのリンクを出す', async () =>
   render(<SurveysPage />);
   expect(await screen.findByRole('link', { name: 'アンケートを作成' })).toHaveAttribute(
     'href',
-    '/store/surveys/create'
+    '/store/1/surveys/create'
   );
 });
 

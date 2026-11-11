@@ -3,7 +3,6 @@ import { createBdd } from "playwright-bdd";
 import { randomUUID } from "node:crypto";
 import { Client } from "pg";
 import { zipEntry } from "./report-export";
-import { APP_URL } from "../base-url";
 import {
   ADMIN_PASSWORD,
   loginViaUiAndEnterStore,
@@ -21,9 +20,12 @@ import {
   cancelOrder,
   submitConfirmedStoreRequest,
   switchStoreOnRail,
+  sidebarPanel,
   createEnrolledHire,
   openLoginForm,
   ensureMedium,
+  storeUrl,
+  waitStaffLanding,
 } from "./store-api";
 const { Given, When, Then } = createBdd();
 const base = "/api/advertising-costs",
@@ -105,10 +107,16 @@ async function login(page: Page, address = email) {
   await page.getByLabel("メールアドレス", { exact: true }).fill(address);
   await page.getByLabel("パスワード", { exact: true }).fill(password);
   await page.getByRole("button", { name: "ログイン", exact: true }).click();
-  await expect(page).toHaveURL(/\/admin\/dashboard\/?$/);
-  await page.goto(`${APP_URL}/store/advertising-costs`);
+  await waitStaffLanding(page);
+  await page.goto(storeUrl(storeId, `/advertising-costs`));
   await expect(page.getByRole("heading", { name: "広告費管理" })).toBeVisible();
   await selectMonth(page, month);
+}
+/** レールで店舗を移り、その店舗の広告費管理を画面内の遷移で開く（レールはダッシュボードへ移るため）。 */
+async function openAdvertisingCostsOnRail(page: Page, name: string) {
+  await switchStoreOnRail(page, name);
+  await sidebarPanel(page).getByRole("link", { name: "広告費管理", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "広告費管理" })).toBeVisible();
 }
 const longMediumName = "非常に長い媒体名".repeat(12);
 async function pickMedium(page: Page, name: string) {
@@ -598,10 +606,10 @@ Then(
     ).toBeVisible();
     await expect(page.getByText("応答消失検証", { exact: true })).toBeHidden();
     await page.unroute("**/api/advertising-costs?**");
-    await switchStoreOnRail(page, foreignName);
+    await openAdvertisingCostsOnRail(page, foreignName);
     await selectMonth(page, month);
     await expect(page.getByText("応答消失検証", { exact: true })).toBeHidden();
-    await switchStoreOnRail(page, storeName);
+    await openAdvertisingCostsOnRail(page, storeName);
     await selectMonth(page, month);
     await expect(page.getByText("応答消失検証", { exact: true })).toBeVisible();
     for (const theme of ["light", "dark"]) {
@@ -1433,7 +1441,7 @@ Then(
       .click();
     await storeArrived;
     await page.unroute("**/api/advertising-order-costs?**");
-    await switchStoreOnRail(page, foreignName);
+    await openAdvertisingCostsOnRail(page, foreignName);
     await selectMonth(page, month);
     await page
       .getByRole("tab", { name: "受注あたり記録広告費", exact: true })

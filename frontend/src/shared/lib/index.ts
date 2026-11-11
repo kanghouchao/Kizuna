@@ -28,8 +28,8 @@ export type { OperationStore } from './operation-store';
 export { useOperation, useOperationRevision } from './hooks/useOperation';
 export type { PendingOperation, SendOperation } from './hooks/useOperation';
 export { createUuid } from './uuid';
-export { getSessionKind, getCurrentStoreId, setCurrentStore } from './session';
-export { isStorePath, storePath } from './store-route';
+export { getSessionKind } from './session';
+export { isStorePath, storeIdOf, storePath } from './store-route';
 export { cn } from './utils';
 export {
   EMAIL_PATTERN,

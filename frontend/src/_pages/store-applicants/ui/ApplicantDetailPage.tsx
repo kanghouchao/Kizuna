@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { hasPermission, useMe, useStoreContext } from '@/entities/user';
+import { hasPermission, useCurrentStoreId, useMe } from '@/entities/user';
 import { useState } from 'react';
 import {
   allowedApplicantTransitions,
@@ -23,7 +23,7 @@ import { ApplicantHistoryPanel } from './ApplicantHistoryPanel';
 import { ApplicantTransitionForm } from './ApplicantTransitionForm';
 export default function ApplicantDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const storeId = useStoreContext().currentStoreId;
+  const storeId = useCurrentStoreId();
   const resource = useResource(() => applicantApi.get(id), [id]);
   const policy = useResource(() => applicantApi.policy());
   const { me } = useMe();
@@ -85,7 +85,7 @@ export default function ApplicantDetailPage() {
             再読み込み
           </Button>
         )}
-        <Button variant="outline" render={<Link href={storePath('/applicants')} />}>
+        <Button variant="outline" render={<Link href={storePath(storeId, '/applicants')} />}>
           一覧へ
         </Button>
       </div>
@@ -105,7 +105,7 @@ export default function ApplicantDetailPage() {
         {resource.failure === 'notFound' ? (
           <RegionError
             message="応募者が見つかりませんでした"
-            fallback={{ href: storePath('/applicants'), label: '一覧へ' }}
+            fallback={{ href: storePath(storeId, '/applicants'), label: '一覧へ' }}
           />
         ) : (
           <RegionError
@@ -292,7 +292,9 @@ export default function ApplicantDetailPage() {
               <p className="text-sm">在籍登録済みです。招待はキャスト一覧から発行します。</p>
               <Button
                 variant="outline"
-                render={<Link href={storePath(`/casts/${applicant.enrollment_id}/edit`)} />}
+                render={
+                  <Link href={storePath(storeId, `/casts/${applicant.enrollment_id}/edit`)} />
+                }
               >
                 在籍を開く
               </Button>
@@ -305,7 +307,7 @@ export default function ApplicantDetailPage() {
                   : '在籍は未登録です。'}
               </p>
               {canEnroll && !applicant.anonymized_at && (
-                <Button render={<Link href={storePath(`/applicants/${id}/enrollment`)} />}>
+                <Button render={<Link href={storePath(storeId, `/applicants/${id}/enrollment`)} />}>
                   在籍登録
                 </Button>
               )}

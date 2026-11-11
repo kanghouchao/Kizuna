@@ -11,6 +11,7 @@ import { formatDateTime } from '../lib/formatDateTime';
 import { UNLINKED_NOTE, customerLabel } from '../lib/customerLabel';
 import { useSearchOnCriteriaChange } from '../lib/useSearchOnCriteriaChange';
 import { Button, Pager, RegionError } from '@/shared/ui';
+import { useCurrentStoreId } from '@/entities/user';
 
 /** アーカイブの 1 ページ。増えるだけの記録なので、位置をページ番号で指せる。 */
 const PAGE_SIZE = 10;
@@ -55,6 +56,7 @@ function OutcomeLine({ order }: { order: OrderArchiveRow }) {
 }
 
 function ArchiveRow({ order, canCorrect }: { order: OrderArchiveRow; canCorrect: boolean }) {
+  const storeId = useCurrentStoreId();
   const label = customerLabel(order);
   return (
     <div className="flex items-start justify-between gap-4 border-b px-4 py-3 last:border-b-0">
@@ -75,7 +77,7 @@ function ArchiveRow({ order, canCorrect }: { order: OrderArchiveRow; canCorrect:
         </div>
         {order.completion_invalidated && <p className="font-medium">誤完了・無効化済み</p>}
         {order.replacement_for_order_id && (
-          <Link href={storePath(`/orders/${order.replacement_for_order_id}/edit`)}>
+          <Link href={storePath(storeId, `/orders/${order.replacement_for_order_id}/edit`)}>
             再提供の元受注
           </Link>
         )}
@@ -91,7 +93,9 @@ function ArchiveRow({ order, canCorrect }: { order: OrderArchiveRow; canCorrect:
           <Button
             variant="ghost"
             size="sm"
-            render={<Link href={storePath(`/orders/${order.id}/completion-invalidation`)} />}
+            render={
+              <Link href={storePath(storeId, `/orders/${order.id}/completion-invalidation`)} />
+            }
           >
             {order.completion_invalidated ? '無効化詳細・再提供' : '誤完了の無効化'}
           </Button>
@@ -99,7 +103,7 @@ function ArchiveRow({ order, canCorrect }: { order: OrderArchiveRow; canCorrect:
           <Button
             variant="ghost"
             size="sm"
-            render={<Link href={storePath(`/orders/${order.id}/point-rollback`)} />}
+            render={<Link href={storePath(storeId, `/orders/${order.id}/point-rollback`)} />}
           >
             ポイント救済
           </Button>
@@ -107,7 +111,7 @@ function ArchiveRow({ order, canCorrect }: { order: OrderArchiveRow; canCorrect:
             <Button
               variant="ghost"
               size="sm"
-              render={<Link href={storePath(`/orders/${order.id}/correction`)} />}
+              render={<Link href={storePath(storeId, `/orders/${order.id}/correction`)} />}
             >
               <PencilLineIcon aria-hidden="true" />
               訂正
@@ -116,7 +120,7 @@ function ArchiveRow({ order, canCorrect }: { order: OrderArchiveRow; canCorrect:
           <Button
             variant="ghost"
             size="sm"
-            render={<Link href={storePath(`/orders/${order.id}/attribution`)} />}
+            render={<Link href={storePath(storeId, `/orders/${order.id}/attribution`)} />}
           >
             <UserRoundCogIcon aria-hidden="true" />
             会員帰属

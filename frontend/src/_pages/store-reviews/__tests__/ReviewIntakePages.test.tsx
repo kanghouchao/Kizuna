@@ -6,17 +6,16 @@ import { reviewApi, Review } from '@/entities/content/review';
 import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 import { storeSessionToken } from '@/shared/api';
-import { setCurrentStore } from '@/shared/lib';
 let mockStoreId = '1';
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => mockStoreId,
   useStoreContext: () => ({
     stores: [{ id: 1, name: 'テスト店舗' }],
     currentStoreId: mockStoreId,
     currentStore: { id: 1, name: 'テスト店舗' },
     loadFailed: false,
     reload: jest.fn(),
-    switchStore: jest.fn(),
   }),
 }));
 jest.mock('@/entities/content/review', () => ({
@@ -79,7 +78,6 @@ beforeEach(() => {
   jest.resetAllMocks();
   mockStoreId = '1';
   storeSessionToken({ token: 't', expires_at: 1, user_id: 7, refresh_expires_at: 2 });
-  setCurrentStore('1');
   permission('REVIEW_VIEW');
   api.get.mockResolvedValue(row);
 });
@@ -150,7 +148,7 @@ test('受付は原文の空白を保って送り、記録した口コミの詳�
     kind: 'CREATE',
     input: { body: '  原文の空白を保持  ', origin_order_id: null },
   });
-  expect(mockReplace).toHaveBeenCalledWith('/store/reviews/12');
+  expect(mockReplace).toHaveBeenCalledWith('/store/1/reviews/12');
   expect(notify.success).toHaveBeenCalledWith('口コミの操作を記録しました');
 });
 test('受付の結果が不明なら新しい送信を止め、同じ要求の再確認で詳細へ移る', async () => {
@@ -168,7 +166,7 @@ test('受付の結果が不明なら新しい送信を止め、同じ要求の�
   expect(screen.getByRole('button', { name: '受付を記録' })).toBeDisabled();
   expect(mockReplace).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: '同じ要求で結果を確認' }));
-  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/store/reviews/12'));
+  await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/store/1/reviews/12'));
   expect(api.write.mock.calls[1][1]).toBe(api.write.mock.calls[0][1]);
 });
 test('受付の404（関連受注の不在）は入力を保って直せる', async () => {
@@ -190,7 +188,7 @@ test('訂正は元の本文を初期値にし、公開許可を引き継がな�
   expect(screen.getByText(/公開許可は引き継ぎません/)).toBeVisible();
   expect(screen.getByRole('link', { name: '詳細へ戻る' })).toHaveAttribute(
     'href',
-    '/store/reviews/10'
+    '/store/1/reviews/10'
   );
   fireEvent.change(screen.getByLabelText('口コミ本文'), { target: { value: '訂正本文' } });
   fireEvent.change(screen.getByLabelText('判断・変更の理由'), { target: { value: '誤記修正' } });
@@ -206,7 +204,7 @@ test('訂正は元の本文を初期値にし、公開許可を引き継がな�
     id: '10',
     input: { version: 0, reason: '誤記修正', body: '訂正本文', origin_order_id: null },
   });
-  expect(mockReplace).toHaveBeenCalledWith('/store/reviews/11');
+  expect(mockReplace).toHaveBeenCalledWith('/store/1/reviews/11');
 });
 test('訂正の404で元口コミが残っていれば、関連受注の不在として入力を保つ', async () => {
   permission('REVIEW_VIEW', 'REVIEW_MANAGE', 'ORDER_MANAGE');

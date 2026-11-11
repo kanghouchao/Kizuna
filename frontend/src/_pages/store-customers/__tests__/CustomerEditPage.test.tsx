@@ -42,13 +42,13 @@ jest.mock('next/navigation', () => ({
 }));
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
+  useCurrentStoreId: () => '1',
   useStoreContext: () => ({
     stores: [{ id: 1, name: 'テスト店舗' }],
     currentStoreId: '1',
     currentStore: { id: 1, name: 'テスト店舗' },
     loadFailed: false,
     reload: jest.fn(),
-    switchStore: jest.fn(),
   }),
 }));
 
@@ -161,7 +161,7 @@ describe('顧客編集ページの取得失敗', () => {
     expect(within(region).queryByRole('button', { name: '再試行' })).not.toBeInTheDocument();
     expect(within(region).getByRole('link', { name: '顧客一覧へ' })).toHaveAttribute(
       'href',
-      '/store/customers'
+      '/store/1/customers'
     );
   });
 

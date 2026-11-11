@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { ChevronLeftIcon } from 'lucide-react';
 import { ReactNode, useState } from 'react';
 import { ContactType, CustomerMergeComparisonResponse, customerApi } from '@/entities/customer';
-import { MePending, hasPermission, useMe } from '@/entities/user';
+import { MePending, hasPermission, useCurrentStoreId, useMe } from '@/entities/user';
 import { storePath, useListPage } from '@/shared/lib';
 import { CustomerMergeComparison } from './CustomerMergeComparison';
 import {
@@ -53,6 +53,7 @@ export default function CustomerDuplicatesPage() {
 }
 
 function CustomerDuplicatesContent() {
+  const storeId = useCurrentStoreId();
   const [searchTerm, setSearchTerm] = useState('');
   const [type, setType] = useState<ContactType | 'ALL'>('ALL');
   const {
@@ -199,7 +200,7 @@ function CustomerDuplicatesContent() {
             連絡先が同じ顧客を手がかりとして並べています。同一人物かどうかはご自身で確かめてください。
           </p>
         </div>
-        <Button render={<Link href={storePath('/customers')} />} variant="outline">
+        <Button render={<Link href={storePath(storeId, '/customers')} />} variant="outline">
           <ChevronLeftIcon />
           顧客一覧へ
         </Button>

@@ -1,4 +1,4 @@
-import { expect, type Locator } from '@playwright/test';
+import { expect, type APIRequestContext, type Locator } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import {
   ADMIN_PASSWORD,
@@ -6,11 +6,17 @@ import {
   createPermissionRole,
   createStaffFixture,
   expectSidebarLinkAbsentEverywhere,
+  getAuthorizedStores,
   loginAsStoreAdmin,
   loginUser,
   openLoginForm,
   revealSidebarLink,
   selectRailContext,
+  sidebarPanel,
+  sidebarRail,
+  storePath,
+  storeUrl,
+  waitSidebarReady,
 } from './store-api';
 
 const { Given, Then, When } = createBdd();
@@ -40,14 +46,14 @@ When('用意した従業員でログインする', async ({ page }) => {
   await page.getByRole('button', { name: 'ログイン', exact: true }).click();
 });
 
-// ログイン系ステップ（統一ログイン画面を開く / メール...でログインする / ダッシュボードへ遷移する）
+// ログイン系ステップ（統一ログイン画面を開く / メール...でログインする / …のダッシュボードへ遷移する）
 // は login.steps.ts の定義を再利用する（playwright-bdd は steps/**/*.ts を横断解決するため
 // 同一ステップ文言の再定義は不要）。
 
 // リンクの有無・クリックは、そのリンクを含む文脈を選んでから行う（既定の文脈に無ければレールで探す）。
 // 「ない」はどの文脈のパネルにも無いことを指す。文脈ごとの断言は「サイドバーのパネル」系のステップを使う。
-const linkByName = (name: string) => (aside: Locator) =>
-  aside.getByRole('link', { name, exact: true });
+const linkByName = (name: string) => (panel: Locator) =>
+  panel.getByRole('link', { name, exact: true });
 
 Then('サイドバーに {string} のリンクがある', async ({ page }, name: string) => {
   await expect(await revealSidebarLink(page, linkByName(name))).toBeVisible();
@@ -66,43 +72,114 @@ When('サイドバーのレールで {string} を選ぶ', async ({ page }, label
 });
 
 Then('サイドバーのレールに {string} が表示される', async ({ page }, label: string) => {
-  await expect(page.locator('aside').getByRole('button', { name: label, exact: true })).toBeVisible();
+  await expect(sidebarRail(page).getByRole('link', { name: label, exact: true })).toBeVisible();
 });
 
 Then('サイドバーのレールに {string} が表示されない', async ({ page }, label: string) => {
   // パネルの描画完了を待ってから欠如を断言する（未描画のまま 0 件になる空振りを避ける）。
-  await expect(page.locator('aside a[href="/admin/dashboard"]')).toBeVisible({ timeout: 15000 });
-  await expect(page.locator('aside').getByRole('button', { name: label, exact: true })).toHaveCount(0);
+  await waitSidebarReady(page);
+  await expect(sidebarRail(page).getByRole('link', { name: label, exact: true })).toHaveCount(0);
+});
+
+Then('サイドバーのレールで {string} が選択されている', async ({ page }, label: string) => {
+  await expect(sidebarRail(page).getByRole('link', { name: label, exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(sidebarRail(page).locator('[aria-current="page"]')).toHaveCount(1);
 });
 
 Then('サイドバーにレールが表示されない', async ({ page }) => {
-  await expect(page.locator('aside a[href="/admin/dashboard"]')).toBeVisible({ timeout: 15000 });
-  await expect(page.locator('aside button[aria-pressed]')).toHaveCount(0);
+  await waitSidebarReady(page);
+  await expect(sidebarRail(page)).toHaveCount(0);
   // レールが無いときはパネルが 256px 全幅を占める。
   const width = await page.locator('aside').evaluate(el => el.getBoundingClientRect().width);
   expect(Math.round(width)).toBe(256);
 });
 
 Then('サイドバーのパネルの見出しが {string} である', async ({ page }, title: string) => {
-  await expect(page.locator('aside span[title]')).toHaveText(title);
+  await expect(sidebarPanel(page).locator('span[title]')).toHaveText(title);
 });
 
 Then('サイドバーのパネルに {string} のリンクがある', async ({ page }, name: string) => {
-  await expect(page.locator('aside').getByRole('link', { name, exact: true })).toBeVisible();
+  await expect(sidebarPanel(page).getByRole('link', { name, exact: true })).toBeVisible();
 });
 
 Then('サイドバーのパネルに {string} のリンクがない', async ({ page }, name: string) => {
-  await expect(page.locator('aside').getByRole('link', { name, exact: true })).toHaveCount(0);
+  await waitSidebarReady(page);
+  await expect(sidebarPanel(page).getByRole('link', { name, exact: true })).toHaveCount(0);
 });
 
 Then('サイドバーのパネルの最上段が {string} である', async ({ page }, name: string) => {
-  await expect(page.locator('aside nav a').first()).toHaveText(name);
+  await expect(sidebarPanel(page).locator('nav a').first()).toHaveText(name);
 });
 
 Then('サイドバーのパネルに見出し {string} がない', async ({ page }, heading: string) => {
-  await expect(page.locator('aside nav h3', { hasText: heading })).toHaveCount(0);
+  await expect(sidebarPanel(page).locator('nav h3', { hasText: heading })).toHaveCount(0);
 });
 
 Then('URL が {string} で終わる', async ({ page }, suffix: string) => {
   await expect(page).toHaveURL(new RegExp(`${suffix}/?$`), { timeout: 15000 });
+});
+
+Then('URL が店舗の {string} で終わる', async ({ page }, subPath: string) => {
+  await expect(page).toHaveURL(new RegExp(`/store/\\d+${subPath}/?$`), { timeout: 15000 });
+});
+
+// 店名から店長の授権店舗の id を実行時に引く（店舗 1 以外の id は固定しない）。
+async function storeIdByName(request: APIRequestContext, name: string): Promise<string> {
+  const stores = await getAuthorizedStores(request, await loginAsStoreAdmin(request));
+  const store = stores.find(candidate => candidate.name === name);
+  expect(store, `店長の授権店舗に ${name} が無い`).toBeDefined();
+  return String(store!.id);
+}
+
+Then('URL が店舗 {string} のダッシュボードである', async ({ page, request }, name: string) => {
+  const storeId = await storeIdByName(request, name);
+  await expect(page).toHaveURL(new RegExp(`${storePath(storeId, '/dashboard')}/?$`), { timeout: 15000 });
+});
+
+Then('店舗のダッシュボードに店舗 {string} が表示される', async ({ page }, name: string) => {
+  // 店舗の欄は店名と稼働状態（準備中 / 稼働中）のバッジを並べる。
+  const card = page.getByRole('main').locator('dl').filter({ has: page.locator('dt', { hasText: /^店舗$/ }) });
+  await expect(card.locator('dd')).toHaveText(new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(準備中|稼働中)$`));
+});
+
+let openedUrl = '';
+let requestedApiPaths: string[] = [];
+
+When('店舗 {string} の {string} を開く', async ({ page, request }, name: string, subPath: string) => {
+  const storeId = await storeIdByName(request, name);
+  requestedApiPaths = [];
+  page.on('request', req => {
+    const path = new URL(req.url()).pathname;
+    if (path.startsWith('/api/')) requestedApiPaths.push(path);
+  });
+  await page.goto(storeUrl(storeId, subPath));
+  openedUrl = page.url();
+});
+
+When('控えた URL を開く', async ({ page }) => {
+  await page.goto(openedUrl);
+});
+
+Then('画面の見出しが {string} である', async ({ page }, heading: string) => {
+  await expect(page.getByRole('main').getByRole('heading', { level: 1, name: heading, exact: true })).toBeVisible({ timeout: 15000 });
+});
+
+Then('この店舗の画面は開けないと表示され、ダッシュボードへの導線だけがある', async ({ page }) => {
+  const alert = page.getByRole('main').getByRole('alert');
+  await expect(alert).toContainText('この店舗の画面は開けません', { timeout: 15000 });
+  await expect(alert.getByRole('link', { name: 'ダッシュボードへ', exact: true })).toHaveAttribute('href', '/admin');
+  // 画面自身の取得は 1 件も送らない（シェルの本人・授権店舗・メニューの取得だけが飛ぶ）。
+  await page.waitForLoadState('networkidle');
+  expect(requestedApiPaths.filter(path => !['/api/me', '/api/stores/me', '/api/menus/me', '/api/auth/refresh'].includes(path))).toEqual([]);
+});
+
+// 着地先は作成日の最も新しい授権店舗。店舗 id は作成順に採番されるので、id の最大の店舗がそれに当たる。
+Then('用意した従業員は作成日の最も新しい授権店舗のダッシュボードへ着地し、パネルとレールがその店舗を示す', async ({ page, request }) => {
+  const token = await loginUser(request, storeOnlyEmail, storeOnlyPassword);
+  const stores = await getAuthorizedStores(request, token);
+  expect(stores.length).toBeGreaterThanOrEqual(2);
+  const newest = stores.reduce((a, b) => (a.id > b.id ? a : b));
+  await expect(page).toHaveURL(new RegExp(`${storePath(newest.id, '/dashboard')}/?$`), { timeout: 15000 });
+  await expect(sidebarPanel(page).locator('span[title]')).toHaveText(newest.name);
+  await expect(sidebarRail(page).getByRole('link', { name: newest.name, exact: true })).toHaveAttribute('aria-current', 'page');
 });

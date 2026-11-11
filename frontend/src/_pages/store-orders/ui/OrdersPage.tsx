@@ -14,7 +14,7 @@ import {
   orderApi,
   orderApplicationApi,
 } from '@/entities/order';
-import { hasPermission, useMe } from '@/entities/user';
+import { hasPermission, useCurrentStoreId, useMe } from '@/entities/user';
 import { storePath, useListPage } from '@/shared/lib';
 import { PageHeader } from '@/widgets/page-header';
 import { OrderApplicationCard } from './OrderApplicationCard';
@@ -106,6 +106,7 @@ const toDraft = (criteria: OrderListCriteria): SearchDraft => ({
 });
 
 export default function OrderListPage() {
+  const storeId = useCurrentStoreId();
   // 完了後訂正は ORDER_CORRECT（店長）限定。導線の表示制御だけで、強制はサーバ側 @PreAuthorize。
   const { me } = useMe();
   const canCorrect = hasPermission(me, 'ORDER_CORRECT');
@@ -194,17 +195,20 @@ export default function OrderListPage() {
         actions={
           <>
             {canReport && (
-              <Button variant="outline" render={<Link href={storePath('/operational-reports')} />}>
+              <Button
+                variant="outline"
+                render={<Link href={storePath(storeId, '/operational-reports')} />}
+              >
                 運営金額集計
               </Button>
             )}
             <Button
               variant="outline"
-              render={<Link href={storePath('/orders/monthly-remunerations')} />}
+              render={<Link href={storePath(storeId, '/orders/monthly-remunerations')} />}
             >
               月次給与明細
             </Button>
-            <Button render={<Link href={storePath('/orders/create')} />}>
+            <Button render={<Link href={storePath(storeId, '/orders/create')} />}>
               <PlusIcon aria-hidden="true" />
               新規オーダー登録
             </Button>
@@ -309,7 +313,9 @@ export default function OrderListPage() {
                 application={application}
                 onDeclined={() => void inbox.reload()}
                 confirmHref={
-                  application.id ? applicationConfirmHref(application.id, query) : undefined
+                  application.id
+                    ? applicationConfirmHref(storeId, application.id, query)
+                    : undefined
                 }
               />
             ))}
@@ -344,7 +350,9 @@ export default function OrderListPage() {
                 key={order.id}
                 order={order}
                 onProcessed={settleCancelled}
-                completionHref={order.id ? orderCompletionHref(order.id, query) : undefined}
+                completionHref={
+                  order.id ? orderCompletionHref(storeId, order.id, query) : undefined
+                }
               />
             ))}
           </ul>

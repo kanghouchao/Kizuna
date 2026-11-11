@@ -36,7 +36,6 @@ function withCurrentStatus(status: 'PREPARING' | 'ACTIVE') {
     currentStore: store,
     loadFailed: false,
     reload: mockReloadStores,
-    switchStore: jest.fn(),
   });
 }
 

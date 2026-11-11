@@ -2,7 +2,13 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
+import {
+  MePending,
+  hasPermission,
+  useCurrentStoreId,
+  useMe,
+  useStoreContext,
+} from '@/entities/user';
 import { reviewApi } from '@/entities/content/review';
 import { storePath, useResource } from '@/shared/lib';
 import { Button, RegionError } from '@/shared/ui';
@@ -28,6 +34,7 @@ export function ReviewEditPage() {
 
 /** 訂正再受付は旧記録を取り下げて新しい口コミを作るので、成功後は訂正先の詳細へ移る。 */
 function Edit({ id, canOrder }: { id: string; canOrder: boolean }) {
+  const storeId = useCurrentStoreId();
   const router = useRouter();
   const [access, setAccess] = useState<string | null>(null);
   const detail = useResource(() => {
@@ -37,8 +44,10 @@ function Edit({ id, canOrder }: { id: string; canOrder: boolean }) {
       throw error;
     });
   }, [id]);
-  const write = useReviewWrite(review => router.replace(storePath(`/reviews/${review.id}`)));
-  const detailHref = storePath(`/reviews/${id}`);
+  const write = useReviewWrite(review =>
+    router.replace(storePath(storeId, `/reviews/${review.id}`))
+  );
+  const detailHref = storePath(storeId, `/reviews/${id}`);
   const row = detail.data;
   return (
     <div className="space-y-6">

@@ -1,6 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
 import { createBdd } from "playwright-bdd";
-import { APP_URL } from "../base-url";
 import {
   acceptCastInvitation,
   createCourse,
@@ -11,6 +10,8 @@ import {
   loginAsStoreAdmin,
   reviseSpecialService,
   openLoginForm,
+  storeUrl,
+  STORE1_ID,
 } from "./store-api";
 
 const { Given, When, Then, After } = createBdd();
@@ -144,7 +145,7 @@ When(
     const token = await loginAsStoreAdmin(request);
     const courseName = `特殊サービス用コース-${Date.now()}`;
     await createCourse(request, token, courseName, orderStore);
-    await managerPage.goto(`${APP_URL}/store/orders/create`);
+    await managerPage.goto(storeUrl(STORE1_ID, `/orders/create`));
     await managerPage.getByLabel("お客様名", { exact: true }).fill(serviceName);
     await managerPage.getByLabel("キャスト *", { exact: true }).click();
     await managerPage.getByPlaceholder("名前で検索").fill(serviceName);
@@ -188,7 +189,7 @@ When(
 
 Then("店長が一覧の要対応から特殊サービスを修復し開始する", async () => {
   const page = managerPage!;
-  await page.goto(`${APP_URL}/store/orders`);
+  await page.goto(storeUrl(STORE1_ID, `/orders`));
   const card = page.getByRole("listitem").filter({ hasText: serviceName });
   await expect(card).toContainText("本人拒否・要対応");
   await card.getByRole("button", { name: "編集", exact: true }).click();
@@ -215,9 +216,9 @@ Then("店長が一覧の要対応から特殊サービスを修復し開始す�
       .click(),
   ]);
   expect(updated.status()).toBe(200);
-  await expect(page).toHaveURL(/\/store\/orders\/?$/);
+  await expect(page).toHaveURL(/\/store\/\d+\/orders\/?$/);
   await page.goto(
-    `${APP_URL}/store/orders/${specialOrderId}/edit`,
+    storeUrl(STORE1_ID, `/orders/${specialOrderId}/edit`),
   );
   await expect(page.getByLabel("サービスの進行")).toContainText("処置済み");
   await page

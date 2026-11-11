@@ -6,7 +6,7 @@ import { PlusIcon, SearchIcon, SquarePenIcon, Trash2Icon, SettingsIcon } from 'l
 import { useState } from 'react';
 import { CastResponse, castApi, castInvitationStatusLabel } from '@/entities/cast';
 import { InvitationButton, InvitationModal, IssuedInvitation } from '@/features/cast-invitation';
-import { hasPermission, useMe } from '@/entities/user';
+import { hasPermission, useCurrentStoreId, useMe } from '@/entities/user';
 import { storePath, useDeleteAction, useListPage } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import {
@@ -28,6 +28,7 @@ const PAGE_SIZE = 20;
 
 /** キャスト一覧ページ */
 export default function CastListPage() {
+  const storeId = useCurrentStoreId();
   const [search, setSearch] = useState('');
   const [issuedInvitationOpen, setIssuedInvitationOpen] = useState(false);
   const [issuedInvitation, setIssuedInvitation] = useState<IssuedInvitation | null>(null);
@@ -89,12 +90,15 @@ export default function CastListPage() {
           <>
             {/* 定義管理ページ（/store/casts/fields）への入口。定義CRUDは CAST_FIELD_DEF_MANAGE 能力限定。 */}
             {canManageFieldDefs && (
-              <Button render={<Link href={storePath('/casts/fields')} />} variant="outline">
+              <Button
+                render={<Link href={storePath(storeId, '/casts/fields')} />}
+                variant="outline"
+              >
                 <SettingsIcon />
                 カスタムフィールド管理
               </Button>
             )}
-            <Button render={<Link href={storePath('/casts/create')} />}>
+            <Button render={<Link href={storePath(storeId, '/casts/create')} />}>
               <PlusIcon />
               新規キャスト登録
             </Button>
@@ -213,7 +217,7 @@ export default function CastListPage() {
                         />
                       )}
                       <Button
-                        render={<Link href={storePath(`/casts/${cast.id}/edit`)} />}
+                        render={<Link href={storePath(storeId, `/casts/${cast.id}/edit`)} />}
                         variant="ghost"
                         size="icon-sm"
                       >
