@@ -18,14 +18,24 @@ accessLog: {}
 # Enable ping for health checks
 ping: {}
 
-# Define the HTTP entrypoint
+# 名前が既存ヘッダの別名になるヘッダ（X_Forwarded_For など）は全入口で捨てる。後段は名前を変数名に読み替えないが、方針を本番と揃える
 entryPoints:
   web:
     address: ":80"
+    http:
+      aliasHeadersStrategy: delete
 
   # frontend のサーバ側から backend への経路（BACKEND_URL）。ホストには公開せず、compose のネットワークの内側だけで使う
   internal:
     address: ":8081"
+    http:
+      aliasHeadersStrategy: delete
+
+  # dashboard と ping の入口。宣言しないと Traefik が既定設定で暗黙に作るため、明示して同じ方針を付ける
+  traefik:
+    address: ":8080"
+    http:
+      aliasHeadersStrategy: delete
 
 # ルーティングは同じディレクトリの dynamic.yml に静的に書く
 providers:

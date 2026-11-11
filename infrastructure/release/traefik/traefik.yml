@@ -10,19 +10,25 @@ api:
   dashboard: true
   insecure: false
 
+# 名前が既存ヘッダの別名になるヘッダ（X_Forwarded_For など）は全入口で捨て、Traefik が書くヘッダを後段で偽装させない
 entryPoints:
   web:
     address: ":80"
     http:
+      aliasHeadersStrategy: delete
       redirections:
         entryPoint:
           to: websecure
           scheme: https
   websecure:
     address: ":443"
+    http:
+      aliasHeadersStrategy: delete
   # frontend のサーバ側から backend への経路（BACKEND_URL）。ホストには公開せず、HTTPS への転送も証明書も付けない
   internal:
     address: ":8081"
+    http:
+      aliasHeadersStrategy: delete
 
 providers:
   file:
