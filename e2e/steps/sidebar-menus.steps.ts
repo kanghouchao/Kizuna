@@ -138,9 +138,10 @@ Then('URL が店舗 {string} のダッシュボードである', async ({ page, 
 });
 
 Then('店舗のダッシュボードに店舗 {string} が表示される', async ({ page }, name: string) => {
-  // 店舗の欄は店名と稼働状態（準備中 / 稼働中）のバッジを並べる。
-  const card = page.getByRole('main').locator('dl').filter({ has: page.locator('dt', { hasText: /^店舗$/ }) });
-  await expect(card.locator('dd')).toHaveText(new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(準備中|稼働中)$`));
+  // 見出しは店名で、その横に稼働状態（準備中 / 稼働中）のバッジを並べる。
+  const heading = page.getByRole('main').getByRole('heading', { level: 1, name, exact: true });
+  await expect(heading).toBeVisible({ timeout: 15000 });
+  await expect(heading.locator('..')).toHaveText(new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(準備中|稼働中)$`));
 });
 
 let openedUrl = '';
@@ -182,11 +183,11 @@ Then('警告 {string} が出て、店舗 {string} のダッシュボードへ戻
 });
 
 // 開いた画面は描かれずに着地へ置き換わるので、その画面自身の取得は 1 件も飛ばない。残るのはシェル（本人・
-// 授権店舗・メニュー）の取得だけ。着地の店舗ダッシュボードが取得を持つようになったら、その端点もここで除く。
+// 授権店舗・メニュー）の取得と、着地のダッシュボードの区画の取得（/api/dashboard/ 配下）だけ。
 Then('開いた画面自身の取得は送られていない', async ({ page }) => {
   await page.waitForLoadState('networkidle');
   const shell = ['/api/me', '/api/stores/me', '/api/menus/me', '/api/auth/refresh'];
-  expect(requestedApiPaths.filter(path => !shell.includes(path))).toEqual([]);
+  expect(requestedApiPaths.filter(path => !shell.includes(path) && !path.startsWith('/api/dashboard/'))).toEqual([]);
 });
 
 // 着地先は作成日の最も新しい授権店舗。店舗 id は作成順に採番されるので、id の最大の店舗がそれに当たる。
