@@ -17,15 +17,23 @@ const STATE_LABELS: Record<RegionState, string> = {
 
 export type Variant = { key: string; name: string };
 
+/** perms は取得先の端点が要る権限（すべて必要）。candidate は spec の第一弾に無い候補区画。 */
+export type RegionDef = { key: string; label: string; perms: string[]; candidate?: boolean };
+
+/** 権限の組合せの例。既定ロールは今の種子の権限そのもの。区画の権限の提案ではない。 */
+export type Preset = { label: string; perms: string[] };
+
 type Settings = {
   states: Record<string, RegionState>;
   storeCount: number;
   longNames: boolean;
   monthDown: boolean;
   storeCard: boolean;
+  showCandidates: boolean;
 };
 
 type ProtoContextValue = Settings & {
+  candidateKeys: string[];
   retry: (key: string) => void;
 };
 
@@ -39,18 +47,21 @@ export function useProto() {
 
 /** 区画の状態。denied なら区画ごと描かない。 */
 export function useRegion(key: string) {
-  const { states, retry } = useProto();
-  return { state: states[key] ?? 'ok', retry: () => retry(key) };
+  const { states, retry, showCandidates, candidateKeys } = useProto();
+  const hidden = !showCandidates && candidateKeys.includes(key);
+  return { state: hidden ? 'denied' : (states[key] ?? 'ok'), retry: () => retry(key) };
 }
 
 export function PrototypeProvider({
   regions,
+  presets,
   variants,
   current,
   showStoreOptions,
   children,
 }: {
-  regions: { key: string; label: string }[];
+  regions: RegionDef[];
+  presets: Preset[];
   variants: Variant[];
   current: string;
   showStoreOptions: 'group' | 'store';
@@ -62,7 +73,20 @@ export function PrototypeProvider({
     longNames: false,
     monthDown: false,
     storeCard: false,
+    showCandidates: true,
   }));
+  const [presetLabel, setPresetLabel] = useState<string | null>(null);
+
+  const applyPreset = (preset: Preset) => {
+    setPresetLabel(preset.label);
+    setSettings(s => ({
+      ...s,
+      states: Object.fromEntries(
+        regions.map(r => [r.key, r.perms.every(p => preset.perms.includes(p)) ? 'ok' : 'denied'])
+      ),
+    }));
+  };
+  const candidateKeys = useMemo(() => regions.filter(r => r.candidate).map(r => r.key), [regions]);
 
   const setAll = (state: RegionState) =>
     setSettings(s => ({
@@ -75,7 +99,10 @@ export function PrototypeProvider({
     setTimeout(() => setSettings(s => ({ ...s, states: { ...s.states, [key]: 'ok' } })), 800);
   }, []);
 
-  const value = useMemo(() => ({ ...settings, retry }), [settings, retry]);
+  const value = useMemo(
+    () => ({ ...settings, retry, candidateKeys }),
+    [settings, retry, candidateKeys]
+  );
 
   return (
     <ProtoContext.Provider value={value}>
@@ -85,13 +112,37 @@ export function PrototypeProvider({
         current={current}
         panel={
           <div className="space-y-3 text-xs">
+            <p className="text-white/70">権限の組合せ{presetLabel && `（いま: ${presetLabel}）`}</p>
+            <div className="flex flex-wrap gap-1">
+              {presets.map(p => (
+                <button
+                  key={p.label}
+                  type="button"
+                  className="rounded border border-white/30 px-2 py-1 hover:bg-white/10"
+                  onClick={() => applyPreset(p)}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={settings.showCandidates}
+                onChange={e => setSettings(s => ({ ...s, showCandidates: e.target.checked }))}
+              />
+              第一弾に無い候補区画（☆）も出す
+            </label>
             <div className="flex flex-wrap gap-1">
               {(['ok', 'denied', 'error', 'loading'] as RegionState[]).map(s => (
                 <button
                   key={s}
                   type="button"
                   className="rounded border border-white/30 px-2 py-1 hover:bg-white/10"
-                  onClick={() => setAll(s)}
+                  onClick={() => {
+                    setPresetLabel(null);
+                    setAll(s);
+                  }}
                 >
                   全部{STATE_LABELS[s]}
                 </button>
@@ -101,7 +152,10 @@ export function PrototypeProvider({
               <tbody>
                 {regions.map(r => (
                   <tr key={r.key}>
-                    <td className="py-0.5 pr-2">{r.label}</td>
+                    <td className="py-0.5 pr-2" title={r.perms.join(' + ') || '権限 1 つ以上'}>
+                      {r.candidate && '☆'}
+                      {r.label}
+                    </td>
                     <td>
                       <select
                         className="rounded bg-neutral-800 px-1 py-0.5"

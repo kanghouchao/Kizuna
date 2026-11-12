@@ -7,5 +7,5 @@ export default async function Page({
   searchParams: Promise<{ variant?: string | string[] }>;
 }) {
   const { variant } = await searchParams;
-  return <StoreDashboardPrototype variant={typeof variant === 'string' ? variant : 'A'} />;
+  return <StoreDashboardPrototype variant={typeof variant === 'string' ? variant : 'B'} />;
 }

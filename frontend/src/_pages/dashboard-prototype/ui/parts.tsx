@@ -5,7 +5,7 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
 import { cn, formatMoney } from '@/shared/lib';
-import { Badge, RegionError, Skeleton } from '@/shared/ui';
+import { Badge, Card, CardHeader, CardTitle, RegionError, Skeleton } from '@/shared/ui';
 import {
   ChartContainer,
   ChartTooltip,
@@ -34,8 +34,9 @@ export function RegionBody({
 }
 
 export function useVisible() {
-  const { states } = useProto();
-  return (key: string) => states[key] !== 'denied';
+  const { states, showCandidates, candidateKeys } = useProto();
+  return (key: string) =>
+    states[key] !== 'denied' && (showCandidates || !candidateKeys.includes(key));
 }
 
 export function StatSkeleton() {
@@ -194,4 +195,69 @@ export function RankRow({
 
 export function AsOf({ children }: { children: ReactNode }) {
   return <p className="text-sm text-muted-foreground">{children}</p>;
+}
+
+/**
+ * 最近の数件の一覧。失敗の「件数」は新しい集計が要る（spec の対象外）ので、行ごとの状態で見せる。
+ */
+export function RecentList({
+  region,
+  title,
+  rows,
+  failMessage,
+}: {
+  region: string;
+  title: string;
+  rows: { title: string; status: string; at: string }[];
+  failMessage: string;
+}) {
+  return (
+    <Card className="gap-0 py-0">
+      <CardHeader className="py-4">
+        <CardTitle role="heading" aria-level={2}>
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <RegionBody
+        region={region}
+        failMessage={failMessage}
+        skeleton={
+          <div className="space-y-3 border-t px-6 py-4">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-2/3" />
+          </div>
+        }
+      >
+        <ul className="divide-y border-t">
+          {rows.map(r => (
+            <li key={r.title + r.at} className="flex items-center gap-2 px-6 py-3">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm text-foreground" title={r.title}>
+                  {r.title}
+                </span>
+                <span className="block text-xs text-muted-foreground">{r.at}</span>
+              </span>
+              {r.status === '失敗' ? (
+                <Badge
+                  variant="outline"
+                  className="border-transparent bg-destructive/10 text-destructive-strong"
+                >
+                  失敗
+                </Badge>
+              ) : (
+                <span className="shrink-0 text-xs text-muted-foreground">{r.status}</span>
+              )}
+            </li>
+          ))}
+        </ul>
+        <Link
+          href="#"
+          className="block border-t px-6 py-3 text-sm text-primary-strong hover:bg-muted"
+        >
+          すべて見る
+        </Link>
+      </RegionBody>
+    </Card>
+  );
 }

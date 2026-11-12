@@ -68,3 +68,34 @@ export function groupTotals(stores: FakeStore[]) {
     preparing: stores.filter(s => s.status === 'PREPARING').length,
   };
 }
+
+// ---- 第一弾に無い候補区画の偽データ（既存の端点で取れるものだけ）
+
+export const storeMonthRemuneration = 1_320_000;
+export const storeMonthAdvertising = 180_000;
+export const storeAttendance = { scheduled: 8, clockedIn: 5, absent: 1 };
+export const storeApplicantsInterview = 3;
+export const storeRecentNotifications = [
+  { title: '11月の出勤キャンペーンのお知らせ', status: '送信済', at: '11/12（木）10:00' },
+  { title: 'ご予約の確認', status: '失敗', at: '11/12（木）9:41' },
+  { title: '口コミ投稿のお礼', status: '送信済', at: '11/11（水）21:15' },
+];
+
+export const groupMonthRemuneration = 37_200_000;
+export const groupMonthAdvertising = 4_860_000;
+export const groupMembers = 12_480;
+export const groupRecentTasks = [
+  { title: 'ポイントの失効', status: '成功', at: '11/12（木）3:00' },
+  { title: '会員ランクの再計算', status: '失敗', at: '11/12（木）4:00' },
+  { title: '予約リマインドの送信', status: '成功', at: '11/12（木）9:00' },
+];
+export const groupRecentMemberNotifications = [
+  { title: '11月のポイント2倍キャンペーン', status: '送信済', at: '11/10（火）12:00' },
+  { title: 'ポイント失効のお知らせ', status: '送信済', at: '11/1（日）9:00' },
+  { title: '誕生日クーポン', status: '失敗', at: '11/1（日）9:00' },
+];
+export const groupRecentAudit = [
+  { title: '従業員「山田」のロールを変更', status: '統括 佐藤', at: '11/12（木）13:52' },
+  { title: '店舗「渋谷店」を稼働中に変更', status: '統括 佐藤', at: '11/12（木）11:20' },
+  { title: 'ロール「経理」を作成', status: '統括 鈴木', at: '11/11（水）18:03' },
+];

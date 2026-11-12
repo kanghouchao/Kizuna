@@ -16,12 +16,17 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/shared/ui';
-import { PrototypeProvider, useProto, type Variant } from './controls';
+import { PrototypeProvider, useProto, type Preset, type RegionDef, type Variant } from './controls';
 import {
   MONTH_LABEL,
   PREV_MONTH_LABEL,
   TODAY_LABEL,
+  storeApplicantsInterview,
+  storeAttendance,
+  storeMonthAdvertising,
+  storeMonthRemuneration,
   storeMonthSales,
+  storeRecentNotifications,
   storeOrders,
   storePrevMonthSales,
   storeTodaySales,
@@ -32,6 +37,7 @@ import {
   DailyChart,
   Delta,
   NumLink,
+  RecentList,
   RegionBody,
   Stat,
   StatSkeleton,
@@ -46,14 +52,47 @@ const VARIANTS: Variant[] = [
   { key: 'C', name: 'タブ：今日｜今月' },
 ];
 
-const REGIONS = [
-  { key: 'todayOrders', label: '今日の受注件数' },
-  { key: 'todaySales', label: '今日の売上' },
-  { key: 'monthSales', label: '今月の売上' },
-  { key: 'dailyChart', label: '日別推移' },
-  { key: 'orderApplications', label: '予約申請' },
-  { key: 'shiftRequests', label: 'シフト申請' },
-  { key: 'reviews', label: '口コミ承認待ち' },
+const REPORT = ['OPERATIONAL_REPORT_VIEW', 'ORDER_MANAGE'];
+const REGIONS: RegionDef[] = [
+  { key: 'todayOrders', label: '今日の受注件数', perms: ['ORDER_MANAGE'] },
+  { key: 'todaySales', label: '今日の売上', perms: REPORT },
+  { key: 'monthSales', label: '今月の売上', perms: REPORT },
+  { key: 'dailyChart', label: '日別推移', perms: REPORT },
+  { key: 'orderApplications', label: '予約申請', perms: ['ORDER_MANAGE'] },
+  { key: 'shiftRequests', label: 'シフト申請', perms: ['SHIFT_MANAGE'] },
+  { key: 'reviews', label: '口コミ承認待ち', perms: ['REVIEW_VIEW'] },
+  {
+    key: 'remuneration',
+    label: '今月の報酬',
+    perms: [...REPORT, 'REMUNERATION_VIEW'],
+    candidate: true,
+  },
+  { key: 'advertising', label: '今月の広告費', perms: ['ADVERTISING_COST_VIEW'], candidate: true },
+  { key: 'attendance', label: '今日の出勤', perms: ['SHIFT_MANAGE'], candidate: true },
+  { key: 'applicants', label: '面接待ちの応募者', perms: ['RECRUITMENT_VIEW'], candidate: true },
+  { key: 'notifications', label: '顧客宛の通知', perms: ['NOTIFICATION_VIEW'], candidate: true },
+];
+
+// 店長・スタッフは今の種子の権限（ダッシュボードに関わる分）。ほかはカスタムロールの例。
+const PRESETS: Preset[] = [
+  {
+    label: '店長（既定）',
+    perms: [
+      ...REPORT,
+      'SHIFT_MANAGE',
+      'REVIEW_VIEW',
+      'REMUNERATION_VIEW',
+      'ADVERTISING_COST_VIEW',
+      'RECRUITMENT_VIEW',
+      'NOTIFICATION_VIEW',
+    ],
+  },
+  {
+    label: 'スタッフ（既定）',
+    perms: ['ORDER_MANAGE', 'SHIFT_MANAGE', 'REVIEW_VIEW', 'NOTIFICATION_VIEW'],
+  },
+  { label: '例: 受付', perms: ['ORDER_MANAGE'] },
+  { label: '例: 採用担当', perms: ['RECRUITMENT_VIEW', 'SHIFT_MANAGE'] },
 ];
 
 const ORDER_STATUSES = [
@@ -73,11 +112,12 @@ export function StoreDashboardPrototype({ variant }: { variant: string }) {
   return (
     <PrototypeProvider
       regions={REGIONS}
+      presets={PRESETS}
       variants={VARIANTS}
       current={variant}
       showStoreOptions="store"
     >
-      {variant === 'B' ? <VariantB /> : variant === 'C' ? <VariantC /> : <VariantA />}
+      {variant === 'A' ? <VariantA /> : variant === 'C' ? <VariantC /> : <VariantB />}
     </PrototypeProvider>
   );
 }
@@ -152,7 +192,12 @@ function TodaySalesStat() {
   );
 }
 
-function TodoRow({ label, count }: { label: string; count: number }) {
+const TODO_ROWS = [
+  ...TODOS,
+  { key: 'applicants', label: '面接待ちの応募者', count: storeApplicantsInterview },
+];
+
+function TodoRow({ label, count, unit = '件' }: { label: string; count: number; unit?: string }) {
   return (
     <Link
       href="#"
@@ -160,7 +205,7 @@ function TodoRow({ label, count }: { label: string; count: number }) {
     >
       <span className="flex-1 text-sm text-foreground">{label}</span>
       <span className="text-lg font-bold tabular-nums text-foreground">{count}</span>
-      <span className="text-sm text-muted-foreground">件</span>
+      <span className="text-sm text-muted-foreground">{unit}</span>
       <ChevronRightIcon className="size-4 text-muted-foreground" aria-hidden />
     </Link>
   );
@@ -294,11 +339,15 @@ function VariantA() {
 
 function VariantB() {
   const visible = useVisible();
-  const leftAny = ['todaySales', 'monthSales', 'dailyChart'].some(visible);
-  const rightAny = ['todayOrders', ...TODOS.map(t => t.key)].some(visible);
+  const numbers = ['todaySales', 'monthSales', 'remuneration', 'advertising'].filter(visible);
+  const leftAny = numbers.length > 0 || visible('dailyChart');
+  const todos = TODO_ROWS.filter(t => visible(t.key));
+  const rightAny =
+    visible('todayOrders') || visible('attendance') || visible('notifications') || todos.length > 0;
   return (
     <div className="space-y-6">
       <PageHeading sub={<AsOf>{TODAY_LABEL}</AsOf>} />
+      <StoreCard className="max-w-md" />
       <div className="@container">
         <div
           className={
@@ -309,35 +358,69 @@ function VariantB() {
         >
           {leftAny && (
             <div className="order-2 min-w-0 space-y-6 @4xl:order-1">
-              <StoreCard />
-              <div className="grid grid-cols-1 gap-6 @xl:grid-cols-2">
-                {visible('todaySales') && (
-                  <Card>
-                    <CardContent>
-                      <RegionBody
-                        region="todaySales"
-                        failMessage="今日の売上の取得に失敗しました"
-                        skeleton={<StatSkeleton />}
-                      >
-                        <TodaySalesStat />
-                      </RegionBody>
-                    </CardContent>
-                  </Card>
-                )}
-                {visible('monthSales') && (
-                  <Card>
-                    <CardContent>
-                      <RegionBody
-                        region="monthSales"
-                        failMessage="今月の売上の取得に失敗しました"
-                        skeleton={<StatSkeleton />}
-                      >
-                        <MonthSalesStat />
-                      </RegionBody>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
+              {numbers.length > 0 && (
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] gap-6">
+                  {visible('todaySales') && (
+                    <Card>
+                      <CardContent>
+                        <RegionBody
+                          region="todaySales"
+                          failMessage="今日の売上の取得に失敗しました"
+                          skeleton={<StatSkeleton />}
+                        >
+                          <TodaySalesStat />
+                        </RegionBody>
+                      </CardContent>
+                    </Card>
+                  )}
+                  {visible('monthSales') && (
+                    <Card>
+                      <CardContent>
+                        <RegionBody
+                          region="monthSales"
+                          failMessage="今月の売上の取得に失敗しました"
+                          skeleton={<StatSkeleton />}
+                        >
+                          <MonthSalesStat />
+                        </RegionBody>
+                      </CardContent>
+                    </Card>
+                  )}
+                  {visible('remuneration') && (
+                    <Card>
+                      <CardContent>
+                        <RegionBody
+                          region="remuneration"
+                          failMessage="今月の報酬の取得に失敗しました"
+                          skeleton={<StatSkeleton />}
+                        >
+                          <Stat
+                            note={`今月の報酬（${MONTH_LABEL}）`}
+                            value={formatMoney(storeMonthRemuneration)}
+                            sub="保証・ボーナスを含む"
+                          />
+                        </RegionBody>
+                      </CardContent>
+                    </Card>
+                  )}
+                  {visible('advertising') && (
+                    <Card>
+                      <CardContent>
+                        <RegionBody
+                          region="advertising"
+                          failMessage="今月の広告費の取得に失敗しました"
+                          skeleton={<StatSkeleton />}
+                        >
+                          <Stat
+                            note="今月の広告費（11月分）"
+                            value={formatMoney(storeMonthAdvertising)}
+                          />
+                        </RegionBody>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              )}
               {visible('dailyChart') && (
                 <Card>
                   <CardHeader>
@@ -359,8 +442,14 @@ function VariantB() {
             </div>
           )}
           {rightAny && (
-            <div className="order-1 space-y-6 @4xl:order-2">
-              {!leftAny && <StoreCard />}
+            // 数字の列が無い（売上を見られない）ときは、今日の区画を全幅の格子に並べ直す
+            <div
+              className={
+                leftAny
+                  ? 'order-1 space-y-6 @4xl:order-2'
+                  : 'grid grid-cols-[repeat(auto-fit,minmax(18rem,1fr))] items-start gap-6'
+              }
+            >
               {visible('todayOrders') && (
                 <Card className="gap-0 py-0">
                   <CardHeader className="py-4">
@@ -388,7 +477,33 @@ function VariantB() {
                   </RegionBody>
                 </Card>
               )}
-              {TODOS.some(t => visible(t.key)) && (
+              {visible('attendance') && (
+                <Card className="gap-0 py-0">
+                  <CardHeader className="py-4">
+                    <CardTitle role="heading" aria-level={2}>
+                      今日の出勤
+                    </CardTitle>
+                  </CardHeader>
+                  <RegionBody
+                    region="attendance"
+                    failMessage="今日の出勤の取得に失敗しました"
+                    skeleton={
+                      <>
+                        <RowSkeleton />
+                        <RowSkeleton />
+                        <RowSkeleton />
+                      </>
+                    }
+                  >
+                    <div className="divide-y border-t">
+                      <TodoRow label="出勤予定" count={storeAttendance.scheduled} unit="人" />
+                      <TodoRow label="出勤済み" count={storeAttendance.clockedIn} unit="人" />
+                      <TodoRow label="欠勤" count={storeAttendance.absent} unit="人" />
+                    </div>
+                  </RegionBody>
+                </Card>
+              )}
+              {todos.length > 0 && (
                 <Card className="gap-0 py-0">
                   <CardHeader className="py-4">
                     <CardTitle role="heading" aria-level={2}>
@@ -396,7 +511,7 @@ function VariantB() {
                     </CardTitle>
                   </CardHeader>
                   <div className="divide-y border-t">
-                    {TODOS.filter(t => visible(t.key)).map(t => (
+                    {todos.map(t => (
                       <RegionBody
                         key={t.key}
                         region={t.key}
@@ -408,6 +523,14 @@ function VariantB() {
                     ))}
                   </div>
                 </Card>
+              )}
+              {visible('notifications') && (
+                <RecentList
+                  region="notifications"
+                  title="最近の顧客宛の通知"
+                  rows={storeRecentNotifications}
+                  failMessage="顧客宛の通知の取得に失敗しました"
+                />
               )}
             </div>
           )}

@@ -4,13 +4,26 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { formatMoney } from '@/shared/lib';
 import { Badge, Card, CardContent, CardHeader, CardTitle, Skeleton } from '@/shared/ui';
-import { PrototypeProvider, useProto, type Variant } from './controls';
-import { MONTH_LABEL, PREV_MONTH_LABEL, TODAY_LABEL, fakeStores, groupTotals } from './fake-data';
+import { PrototypeProvider, useProto, type Preset, type RegionDef, type Variant } from './controls';
+import {
+  MONTH_LABEL,
+  PREV_MONTH_LABEL,
+  TODAY_LABEL,
+  fakeStores,
+  groupMembers,
+  groupMonthAdvertising,
+  groupMonthRemuneration,
+  groupRecentAudit,
+  groupRecentMemberNotifications,
+  groupRecentTasks,
+  groupTotals,
+} from './fake-data';
 import {
   AsOf,
   Delta,
   NumLink,
   RankRow,
+  RecentList,
   RegionBody,
   Stat,
   StatSkeleton,
@@ -26,22 +39,67 @@ const VARIANTS: Variant[] = [
   { key: 'C', name: '一枚の帳票＋棒入りの全店順位' },
 ];
 
-const REGIONS = [
-  { key: 'groupToday', label: '今日の売上・件数' },
-  { key: 'groupMonth', label: '今月の売上・件数' },
-  { key: 'ranking', label: '店舗別の順位' },
-  { key: 'storeCount', label: '担当店舗数' },
+const SALES = ['OPERATIONAL_REPORT_SET_VIEW'];
+const REGIONS: RegionDef[] = [
+  { key: 'groupToday', label: '今日の売上・件数', perms: SALES },
+  { key: 'groupMonth', label: '今月の売上・件数', perms: SALES },
+  { key: 'ranking', label: '店舗別の順位', perms: SALES },
+  { key: 'storeCount', label: '担当店舗数', perms: [] },
+  {
+    key: 'remuneration',
+    label: '今月の報酬',
+    perms: [...SALES, 'REMUNERATION_SET_VIEW'],
+    candidate: true,
+  },
+  {
+    key: 'advertising',
+    label: '今月の広告費',
+    perms: [...SALES, 'ADVERTISING_COST_SET_VIEW'],
+    candidate: true,
+  },
+  { key: 'members', label: '会員数', perms: ['MEMBER_VIEW'], candidate: true },
+  {
+    key: 'memberNotifications',
+    label: '会員宛の通知',
+    perms: ['MEMBER_NOTIFICATION_VIEW'],
+    candidate: true,
+  },
+  { key: 'tasks', label: '定期処理', perms: ['TASK_MANAGE'], candidate: true },
+  { key: 'audit', label: '監査', perms: ['AUDIT_VIEW'], candidate: true },
+];
+
+// 統括は今の種子の権限のグループの木の分。ほかはカスタムロールの例。
+const PRESETS: Preset[] = [
+  {
+    label: '統括（既定）',
+    perms: [
+      'OPERATIONAL_REPORT_SET_VIEW',
+      'REMUNERATION_SET_VIEW',
+      'ADVERTISING_COST_SET_VIEW',
+      'MEMBER_VIEW',
+      'MEMBER_NOTIFICATION_VIEW',
+      'TASK_MANAGE',
+      'AUDIT_VIEW',
+    ],
+  },
+  {
+    label: '例: 経理',
+    perms: ['OPERATIONAL_REPORT_SET_VIEW', 'REMUNERATION_SET_VIEW', 'ADVERTISING_COST_SET_VIEW'],
+  },
+  { label: '例: 会員担当', perms: ['MEMBER_VIEW', 'MEMBER_NOTIFICATION_VIEW'] },
+  { label: '例: システム担当', perms: ['TASK_MANAGE', 'AUDIT_VIEW'] },
 ];
 
 export function GroupDashboardPrototype({ variant }: { variant: string }) {
   return (
     <PrototypeProvider
       regions={REGIONS}
+      presets={PRESETS}
       variants={VARIANTS}
       current={variant}
       showStoreOptions="group"
     >
-      {variant === 'B' ? <VariantB /> : variant === 'C' ? <VariantC /> : <VariantA />}
+      {variant === 'A' ? <VariantA /> : variant === 'B' ? <VariantB /> : <VariantC />}
     </PrototypeProvider>
   );
 }
@@ -293,17 +351,64 @@ function VariantC() {
   const { stores } = useData();
   const top = stores[0]?.monthSales || 1;
   const stats = ['groupToday', 'groupMonth', 'storeCount'].filter(visible);
-  const any = stats.length > 0 || visible('ranking');
+  const more = ['remuneration', 'advertising', 'members'].filter(visible);
+  const ops = ['tasks', 'memberNotifications', 'audit'].filter(visible);
+  const any = stats.length > 0 || more.length > 0 || ops.length > 0 || visible('ranking');
+  // 1 枚のカードの中は幅で折り返す。固定 3 列だと 1024px で 8 桁の金額がはみ出る。
+  const strip = 'grid grid-cols-[repeat(auto-fit,minmax(15rem,1fr))] gap-x-8 gap-y-6';
   return (
     <div className="space-y-6">
       <Heading />
       {stats.length > 0 && (
         <Card>
           <CardContent>
-            <div className="grid grid-cols-1 gap-6 divide-y md:grid-cols-3 md:divide-x md:divide-y-0 [&>*]:pb-6 md:[&>*]:pb-0 md:[&>*:not(:first-child)]:pl-6">
+            <div className={strip}>
               {visible('groupToday') && <TodayStat />}
               {visible('groupMonth') && <MonthStat />}
               {visible('storeCount') && <StoreCountStat />}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+      {more.length > 0 && (
+        <Card>
+          <CardContent>
+            <div className={strip}>
+              {visible('remuneration') && (
+                <RegionBody
+                  region="remuneration"
+                  failMessage="今月の報酬の取得に失敗しました"
+                  skeleton={<StatSkeleton />}
+                >
+                  <Stat
+                    note={`今月の報酬（${MONTH_LABEL}）`}
+                    value={formatMoney(groupMonthRemuneration)}
+                    sub="保証・ボーナスを含む"
+                  />
+                </RegionBody>
+              )}
+              {visible('advertising') && (
+                <RegionBody
+                  region="advertising"
+                  failMessage="今月の広告費の取得に失敗しました"
+                  skeleton={<StatSkeleton />}
+                >
+                  <Stat note="今月の広告費（11月分）" value={formatMoney(groupMonthAdvertising)} />
+                </RegionBody>
+              )}
+              {visible('members') && (
+                <RegionBody
+                  region="members"
+                  failMessage="会員数の取得に失敗しました"
+                  skeleton={<StatSkeleton />}
+                >
+                  <Stat
+                    note="会員"
+                    value={`${groupMembers.toLocaleString()} 人`}
+                    sub="有効な会員"
+                  />
+                </RegionBody>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -351,6 +456,34 @@ function VariantC() {
             </ol>
           </RegionBody>
         </Card>
+      )}
+      {ops.length > 0 && (
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(18rem,1fr))] gap-6">
+          {visible('tasks') && (
+            <RecentList
+              region="tasks"
+              title="最近の定期処理"
+              rows={groupRecentTasks}
+              failMessage="定期処理の取得に失敗しました"
+            />
+          )}
+          {visible('memberNotifications') && (
+            <RecentList
+              region="memberNotifications"
+              title="最近の会員宛の通知"
+              rows={groupRecentMemberNotifications}
+              failMessage="会員宛の通知の取得に失敗しました"
+            />
+          )}
+          {visible('audit') && (
+            <RecentList
+              region="audit"
+              title="最近の操作（監査）"
+              rows={groupRecentAudit}
+              failMessage="監査の取得に失敗しました"
+            />
+          )}
+        </div>
       )}
       {!any && <NothingToShow />}
     </div>
