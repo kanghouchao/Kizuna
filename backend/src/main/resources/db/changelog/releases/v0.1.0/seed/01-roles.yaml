@@ -14,6 +14,10 @@ databaseChangeLog:
         - insert:
             tableName: t_permissions
             columns:
+              - column: { name: code, value: DASHBOARD_TODAY_ORDERS_VIEW }
+        - insert:
+            tableName: t_permissions
+            columns:
               - column: { name: code, value: ADVERTISING_COST_VIEW }
         - insert:
             tableName: t_permissions
@@ -389,7 +393,12 @@ databaseChangeLog:
               - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STAFF_MANAGE')" }
 
-        # 店長: 初期授与 38 権限
+        # 店長: 初期授与 39 権限
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'DASHBOARD_TODAY_ORDERS_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:
@@ -581,7 +590,12 @@ databaseChangeLog:
               - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'ARTICLE_MANAGE')" }
 
-        # スタッフ: 初期授与 11 権限
+        # スタッフ: 初期授与 12 権限
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = 'スタッフ')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'DASHBOARD_TODAY_ORDERS_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:

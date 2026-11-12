@@ -19,6 +19,14 @@ import lombok.Getter;
  */
 @Getter
 public enum PermissionCode {
+  /** 店舗のダッシュボードの今日の受注件数（集計の数字だけを開き、受注の一覧の権限を前提としない）。 */
+  DASHBOARD_TODAY_ORDERS_VIEW(
+      "今日の受注件数",
+      PermissionTree.STORE,
+      PermissionGroup.DASHBOARD,
+      SystemRole.MANAGER,
+      SystemRole.STAFF),
+
   /** 受注の閲覧・登録・更新・状態遷移・削除（OrderController）。 */
   ORDER_MANAGE(
       "受注の管理",
