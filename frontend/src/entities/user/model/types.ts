@@ -16,6 +16,7 @@ export type UserType = 'STAFF' | 'CAST' | 'MEMBER';
 // 権限コード（バックエンド user/domain/PermissionCode.java と対応）。
 // ワイヤ上は接頭辞なしの素の enum 名で、PERM_ 形式は JWT の authorities 内部だけに存在する。
 export type PermissionCode =
+  | 'DASHBOARD_TODAY_ORDERS_VIEW'
   | 'STORE_MANAGE'
   | 'ROLE_MANAGE'
   | 'STAFF_CREDENTIAL_MANAGE'
@@ -118,7 +119,8 @@ export interface PermissionResponse {
   label: string;
 }
 
-export type PermissionGroupCode = 'BUSINESS' | 'CAST' | 'CUSTOMER' | 'ORGANIZATION' | 'OPERATION';
+export type PermissionGroupCode =
+  'DASHBOARD' | 'BUSINESS' | 'CAST' | 'CUSTOMER' | 'ORGANIZATION' | 'OPERATION';
 
 // 権限目録の一つの木の中の区分見出しごとの束。権限の無い見出しはサーバが出さない。
 export interface PermissionGroupResponse {

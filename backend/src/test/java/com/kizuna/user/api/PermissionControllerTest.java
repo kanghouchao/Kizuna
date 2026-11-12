@@ -30,7 +30,7 @@ class PermissionControllerTest {
         .containsExactly("BUSINESS", "CAST", "CUSTOMER", "ORGANIZATION", "OPERATION");
     assertThat(groupsOf("STORE"))
         .extracting(PermissionGroupResponse::group)
-        .containsExactly("BUSINESS", "CAST", "CUSTOMER", "OPERATION");
+        .containsExactly("DASHBOARD", "BUSINESS", "CAST", "CUSTOMER", "OPERATION");
     body.forEach(
         tree -> tree.groups().forEach(group -> assertThat(group.permissions()).isNotEmpty()));
   }

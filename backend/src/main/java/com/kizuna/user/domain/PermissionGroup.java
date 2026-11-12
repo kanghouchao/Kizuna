@@ -5,6 +5,7 @@ import lombok.Getter;
 /** 権限の業務領域。宣言順がロール編集画面の表示順で、label はサイドバーの節見出しと揃える。 */
 @Getter
 public enum PermissionGroup {
+  DASHBOARD("ダッシュボード"),
   BUSINESS("業務"),
   CAST("キャスト"),
   CUSTOMER("顧客"),
