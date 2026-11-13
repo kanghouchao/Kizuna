@@ -17,6 +17,7 @@ jest.mock('../api/dashboard', () => ({
     getPendingOrderApplications: jest.fn(),
     getPendingShiftRequests: jest.fn(),
     getPendingReviews: jest.fn(),
+    getSales: jest.fn(),
   },
 }));
 
@@ -29,6 +30,17 @@ const PENDING_REGIONS: PermissionCode[] = [
   'DASHBOARD_PENDING_SHIFT_REQUESTS_VIEW',
   'DASHBOARD_PENDING_REVIEWS_VIEW',
 ];
+const getSales = jest.mocked(dashboardApi.getSales);
+const SALES = {
+  business_date: '2026-11-12',
+  today: { sales: 20_000, order_count: 2 },
+  month_to_date: { sales: 12_345_678, order_count: 40 },
+  previous_month_to_date: { sales: 10_000_000, order_count: 35 },
+  daily: [
+    { business_date: '2026-11-01', sales: 5_000, order_count: 1 },
+    { business_date: '2026-11-02', sales: 0, order_count: 0 },
+  ],
+};
 const TODAY_ORDERS = {
   business_date: '2026-11-12',
   confirmed: 4,
@@ -65,6 +77,9 @@ const withMe = (permissions: PermissionCode[] | null) =>
   });
 
 const todayOrdersRegion = () => screen.queryByRole('heading', { name: '今日の受注', level: 2 });
+const dailySalesRegion = () =>
+  screen.queryByRole('heading', { name: '今月の日別の売上', level: 2 });
+const statOf = (note: string) => screen.getByText(note).parentElement;
 
 const pendingWorkRegion = () => screen.queryByRole('heading', { name: 'やること', level: 2 });
 const row = async (label: string) => (await screen.findByText(label)).parentElement;
@@ -76,6 +91,7 @@ beforeEach(() => {
     .mockResolvedValue({ business_date: '2026-11-12', count: 3 });
   getPendingShiftRequests.mockReset().mockResolvedValue({ count: 5 });
   getPendingReviews.mockReset().mockResolvedValue({ count: 2 });
+  getSales.mockReset();
   withStore('ACTIVE');
 });
 
@@ -237,5 +253,105 @@ describe('店舗のダッシュボード', () => {
       expect(await row('審査待ちの口コミ')).toHaveTextContent('審査待ちの口コミ2件');
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     });
+  });
+
+  it('売上の区画の権限で今日・今月の売上を出し、増減は今月だけに前月同時点と並べる', async () => {
+    withMe(['DASHBOARD_SALES_VIEW']);
+    getSales.mockResolvedValue(SALES);
+
+    render(<StoreDashboardPage />);
+
+    expect(await screen.findByText('今日の売上')).toBeInTheDocument();
+    expect(statOf('今日の売上')).toHaveTextContent('¥20,000');
+    expect(statOf('今日の売上')).toHaveTextContent('完了 2 件');
+    expect(statOf('今日の売上')).not.toHaveTextContent('前月同時点');
+    expect(statOf('今月の売上')).toHaveTextContent('¥12,345,678');
+    expect(statOf('今月の売上')).toHaveTextContent('+23.5%');
+    expect(statOf('今月の売上')).toHaveTextContent('前月同時点 ¥10,000,000');
+    expect(dailySalesRegion()).toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it('前月同時点を下回れば減少を、前月同時点が 0 なら率を出さず金額だけを出す', async () => {
+    withMe(['DASHBOARD_SALES_VIEW']);
+    getSales
+      .mockResolvedValueOnce({
+        ...SALES,
+        month_to_date: { sales: 7_500, order_count: 1 },
+        previous_month_to_date: { sales: 10_000, order_count: 2 },
+      })
+      .mockResolvedValueOnce({ ...SALES, previous_month_to_date: { sales: 0, order_count: 0 } });
+
+    const { unmount } = render(<StoreDashboardPage />);
+    expect((await screen.findByText('今月の売上')).parentElement).toHaveTextContent('−25.0%');
+    unmount();
+
+    render(<StoreDashboardPage />);
+    const month = (await screen.findByText('今月の売上')).parentElement;
+    expect(month).toHaveTextContent('前月同時点 ¥0');
+    expect(month).not.toHaveTextContent('%');
+  });
+
+  it('運営集計を開ける者には、売上の金額から運営集計へ進む導線を出す', async () => {
+    withMe(['DASHBOARD_SALES_VIEW', 'OPERATIONAL_REPORT_VIEW', 'ORDER_MANAGE']);
+    getSales.mockResolvedValue(SALES);
+
+    render(<StoreDashboardPage />);
+
+    const link = await screen.findByRole('link', { name: '¥12,345,678' });
+    expect(link).toHaveAttribute('href', '/store/2/operational-reports');
+    expect(screen.getByRole('link', { name: '¥20,000' })).toHaveAttribute(
+      'href',
+      '/store/2/operational-reports'
+    );
+  });
+
+  it('売上の区画の権限が無ければ、運営集計の権限があっても売上を出さず取得もしない', async () => {
+    withMe(['DASHBOARD_TODAY_ORDERS_VIEW', 'OPERATIONAL_REPORT_VIEW', 'ORDER_MANAGE']);
+    getTodayOrders.mockResolvedValue(TODAY_ORDERS);
+
+    render(<StoreDashboardPage />);
+
+    expect(await screen.findByText('確定')).toBeInTheDocument();
+    expect(todayOrdersRegion()).toBeInTheDocument();
+    expect(screen.queryByText('今日の売上')).not.toBeInTheDocument();
+    expect(dailySalesRegion()).not.toBeInTheDocument();
+    expect(getSales).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-column="numbers"]')).toBeNull();
+    expect(todayOrdersRegion()?.closest('[data-column]')).toHaveAttribute(
+      'data-column',
+      'today-full-width'
+    );
+  });
+
+  it('売上と今日の受注の両方を見られる者には、数字の列と今日の列を並べる', async () => {
+    withMe(['DASHBOARD_SALES_VIEW', 'DASHBOARD_TODAY_ORDERS_VIEW']);
+    getTodayOrders.mockResolvedValue(TODAY_ORDERS);
+    getSales.mockResolvedValue(SALES);
+
+    render(<StoreDashboardPage />);
+
+    expect((await screen.findByText('今日の売上')).closest('[data-column]')).toHaveAttribute(
+      'data-column',
+      'numbers'
+    );
+    expect(todayOrdersRegion()?.closest('[data-column]')).toHaveAttribute('data-column', 'today');
+  });
+
+  it('売上の取得が失敗しても今日の受注は出し、売上の区画にだけ再試行を出す', async () => {
+    withMe(['DASHBOARD_SALES_VIEW', 'DASHBOARD_TODAY_ORDERS_VIEW']);
+    getTodayOrders.mockResolvedValue(TODAY_ORDERS);
+    getSales.mockRejectedValueOnce(new Error('network')).mockResolvedValue(SALES);
+
+    render(<StoreDashboardPage />);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('売上の取得に失敗しました');
+    expect((await screen.findByText('確定')).parentElement).toHaveTextContent('確定4件');
+
+    fireEvent.click(within(alert).getByRole('button'));
+
+    expect(await screen.findByText('今日の売上')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });

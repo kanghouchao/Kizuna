@@ -12,6 +12,7 @@ import { storePath } from '@/shared/lib';
 import { Badge } from '@/shared/ui';
 import { dashboardApi } from '../api/dashboard';
 import { PendingWorkRegion, type PendingWork } from './PendingWorkRegion';
+import { SalesRegion } from './SalesRegion';
 import { TodayOrdersRegion } from './TodayOrdersRegion';
 
 /**
@@ -25,6 +26,16 @@ export default function StoreDashboardPage() {
 
   const numbers: ReactNode[] = [];
   const today: ReactNode[] = [];
+  if (me !== null && hasPermission(me, 'DASHBOARD_SALES_VIEW'))
+    numbers.push(
+      <SalesRegion
+        key="sales"
+        storeId={currentStoreId}
+        canOpenReports={
+          hasPermission(me, 'OPERATIONAL_REPORT_VIEW') && hasPermission(me, 'ORDER_MANAGE')
+        }
+      />
+    );
   if (me !== null && hasPermission(me, 'DASHBOARD_TODAY_ORDERS_VIEW'))
     today.push(
       <TodayOrdersRegion
@@ -84,11 +95,14 @@ export default function StoreDashboardPage() {
             }
           >
             {numbers.length > 0 && (
-              <div className="order-2 min-w-0 space-y-6 @4xl:order-1">{numbers}</div>
+              <div data-column="numbers" className="order-2 min-w-0 space-y-6 @4xl:order-1">
+                {numbers}
+              </div>
             )}
             {today.length > 0 && (
               // 数字の列が無いときは、今日の区画を全幅の格子に並べ直す
               <div
+                data-column={numbers.length > 0 ? 'today' : 'today-full-width'}
                 className={
                   numbers.length > 0
                     ? 'order-1 space-y-6 @4xl:order-2'

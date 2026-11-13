@@ -30,6 +30,10 @@ databaseChangeLog:
         - insert:
             tableName: t_permissions
             columns:
+              - column: { name: code, value: DASHBOARD_SALES_VIEW }
+        - insert:
+            tableName: t_permissions
+            columns:
               - column: { name: code, value: ADVERTISING_COST_VIEW }
         - insert:
             tableName: t_permissions
@@ -405,7 +409,7 @@ databaseChangeLog:
               - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STAFF_MANAGE')" }
 
-        # 店長: 初期授与 42 権限
+        # 店長: 初期授与 43 権限
         - insert:
             tableName: t_role_permissions
             columns:
@@ -426,6 +430,11 @@ databaseChangeLog:
             columns:
               - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'DASHBOARD_PENDING_REVIEWS_VIEW')" }
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'DASHBOARD_SALES_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:

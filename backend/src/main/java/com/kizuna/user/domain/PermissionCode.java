@@ -47,6 +47,10 @@ public enum PermissionCode {
   DASHBOARD_PENDING_REVIEWS_VIEW(
       "審査待ちの口コミ件数", PermissionTree.STORE, PermissionGroup.DASHBOARD, SystemRole.MANAGER),
 
+  /** 店舗のダッシュボードの今日 / 今月の売上と日別推移（集計の数字だけを開き、運営集計の権限を前提としない）。 */
+  DASHBOARD_SALES_VIEW(
+      "売上の概況", PermissionTree.STORE, PermissionGroup.DASHBOARD, SystemRole.MANAGER),
+
   /** 受注の閲覧・登録・更新・状態遷移・削除（OrderController）。 */
   ORDER_MANAGE(
       "受注の管理",
