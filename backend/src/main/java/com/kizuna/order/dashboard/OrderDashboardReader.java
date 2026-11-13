@@ -1,5 +1,6 @@
 package com.kizuna.order.dashboard;
 
+import com.kizuna.order.domain.OrderApplicationStatus;
 import com.kizuna.order.domain.OrderStatus;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
@@ -35,5 +36,20 @@ public class OrderDashboardReader {
         counts.getOrDefault(OrderStatus.IN_SERVICE, 0L),
         counts.getOrDefault(OrderStatus.COMPLETED, 0L),
         counts.getOrDefault(OrderStatus.CANCELLED, 0L));
+  }
+
+  /** 希望営業日が今日以降の PENDING の予約申請。希望日を過ぎた申請は失効して確定も謝絶もできないので、処理すべき件数に入れない。 */
+  @Transactional(readOnly = true)
+  public long pendingApplications(Long storeId, LocalDate businessDate) {
+    return em.createQuery(
+            """
+            select count(a) from com.kizuna.order.domain.OrderApplication a
+            where a.storeId = :store and a.status = :pending and a.businessDate >= :date
+            """,
+            Long.class)
+        .setParameter("store", storeId)
+        .setParameter("pending", OrderApplicationStatus.PENDING)
+        .setParameter("date", businessDate)
+        .getSingleResult();
   }
 }

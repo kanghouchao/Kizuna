@@ -17,6 +17,9 @@ export type UserType = 'STAFF' | 'CAST' | 'MEMBER';
 // ワイヤ上は接頭辞なしの素の enum 名で、PERM_ 形式は JWT の authorities 内部だけに存在する。
 export type PermissionCode =
   | 'DASHBOARD_TODAY_ORDERS_VIEW'
+  | 'DASHBOARD_PENDING_ORDER_APPLICATIONS_VIEW'
+  | 'DASHBOARD_PENDING_SHIFT_REQUESTS_VIEW'
+  | 'DASHBOARD_PENDING_REVIEWS_VIEW'
   | 'STORE_MANAGE'
   | 'ROLE_MANAGE'
   | 'STAFF_CREDENTIAL_MANAGE'

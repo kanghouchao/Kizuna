@@ -11,9 +11,24 @@ jest.mock('@/entities/user/model/StoreContext', () => ({
   ...jest.requireActual('@/entities/user/model/StoreContext'),
   useStoreContext: jest.fn(),
 }));
-jest.mock('../api/dashboard', () => ({ dashboardApi: { getTodayOrders: jest.fn() } }));
+jest.mock('../api/dashboard', () => ({
+  dashboardApi: {
+    getTodayOrders: jest.fn(),
+    getPendingOrderApplications: jest.fn(),
+    getPendingShiftRequests: jest.fn(),
+    getPendingReviews: jest.fn(),
+  },
+}));
 
 const getTodayOrders = jest.mocked(dashboardApi.getTodayOrders);
+const getPendingOrderApplications = jest.mocked(dashboardApi.getPendingOrderApplications);
+const getPendingShiftRequests = jest.mocked(dashboardApi.getPendingShiftRequests);
+const getPendingReviews = jest.mocked(dashboardApi.getPendingReviews);
+const PENDING_REGIONS: PermissionCode[] = [
+  'DASHBOARD_PENDING_ORDER_APPLICATIONS_VIEW',
+  'DASHBOARD_PENDING_SHIFT_REQUESTS_VIEW',
+  'DASHBOARD_PENDING_REVIEWS_VIEW',
+];
 const TODAY_ORDERS = {
   business_date: '2026-11-12',
   confirmed: 4,
@@ -51,8 +66,16 @@ const withMe = (permissions: PermissionCode[] | null) =>
 
 const todayOrdersRegion = () => screen.queryByRole('heading', { name: '今日の受注', level: 2 });
 
+const pendingWorkRegion = () => screen.queryByRole('heading', { name: 'やること', level: 2 });
+const row = async (label: string) => (await screen.findByText(label)).parentElement;
+
 beforeEach(() => {
   getTodayOrders.mockReset();
+  getPendingOrderApplications
+    .mockReset()
+    .mockResolvedValue({ business_date: '2026-11-12', count: 3 });
+  getPendingShiftRequests.mockReset().mockResolvedValue({ count: 5 });
+  getPendingReviews.mockReset().mockResolvedValue({ count: 2 });
   withStore('ACTIVE');
 });
 
@@ -133,5 +156,86 @@ describe('店舗のダッシュボード', () => {
 
     expect((await screen.findByText('確定')).parentElement).toHaveTextContent('確定4件');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  describe('やること', () => {
+    it('区画の権限で未処理の件数を出し、一覧の権限が無ければ導線を出さない', async () => {
+      withMe(PENDING_REGIONS);
+
+      render(<StoreDashboardPage />);
+
+      expect(pendingWorkRegion()).toBeInTheDocument();
+      expect(await row('未処理の予約申請')).toHaveTextContent('未処理の予約申請3件');
+      expect(await row('未処理の出勤希望')).toHaveTextContent('未処理の出勤希望5件');
+      expect(await row('審査待ちの口コミ')).toHaveTextContent('審査待ちの口コミ2件');
+      expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    });
+
+    it('一覧の権限ごとに、件数からその一覧へ進める', async () => {
+      withMe([...PENDING_REGIONS, 'ORDER_MANAGE', 'SHIFT_MANAGE', 'REVIEW_VIEW']);
+
+      render(<StoreDashboardPage />);
+
+      expect(await screen.findByRole('link', { name: /未処理の予約申請\s*3/ })).toHaveAttribute(
+        'href',
+        '/store/2/orders'
+      );
+      expect(await screen.findByRole('link', { name: /未処理の出勤希望\s*5/ })).toHaveAttribute(
+        'href',
+        '/store/2/shifts'
+      );
+      expect(await screen.findByRole('link', { name: /審査待ちの口コミ\s*2/ })).toHaveAttribute(
+        'href',
+        '/store/2/reviews'
+      );
+    });
+
+    it('導線は行ごとの一覧の権限で決まり、他の行の一覧の権限では出ない', async () => {
+      withMe([...PENDING_REGIONS, 'SHIFT_MANAGE']);
+
+      render(<StoreDashboardPage />);
+
+      expect(await screen.findByRole('link', { name: /未処理の出勤希望/ })).toBeInTheDocument();
+      expect(await row('未処理の予約申請')).not.toHaveAttribute('href');
+      expect(screen.getAllByRole('link')).toHaveLength(1);
+    });
+
+    it('区画の権限が無い行は出さず取得もせず、一つも無ければカードごと出さない', async () => {
+      withMe(['DASHBOARD_PENDING_SHIFT_REQUESTS_VIEW', 'ORDER_MANAGE', 'REVIEW_VIEW']);
+
+      const { unmount } = render(<StoreDashboardPage />);
+
+      expect(await row('未処理の出勤希望')).toHaveTextContent('5件');
+      expect(screen.queryByText('未処理の予約申請')).not.toBeInTheDocument();
+      expect(screen.queryByText('審査待ちの口コミ')).not.toBeInTheDocument();
+      expect(getPendingOrderApplications).not.toHaveBeenCalled();
+      expect(getPendingReviews).not.toHaveBeenCalled();
+      unmount();
+
+      withMe(['ORDER_MANAGE', 'SHIFT_MANAGE', 'REVIEW_VIEW']);
+      render(<StoreDashboardPage />);
+
+      expect(pendingWorkRegion()).not.toBeInTheDocument();
+      expect(getPendingShiftRequests).toHaveBeenCalledTimes(1);
+    });
+
+    it('一つの行の取得が失敗しても他の行は出て、その行にだけ再試行を出す', async () => {
+      withMe(PENDING_REGIONS);
+      getPendingReviews.mockReset().mockRejectedValueOnce(new Error('network')).mockResolvedValue({
+        count: 2,
+      });
+
+      render(<StoreDashboardPage />);
+
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('審査待ちの口コミの件数の取得に失敗しました');
+      expect(await row('未処理の予約申請')).toHaveTextContent('3件');
+      expect(await row('未処理の出勤希望')).toHaveTextContent('5件');
+
+      fireEvent.click(within(alert).getByRole('button'));
+
+      expect(await row('審査待ちの口コミ')).toHaveTextContent('審査待ちの口コミ2件');
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
   });
 });

@@ -1,11 +1,10 @@
 'use client';
 
-import { ChevronRightIcon } from 'lucide-react';
-import Link from 'next/link';
 import { ORDER_STATUS_LABELS, type OrderStatus } from '@/entities/order';
 import { storePath, useResource } from '@/shared/lib';
-import { Card, CardHeader, CardTitle, RegionError, Skeleton } from '@/shared/ui';
+import { Card, CardHeader, CardTitle, RegionError } from '@/shared/ui';
 import { dashboardApi, type TodayOrders } from '../api/dashboard';
+import { CountRow, CountRowSkeleton } from './CountRow';
 
 const ROWS: { status: OrderStatus; count: (orders: TodayOrders) => number }[] = [
   { status: 'CONFIRMED', count: orders => orders.confirmed },
@@ -37,10 +36,7 @@ export function TodayOrdersRegion({
       {isLoading ? (
         <div className="divide-y border-t">
           {ROWS.map(row => (
-            <div key={row.status} className="flex items-center gap-3 px-6 py-3">
-              <Skeleton className="h-4 flex-1" />
-              <Skeleton className="h-6 w-10" />
-            </div>
+            <CountRowSkeleton key={row.status} />
           ))}
         </div>
       ) : failure !== null || data === null ? (
@@ -67,25 +63,5 @@ export function TodayOrdersRegion({
         </ul>
       )}
     </Card>
-  );
-}
-
-function CountRow({ label, count, href }: { label: string; count: number; href?: string }) {
-  const body = (
-    <>
-      <span className="flex-1 text-sm text-foreground">{label}</span>
-      <span className="text-lg font-bold tabular-nums text-foreground">{count}</span>
-      <span className="text-sm text-muted-foreground">件</span>
-    </>
-  );
-  if (href === undefined) return <div className="flex items-center gap-3 px-6 py-3">{body}</div>;
-  return (
-    <Link
-      href={href}
-      className="flex items-center gap-3 px-6 py-3 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
-    >
-      {body}
-      <ChevronRightIcon className="size-4 text-muted-foreground" aria-hidden />
-    </Link>
   );
 }

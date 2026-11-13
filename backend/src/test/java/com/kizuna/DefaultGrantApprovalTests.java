@@ -17,6 +17,9 @@ import static com.kizuna.user.domain.PermissionCode.CAST_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.CAST_PERSON_VIEW;
 import static com.kizuna.user.domain.PermissionCode.CUSTOMER_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.CUSTOMER_MERGE;
+import static com.kizuna.user.domain.PermissionCode.DASHBOARD_PENDING_ORDER_APPLICATIONS_VIEW;
+import static com.kizuna.user.domain.PermissionCode.DASHBOARD_PENDING_REVIEWS_VIEW;
+import static com.kizuna.user.domain.PermissionCode.DASHBOARD_PENDING_SHIFT_REQUESTS_VIEW;
 import static com.kizuna.user.domain.PermissionCode.DASHBOARD_TODAY_ORDERS_VIEW;
 import static com.kizuna.user.domain.PermissionCode.GUARANTEE_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.MEMBER_NOTIFICATION_MANAGE;
@@ -93,6 +96,9 @@ class DefaultGrantApprovalTests {
   private static final Map<PermissionCode, Set<SystemRole>> APPROVED_DEFAULT_GRANTS =
       Map.ofEntries(
           Map.entry(DASHBOARD_TODAY_ORDERS_VIEW, Set.of(MANAGER, STAFF)),
+          Map.entry(DASHBOARD_PENDING_ORDER_APPLICATIONS_VIEW, Set.of(MANAGER, STAFF)),
+          Map.entry(DASHBOARD_PENDING_SHIFT_REQUESTS_VIEW, Set.of(MANAGER, STAFF)),
+          Map.entry(DASHBOARD_PENDING_REVIEWS_VIEW, Set.of(MANAGER)),
           Map.entry(STORE_MANAGE, Set.of(ADMIN)),
           Map.entry(ROLE_MANAGE, Set.of(ADMIN)),
           Map.entry(STAFF_CREDENTIAL_MANAGE, Set.of(ADMIN, MANAGER)),
