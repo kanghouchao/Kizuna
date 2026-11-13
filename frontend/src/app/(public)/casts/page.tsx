@@ -5,6 +5,10 @@ export async function generateMetadata(): Promise<Metadata> {
   return storeSiteMetadata('キャスト一覧');
 }
 
-export default function CastsRoute() {
-  return <StoreSitePage page="casts" />;
+export default async function CastsRoute({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  return <StoreSitePage page="casts" searchParams={await searchParams} />;
 }

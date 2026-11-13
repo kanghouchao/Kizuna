@@ -1,0 +1,1112 @@
+/* 和風・落ち着き：紙の地・明朝・細罫・縦組み。全規則を .p1356-classic の下に閉じる */
+.p1356-classic {
+  --c-paper: #f4efe4;
+  --c-paper-deep: #ebe4d4;
+  --c-ink: #27231e;
+  --c-ink-2: #5a5146;
+  --c-rule: #a99c84;
+  --c-rule-soft: #d5cbb7;
+  --c-shu: #9b3122;
+  --c-rail-w: 116px;
+  --c-gutter: clamp(16px, 4vw, 56px);
+
+  position: relative;
+  min-height: 100dvh;
+  overflow-x: clip;
+  background-color: var(--c-paper);
+  color: var(--c-ink);
+  font-family:
+    var(--c-font-body), 'Hiragino Mincho ProN', 'Yu Mincho', 'YuMincho', 'Noto Serif JP', serif;
+  font-size: 15px;
+  line-height: 1.95;
+  letter-spacing: 0.05em;
+  font-feature-settings: 'palt' 0;
+  -webkit-font-smoothing: antialiased;
+}
+
+.p1356-classic a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.p1356-classic :focus-visible {
+  outline: 1px solid var(--c-shu);
+  outline-offset: 3px;
+}
+
+.p1356-classic .c-display {
+  font-family:
+    var(--c-font-display), var(--c-font-body), 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+}
+
+/* 縦組みの基本。行長は max-height で縛る（vertical-rl では block-size が横幅になるため） */
+.p1356-classic .c-v {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  overflow-wrap: anywhere;
+}
+
+.p1356-classic .c-tcy {
+  text-combine-upright: all;
+}
+
+/* ---- 骨格 ---- */
+.p1356-classic .c-shell {
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .p1356-classic .c-shell {
+    padding-right: var(--c-rail-w);
+  }
+}
+
+.p1356-classic .c-main {
+  min-width: 0;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 0 var(--c-gutter) 72px;
+}
+
+/* ---- 右端の縦レール（デスクトップ） ---- */
+.p1356-classic .c-rail {
+  display: none;
+}
+
+@media (min-width: 1024px) {
+  .p1356-classic .c-rail {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    width: var(--c-rail-w);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: clamp(10px, 1.8vh, 22px);
+    padding: clamp(18px, 3vh, 30px) 0 18px;
+    overflow-y: auto;
+    scrollbar-width: none;
+    background-color: var(--c-paper);
+    border-left: 1px solid var(--c-rule);
+  }
+}
+
+.p1356-classic .c-rail-mark {
+  display: block;
+  max-height: 18vh;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  line-height: 1.5;
+}
+
+.p1356-classic .c-rail-logo {
+  position: relative;
+  display: block;
+  width: 76px;
+  height: 56px;
+}
+
+.p1356-classic .c-rail-tick {
+  flex: none;
+  width: 1px;
+  height: 28px;
+  background-color: var(--c-rule);
+}
+
+.p1356-classic .c-rail-nav {
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 16px;
+  row-gap: 14px;
+  justify-items: center;
+}
+
+.p1356-classic .c-rail-link {
+  display: block;
+  font-size: 13px;
+  letter-spacing: 0.18em;
+  line-height: 1.6;
+  color: var(--c-ink-2);
+  transition: color 0.3s ease;
+}
+
+.p1356-classic .c-rail-link:hover,
+.p1356-classic .c-rail-link[aria-current='page'] {
+  color: var(--c-ink);
+}
+
+.p1356-classic .c-rail-link[aria-current='page']::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-bottom: 8px;
+  background-color: var(--c-shu);
+}
+
+.p1356-classic .c-rail-login {
+  margin-top: auto;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  color: var(--c-ink-2);
+  border-right: 1px solid var(--c-rule-soft);
+  padding-right: 4px;
+}
+
+/* 朱の判（ご予約） */
+.p1356-classic .c-seal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 52px;
+  height: 52px;
+  background-color: var(--c-shu);
+  color: #f7f1e6;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  line-height: 1.15;
+  box-shadow:
+    inset 0 0 0 2px var(--c-shu),
+    inset 0 0 0 3px #f7f1e6;
+  transition: transform 0.4s ease;
+}
+
+.p1356-classic .c-seal:hover {
+  transform: rotate(-4deg);
+}
+
+.p1356-classic .c-seal--lg {
+  width: 76px;
+  height: 76px;
+  font-size: 17px;
+}
+
+/* ---- モバイルの上帯と品書きドロワー ---- */
+.p1356-classic .c-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 56px;
+  padding: 0 16px;
+  background-color: var(--c-paper);
+  border-bottom: 1px solid var(--c-rule);
+}
+
+@media (min-width: 1024px) {
+  .p1356-classic .c-topbar {
+    display: none;
+  }
+}
+
+.p1356-classic .c-topbar-mark {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+.p1356-classic .c-topbar-logo {
+  position: relative;
+  display: block;
+  width: 120px;
+  height: 36px;
+}
+
+.p1356-classic .c-menu-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--c-ink);
+  font-size: 13px;
+  letter-spacing: 0.3em;
+  background: transparent;
+  color: var(--c-ink);
+  cursor: pointer;
+}
+
+.p1356-classic .c-menu-btn-bar {
+  display: inline-block;
+  width: 1px;
+  height: 14px;
+  background-color: var(--c-ink);
+}
+
+.p1356-classic .c-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  visibility: hidden;
+  pointer-events: none;
+  transition: visibility 0s linear 0.45s;
+}
+
+.p1356-classic .c-drawer[data-open='true'] {
+  visibility: visible;
+  pointer-events: auto;
+  transition: visibility 0s;
+}
+
+.p1356-classic .c-drawer-scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background-color: rgba(39, 35, 30, 0.38);
+  opacity: 0;
+  transition: opacity 0.45s ease;
+  cursor: pointer;
+}
+
+.p1356-classic .c-drawer[data-open='true'] .c-drawer-scrim {
+  opacity: 1;
+}
+
+.p1356-classic .c-drawer-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(88vw, 380px);
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 18px 20px 28px;
+  overflow-y: auto;
+  background-color: var(--c-paper);
+  border-left: 1px solid var(--c-rule);
+  box-shadow: inset 6px 0 0 -5px var(--c-rule-soft);
+  transform: translateX(100%);
+  transition: transform 0.45s cubic-bezier(0.22, 0.7, 0.2, 1);
+}
+
+.p1356-classic .c-drawer[data-open='true'] .c-drawer-panel {
+  transform: translateX(0);
+}
+
+.p1356-classic .c-drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--c-rule);
+  font-size: 13px;
+  letter-spacing: 0.3em;
+  color: var(--c-ink-2);
+}
+
+.p1356-classic .c-drawer-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--c-ink);
+  cursor: pointer;
+}
+
+/* 縦書きの段組み：li が右から左へ並ぶ */
+.p1356-classic .c-drawer-nav {
+  max-width: 100%;
+  overflow-x: auto;
+  direction: rtl;
+}
+
+.p1356-classic .c-drawer-nav ul {
+  direction: ltr;
+  writing-mode: vertical-rl;
+  height: min(44vh, 300px);
+  margin: 0 0 0 auto;
+  padding: 0;
+  list-style: none;
+}
+
+.p1356-classic .c-drawer-nav li {
+  line-height: 1.3;
+  margin-block-end: 6px;
+  padding-block-end: 6px;
+  border-left: 1px solid var(--c-rule-soft);
+}
+
+.p1356-classic .c-drawer-nav li:last-child {
+  border-left: 0;
+}
+
+.p1356-classic .c-drawer-nav a {
+  font-size: 17px;
+  letter-spacing: 0.22em;
+}
+
+.p1356-classic .c-drawer-nav a[aria-current='page'] {
+  color: var(--c-shu);
+}
+
+.p1356-classic .c-drawer-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--c-rule);
+  font-size: 13px;
+  color: var(--c-ink-2);
+}
+
+/* ---- 写真の枠と、写真の無いときの文字札 ---- */
+.p1356-classic .c-frame {
+  position: relative;
+  padding: 5px;
+  border: 3px double var(--c-rule);
+  background-color: var(--c-paper);
+}
+
+.p1356-classic .c-frame-in {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--c-paper-deep);
+}
+
+.p1356-classic .c-photo {
+  object-fit: cover;
+  filter: sepia(0.14) saturate(0.86) contrast(0.98);
+  transition: filter 0.6s ease;
+}
+
+.p1356-classic a:hover .c-photo {
+  filter: none;
+}
+
+.p1356-classic .c-tile {
+  position: absolute;
+  inset: 8%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--c-rule);
+  color: var(--c-ink-2);
+  font-weight: 500;
+  line-height: 1;
+}
+
+.p1356-classic .c-tile::after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border: 1px solid var(--c-rule-soft);
+}
+
+/* ---- 共通の節：本文｜余白の縦見出し ---- */
+.p1356-classic .c-sec {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'body title';
+  column-gap: clamp(20px, 4vw, 56px);
+  padding: clamp(44px, 7vw, 88px) 0;
+  border-top: 1px solid var(--c-rule);
+}
+
+.p1356-classic .c-sec-title {
+  grid-area: title;
+  align-self: start;
+  margin: 0;
+  max-height: 12em;
+  padding-left: clamp(10px, 1.6vw, 18px);
+  border-left: 1px solid var(--c-rule-soft);
+  font-size: 15px;
+  font-weight: 500;
+  letter-spacing: 0.42em;
+  color: var(--c-ink);
+}
+
+.p1356-classic .c-sec-title::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-bottom: 12px;
+  background-color: var(--c-shu);
+}
+
+.p1356-classic .c-sec-body {
+  grid-area: body;
+  min-width: 0;
+}
+
+.p1356-classic .c-prose {
+  max-width: 34em;
+  margin: 0;
+  white-space: pre-line;
+  font-size: 15.5px;
+  line-height: 2.15;
+}
+
+.p1356-classic .c-quiet {
+  margin: 0;
+  font-size: 14px;
+  color: var(--c-ink-2);
+  letter-spacing: 0.12em;
+}
+
+.p1356-classic .c-textlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  letter-spacing: 0.18em;
+  border-bottom: 1px solid var(--c-rule);
+  padding-bottom: 2px;
+  transition: border-color 0.3s ease;
+}
+
+.p1356-classic .c-textlink:hover {
+  border-bottom-color: var(--c-ink);
+}
+
+/* ---- トップ：扉 ---- */
+.p1356-classic .c-open {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'title' 'side';
+  row-gap: 40px;
+  padding: 40px 0 56px;
+}
+
+.p1356-classic .c-open-title {
+  grid-area: title;
+  justify-self: end;
+  max-width: 100%;
+  max-height: min(64vh, 520px);
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-right: 18px;
+  border-right: 1px solid var(--c-ink);
+  animation: c-classic-ink 1.6s ease both;
+}
+
+.p1356-classic .c-open-name {
+  margin: 0;
+  margin-block-end: 0.7em;
+  font-size: clamp(34px, 5vw, 62px);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: 0.16em;
+}
+
+.p1356-classic .c-open-catch {
+  margin: 0;
+  margin-block-start: 0.3em;
+  margin-block-end: 0.15em;
+  font-size: clamp(16px, 1.8vw, 22px);
+  line-height: 1.7;
+  letter-spacing: 0.32em;
+  color: var(--c-ink);
+}
+
+.p1356-classic .c-open-catch:first-of-type {
+  margin-block-start: 2.2em;
+}
+
+.p1356-classic .c-open-side {
+  grid-area: side;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+
+.p1356-classic .c-open-banner {
+  width: min(100%, 540px);
+  animation: c-classic-ink 1.6s ease 0.25s both;
+}
+
+.p1356-classic .c-open-banner .c-frame-in {
+  aspect-ratio: 16 / 11;
+}
+
+.p1356-classic .c-colophon {
+  max-width: 340px;
+  padding-top: 16px;
+  border-top: 1px solid var(--c-ink);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 20px;
+  row-gap: 10px;
+  align-items: end;
+}
+
+.p1356-classic .c-colophon-label {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.4em;
+  color: var(--c-ink-2);
+}
+
+.p1356-classic .c-colophon-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
+  letter-spacing: 0.14em;
+}
+
+.p1356-classic .c-colophon .c-seal {
+  grid-column: 2;
+  grid-row: 1 / span 3;
+}
+
+.p1356-classic .c-age {
+  display: inline-block;
+  justify-self: start;
+  margin: 0;
+  padding: 1px 8px;
+  border: 1px solid var(--c-ink-2);
+  font-size: 11.5px;
+  letter-spacing: 0.2em;
+  color: var(--c-ink-2);
+}
+
+@media (min-width: 768px) {
+  .p1356-classic .c-open {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'side title';
+    column-gap: clamp(32px, 6vw, 104px);
+    min-height: calc(100dvh - 56px);
+    padding: 72px 0 72px;
+  }
+
+  .p1356-classic .c-open-title {
+    max-height: min(74vh, 640px);
+  }
+
+  .p1356-classic .c-open-side {
+    justify-content: space-between;
+    gap: 48px;
+  }
+
+  .p1356-classic .c-open-banner {
+    margin-top: 9vh;
+  }
+}
+
+/* バナーも惹句も無いとき：店名だけを右に立て、左下へ案内を沈める。間で見せる */
+.p1356-classic .c-open--bare .c-open-name {
+  font-size: clamp(40px, 7vw, 84px);
+  margin-block-end: 0;
+}
+
+@media (min-width: 768px) {
+  .p1356-classic .c-open--bare .c-open-side {
+    justify-content: flex-end;
+  }
+
+  .p1356-classic .c-open--bare .c-colophon {
+    max-width: 380px;
+  }
+}
+
+.p1356-classic .c-open--bare .c-open-title {
+  padding-right: 24px;
+  border-right-width: 2px;
+}
+
+/* ---- 映像 ---- */
+.p1356-classic .c-mv {
+  width: min(100%, 760px);
+}
+
+.p1356-classic .c-mv .c-frame-in {
+  aspect-ratio: 16 / 9;
+}
+
+.p1356-classic .c-mv video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ---- トップ：キャストの帯 ---- */
+.p1356-classic .c-strip {
+  display: flex;
+  gap: 30px;
+  margin: 0;
+  padding: 4px 0 18px;
+  list-style: none;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+  scrollbar-color: var(--c-rule) transparent;
+}
+
+.p1356-classic .c-strip > li {
+  flex: none;
+  scroll-snap-align: start;
+}
+
+.p1356-classic .c-strip-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.p1356-classic .c-strip-photo {
+  width: 104px;
+}
+
+.p1356-classic .c-strip-photo .c-frame-in {
+  aspect-ratio: 3 / 4;
+}
+
+.p1356-classic .c-strip-name {
+  max-height: 150px;
+  font-size: 15px;
+  letter-spacing: 0.2em;
+  line-height: 1.5;
+}
+
+.p1356-classic .c-strip-more {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  height: 100%;
+  padding: 6px 0 0 18px;
+  border-left: 1px solid var(--c-rule);
+  font-size: 14px;
+  letter-spacing: 0.3em;
+  color: var(--c-ink);
+}
+
+.p1356-classic .c-strip-more small {
+  font-size: 12px;
+  color: var(--c-ink-2);
+}
+
+/* ---- 予約の節 ---- */
+.p1356-classic .c-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 24px 36px;
+}
+
+.p1356-classic .c-cta p {
+  margin: 0;
+  max-width: 26em;
+  font-size: 15px;
+}
+
+/* ---- ページ見出し（一覧・詳細） ---- */
+.p1356-classic .c-crumb {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 0;
+  padding: 22px 0 0;
+  font-size: 12.5px;
+  letter-spacing: 0.14em;
+  color: var(--c-ink-2);
+}
+
+.p1356-classic .c-crumb a:hover {
+  color: var(--c-ink);
+}
+
+.p1356-classic .c-pagehead {
+  border-top: 0;
+  padding-top: 32px;
+}
+
+.p1356-classic .c-pagehead .c-sec-title {
+  max-height: none;
+  padding-left: clamp(14px, 2vw, 22px);
+  border-left: 1px solid var(--c-ink);
+  font-size: clamp(22px, 2.6vw, 30px);
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  line-height: 1.4;
+}
+
+.p1356-classic .c-pagehead .c-sec-title small {
+  display: block;
+  margin-block-start: 10px;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  color: var(--c-ink-2);
+}
+
+@media (max-width: 767px) {
+  .p1356-classic .c-pagehead {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'title' 'body';
+    row-gap: 28px;
+  }
+
+  .p1356-classic .c-pagehead .c-sec-title {
+    justify-self: end;
+  }
+
+  .p1356-classic .c-rows .c-row {
+    grid-template-columns: 72px auto minmax(0, 1fr);
+    column-gap: 12px;
+  }
+
+  .p1356-classic .c-row-go {
+    display: none;
+  }
+}
+
+/* ---- キャスト一覧：品書きの行 ---- */
+.p1356-classic .c-rows {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 3px double var(--c-rule);
+}
+
+@media (min-width: 900px) {
+  .p1356-classic .c-rows {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 56px;
+    background-image: linear-gradient(var(--c-rule-soft), var(--c-rule-soft));
+    background-size: 1px 100%;
+    background-position: center top;
+    background-repeat: no-repeat;
+  }
+}
+
+.p1356-classic .c-rows > li {
+  min-width: 0;
+  border-bottom: 1px solid var(--c-rule-soft);
+}
+
+.p1356-classic .c-row {
+  display: grid;
+  grid-template-columns: 78px auto minmax(0, 1fr) auto;
+  column-gap: 16px;
+  align-items: start;
+  padding: 18px 0;
+}
+
+.p1356-classic .c-row .c-frame {
+  padding: 3px;
+}
+
+.p1356-classic .c-row .c-frame-in {
+  aspect-ratio: 3 / 4;
+}
+
+.p1356-classic .c-row-name {
+  max-height: 104px;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  line-height: 1.4;
+}
+
+.p1356-classic .c-row-info {
+  min-width: 0;
+  padding-top: 2px;
+}
+
+.p1356-classic .c-row-no {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.3em;
+  color: var(--c-ink-2);
+}
+
+.p1356-classic .c-row-spec {
+  margin: 2px 0 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 13px;
+  color: var(--c-ink-2);
+  letter-spacing: 0.06em;
+}
+
+.p1356-classic .c-row-intro {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  line-height: 1.85;
+}
+
+.p1356-classic .c-row-go {
+  align-self: center;
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  color: var(--c-ink-2);
+  transition: color 0.3s ease;
+}
+
+.p1356-classic a.c-row:hover .c-row-go {
+  color: var(--c-shu);
+}
+
+/* ---- キャスト詳細：冊子の見開き ---- */
+.p1356-classic .c-book {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'photo name'
+    'spec spec'
+    'intro intro';
+  gap: 32px 20px;
+  padding: 32px 0 56px;
+}
+
+.p1356-classic .c-book-name {
+  grid-area: name;
+  align-self: start;
+  max-height: min(70vh, 520px);
+  padding-left: 14px;
+  border-left: 1px solid var(--c-ink);
+}
+
+.p1356-classic .c-book-name p {
+  margin: 0;
+  margin-block-end: 0.6em;
+  font-size: 12.5px;
+  letter-spacing: 0.4em;
+  color: var(--c-ink-2);
+}
+
+.p1356-classic .c-book-name h1 {
+  margin: 0;
+  font-size: clamp(32px, 5vw, 60px);
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: 0.18em;
+}
+
+.p1356-classic .c-book-photo {
+  grid-area: photo;
+  min-width: 0;
+}
+
+.p1356-classic .c-book-photo .c-frame-in {
+  aspect-ratio: 3 / 4;
+}
+
+.p1356-classic .c-book-spec {
+  grid-area: spec;
+  min-width: 0;
+}
+
+.p1356-classic .c-spec {
+  width: 100%;
+  border-collapse: collapse;
+  border-top: 3px double var(--c-rule);
+  font-size: 14.5px;
+}
+
+.p1356-classic .c-spec th,
+.p1356-classic .c-spec td {
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--c-rule-soft);
+  text-align: left;
+  vertical-align: top;
+}
+
+.p1356-classic .c-spec th {
+  width: 7.5em;
+  font-weight: 400;
+  font-size: 13px;
+  letter-spacing: 0.24em;
+  color: var(--c-ink-2);
+  border-right: 1px solid var(--c-rule-soft);
+}
+
+.p1356-classic .c-spec td {
+  padding-left: 18px;
+  overflow-wrap: anywhere;
+}
+
+.p1356-classic .c-book-intro {
+  grid-area: intro;
+  min-width: 0;
+}
+
+.p1356-classic .c-book-intro h2 {
+  margin: 0 0 14px;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.4em;
+  color: var(--c-ink-2);
+}
+
+.p1356-classic .c-book-intro h2::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 10px;
+  vertical-align: middle;
+  background-color: var(--c-shu);
+}
+
+@media (min-width: 768px) {
+  .p1356-classic .c-book {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 300px) auto;
+    grid-template-areas:
+      'spec photo name'
+      'intro intro intro';
+    column-gap: 36px;
+  }
+}
+
+@media (min-width: 1180px) {
+  .p1356-classic .c-book {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 340px) auto;
+    grid-template-areas:
+      'intro photo name'
+      'intro spec name';
+    column-gap: 48px;
+    row-gap: 28px;
+    padding-top: 48px;
+  }
+
+  .p1356-classic .c-book-intro {
+    padding-right: 48px;
+    border-right: 1px solid var(--c-rule-soft);
+  }
+}
+
+.p1356-classic .c-book-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding-top: 32px;
+  border-top: 1px solid var(--c-rule);
+}
+
+/* ---- 奥付（フッター） ---- */
+.p1356-classic .c-foot {
+  border-top: 3px double var(--c-rule);
+  background-color: var(--c-paper-deep);
+}
+
+.p1356-classic .c-foot-in {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 44px var(--c-gutter) 88px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 32px;
+  row-gap: 28px;
+}
+
+.p1356-classic .c-foot-cols {
+  min-width: 0;
+  display: grid;
+  gap: 24px;
+}
+
+@media (min-width: 768px) {
+  .p1356-classic .c-foot-cols {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.p1356-classic .c-foot-cols h2 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.4em;
+  color: var(--c-ink-2);
+}
+
+.p1356-classic .c-foot-cols ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13.5px;
+  line-height: 2.1;
+}
+
+.p1356-classic .c-foot-cols a:hover {
+  border-bottom: 1px solid var(--c-ink);
+}
+
+.p1356-classic .c-foot-sign {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.p1356-classic .c-foot-name {
+  max-height: 200px;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  line-height: 1.5;
+}
+
+.p1356-classic .c-foot-copy {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--c-rule);
+  font-size: 12px;
+  color: var(--c-ink-2);
+  letter-spacing: 0.12em;
+}
+
+/* ---- 動き：墨がにじむように現れるだけ ---- */
+@keyframes c-classic-ink {
+  from {
+    opacity: 0;
+    filter: blur(3px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .p1356-classic *,
+  .p1356-classic *::before,
+  .p1356-classic *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+
+  .p1356-classic .c-seal:hover {
+    transform: none;
+  }
+}

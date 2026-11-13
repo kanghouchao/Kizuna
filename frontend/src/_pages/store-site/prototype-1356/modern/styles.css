@@ -1,0 +1,169 @@
+.p1356-modern {
+  --m-bg: #fff8ef;
+  --m-card: #ffffff;
+  --m-ink: #1f1a3a;
+  --m-sub: #5a5470;
+  --m-line: #efe4d6;
+  --m-pink: #ff5c93;
+  --m-yellow: #ffd84d;
+  --m-mint: #7be0b4;
+  --m-sky: #9cc3ff;
+  --m-lilac: #cdb6ff;
+  --m-peach: #ffb39a;
+  --m-radius: 28px;
+
+  min-height: 100vh;
+  overflow-x: clip;
+  background:
+    radial-gradient(circle at 12% 0%, #ffe3ee 0, transparent 38%),
+    radial-gradient(circle at 100% 18%, #fff0bf 0, transparent 32%),
+    var(--m-bg);
+  color: var(--m-ink);
+  font-family:
+    'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'Yu Gothic', system-ui, sans-serif;
+  line-height: 1.75;
+  padding-bottom: 112px;
+}
+
+@media (min-width: 1024px) {
+  .p1356-modern {
+    padding-bottom: 72px;
+  }
+}
+
+.p1356-modern .m-display {
+  font-family: var(--m-font-display), 'Hiragino Maru Gothic ProN', system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+.p1356-modern .m-ink { color: var(--m-ink); }
+.p1356-modern .m-sub { color: var(--m-sub); }
+.p1356-modern .m-bg-card { background: var(--m-card); }
+.p1356-modern .m-bg-ink { background: var(--m-ink); color: #fff; }
+.p1356-modern .m-bg-pink { background: var(--m-pink); color: var(--m-ink); }
+.p1356-modern .m-bg-yellow { background: var(--m-yellow); color: var(--m-ink); }
+.p1356-modern .m-bg-mint { background: var(--m-mint); color: var(--m-ink); }
+.p1356-modern .m-bg-sky { background: var(--m-sky); color: var(--m-ink); }
+.p1356-modern .m-bg-lilac { background: var(--m-lilac); color: var(--m-ink); }
+.p1356-modern .m-bg-peach { background: var(--m-peach); color: var(--m-ink); }
+.p1356-modern .m-border { border: 2px solid var(--m-ink); }
+.p1356-modern .m-line { border-color: var(--m-line); }
+
+/* 太い墨線＋ずらした影で「ステッカー」風に見せる */
+.p1356-modern .m-sticker {
+  border: 2px solid var(--m-ink);
+  box-shadow: 4px 4px 0 var(--m-ink);
+}
+
+.p1356-modern .m-lift {
+  transition:
+    transform 180ms cubic-bezier(0.3, 1.6, 0.5, 1),
+    box-shadow 180ms ease;
+}
+.p1356-modern .m-lift:hover,
+.p1356-modern .m-lift:focus-visible {
+  transform: translate(-2px, -4px);
+  box-shadow: 6px 8px 0 var(--m-ink);
+}
+
+.p1356-modern .m-tilt {
+  transition: transform 200ms cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+.p1356-modern .m-tilt:hover,
+.p1356-modern .m-tilt:focus-visible {
+  transform: rotate(-2deg) scale(1.03);
+}
+
+.p1356-modern .m-squircle {
+  border-radius: 38% 42% 40% 44% / 42% 38% 44% 40%;
+}
+
+.p1356-modern .m-snap {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 16px;
+  padding: 6px 16px 14px;
+  scrollbar-width: none;
+}
+.p1356-modern .m-snap::-webkit-scrollbar {
+  display: none;
+}
+.p1356-modern .m-snap > * {
+  scroll-snap-align: start;
+  flex: none;
+}
+
+.p1356-modern .m-avatar-ring {
+  background: conic-gradient(var(--m-pink), var(--m-yellow), var(--m-mint), var(--m-sky), var(--m-lilac), var(--m-pink));
+  transition: transform 200ms cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+.p1356-modern a:hover .m-avatar-ring,
+.p1356-modern a:focus-visible .m-avatar-ring {
+  transform: translateY(-4px) rotate(-4deg);
+}
+
+.p1356-modern .m-pop {
+  animation: m-pop 520ms cubic-bezier(0.3, 1.5, 0.5, 1) both;
+}
+.p1356-modern .m-pop-2 {
+  animation-delay: 90ms;
+}
+.p1356-modern .m-pop-3 {
+  animation-delay: 180ms;
+}
+@keyframes m-pop {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.p1356-modern .m-float {
+  animation: m-float 5s ease-in-out infinite;
+}
+@keyframes m-float {
+  50% {
+    transform: translateY(-8px) rotate(3deg);
+  }
+}
+
+.p1356-modern .m-sheet {
+  animation: m-sheet 260ms cubic-bezier(0.2, 1.2, 0.4, 1) both;
+}
+@keyframes m-sheet {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+.p1356-modern a:focus-visible,
+.p1356-modern button:focus-visible {
+  outline: 3px solid var(--m-pink);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .p1356-modern *,
+  .p1356-modern *::before,
+  .p1356-modern *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  .p1356-modern .m-lift:hover,
+  .p1356-modern .m-tilt:hover,
+  .p1356-modern a:hover .m-avatar-ring {
+    transform: none;
+  }
+}

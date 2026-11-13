@@ -15,7 +15,11 @@ export async function generateMetadata(): Promise<Metadata> {
  * - ドメイン（ロール）に応じたルーティングの振り分け。
  * - 適切な模版（Template）の動的読み込み。
  */
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const cookieStore = await cookies();
   // 未登録の Host（削除した店舗を含む）は、セッションの有無に依らず 404 にする
   const host = await resolveHost();
@@ -44,5 +48,5 @@ export default async function Home() {
   }
 
   // 店舗ドメインなら店舗サイトのトップを描く
-  return <StoreSitePage page="page" />;
+  return <StoreSitePage page="page" searchParams={await searchParams} />;
 }
