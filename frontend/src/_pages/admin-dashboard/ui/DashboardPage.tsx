@@ -1,69 +1,50 @@
 'use client';
 
-import { adminStoreApi } from '@/entities/store';
+import type { ReactNode } from 'react';
 import { MePending, hasPermission, useMe } from '@/entities/user';
-import { useResource } from '@/shared/lib';
-import { Card, CardContent, RegionError, Skeleton } from '@/shared/ui';
+import { Card, CardContent } from '@/shared/ui';
+import { StoresRegion } from './StoresRegion';
 
-/** グループの文脈のダッシュボード。グループ全体の集計は店舗管理の権限を持つ者にだけ出す。 */
+/**
+ * グループの文脈のダッシュボード。数字の区画は 1 枚の帳票カードに並べ、幅で折り返す（固定列は 8 桁の金額がはみ出る）。
+ * 区画は区画の権限で出し分け、見られない区画は枠ごと出さない。
+ */
 export default function AdminDashboard() {
   const { me } = useMe();
-  if (me === null) return <MePending />;
+
+  const numbers: ReactNode[] = [];
+  if (me !== null && hasPermission(me, 'DASHBOARD_STORES_VIEW'))
+    numbers.push(<StoresRegion key="stores" canOpenStores={hasPermission(me, 'STORE_MANAGE')} />);
 
   return (
     // 外殻（サイドバー・ヘッダー・幅制約・余白）は (admin) の layout が供給するため、
     // このページは中身だけを描く
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      {hasPermission(me, 'STORE_MANAGE') && <StoreStatsCard />}
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold text-foreground">グループ</h1>
+      {me === null ? (
+        <MePending />
+      ) : numbers.length === 0 ? (
+        <NothingToShow />
+      ) : (
+        <Card>
+          <CardContent>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(15rem,1fr))] gap-x-8 gap-y-6">
+              {numbers}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
 
-function StoreStatsCard() {
-  const {
-    data: stats,
-    isLoading: loadingStats,
-    failure,
-    reload: loadStats,
-  } = useResource(() => adminStoreApi.getStats());
-
+function NothingToShow() {
   return (
-    <Card>
-      <CardContent>
-        {loadingStats ? (
-          <>
-            <Skeleton className="h-4 w-3/4 mb-2" />
-            <Skeleton className="h-8 w-1/2" />
-          </>
-        ) : failure !== null ? (
-          // 取れなかった統計を残すと 0 と表示され、店舗が 1 つも無い状態と見分けがつかない
-          <RegionError message="店舗数の取得に失敗しました" onRetry={() => void loadStats()} />
-        ) : (
-          <div className="flex items-center">
-            <div className="shrink-0">
-              <svg
-                className="h-6 w-6 text-muted-foreground"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"
-                />
-              </svg>
-            </div>
-            <div className="ml-5 w-0 flex-1">
-              <dl>
-                <dt className="text-sm font-medium text-muted-foreground truncate">総店舗数</dt>
-                <dd className="text-lg font-medium text-foreground">{stats?.total || 0}</dd>
-              </dl>
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <div className="rounded-xl border p-8 text-center">
+      <p className="text-sm text-foreground">このダッシュボードで表示できる項目がありません。</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        表示には管理者からの権限の付与が必要です。
+      </p>
+    </div>
   );
 }

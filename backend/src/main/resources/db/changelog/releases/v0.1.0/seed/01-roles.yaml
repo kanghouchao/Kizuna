@@ -27,6 +27,7 @@ databaseChangeLog:
             tableName: t_permissions
             columns:
               - column: { name: code, value: DASHBOARD_PENDING_REVIEWS_VIEW }
+              - column: { name: code, value: DASHBOARD_STORES_VIEW }
         - insert:
             tableName: t_permissions
             columns:
@@ -292,7 +293,12 @@ databaseChangeLog:
               - column: { name: name, value: "スタッフ" }
               - column: { name: is_system, valueBoolean: true }
 
-        # 統括: 初期授与 20 権限
+        # 統括: 初期授与 21 権限
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'DASHBOARD_STORES_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:
@@ -410,6 +416,11 @@ databaseChangeLog:
               - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'STAFF_MANAGE')" }
 
         # 店長: 初期授与 43 権限
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '店長')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'DASHBOARD_STORES_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:

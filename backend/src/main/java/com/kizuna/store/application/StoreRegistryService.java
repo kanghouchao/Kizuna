@@ -218,11 +218,6 @@ public class StoreRegistryService {
     businessAudit.recordCurrent(storeId, action, "STORE", String.valueOf(storeId), before, after);
   }
 
-  @Transactional(readOnly = true)
-  public long count(StoreScope scope) {
-    return scope.storeIds().isEmpty() ? 0 : storeRepository.count(withinScope(scope, null));
-  }
-
   /** 集合外の店舗は存在しない扱い（404）にする。業務上の検証より先に判定し、集合外の店舗の状態（稼働中・略称の重複）を応答で漏らさない。 */
   private Long requireInScope(StoreScope scope, String id) {
     Long storeId = parseId(id);

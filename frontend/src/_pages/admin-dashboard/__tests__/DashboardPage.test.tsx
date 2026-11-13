@@ -1,127 +1,134 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { adminStoreApi } from '@/entities/store';
-import { useMe } from '@/entities/user';
-import type { PermissionCode } from '@/entities/user';
+import { useMe, type PermissionCode } from '@/entities/user';
+import { dashboardApi } from '../api/dashboard';
 import DashboardPage from '../ui/DashboardPage';
-
-jest.mock('@/entities/store', () => ({
-  adminStoreApi: {
-    getStats: jest.fn(),
-  },
-}));
 
 jest.mock('@/entities/user/model/MeContext', () => ({
   ...jest.requireActual('@/entities/user/model/MeContext'),
   useMe: jest.fn(),
 }));
+jest.mock('../api/dashboard', () => ({ dashboardApi: { getStores: jest.fn() } }));
 
-const mockedApi = adminStoreApi as jest.Mocked<typeof adminStoreApi>;
+const getStores = jest.mocked(dashboardApi.getStores);
+const STORES = { total: 12, preparing: 3, active: 9 };
 
-const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
-const meWith = (permissions: PermissionCode[]) =>
-  mockedUseMe.mockReturnValue({
-    me: {
-      email: 'staff@example.com',
-      user_type: 'STAFF',
-      permissions,
-      line_linked: false,
-      email_verified: false,
-    },
-    isLoading: false,
+const withMe = (permissions: PermissionCode[] | null) =>
+  jest.mocked(useMe).mockReturnValue({
+    me:
+      permissions === null
+        ? null
+        : {
+            email: 'staff@example.com',
+            user_type: 'STAFF',
+            permissions,
+            line_linked: false,
+            email_verified: false,
+          },
+    isLoading: permissions === null,
     failure: null,
     reload: jest.fn(),
     setMe: jest.fn(),
   });
 
+const storesRegion = () => screen.queryByRole('region', { name: '担当店舗' });
+
 beforeEach(() => {
-  meWith(['STORE_MANAGE']);
+  getStores.mockReset();
 });
 
-describe('ダッシュボード', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockedApi.getStats.mockResolvedValue({ total: 12 });
-  });
+describe('グループのダッシュボード', () => {
+  it('区画の権限があれば、担当店舗の数と稼働状態の内訳を出すこと', async () => {
+    withMe(['DASHBOARD_STORES_VIEW']);
+    getStores.mockResolvedValue(STORES);
 
-  it('総店舗数を表示すること', async () => {
     render(<DashboardPage />);
 
-    expect(await screen.findByText('総店舗数')).toBeInTheDocument();
-    expect(screen.getByText('12')).toBeInTheDocument();
+    const region = await screen.findByRole('region', { name: '担当店舗' });
+    expect(await within(region).findByText('12 店舗')).toBeInTheDocument();
+    expect(within(region).getByText('稼働中 9')).toBeInTheDocument();
+    expect(within(region).getByText('準備中 3')).toBeInTheDocument();
   });
 
-  it('未モデル化の店舗状態は統計として表示しないこと', async () => {
-    render(<DashboardPage />);
-    await screen.findByText('総店舗数');
+  it('店舗の管理の権限を持つ者にだけ、店舗数から店舗一覧への導線を出すこと', async () => {
+    withMe(['DASHBOARD_STORES_VIEW', 'STORE_MANAGE']);
+    getStores.mockResolvedValue(STORES);
 
-    expect(screen.queryByText('審査待ち')).not.toBeInTheDocument();
-    expect(screen.queryByText('有効店舗')).not.toBeInTheDocument();
-    expect(screen.queryByText('無効店舗')).not.toBeInTheDocument();
+    render(<DashboardPage />);
+
+    expect(await screen.findByRole('link', { name: '12 店舗' })).toHaveAttribute(
+      'href',
+      '/admin/stores'
+    );
   });
 
-  it('店舗一覧と店舗作成の導線は持たないこと', async () => {
-    render(<DashboardPage />);
-    await screen.findByText('総店舗数');
+  it('店舗の管理の権限が無ければ、数字だけで導線を出さないこと', async () => {
+    withMe(['DASHBOARD_STORES_VIEW']);
+    getStores.mockResolvedValue(STORES);
 
-    expect(screen.queryByText('最近追加された店舗')).not.toBeInTheDocument();
-    expect(screen.queryByText('店舗作成')).not.toBeInTheDocument();
-    expect(screen.queryByText('店舗管理')).not.toBeInTheDocument();
-    // 取得できた姿にボタンは 1 つも無い。失敗時の再試行はこの describe の射程外
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
+    render(<DashboardPage />);
+
+    expect(await screen.findByText('12 店舗')).toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it('区画の権限が無ければ、店舗の管理の権限があっても区画を出さず取得もしないこと', () => {
+    withMe(['STORE_MANAGE', 'STAFF_MANAGE']);
+
+    render(<DashboardPage />);
+
+    expect(storesRegion()).not.toBeInTheDocument();
+    expect(getStores).not.toHaveBeenCalled();
+    expect(
+      screen.getByText('このダッシュボードで表示できる項目がありません。')
+    ).toBeInTheDocument();
+  });
+
+  it('利用者の情報を待つ間は区画を出さないこと', () => {
+    withMe(null);
+
+    render(<DashboardPage />);
+
+    expect(storesRegion()).not.toBeInTheDocument();
+    expect(getStores).not.toHaveBeenCalled();
   });
 });
 
-describe('店舗管理の権限が無い者のダッシュボード', () => {
+describe('担当店舗の取得失敗', () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    meWith(['ORDER_MANAGE']);
-  });
-
-  it('集計を取りに行かず、店舗の情報も出さないこと（店舗の文脈は店舗のダッシュボードにある）', () => {
-    render(<DashboardPage />);
-
-    expect(screen.queryByText('総店舗数')).not.toBeInTheDocument();
-    expect(mockedApi.getStats).not.toHaveBeenCalled();
-  });
-});
-
-describe('ダッシュボードの取得失敗', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
+    withMe(['DASHBOARD_STORES_VIEW']);
   });
 
   it('取得に失敗したら 0 店舗と言わず、区画が失敗を名乗って再試行できること', async () => {
-    mockedApi.getStats.mockRejectedValueOnce(new Error('boom'));
+    getStores.mockRejectedValueOnce(new Error('boom'));
 
     render(<DashboardPage />);
 
-    const region = await screen.findByRole('alert');
-    expect(within(region).getByText('店舗数の取得に失敗しました')).toBeInTheDocument();
+    const alert = await screen.findByRole('alert');
+    expect(within(alert).getByText('担当店舗の取得に失敗しました')).toBeInTheDocument();
     // 読めなかっただけの状態が「0 店舗」という事実に化ける
-    expect(screen.queryByText('総店舗数')).not.toBeInTheDocument();
-    expect(screen.queryByText('0')).not.toBeInTheDocument();
+    expect(screen.queryByText('0 店舗')).not.toBeInTheDocument();
 
-    mockedApi.getStats.mockResolvedValue({ total: 12 });
-    fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
+    getStores.mockResolvedValue(STORES);
+    fireEvent.click(within(alert).getByRole('button', { name: '再試行' }));
 
-    expect(await screen.findByText('12')).toBeInTheDocument();
+    expect(await screen.findByText('12 店舗')).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('二度目の失敗でも読み込み中を経由し、区画が mount し直されること', async () => {
-    mockedApi.getStats.mockRejectedValueOnce(new Error('boom'));
+    getStores.mockRejectedValueOnce(new Error('boom'));
 
     render(<DashboardPage />);
-    const region = await screen.findByRole('alert');
+    const alert = await screen.findByRole('alert');
 
     // 2 回目の解決を保留し、押した直後の姿を観測する
     let failSecond = (): void => {};
-    mockedApi.getStats.mockReturnValueOnce(
+    getStores.mockReturnValueOnce(
       new Promise((_, reject) => {
         failSecond = () => reject(new Error('boom again'));
       })
     );
-    fireEvent.click(within(region).getByRole('button', { name: '再試行' }));
+    fireEvent.click(within(alert).getByRole('button', { name: '再試行' }));
 
     // 読み込み中を経由するので、この時点で区画は一度消えている。消えないまま二度目の失敗を
     // 迎えると role="alert" が再発火せず、読み上げ利用者には何も届かない

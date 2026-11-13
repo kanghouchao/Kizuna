@@ -21,7 +21,7 @@ describe('admin store api wrappers', () => {
     jest.clearAllMocks();
   });
 
-  it('adminStoreApi basic CRUD and stats', async () => {
+  it('adminStoreApi basic CRUD', async () => {
     // 一覧は他一覧と同形の Spring Page 形（0 起点）
     mockGet.mockResolvedValueOnce({
       data: { content: [{ id: '1' }], total_pages: 4, total_elements: 35, size: 10, number: 1 },
@@ -63,11 +63,6 @@ describe('admin store api wrappers', () => {
     mockDelete.mockResolvedValueOnce();
     await adminStoreApi.delete('3');
     expect(mockDelete).toHaveBeenCalledWith('/stores/3');
-
-    mockGet.mockResolvedValueOnce({ data: { total: 1 } });
-    const stats = await adminStoreApi.getStats();
-    expect(stats).toEqual({ total: 1 });
-    expect(mockGet).toHaveBeenCalledWith('/stores/stats');
   });
 });
 

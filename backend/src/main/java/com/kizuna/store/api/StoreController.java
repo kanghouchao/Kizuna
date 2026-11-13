@@ -5,7 +5,6 @@ import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.store.api.dto.AdminStoreCreationResponse;
 import com.kizuna.store.api.dto.AdminStoreResponse;
 import com.kizuna.store.api.dto.StoreCreateDTO;
-import com.kizuna.store.api.dto.StoreStatusVO;
 import com.kizuna.store.api.dto.StoreUpdateDTO;
 import com.kizuna.store.api.dto.StoreVO;
 import com.kizuna.store.application.AdminStoreService;
@@ -106,12 +105,6 @@ public class StoreController {
   public ResponseEntity<Void> delete(@PathVariable String id) {
     storeRegistryService.delete(scope(), id);
     return ResponseEntity.noContent().build();
-  }
-
-  @GetMapping("/stats")
-  @PreAuthorize("hasAuthority('PERM_STORE_MANAGE')")
-  public ResponseEntity<StoreStatusVO> stats() {
-    return ResponseEntity.ok(new StoreStatusVO(storeRegistryService.count(scope())));
   }
 
   private StoreScope scope() {

@@ -40,6 +40,14 @@ Given('店舗の木の権限だけを持つロールで2店舗を担当する従
   await createStaffFixture(request, manager, storeOnlyEmail, storeOnlyPassword, [roleId], storeIds);
 });
 
+// 担当店舗の数は他の feature が足した店舗で変わるので、数そのものではなく区画と内訳が出たことを見る。
+Then('グループのダッシュボードに担当店舗の区画が表示される', async ({ page }) => {
+  const region = page.getByRole('region', { name: '担当店舗' });
+  await expect(region.getByText(/^\d+ 店舗$/)).toBeVisible({ timeout: 15000 });
+  await expect(region.getByText(/^稼働中 \d+$/)).toBeVisible();
+  await expect(region.getByText(/^準備中 \d+$/)).toBeVisible();
+});
+
 When('用意した従業員でログインする', async ({ page }) => {
   await openLoginForm(page);
   await page.getByLabel('メールアドレス', { exact: true }).fill(storeOnlyEmail);

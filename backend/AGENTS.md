@@ -71,4 +71,4 @@ One capability has one endpoint. A read of one store's data declares `@CurrentSt
 
 ### Existing deviations
 
-Do not replicate or opportunistically rename `/staff`, `StoreVO` / `StoreStatusVO` / `MenuVO`, `Token`, or `StoreCreateDTO` / `StoreUpdateDTO`. Existing path-only anonymous matchers do not relax the method-plus-path rule; their repair requires checking sibling methods and optional authentication together.
+Do not replicate or opportunistically rename `/staff`, `StoreVO` / `MenuVO`, `Token`, or `StoreCreateDTO` / `StoreUpdateDTO`. Existing path-only anonymous matchers do not relax the method-plus-path rule; their repair requires checking sibling methods and optional authentication together.

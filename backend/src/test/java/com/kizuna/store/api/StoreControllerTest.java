@@ -247,18 +247,6 @@ class StoreControllerTest {
   }
 
   @Test
-  @DisplayName("GET /stores/stats は店舗数を total で返すこと")
-  @WithMockUser(authorities = "PERM_STORE_MANAGE")
-  void statsWritesTotal() throws Exception {
-    when(storeRegistryService.count(SCOPE)).thenReturn(5L);
-
-    mockMvc
-        .perform(get("/stores/stats"))
-        .andExpect(status().isOk())
-        .andExpect(content().json("{\"total\":5}", JsonCompareMode.STRICT));
-  }
-
-  @Test
   @DisplayName("店舗集合を解決できない要求は店舗の管理で 403 になること")
   @WithMockUser(authorities = "PERM_STORE_MANAGE")
   void unresolvedScopeIsForbidden() throws Exception {

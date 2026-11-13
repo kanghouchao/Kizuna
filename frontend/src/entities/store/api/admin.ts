@@ -1,12 +1,6 @@
 import { apiClient, PageResult, fromSpringPage, toSpringPageParams } from '@/shared/api';
 import { requireId } from '@/shared/lib';
-import {
-  CreateStoreRequest,
-  CreateStoreResponse,
-  Store,
-  StoreStats,
-  UpdateStoreRequest,
-} from '../model/types';
+import { CreateStoreRequest, CreateStoreResponse, Store, UpdateStoreRequest } from '../model/types';
 
 export const adminStoreApi = {
   /** 店舗一覧を取得する。page は他一覧と同じ 0 起点（Spring Page 形） */
@@ -40,9 +34,5 @@ export const adminStoreApi = {
   },
   delete: async (id: string | undefined): Promise<void> => {
     await apiClient.delete(`/stores/${requireId(id, '店舗')}`);
-  },
-  getStats: async (): Promise<StoreStats> => {
-    const response = await apiClient.get('/stores/stats');
-    return response.data;
   },
 };
