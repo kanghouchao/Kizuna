@@ -59,6 +59,10 @@ public enum PermissionCode {
       SystemRole.ADMIN,
       SystemRole.MANAGER),
 
+  /** グループのダッシュボードの店舗別の今月の売上順位（集計の数字だけを開き、運営集計の権限を前提としない）。 */
+  DASHBOARD_SALES_RANKING_VIEW(
+      "店舗別の売上順位", PermissionTree.GROUP, PermissionGroup.DASHBOARD, SystemRole.ADMIN),
+
   /** 受注の閲覧・登録・更新・状態遷移・削除（OrderController）。 */
   ORDER_MANAGE(
       "受注の管理",

@@ -22,4 +22,13 @@ class StoreDashboardReaderTest {
     assertThat(counts).isEqualTo(new StoreStatusCounts(0, 0, 0));
     verifyNoInteractions(em);
   }
+
+  @Test
+  @DisplayName("空の店舗集合の稼働状態は問い合わせを組まずに空を返す")
+  void emptyScopeHasNoStatusesWithoutQuerying() {
+    EntityManager em = mock(EntityManager.class);
+
+    assertThat(new StoreDashboardReader(em).statuses(new StoreScope(Set.of()))).isEmpty();
+    verifyNoInteractions(em);
+  }
 }

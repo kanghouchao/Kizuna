@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { MePending, hasPermission, useMe } from '@/entities/user';
 import { Card, CardContent } from '@/shared/ui';
+import { SalesRankingRegion } from './SalesRankingRegion';
 import { StoresRegion } from './StoresRegion';
 
 /**
@@ -15,6 +16,7 @@ export default function AdminDashboard() {
   const numbers: ReactNode[] = [];
   if (me !== null && hasPermission(me, 'DASHBOARD_STORES_VIEW'))
     numbers.push(<StoresRegion key="stores" canOpenStores={hasPermission(me, 'STORE_MANAGE')} />);
+  const ranking = me !== null && hasPermission(me, 'DASHBOARD_SALES_RANKING_VIEW');
 
   return (
     // 外殻（サイドバー・ヘッダー・幅制約・余白）は (admin) の layout が供給するため、
@@ -23,16 +25,21 @@ export default function AdminDashboard() {
       <h1 className="text-2xl font-bold text-foreground">グループ</h1>
       {me === null ? (
         <MePending />
-      ) : numbers.length === 0 ? (
+      ) : numbers.length === 0 && !ranking ? (
         <NothingToShow />
       ) : (
-        <Card>
-          <CardContent>
-            <div className="grid grid-cols-[repeat(auto-fit,minmax(15rem,1fr))] gap-x-8 gap-y-6">
-              {numbers}
-            </div>
-          </CardContent>
-        </Card>
+        <>
+          {numbers.length > 0 && (
+            <Card>
+              <CardContent>
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(15rem,1fr))] gap-x-8 gap-y-6">
+                  {numbers}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          {ranking && <SalesRankingRegion />}
+        </>
       )}
     </div>
   );

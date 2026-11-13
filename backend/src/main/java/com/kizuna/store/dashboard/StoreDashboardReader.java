@@ -5,6 +5,8 @@ import com.kizuna.store.domain.StoreStatus;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Tuple;
 import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,5 +34,18 @@ public class StoreDashboardReader {
     long preparing = counts.getOrDefault(StoreStatus.PREPARING, 0L);
     long active = counts.getOrDefault(StoreStatus.ACTIVE, 0L);
     return new StoreStatusCounts(preparing + active, preparing, active);
+  }
+
+  @Transactional(readOnly = true)
+  public Map<Long, StoreStatus> statuses(StoreScope scope) {
+    var statuses = new HashMap<Long, StoreStatus>();
+    if (scope.storeIds().isEmpty()) return statuses;
+    em.createQuery(
+            "select s.id, s.status from com.kizuna.store.domain.Store s where s.id in :stores",
+            Tuple.class)
+        .setParameter("stores", scope.storeIds())
+        .getResultList()
+        .forEach(row -> statuses.put(row.get(0, Long.class), row.get(1, StoreStatus.class)));
+    return statuses;
   }
 }
