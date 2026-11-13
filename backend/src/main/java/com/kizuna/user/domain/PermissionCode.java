@@ -27,6 +27,26 @@ public enum PermissionCode {
       SystemRole.MANAGER,
       SystemRole.STAFF),
 
+  /** 店舗のダッシュボードの未処理の予約申請件数（件数だけを開き、受注の一覧の権限を前提としない）。 */
+  DASHBOARD_PENDING_ORDER_APPLICATIONS_VIEW(
+      "未処理の予約申請件数",
+      PermissionTree.STORE,
+      PermissionGroup.DASHBOARD,
+      SystemRole.MANAGER,
+      SystemRole.STAFF),
+
+  /** 店舗のダッシュボードの未処理の出勤希望件数（件数だけを開き、出勤管理の権限を前提としない）。 */
+  DASHBOARD_PENDING_SHIFT_REQUESTS_VIEW(
+      "未処理の出勤希望件数",
+      PermissionTree.STORE,
+      PermissionGroup.DASHBOARD,
+      SystemRole.MANAGER,
+      SystemRole.STAFF),
+
+  /** 店舗のダッシュボードの審査待ちの口コミ件数（件数だけを開き、口コミの閲覧の権限を前提としない）。審査が店長だけなので店長限定。 */
+  DASHBOARD_PENDING_REVIEWS_VIEW(
+      "審査待ちの口コミ件数", PermissionTree.STORE, PermissionGroup.DASHBOARD, SystemRole.MANAGER),
+
   /** 受注の閲覧・登録・更新・状態遷移・削除（OrderController）。 */
   ORDER_MANAGE(
       "受注の管理",

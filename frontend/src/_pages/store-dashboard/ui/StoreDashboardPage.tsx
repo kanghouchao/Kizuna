@@ -1,8 +1,17 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { MePending, hasPermission, useMe, useStoreContext } from '@/entities/user';
+import {
+  MePending,
+  hasPermission,
+  useMe,
+  useStoreContext,
+  type PermissionCode,
+} from '@/entities/user';
+import { storePath } from '@/shared/lib';
 import { Badge } from '@/shared/ui';
+import { dashboardApi } from '../api/dashboard';
+import { PendingWorkRegion, type PendingWork } from './PendingWorkRegion';
 import { TodayOrdersRegion } from './TodayOrdersRegion';
 
 /**
@@ -24,6 +33,34 @@ export default function StoreDashboardPage() {
         canOpenOrders={hasPermission(me, 'ORDER_MANAGE')}
       />
     );
+  const pending: PendingWork[] = [];
+  if (me !== null) {
+    // 件数は区画の権限で、一覧への導線は一覧の権限で出し分ける
+    const listHref = (code: PermissionCode, path: string) =>
+      hasPermission(me, code) ? storePath(currentStoreId, path) : undefined;
+    if (hasPermission(me, 'DASHBOARD_PENDING_ORDER_APPLICATIONS_VIEW'))
+      pending.push({
+        key: 'order-applications',
+        label: '未処理の予約申請',
+        fetchCount: async () => (await dashboardApi.getPendingOrderApplications()).count,
+        href: listHref('ORDER_MANAGE', '/orders'),
+      });
+    if (hasPermission(me, 'DASHBOARD_PENDING_SHIFT_REQUESTS_VIEW'))
+      pending.push({
+        key: 'shift-requests',
+        label: '未処理の出勤希望',
+        fetchCount: async () => (await dashboardApi.getPendingShiftRequests()).count,
+        href: listHref('SHIFT_MANAGE', '/shifts'),
+      });
+    if (hasPermission(me, 'DASHBOARD_PENDING_REVIEWS_VIEW'))
+      pending.push({
+        key: 'reviews',
+        label: '審査待ちの口コミ',
+        fetchCount: async () => (await dashboardApi.getPendingReviews()).count,
+        href: listHref('REVIEW_VIEW', '/reviews'),
+      });
+  }
+  if (pending.length > 0) today.push(<PendingWorkRegion key="pending-work" rows={pending} />);
 
   return (
     <div className="space-y-6">
