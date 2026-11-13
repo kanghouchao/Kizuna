@@ -8,12 +8,19 @@ jest.mock('@/entities/user/model/MeContext', () => ({
   useMe: jest.fn(),
 }));
 jest.mock('../api/dashboard', () => ({
-  dashboardApi: { getStores: jest.fn(), getSalesRanking: jest.fn() },
+  dashboardApi: { getStores: jest.fn(), getSalesRanking: jest.fn(), getSales: jest.fn() },
 }));
 
 const getStores = jest.mocked(dashboardApi.getStores);
 const getSalesRanking = jest.mocked(dashboardApi.getSalesRanking);
+const getSales = jest.mocked(dashboardApi.getSales);
 const STORES = { total: 12, preparing: 3, active: 9 };
+const SALES = {
+  business_date: '2026-11-12',
+  today: { sales: 98_765_432, order_count: 41 },
+  month_to_date: { sales: 12_345_678, order_count: 1_234 },
+  previous_month_to_date: { sales: 10_000_000, order_count: 1_000 },
+};
 
 const withMe = (permissions: PermissionCode[] | null) =>
   jest.mocked(useMe).mockReturnValue({
@@ -35,9 +42,12 @@ const withMe = (permissions: PermissionCode[] | null) =>
 
 const storesRegion = () => screen.queryByRole('region', { name: '担当店舗' });
 
+const statOf = (title: string) => screen.getByRole('region', { name: title });
+
 beforeEach(() => {
   getStores.mockReset();
   getSalesRanking.mockReset();
+  getSales.mockReset();
 });
 
 describe('グループのダッシュボード', () => {
@@ -87,6 +97,56 @@ describe('グループのダッシュボード', () => {
     ).toBeInTheDocument();
   });
 
+  it('売上の区画の権限があれば、今日と今月の売上と件数を出し、増減は今月だけに前月同時点と並べること', async () => {
+    withMe(['DASHBOARD_SALES_SET_VIEW']);
+    getSales.mockResolvedValue(SALES);
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByRole('region', { name: '今日の売上' })).toHaveTextContent(
+      '¥98,765,432'
+    );
+    expect(statOf('今日の売上')).toHaveTextContent('完了 41 件');
+    expect(statOf('今日の売上')).not.toHaveTextContent('前月同時点');
+    expect(statOf('今月の売上')).toHaveTextContent('¥12,345,678');
+    expect(statOf('今月の売上')).toHaveTextContent('完了 1,234 件');
+    expect(statOf('今月の売上')).toHaveTextContent('+23.5%');
+    expect(statOf('今月の売上')).toHaveTextContent('前月同時点 ¥10,000,000');
+    expect(storesRegion()).not.toBeInTheDocument();
+    expect(getStores).not.toHaveBeenCalled();
+    expect(
+      screen.queryByText('このダッシュボードで表示できる項目がありません。')
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it('横断の運営集計を開ける者にだけ、売上の金額から運営集計への導線を出すこと', async () => {
+    withMe(['DASHBOARD_SALES_SET_VIEW', 'OPERATIONAL_REPORT_SET_VIEW']);
+    getSales.mockResolvedValue(SALES);
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByRole('link', { name: '¥12,345,678' })).toHaveAttribute(
+      'href',
+      '/admin/operational-reports'
+    );
+    expect(screen.getByRole('link', { name: '¥98,765,432' })).toHaveAttribute(
+      'href',
+      '/admin/operational-reports'
+    );
+  });
+
+  it('担当店舗の区画の権限だけなら、売上を取得しないこと', async () => {
+    withMe(['DASHBOARD_STORES_VIEW']);
+    getStores.mockResolvedValue(STORES);
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByText('12 店舗')).toBeInTheDocument();
+    expect(getSales).not.toHaveBeenCalled();
+    expect(screen.queryByRole('region', { name: '今日の売上' })).not.toBeInTheDocument();
+  });
+
   it('利用者の情報を待つ間は区画を出さないこと', () => {
     withMe(null);
 
@@ -94,6 +154,32 @@ describe('グループのダッシュボード', () => {
 
     expect(storesRegion()).not.toBeInTheDocument();
     expect(getStores).not.toHaveBeenCalled();
+    expect(getSales).not.toHaveBeenCalled();
+  });
+});
+
+describe('売上の取得失敗', () => {
+  it('取得に失敗したら ¥0 と言わず、失敗を一度だけ名乗って再試行できること', async () => {
+    withMe(['DASHBOARD_SALES_SET_VIEW', 'DASHBOARD_STORES_VIEW']);
+    getStores.mockResolvedValue(STORES);
+    getSales.mockRejectedValueOnce(new Error('boom'));
+
+    render(<DashboardPage />);
+
+    const alert = await screen.findByRole('alert');
+    expect(within(alert).getByText('売上の取得に失敗しました')).toBeInTheDocument();
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.queryByText('¥0')).not.toBeInTheDocument();
+    // 担当店舗の区画は売上の失敗に巻き込まれない
+    expect(await screen.findByText('12 店舗')).toBeInTheDocument();
+
+    getSales.mockResolvedValue(SALES);
+    fireEvent.click(within(alert).getByRole('button', { name: '再試行' }));
+
+    expect(await screen.findByRole('region', { name: '今月の売上' })).toHaveTextContent(
+      '¥12,345,678'
+    );
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
 

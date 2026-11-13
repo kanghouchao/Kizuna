@@ -64,6 +64,22 @@ Then('グループのダッシュボードに店舗別の売上順位の区画�
   await expect(page.getByRole('region', { name: '店舗別の今月の売上' })).toHaveCount(0);
 });
 
+Then('グループのダッシュボードに売上の区画が表示される', async ({ page }) => {
+  for (const name of ['今日の売上', '今月の売上']) {
+    const region = page.getByRole('region', { name, exact: true });
+    await expect(region.getByText(/^¥[\d,]+$/)).toBeVisible({ timeout: 15000 });
+    await expect(region.getByText(/^完了 [\d,]+ 件$/)).toBeVisible();
+  }
+  await expect(page.getByRole('region', { name: '今月の売上', exact: true }).getByText(/前月同時点 ¥[\d,]+/)).toBeVisible();
+});
+
+// 既定授与は統括だけ。担当店舗の区画が描けた後で確かめ、まだ描かれていないだけの不在と区別する。
+Then('グループのダッシュボードに売上の区画が表示されない', async ({ page }) => {
+  await expect(page.getByRole('region', { name: '担当店舗' }).getByText(/^\d+ 店舗$/)).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole('region', { name: '今日の売上', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: '今月の売上', exact: true })).toHaveCount(0);
+});
+
 When('用意した従業員でログインする', async ({ page }) => {
   await openLoginForm(page);
   await page.getByLabel('メールアドレス', { exact: true }).fill(storeOnlyEmail);

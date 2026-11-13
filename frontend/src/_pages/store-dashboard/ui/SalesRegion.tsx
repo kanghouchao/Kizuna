@@ -1,11 +1,17 @@
 'use client';
 
-import { ArrowDownRightIcon, ArrowUpRightIcon } from 'lucide-react';
-import Link from 'next/link';
-import type { ReactNode } from 'react';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from 'recharts';
-import { cn, formatMoney, storePath, useResource } from '@/shared/lib';
-import { Card, CardContent, CardHeader, CardTitle, RegionError, Skeleton } from '@/shared/ui';
+import { formatMoney, storePath, useResource } from '@/shared/lib';
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  RegionError,
+  SalesStat,
+  SalesStatSkeleton,
+  Skeleton,
+} from '@/shared/ui';
 import {
   ChartContainer,
   ChartTooltip,
@@ -53,10 +59,10 @@ export function SalesRegion({
         <Card>
           <CardContent>
             {sales === null ? (
-              <StatSkeleton />
+              <SalesStatSkeleton />
             ) : (
-              <Stat
-                note="今日の売上"
+              <SalesStat
+                title="今日の売上"
                 amount={sales.today.sales}
                 count={sales.today.order_count}
                 href={reportHref}
@@ -67,19 +73,14 @@ export function SalesRegion({
         <Card>
           <CardContent>
             {sales === null ? (
-              <StatSkeleton />
+              <SalesStatSkeleton />
             ) : (
-              <Stat
-                note="今月の売上"
+              <SalesStat
+                title="今月の売上"
                 amount={sales.month_to_date.sales}
                 count={sales.month_to_date.order_count}
                 href={reportHref}
-                delta={
-                  <Delta
-                    now={sales.month_to_date.sales}
-                    before={sales.previous_month_to_date.sales}
-                  />
-                }
+                previous={sales.previous_month_to_date.sales}
               />
             )}
           </CardContent>
@@ -99,75 +100,6 @@ export function SalesRegion({
         </CardContent>
       </Card>
     </>
-  );
-}
-
-/** 統計カードの中身: 注釈・数値・増減の順（DESIGN.md）。 */
-function Stat({
-  note,
-  amount,
-  count,
-  href,
-  delta,
-}: {
-  note: string;
-  amount: number;
-  count: number;
-  href?: string;
-  delta?: ReactNode;
-}) {
-  return (
-    <div className="min-w-0 space-y-1">
-      <p className="text-sm text-muted-foreground">{note}</p>
-      <p className="text-3xl font-bold tabular-nums text-foreground">
-        {href === undefined ? (
-          formatMoney(amount)
-        ) : (
-          <Link
-            href={href}
-            className="rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-          >
-            {formatMoney(amount)}
-          </Link>
-        )}
-      </p>
-      <p className="text-sm tabular-nums text-muted-foreground">完了 {count} 件</p>
-      {delta}
-    </div>
-  );
-}
-
-/** 前月同時点との増減。前月同時点が 0 なら率は出せないので金額だけを並べる。 */
-function Delta({ now, before }: { now: number; before: number }) {
-  const label = <span className="text-muted-foreground">前月同時点 {formatMoney(before)}</span>;
-  if (before === 0) return <p className="text-sm tabular-nums">{label}</p>;
-  const rate = ((now - before) / before) * 100;
-  const up = rate >= 0;
-  const Icon = up ? ArrowUpRightIcon : ArrowDownRightIcon;
-  return (
-    <p className="flex flex-wrap items-center gap-x-1 text-sm">
-      <span
-        className={cn(
-          'inline-flex items-center gap-0.5 font-medium tabular-nums',
-          up ? 'text-success-strong' : 'text-destructive-strong'
-        )}
-      >
-        <Icon className="size-4" aria-hidden />
-        {up ? '+' : '−'}
-        {Math.abs(rate).toFixed(1)}%
-      </span>
-      {label}
-    </p>
-  );
-}
-
-function StatSkeleton() {
-  return (
-    <div className="space-y-3">
-      <Skeleton className="h-4 w-24" />
-      <Skeleton className="h-8 w-40" />
-      <Skeleton className="h-4 w-32" />
-    </div>
   );
 }
 

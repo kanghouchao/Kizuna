@@ -12,7 +12,7 @@ public record SalesResponse(
     Totals previousMonthToDate,
     List<Day> daily) {
   public record Totals(long sales, long orderCount) {
-    static Totals from(SalesTotals totals) {
+    public static Totals from(SalesTotals totals) {
       return new Totals(totals.sales(), totals.orderCount());
     }
   }

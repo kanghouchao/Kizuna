@@ -1,5 +1,6 @@
 package com.kizuna.reporting;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -27,6 +28,16 @@ class OperationalReportScopeTest {
     assertThatThrownBy(
             () -> reader.groupWide(null, LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30)))
         .isInstanceOf(AccessDeniedException.class);
+    verifyNoInteractions(manager);
+  }
+
+  @Test
+  void emptyScopeReturnsNoStoresBeforeQuery() {
+    var facts =
+        reader.groupWide(
+            new StoreScope(Set.of()), LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30));
+    assertThat(facts.stores()).isEmpty();
+    assertThat(facts.orders()).isEmpty();
     verifyNoInteractions(manager);
   }
 

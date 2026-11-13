@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { MePending, hasPermission, useMe } from '@/entities/user';
 import { Card, CardContent } from '@/shared/ui';
 import { SalesRankingRegion } from './SalesRankingRegion';
+import { SalesRegion } from './SalesRegion';
 import { StoresRegion } from './StoresRegion';
 
 /**
@@ -14,6 +15,10 @@ export default function AdminDashboard() {
   const { me } = useMe();
 
   const numbers: ReactNode[] = [];
+  if (me !== null && hasPermission(me, 'DASHBOARD_SALES_SET_VIEW'))
+    numbers.push(
+      <SalesRegion key="sales" canOpenReports={hasPermission(me, 'OPERATIONAL_REPORT_SET_VIEW')} />
+    );
   if (me !== null && hasPermission(me, 'DASHBOARD_STORES_VIEW'))
     numbers.push(<StoresRegion key="stores" canOpenStores={hasPermission(me, 'STORE_MANAGE')} />);
   const ranking = me !== null && hasPermission(me, 'DASHBOARD_SALES_RANKING_VIEW');
