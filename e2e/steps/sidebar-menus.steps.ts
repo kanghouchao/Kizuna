@@ -48,6 +48,22 @@ Then('グループのダッシュボードに担当店舗の区画が表示さ�
   await expect(region.getByText(/^準備中 \d+$/)).toBeVisible();
 });
 
+// 店舗の数と売上は他の feature の行で変わるので、区画と、行があればその行の行き先だけを見る。
+Then('グループのダッシュボードに店舗別の売上順位の区画が表示される', async ({ page }) => {
+  const region = page.getByRole('region', { name: '店舗別の今月の売上' });
+  const rows = region.getByRole('link');
+  await expect(rows.first().or(region.getByText('担当店舗がありません。'))).toBeVisible({
+    timeout: 15000,
+  });
+  if ((await rows.count()) > 0)
+    await expect(rows.first()).toHaveAttribute('href', /^\/store\/\d+\/dashboard$/);
+});
+
+Then('グループのダッシュボードに店舗別の売上順位の区画が表示されない', async ({ page }) => {
+  await expect(page.getByRole('region', { name: '担当店舗' })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole('region', { name: '店舗別の今月の売上' })).toHaveCount(0);
+});
+
 When('用意した従業員でログインする', async ({ page }) => {
   await openLoginForm(page);
   await page.getByLabel('メールアドレス', { exact: true }).fill(storeOnlyEmail);

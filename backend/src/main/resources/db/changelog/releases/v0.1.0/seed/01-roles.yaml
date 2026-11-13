@@ -38,6 +38,10 @@ databaseChangeLog:
         - insert:
             tableName: t_permissions
             columns:
+              - column: { name: code, value: DASHBOARD_SALES_RANKING_VIEW }
+        - insert:
+            tableName: t_permissions
+            columns:
               - column: { name: code, value: ADVERTISING_COST_VIEW }
         - insert:
             tableName: t_permissions
@@ -296,7 +300,12 @@ databaseChangeLog:
               - column: { name: name, value: "スタッフ" }
               - column: { name: is_system, valueBoolean: true }
 
-        # 統括: 初期授与 24 権限
+        # 統括: 初期授与 25 権限
+        - insert:
+            tableName: t_role_permissions
+            columns:
+              - column: { name: role_id, valueComputed: "(SELECT id FROM t_roles WHERE name = '統括')" }
+              - column: { name: permission_id, valueComputed: "(SELECT id FROM t_permissions WHERE code = 'DASHBOARD_SALES_RANKING_VIEW')" }
         - insert:
             tableName: t_role_permissions
             columns:
