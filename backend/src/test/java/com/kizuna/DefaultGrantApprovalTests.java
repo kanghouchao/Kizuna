@@ -21,6 +21,7 @@ import static com.kizuna.user.domain.PermissionCode.DASHBOARD_PENDING_ORDER_APPL
 import static com.kizuna.user.domain.PermissionCode.DASHBOARD_PENDING_REVIEWS_VIEW;
 import static com.kizuna.user.domain.PermissionCode.DASHBOARD_PENDING_SHIFT_REQUESTS_VIEW;
 import static com.kizuna.user.domain.PermissionCode.DASHBOARD_SALES_VIEW;
+import static com.kizuna.user.domain.PermissionCode.DASHBOARD_STORES_VIEW;
 import static com.kizuna.user.domain.PermissionCode.DASHBOARD_TODAY_ORDERS_VIEW;
 import static com.kizuna.user.domain.PermissionCode.GUARANTEE_MANAGE;
 import static com.kizuna.user.domain.PermissionCode.MEMBER_NOTIFICATION_MANAGE;
@@ -101,6 +102,7 @@ class DefaultGrantApprovalTests {
           Map.entry(DASHBOARD_PENDING_SHIFT_REQUESTS_VIEW, Set.of(MANAGER, STAFF)),
           Map.entry(DASHBOARD_PENDING_REVIEWS_VIEW, Set.of(MANAGER)),
           Map.entry(DASHBOARD_SALES_VIEW, Set.of(MANAGER)),
+          Map.entry(DASHBOARD_STORES_VIEW, Set.of(ADMIN, MANAGER)),
           Map.entry(STORE_MANAGE, Set.of(ADMIN)),
           Map.entry(ROLE_MANAGE, Set.of(ADMIN)),
           Map.entry(STAFF_CREDENTIAL_MANAGE, Set.of(ADMIN, MANAGER)),

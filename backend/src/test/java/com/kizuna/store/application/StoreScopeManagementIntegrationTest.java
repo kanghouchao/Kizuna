@@ -130,16 +130,14 @@ class StoreScopeManagementIntegrationTest {
         .doesNotContain(storeB);
     assertThat(stores.list(all, null, PageRequest.of(0, 100)).map(StoreView::id))
         .contains(storeA, storeB);
-    assertThat(stores.count(onlyA)).isEqualTo(1);
   }
 
   @Test
-  void emptySetListsCountsAndAuthorizesNoStore() {
+  void emptySetListsAndAuthorizesNoStore() {
     var empty = new StoreScope(Set.of());
 
     assertThat(stores.list(empty, null, PageRequest.of(0, 10))).isEmpty();
     assertThat(stores.list(empty, "検証店", PageRequest.of(0, 10))).isEmpty();
-    assertThat(stores.count(empty)).isZero();
     assertThatThrownBy(() -> stores.getById(empty, String.valueOf(storeA)))
         .isInstanceOf(NotFoundException.class);
     var holder = context.getBean(StoreScopeHolder.class);

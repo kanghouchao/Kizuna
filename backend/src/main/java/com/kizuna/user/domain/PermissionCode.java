@@ -51,6 +51,14 @@ public enum PermissionCode {
   DASHBOARD_SALES_VIEW(
       "売上の概況", PermissionTree.STORE, PermissionGroup.DASHBOARD, SystemRole.MANAGER),
 
+  /** グループのダッシュボードの担当店舗数と稼働状態の内訳（集計の数字だけを開き、店舗の管理の権限を前提としない）。 */
+  DASHBOARD_STORES_VIEW(
+      "担当店舗の状況",
+      PermissionTree.GROUP,
+      PermissionGroup.DASHBOARD,
+      SystemRole.ADMIN,
+      SystemRole.MANAGER),
+
   /** 受注の閲覧・登録・更新・状態遷移・削除（OrderController）。 */
   ORDER_MANAGE(
       "受注の管理",

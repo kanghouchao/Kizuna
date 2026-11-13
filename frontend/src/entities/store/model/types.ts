@@ -27,9 +27,3 @@ export interface UpdateStoreRequest {
   name: string;
   short_name: string;
 }
-
-// 店舗統計データ
-export interface StoreStats {
-  // Java 側が primitive の long のため、キーは必ず応答に含まれる
-  total: number;
-}

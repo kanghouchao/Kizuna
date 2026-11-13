@@ -27,7 +27,7 @@ class PermissionControllerTest {
   void groupsInDeclarationOrderWithoutEmptyOnes() {
     assertThat(groupsOf("GROUP"))
         .extracting(PermissionGroupResponse::group)
-        .containsExactly("BUSINESS", "CAST", "CUSTOMER", "ORGANIZATION", "OPERATION");
+        .containsExactly("DASHBOARD", "BUSINESS", "CAST", "CUSTOMER", "ORGANIZATION", "OPERATION");
     assertThat(groupsOf("STORE"))
         .extracting(PermissionGroupResponse::group)
         .containsExactly("DASHBOARD", "BUSINESS", "CAST", "CUSTOMER", "OPERATION");

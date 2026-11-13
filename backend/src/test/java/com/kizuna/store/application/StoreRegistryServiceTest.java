@@ -333,19 +333,6 @@ class StoreRegistryServiceTest {
   }
 
   @Test
-  void count_returnsStoreCount() {
-    when(storeRepository.count(ArgumentMatchers.<Specification<Store>>any())).thenReturn(5L);
-
-    assertThat(storeRegistryService.count(ALL)).isEqualTo(5L);
-  }
-
-  @Test
-  void count_emptyScopeIsZeroWithoutQuerying() {
-    assertThat(storeRegistryService.count(new StoreScope(Set.of()))).isZero();
-    verify(storeRepository, never()).count(ArgumentMatchers.<Specification<Store>>any());
-  }
-
-  @Test
   void list_emptyScopeIsEmptyWithoutQuerying() {
     assertThat(storeRegistryService.list(new StoreScope(Set.of()), null, PageRequest.of(0, 10)))
         .isEmpty();
