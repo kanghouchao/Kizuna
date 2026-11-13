@@ -25,6 +25,7 @@ export * from './popover';
 export * from './portal-tier';
 export * from './radio-group';
 export * from './region-error';
+export * from './sales-stat';
 export * from './segmented';
 export * from './select';
 export * from './skeleton';

@@ -20,9 +20,25 @@ export interface SalesRanking {
   }[];
 }
 
+/** 完了受注の料金合計と件数。数え方は運営集計と同じ（誤完了の無効化を受けた受注は数えない）。 */
+export interface SalesTotals {
+  sales: number;
+  order_count: number;
+}
+
+/** 呼び出し者の店舗集合の今日・今月・前月同時点の売上の合計。 */
+export interface CrossStoreSales {
+  business_date: string;
+  today: SalesTotals;
+  month_to_date: SalesTotals;
+  previous_month_to_date: SalesTotals;
+}
+
 export const dashboardApi = {
   getStores: async (): Promise<AssignedStores> =>
     (await apiClient.get<AssignedStores>('/dashboard/stores')).data,
   getSalesRanking: async (): Promise<SalesRanking> =>
     (await apiClient.get<SalesRanking>('/dashboard/sales-ranking')).data,
+  getSales: async (): Promise<CrossStoreSales> =>
+    (await apiClient.get<CrossStoreSales>('/dashboard/sales/cross-store')).data,
 };
