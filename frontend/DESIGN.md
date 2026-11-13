@@ -100,7 +100,7 @@ default / modern / classic は同一の `--storefront-*` 契約を各 theme.css 
 
 ## コンポーネント
 
-既存 primitive を `@/shared/ui` から使う。vendored への画面別変更は consumer の className で表す。
+既存 primitive を `@/shared/ui` から使う（chart だけは `@/shared/ui/chart` から）。vendored への画面別変更は consumer の className で表す。
 
 | 用途             | 規則                                                                                                                                                                                                  |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -122,6 +122,8 @@ default / modern / classic は同一の `--storefront-*` 契約を各 theme.css 
 - 裸の操作要素は `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary`。この ring はカード／ページ面でのみ認証済み。overflow で切れる場合は ring-inset を検討し、背景も再検証する。
 - sidebar は左端の文脈レール（56px）と、その文脈のメニューだけを出すパネル（200px）からなり、全画面幅で表示する。レールは「グループ」（icon のみ）、区切り線、授権店舗の略称（作成日の新しい順。40px 角、`aria-label` / `title` は店名）を縦に並べ、はみ出せばレールだけが縦スクロールする。「グループ」はグループの木の権限を持つ利用者にだけ、店舗は店舗の木の権限を持つ利用者にだけ授権店舗すべてを出す（どちらの木もメニュー API が返すかどうかで決まり、項目のパスでは分けない）。文脈が 1 つしか無い利用者にはレールを出さない。レールの各項目はその文脈のダッシュボードへのリンクで、選択は URL だけで決まる（`/admin/**` はグループ、`/store/{storeId}/**` はその店舗。選択中は `aria-current="page"`）。レールの選択は `bg-primary/10 text-primary-strong ring-2 ring-primary`、非選択 hover は `bg-muted text-foreground`。パネルは見出しに文脈名（長い名前は省略表示）、最上段にその木のダッシュボード、続けて項目のある区分見出しだけを出す。どの木も持たない利用者にはダッシュボードへの導線だけを出す。パネルの項目は高さ 40px・icon 20px・文字 14px。選択は primary tint と strong の縁、非選択 hover は `bg-muted text-foreground`。グループ見出しは折り畳まない。ヘッダーに店舗切替は置かない。
 - 統計カードは注釈・数値・増減の順。カテゴリ chip は chart tint と foreground。ランキングは 32px の primary tint の順位と名前、右端に金額／件数。
+- 統計カードの増減は前期比の率と比較元の金額を並べ、増は `text-success-strong`、減は `text-destructive-strong` に向きの icon を添える。比較元が 0 なら率を出さず金額だけを出す。
+- グラフは shadcn chart（`@/shared/ui/chart` の `ChartContainer` / `ChartTooltip`。Recharts）だけで描き、別のグラフ部品を足さない。系列の色は `ChartConfig` の `color: 'var(--primary-strong)'` を `var(--color-<key>)` で参照する（棒は 3:1 の図形対比を満たす `primary-strong`。`chart-*` は薄い背景専用なので塗りに使わない）。軸線・目盛線は消し、横の補助線だけを残す。金額の軸は万単位で略し、正確な金額は tooltip に `formatMoney` で出す。高さは固定（`h-64` 程度）し、幅はカードに追従させる。
 - 選択 preview は label 内の sr-only radio、選択時 `border-primary ring-2 ring-primary bg-primary/10`。説明は未選択時だけ muted、hover／選択時は foreground。focus-visible を label に伝播する。
 
 ### ダイアログか画面か
@@ -295,7 +297,7 @@ RegionError の `message` と、`onRetry` または `fallback: {href,label}` の
 
 ## 共有 UI とテスト
 
-vendored は combobox / alert-dialog / button / card / dialog / select / form / table / badge / popover / skeleton / tabs / dropdown-menu / checkbox / switch / radio-group / input / label / textarea。整形以外は生成状態を保つ。
+vendored は chart / combobox / alert-dialog / button / card / dialog / select / form / table / badge / popover / skeleton / tabs / dropdown-menu / checkbox / switch / radio-group / input / label / textarea。整形以外は生成状態を保つ。
 
 image-upload / auth-layout / theme-provider / confirm-dialog / dialog-frame / table-card / toast / region-error / pager / key-value / change-table / status-badge / segmented / store-chips / month-picker / bottom-sheet / list-row / money / empty-state / portal-tier は自作で、用途に応じて編集する。分類の正本はこの一覧。data-slot や Base UI import だけでは区別できず、未知のファイルは git log で確認する。
 
