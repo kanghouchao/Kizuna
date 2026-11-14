@@ -5,9 +5,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -27,6 +29,7 @@ import com.kizuna.survey.domain.SurveyValues.QuestionType;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -38,13 +41,17 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 /** handler が X-Store-ID で名乗られた店舗をそのまま service へ渡すことの単体テスト。 */
 @WebMvcTest({SurveyController.class, SurveyResponseController.class})
@@ -234,6 +241,73 @@ class SurveyControllerTest {
                     SurveyRevision::getId)));
     assertThat(answers.getValue().getPageNumber()).isEqualTo(2);
     assertThat(answers.getValue().getPageSize()).isEqualTo(20);
+  }
+
+  private static final List<String> ALL =
+      List.of("PERM_SURVEY_VIEW", "PERM_SURVEY_MANAGE", "PERM_SURVEY_RECORD");
+
+  private record Guarded(MockHttpServletRequestBuilder request, List<String> required) {}
+
+  private static List<Guarded> guarded() {
+    var view = List.of("PERM_SURVEY_VIEW");
+    var manage = List.of("PERM_SURVEY_VIEW", "PERM_SURVEY_MANAGE");
+    var record = List.of("PERM_SURVEY_VIEW", "PERM_SURVEY_RECORD");
+    String revision = "/surveys/s1/revisions/r1";
+    return List.of(
+        new Guarded(get("/surveys"), view),
+        new Guarded(get("/surveys/s1"), view),
+        new Guarded(get("/surveys/s1/revisions"), view),
+        new Guarded(get(revision), view),
+        new Guarded(get(revision + "/response-counts"), view),
+        new Guarded(get(revision + "/responses"), view),
+        new Guarded(get(revision + "/history"), view),
+        new Guarded(get("/survey-responses/101"), view),
+        new Guarded(get("/survey-responses/101/history"), view),
+        new Guarded(post("/surveys"), manage),
+        new Guarded(post("/surveys/s1/revisions"), manage),
+        new Guarded(put(revision), manage),
+        new Guarded(post(revision + "/openings"), manage),
+        new Guarded(post(revision + "/closures"), manage),
+        new Guarded(post(revision + "/responses"), record),
+        new Guarded(post("/survey-responses/101/withdrawals"), record),
+        new Guarded(post("/survey-responses/101/corrections"), record));
+  }
+
+  @Test
+  @DisplayName("どの端点も、必要な権限を一つでも欠く要求を 403 で拒み service を呼ばないこと")
+  void everyEndpointRejectsACallerMissingARequiredPermission() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    for (var endpoint : guarded())
+      for (var missing : endpoint.required())
+        mockMvc
+            .perform(
+                endpoint
+                    .request()
+                    .with(holding(ALL.stream().filter(p -> !p.equals(missing)).toList()))
+                    .header("X-Store-ID", STORE_ID.toString())
+                    .contentType("application/json")
+                    .content("{}"))
+            .andExpect(status().isForbidden());
+
+    verifyNoInteractions(service, reads);
+  }
+
+  /** 権限の判定だけを見るため、店舗集合の照合が掛からない Bearer 以外の主体を文脈と principal の両方に載せる。 */
+  private static RequestPostProcessor holding(List<String> permissions) {
+    var token =
+        new UsernamePasswordAuthenticationToken(
+            "user", "unused", permissions.stream().map(SimpleGrantedAuthority::new).toList());
+    SecurityContextHolder.getContext().setAuthentication(token);
+    return request -> {
+      request.setUserPrincipal(token);
+      return request;
+    };
+  }
+
+  @AfterEach
+  void clearAuthentication() {
+    SecurityContextHolder.clearContext();
   }
 
   private static SurveyRevision revision() {

@@ -34,6 +34,7 @@ import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -409,6 +410,59 @@ class NotificationDeliveryControllerTest {
         staff("PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_MANAGE", "PERM_NOTIFICATION_SEND");
     for (var request : requests("/member-notification-deliveries", store))
       mockMvc.perform(request).andExpect(status().isForbidden());
+
+    verifyNoInteractions(notifications);
+  }
+
+  @Test
+  @DisplayName("会員宛の通知の権限だけでは、どの端点でも店舗の通知に到達できないこと")
+  void memberNotificationPermissionsDoNotOpenStoreRows() throws Exception {
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(STORE_ID)));
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    var member =
+        staff(
+            "PERM_MEMBER_NOTIFICATION_VIEW",
+            "PERM_MEMBER_NOTIFICATION_MANAGE",
+            "PERM_MEMBER_NOTIFICATION_SEND");
+    for (var request : requests("/notification-deliveries", member))
+      mockMvc
+          .perform(request.header("X-Store-ID", STORE_ID.toString()))
+          .andExpect(status().isForbidden());
+
+    verifyNoInteractions(notifications);
+  }
+
+  @Test
+  @DisplayName("店舗の行・会員宛の行のどの端点も、必要な権限を一つでも欠く要求を 403 で拒み service を呼ばないこと")
+  void everyEndpointRejectsACallerMissingARequiredPermission() throws Exception {
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(STORE_ID)));
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    for (var prefix : List.of("PERM_NOTIFICATION_", "PERM_MEMBER_NOTIFICATION_")) {
+      String base =
+          prefix.contains("MEMBER")
+              ? "/member-notification-deliveries"
+              : "/notification-deliveries";
+      for (var missing : List.of("VIEW", "MANAGE", "SEND")) {
+        var held =
+            staff(
+                Stream.of("VIEW", "MANAGE", "SEND")
+                    .filter(p -> !p.equals(missing))
+                    .map(prefix::concat)
+                    .toArray(String[]::new));
+        var all = requests(base, held);
+        var needing =
+            switch (missing) {
+              case "VIEW" -> all;
+              case "SEND" -> all.subList(3, 6);
+              default -> all.subList(6, 7);
+            };
+        for (var request : needing)
+          mockMvc
+              .perform(request.header("X-Store-ID", STORE_ID.toString()))
+              .andExpect(status().isForbidden());
+      }
+    }
 
     verifyNoInteractions(notifications);
   }

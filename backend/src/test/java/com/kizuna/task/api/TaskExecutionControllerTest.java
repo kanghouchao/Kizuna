@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -120,6 +121,34 @@ class TaskExecutionControllerTest {
         .andExpect(status().isForbidden());
 
     verify(options, never()).uncoveredStores(any());
+  }
+
+  @Test
+  @DisplayName("どの端点も、処理の管理権限を欠く要求を 403 で拒み、何も読まず実行もしないこと")
+  void everyEndpointRequiresTaskManage() throws Exception {
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(3L)));
+    var other = jwt("PERM_TASK_EXECUTE", "PERM_AUDIT_VIEW");
+    String reason = "{\"reason\":\"確認\"}";
+    String execution =
+        "{\"task_name\":\"NOTIFICATION_DELIVER\",\"logical_key\":\"k\",\"service_user_id\":10,"
+            + "\"period_start\":\"2026-10-07\",\"period_end\":\"2026-10-07\"}";
+    for (var request :
+        List.of(
+            get("/task-executions"),
+            get("/task-executions/service-identities"),
+            get("/task-executions/task-types"),
+            get("/task-executions/uncovered-stores"),
+            get("/task-executions/1"),
+            post("/task-executions").contentType(MediaType.APPLICATION_JSON).content(execution),
+            post("/task-executions/1/retries")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(reason),
+            post("/task-executions/1/interruption")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(reason)))
+      mockMvc.perform(request.with(other)).andExpect(status().isForbidden());
+
+    verifyNoInteractions(executor, options, lifecycle, query, identities);
   }
 
   private static RequestPostProcessor jwt(String... permissions) {
