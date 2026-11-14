@@ -1,5 +1,6 @@
 package com.kizuna.memberconsole.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -34,7 +35,6 @@ import com.kizuna.user.application.StoreScopeResolver;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Set;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -48,10 +48,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
@@ -77,11 +73,6 @@ class MemberConsoleControllerTest {
   @MockitoBean private SystemConfigService systemConfigService;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
   @MockitoBean private StoreScopeResolver storeScopeResolver;
-
-  @AfterEach
-  void clearSecurityContext() {
-    SecurityContextHolder.clearContext();
-  }
 
   @Test
   @DisplayName("MEMBER_VIEW が無い職員には一覧も詳細も 403 で、service に到達しないこと")
@@ -276,22 +267,8 @@ class MemberConsoleControllerTest {
     return post("/members/7/withdrawal").contentType(MediaType.APPLICATION_JSON).content(body);
   }
 
-  /** 検証済み Bearer トークンの職員。認可（SecurityContext）と handler の Principal の両方へ同じ認証を置く。 */
   private static RequestPostProcessor staff(String... authorities) {
-    Jwt jwt =
-        Jwt.withTokenValue("token")
-            .header("alg", "HS256")
-            .subject("staff@example.com")
-            .claim("userId", STAFF_USER_ID)
-            .build();
-    var authentication =
-        new JwtAuthenticationToken(
-            jwt, java.util.Arrays.stream(authorities).map(SimpleGrantedAuthority::new).toList());
-    return request -> {
-      SecurityContextHolder.getContext().setAuthentication(authentication);
-      request.setUserPrincipal(authentication);
-      return request;
-    };
+    return jwtUser(STAFF_USER_ID, authorities);
   }
 
   private static MemberSummary summary(long id, OffsetDateTime withdrawnAt, boolean emailVerified) {
