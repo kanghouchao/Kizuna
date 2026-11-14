@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import { APP_URL } from '../base-url';
 import {
@@ -19,21 +17,30 @@ import {
 
 // 目視用のデータ。アカウントは E2E と同じもの（統括 admin@kizuna.test と店長 ADMIN_EMAIL）を作る。
 // store1 は全項目を埋め、store2 は何も設定しない（未設定のときの見え方を確かめる店舗）。
-const PHOTOS = join(__dirname, 'photos');
 const SETUP_ADMIN = 'admin@kizuna.test';
 
+// 画像は文字入りの仮画像を返す外部サービスの URL をそのまま登録する。リポジトリにもストレージにも
+// 画像を持たず、文字と寸法を変えればすぐ差し替えられる。和文は描けないので文字は英数字にする。
+function placeholder(width: number, height: number, text: string, background = '2b2233'): string {
+  return `https://placehold.co/${width}x${height}/${background}/e8d9c0/png?text=${encodeURIComponent(text)}`;
+}
+
+function castPhoto(number: number, background: string): string {
+  return placeholder(900, 1200, `CAST ${String(number).padStart(2, '0')}\\n900x1200 (3:4)`, background);
+}
+
 const CASTS = [
-  { photo: 'cast-01.png', name: '美咲', age: 24, height: 158, introduction: 'はじめまして。お話しするのが大好きです。\nお仕事帰りに、ふらっと立ち寄ってくださいね。' },
-  { photo: 'cast-02.png', name: 'あやか', age: 22, height: 162, introduction: '笑顔がチャームポイントと言われます。\nワインとゴルフのお話なら任せてください。' },
-  { photo: 'cast-03.png', name: '玲奈', age: 27, height: 165, bust: 86, waist: 58, hip: 87, introduction: '落ち着いた雰囲気でゆっくりお話ししたい方、ぜひ。\n日本酒を勉強中です。' },
-  { photo: 'cast-04.png', name: 'ゆい', age: 21, height: 154 },
-  { photo: 'cast-05.png', name: '七海', introduction: '海の近くで育ちました。旅行のお話を聞くのが好きです。' },
-  { photo: 'cast-06.png', name: 'さくら', age: 25, height: 160, bust: 84, waist: 57, hip: 85 },
-  { photo: 'cast-07.png', name: '麗', age: 29, height: 168, introduction: '銀座は 5 年目になります。\nお酒の選び方に迷ったら、お気軽にお尋ねください。' },
-  { photo: 'cast-08.png', name: 'かれん', age: 23, height: 156 },
-  { photo: 'cast-09.png', name: 'みお', introduction: '映画と猫の話になると止まりません。' },
-  { photo: 'cast-10.png', name: '凛', age: 26, height: 163, bust: 85, waist: 58, hip: 86, introduction: '静かに飲みたい夜に、隣でお付き合いします。' },
-  { photo: 'cast-11.png', name: 'アナスタシア・クリスティーナ', age: 24, height: 170, introduction: '名前が長いときの折り返しを確かめるためのキャストです。' },
+  { photo: castPhoto(1, '3a2a3f'), name: '美咲', age: 24, height: 158, introduction: 'はじめまして。お話しするのが大好きです。\nお仕事帰りに、ふらっと立ち寄ってくださいね。' },
+  { photo: castPhoto(2, '2f3a4a'), name: 'あやか', age: 22, height: 162, introduction: '笑顔がチャームポイントと言われます。\nワインとゴルフのお話なら任せてください。' },
+  { photo: castPhoto(3, '3f3a2a'), name: '玲奈', age: 27, height: 165, bust: 86, waist: 58, hip: 87, introduction: '落ち着いた雰囲気でゆっくりお話ししたい方、ぜひ。\n日本酒を勉強中です。' },
+  { photo: castPhoto(4, '2a3f3a'), name: 'ゆい', age: 21, height: 154 },
+  { photo: castPhoto(5, '4a2f3a'), name: '七海', introduction: '海の近くで育ちました。旅行のお話を聞くのが好きです。' },
+  { photo: castPhoto(6, '3a3f2a'), name: 'さくら', age: 25, height: 160, bust: 84, waist: 57, hip: 85 },
+  { photo: castPhoto(7, '2a2f4a'), name: '麗', age: 29, height: 168, introduction: '銀座は 5 年目になります。\nお酒の選び方に迷ったら、お気軽にお尋ねください。' },
+  { photo: castPhoto(8, '4a3a2f'), name: 'かれん', age: 23, height: 156 },
+  { photo: castPhoto(9, '2f4a3a'), name: 'みお', introduction: '映画と猫の話になると止まりません。' },
+  { photo: castPhoto(10, '3f2a4a'), name: '凛', age: 26, height: 163, bust: 85, waist: 58, hip: 86, introduction: '静かに飲みたい夜に、隣でお付き合いします。' },
+  { photo: castPhoto(11, '4a2a2a'), name: 'アナスタシア・クリスティーナ', age: 24, height: 170, introduction: '名前が長いときの折り返しを確かめるためのキャストです。' },
   // 写真の無いキャスト（写真が無いときの枠を確かめる）
   { photo: undefined, name: 'ひなた', age: 20, height: 152 },
 ];
@@ -49,15 +56,6 @@ const REVIEWS = [
   { display_name: '銀座の常連', body: '内装が上品で、接待にも安心して使えます。' },
   { display_name: 'M', body: 'キャストの皆さんの会話の引き出しが多く、あっという間の 2 時間でした。料金の説明も最初に分かりやすくしてもらえたので、会計で驚くこともありませんでした。' },
 ];
-
-async function upload(request: APIRequestContext, token: string, purpose: string, file: string): Promise<string> {
-  const response = await request.post('/api/files', {
-    headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
-    multipart: { purpose, file: { name: file, mimeType: 'image/png', buffer: readFileSync(join(PHOTOS, file)) } },
-  });
-  expect(response.status(), await response.text()).toBe(201);
-  return (await response.json()).url;
-}
 
 async function post(request: APIRequestContext, token: string, path: string, data: unknown, expected = 201) {
   const response = await request.post(path, { headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` }, data });
@@ -107,9 +105,9 @@ test('目視用のデータを投入する', async ({ request }) => {
   const token = await loginUser(request, ADMIN_EMAIL, ADMIN_PASSWORD);
 
   await put(request, token, '/api/config', {
-    logo_url: await upload(request, token, 'store-logo', 'logo.png'),
-    banner_url: await upload(request, token, 'store-banner', 'banner.png'),
-    mv_url: await upload(request, token, 'store-mv', 'mv.png'),
+    logo_url: placeholder(360, 96, 'LOGO 360x96', '16141c'),
+    banner_url: placeholder(1600, 700, 'BANNER\\n1600x700', '3a2233'),
+    mv_url: placeholder(1600, 900, 'MAIN VISUAL\\n1600x900 (16:9)', '22303a'),
     mv_type: 'image',
     catch_copy: '今宵、月の華が咲く。\n銀座で過ごす、上質な時間。',
     description: '銀座の中心に佇む、大人のための社交場。\n落ち着いた空間と洗練されたおもてなしで、特別なひとときをお届けします。',
@@ -134,7 +132,7 @@ test('目視用のデータを投入する', async ({ request }) => {
       ...cast,
       started_on: todayInTokyo(),
       display_order: index,
-      ...(photo ? { photo_url: await upload(request, token, 'cast-photo', photo) } : {}),
+      ...(photo ? { photo_url: photo } : {}),
     });
     await setCastPublication(request, token, created.id, 'PUBLISHED');
     castIds.push(created.id);
@@ -154,7 +152,7 @@ test('目視用のデータを投入する', async ({ request }) => {
     }
   }
 
-  const cover = await upload(request, token, 'article-cover', 'article.png');
+  const cover = placeholder(1200, 630, 'ARTICLE COVER\\n1200x630', '3a3322');
   for (const [index, article] of ARTICLES.entries()) {
     const created = await post(request, token, '/api/articles', {
       title: article.title,
