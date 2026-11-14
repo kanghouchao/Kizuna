@@ -85,7 +85,7 @@ class SurveyControllerTest {
   @WithMockUser(authorities = "PERM_SURVEY_VIEW")
   void listPassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(reads.list(any(), any(), any(), any(), any(), any(), any()))
+    when(reads.list(any(), any(), any(), any(), any(), any()))
         .thenReturn(new PageImpl<>(List.of()));
 
     mockMvc
@@ -95,7 +95,6 @@ class SurveyControllerTest {
     verify(reads)
         .list(
             STORE_ID,
-            "user",
             PageRequest.of(0, 20, Sort.by(SurveySeries::getId)),
             null,
             null,
@@ -150,7 +149,7 @@ class SurveyControllerTest {
                 .principal(currentUser()))
         .andExpect(status().isOk());
 
-    verify(service).answer(STORE_ID, "user", "101");
+    verify(service).answer(STORE_ID, "101");
   }
 
   @Test
@@ -160,9 +159,9 @@ class SurveyControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<Pageable> revisions = ArgumentCaptor.forClass(Pageable.class);
     ArgumentCaptor<Pageable> answers = ArgumentCaptor.forClass(Pageable.class);
-    when(reads.revisionHistory(eq(STORE_ID), eq("user"), eq("s1"), eq("r1"), revisions.capture()))
+    when(reads.revisionHistory(eq(STORE_ID), eq("s1"), eq("r1"), revisions.capture()))
         .thenReturn(new PageImpl<>(List.of()));
-    when(reads.answerHistory(eq(STORE_ID), eq("user"), eq("101"), answers.capture()))
+    when(reads.answerHistory(eq(STORE_ID), eq("101"), answers.capture()))
         .thenReturn(new PageImpl<>(List.of()));
 
     mockMvc
@@ -191,12 +190,11 @@ class SurveyControllerTest {
   void revisionAndAnswerListsArePages() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<Pageable> revisions = ArgumentCaptor.forClass(Pageable.class);
-    when(reads.revisions(eq(STORE_ID), eq("user"), eq("s1"), revisions.capture()))
+    when(reads.revisions(eq(STORE_ID), eq("s1"), revisions.capture()))
         .thenReturn(new PageImpl<>(List.of()));
     ArgumentCaptor<Pageable> answers = ArgumentCaptor.forClass(Pageable.class);
     when(reads.answers(
             eq(STORE_ID),
-            eq("user"),
             eq("s1"),
             eq("r1"),
             answers.capture(),

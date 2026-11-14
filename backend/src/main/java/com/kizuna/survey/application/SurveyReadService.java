@@ -19,7 +19,6 @@ import com.kizuna.survey.domain.SurveySeriesRepository;
 import com.kizuna.survey.domain.SurveySeriesView;
 import com.kizuna.survey.domain.SurveyValues.AnswerStatus;
 import com.kizuna.survey.domain.SurveyValues.RevisionStatus;
-import com.kizuna.user.domain.PermissionCode;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
@@ -42,18 +41,10 @@ public class SurveyReadService {
   private final SurveyRevisionRepository revisions;
   private final SurveyAnswerRepository answers;
   private final SurveyHistoryRepository history;
-  private final SurveyActors actors;
 
   @Transactional(readOnly = true)
   public Page<Summary> list(
-      Long storeId,
-      String email,
-      Pageable pageable,
-      String q,
-      String id,
-      RevisionStatus status,
-      String sort) {
-    actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
+      Long storeId, Pageable pageable, String q, String id, RevisionStatus status, String sort) {
     var paging = page(pageable, sort, null, SurveySeries::getCreatedAt, SurveySeries::getId);
     Specification<SurveySeries> spec = (r, query, cb) -> cb.equal(r.get("storeId"), storeId);
     if (id != null) {
@@ -101,8 +92,7 @@ public class SurveyReadService {
   }
 
   @Transactional(readOnly = true)
-  public Detail detail(Long storeId, String email, String id) {
-    actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
+  public Detail detail(Long storeId, String id) {
     var row =
         surveys
             .findProjectedByIdAndStoreId(SurveyInput.id(id), storeId)
@@ -117,9 +107,7 @@ public class SurveyReadService {
   }
 
   @Transactional(readOnly = true)
-  public Page<SurveyRevisionSummaryView> revisions(
-      Long storeId, String email, String sid, Pageable pageable) {
-    actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
+  public Page<SurveyRevisionSummaryView> revisions(Long storeId, String sid, Pageable pageable) {
     requireSurvey(storeId, sid);
     Specification<SurveyRevision> spec =
         (r, q, cb) -> cb.and(cb.equal(r.get("storeId"), storeId), cb.equal(r.get("surveyId"), sid));
@@ -129,14 +117,12 @@ public class SurveyReadService {
   @Transactional(readOnly = true)
   public Page<SurveyAnswerSummaryView> answers(
       Long storeId,
-      String email,
       String sid,
       String rid,
       Pageable pageable,
       String id,
       AnswerStatus status,
       String sort) {
-    actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
     requireRevision(storeId, sid, rid);
     var paging =
         page(
@@ -158,16 +144,13 @@ public class SurveyReadService {
 
   @Transactional(readOnly = true)
   public Page<SurveyHistoryView> revisionHistory(
-      Long storeId, String email, String sid, String rid, Pageable pageable) {
-    actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
+      Long storeId, String sid, String rid, Pageable pageable) {
     requireRevision(storeId, sid, rid);
     return history(storeId, "revisionId", rid, pageable);
   }
 
   @Transactional(readOnly = true)
-  public Page<SurveyHistoryView> answerHistory(
-      Long storeId, String email, String aid, Pageable pageable) {
-    actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
+  public Page<SurveyHistoryView> answerHistory(Long storeId, String aid, Pageable pageable) {
     if (!answers.existsByIdAndStoreId(SurveyInput.id(aid), storeId)) throw missing();
     return history(storeId, "responseId", aid, pageable);
   }

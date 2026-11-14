@@ -10,7 +10,6 @@ import com.kizuna.review.domain.ReviewValues.Operation;
 import com.kizuna.review.domain.ReviewValues.ReceivedVia;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.publication.Publication;
-import com.kizuna.user.domain.PermissionCode;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
@@ -184,53 +183,6 @@ class ReviewCommandTest {
             new ReviewCommand.Correct(
                     "00000000-0000-7000-8000-000000000002", 0L, "訂正", input(null), "a")
                 .fingerprint());
-  }
-
-  @Test
-  void eachVariantNamesThePermissionsItRequires() {
-    assertThat(
-            new ReviewCommand.Decide(
-                    "00000000-0000-7000-8000-000000000001", 0L, Operation.APPROVED, "理由", "k")
-                .permissions())
-        .containsExactly(PermissionCode.REVIEW_MODERATE);
-    assertThat(
-            new ReviewCommand.Publish(
-                    "00000000-0000-7000-8000-000000000001", 0L, Publication.HIDDEN, "k")
-                .permissions())
-        .containsExactly(PermissionCode.REVIEW_MODERATE);
-    assertThat(
-            new ReviewCommand.Withdraw("00000000-0000-7000-8000-000000000001", 0L, "理由", "k")
-                .permissions())
-        .containsExactly(PermissionCode.REVIEW_MANAGE);
-    assertThat(
-            new ReviewCommand.Grant(
-                    "00000000-0000-7000-8000-000000000001", 0L, Basis.WRITTEN, AT, "根拠", "k")
-                .permissions())
-        .containsExactly(PermissionCode.REVIEW_MANAGE);
-    assertThat(
-            new ReviewCommand.Revoke("00000000-0000-7000-8000-000000000001", 0L, AT, "理由", "k")
-                .permissions())
-        .containsExactly(PermissionCode.REVIEW_MANAGE);
-    assertThat(new ReviewCommand.Receive(input(null), "k").permissions())
-        .containsExactly(PermissionCode.REVIEW_MANAGE);
-    assertThat(
-            new ReviewCommand.Receive(input("00000000-0000-7000-8000-000000000009"), "k")
-                .permissions())
-        .containsExactly(PermissionCode.REVIEW_MANAGE, PermissionCode.ORDER_MANAGE);
-    assertThat(
-            new ReviewCommand.Correct(
-                    "00000000-0000-7000-8000-000000000001", 0L, "訂正", input(null), "k")
-                .permissions())
-        .containsExactly(PermissionCode.REVIEW_MANAGE);
-    assertThat(
-            new ReviewCommand.Correct(
-                    "00000000-0000-7000-8000-000000000001",
-                    0L,
-                    "訂正",
-                    input("00000000-0000-7000-8000-000000000009"),
-                    "k")
-                .permissions())
-        .containsExactly(PermissionCode.REVIEW_MANAGE, PermissionCode.ORDER_MANAGE);
   }
 
   @ParameterizedTest

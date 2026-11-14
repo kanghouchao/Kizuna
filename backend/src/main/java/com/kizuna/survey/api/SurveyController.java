@@ -132,29 +132,21 @@ public class SurveyController {
   @GetMapping("/{sid}/revisions/{rid}")
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW')")
   public SurveyRevisionResponse revision(
-      @CurrentStore Long storeId,
-      Authentication auth,
-      @PathVariable String sid,
-      @PathVariable String rid) {
-    return SurveyRevisionResponse.of(service.revision(storeId, auth.getName(), sid, rid));
+      @CurrentStore Long storeId, @PathVariable String sid, @PathVariable String rid) {
+    return SurveyRevisionResponse.of(service.revision(storeId, sid, rid));
   }
 
   @GetMapping("/{sid}/revisions/{rid}/response-counts")
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW')")
   public SurveyResponseCountsResponse counts(
-      @CurrentStore Long storeId,
-      Authentication auth,
-      @PathVariable String sid,
-      @PathVariable String rid) {
-    return SurveyResponseCountsResponse.of(
-        sid, rid, service.counts(storeId, auth.getName(), sid, rid));
+      @CurrentStore Long storeId, @PathVariable String sid, @PathVariable String rid) {
+    return SurveyResponseCountsResponse.of(sid, rid, service.counts(storeId, sid, rid));
   }
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW')")
   public Page<SurveySummaryResponse> list(
       @CurrentStore Long storeId,
-      Authentication auth,
       @PageableDefault(
               size = 20,
               sort = {})
@@ -164,38 +156,33 @@ public class SurveyController {
       @RequestParam(name = "latest_status", required = false) RevisionStatus latestStatus,
       @RequestParam(defaultValue = "CREATED_DESC") String sort) {
     return reads
-        .list(storeId, auth.getName(), pageable, q, surveyId, latestStatus, sort)
+        .list(storeId, pageable, q, surveyId, latestStatus, sort)
         .map(SurveySummaryResponse::of);
   }
 
   @GetMapping("/{sid}")
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW')")
-  public SurveyResponse survey(
-      @CurrentStore Long storeId, Authentication auth, @PathVariable String sid) {
-    return SurveyResponse.of(reads.detail(storeId, auth.getName(), sid));
+  public SurveyResponse survey(@CurrentStore Long storeId, @PathVariable String sid) {
+    return SurveyResponse.of(reads.detail(storeId, sid));
   }
 
   @GetMapping("/{sid}/revisions")
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW')")
   public Page<SurveyRevisionSummaryResponse> revisions(
       @CurrentStore Long storeId,
-      Authentication auth,
       @PathVariable String sid,
       @PageableDefault(
               size = 20,
               sort = {"revisionNumber", "id"},
               direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return reads
-        .revisions(storeId, auth.getName(), sid, pageable)
-        .map(SurveyRevisionSummaryResponse::of);
+    return reads.revisions(storeId, sid, pageable).map(SurveyRevisionSummaryResponse::of);
   }
 
   @GetMapping("/{sid}/revisions/{rid}/responses")
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW')")
   public Page<SurveyAnswerSummaryResponse> responses(
       @CurrentStore Long storeId,
-      Authentication auth,
       @PathVariable String sid,
       @PathVariable String rid,
       @PageableDefault(
@@ -206,7 +193,7 @@ public class SurveyController {
       @RequestParam(required = false) AnswerStatus status,
       @RequestParam(defaultValue = "RECEIVED_DESC") String sort) {
     return reads
-        .answers(storeId, auth.getName(), sid, rid, pageable, responseId, status, sort)
+        .answers(storeId, sid, rid, pageable, responseId, status, sort)
         .map(SurveyAnswerSummaryResponse::of);
   }
 
@@ -214,12 +201,11 @@ public class SurveyController {
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW')")
   public Page<SurveyRevisionHistoryResponse> revisionHistory(
       @CurrentStore Long storeId,
-      Authentication auth,
       @PathVariable String sid,
       @PathVariable String rid,
       @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
     return reads
-        .revisionHistory(storeId, auth.getName(), sid, rid, pageable)
+        .revisionHistory(storeId, sid, rid, pageable)
         .map(SurveyRevisionHistoryResponse::of);
   }
 

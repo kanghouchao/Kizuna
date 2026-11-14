@@ -63,21 +63,17 @@ public class SurveyResponseController {
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW')")
-  public SurveyAnswerResponse answer(
-      @CurrentStore Long storeId, Authentication auth, @PathVariable String aid) {
-    return SurveyAnswerResponse.of(service.answer(storeId, auth.getName(), aid));
+  public SurveyAnswerResponse answer(@CurrentStore Long storeId, @PathVariable String aid) {
+    return SurveyAnswerResponse.of(service.answer(storeId, aid));
   }
 
   @GetMapping("/history")
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW')")
   public Page<SurveyAnswerHistoryResponse> answerHistory(
       @CurrentStore Long storeId,
-      Authentication auth,
       @PathVariable String aid,
       @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
-    return reads
-        .answerHistory(storeId, auth.getName(), aid, pageable)
-        .map(SurveyAnswerHistoryResponse::of);
+    return reads.answerHistory(storeId, aid, pageable).map(SurveyAnswerHistoryResponse::of);
   }
 
   private ResponseEntity<SurveyWriteResponse> write(

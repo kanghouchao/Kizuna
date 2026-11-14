@@ -29,8 +29,8 @@ import com.kizuna.survey.domain.SurveySeries;
 import com.kizuna.survey.domain.SurveySeriesRepository;
 import com.kizuna.survey.domain.SurveyValues.Operation;
 import com.kizuna.survey.domain.SurveyValues.RevisionStatus;
+import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PermissionCode;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
@@ -49,13 +49,13 @@ public class SurveyService {
   private final SurveyAnswerRepository answers;
   private final OperationReceipts receipts;
   private final SurveyHistoryRepository history;
-  private final SurveyActors actors;
+  private final ActorIdentityService identities;
   private final BusinessAudit audit;
   private final Clock clock;
 
   @Transactional
   public Written write(Long storeId, String email, SurveyCommand command) {
-    var actor = actors.require(storeId, email, permission(command));
+    var actor = identities.requireActor(email);
     return receipts.once(
         new ReceiptKey(storeId, actor.id(), command.key()),
         fingerprint(command),
@@ -82,7 +82,7 @@ public class SurveyService {
 
   @Transactional(readOnly = true)
   public Written replayOnly(Long storeId, String email, SurveyCommand command) {
-    var actor = actors.require(storeId, email, permission(command));
+    var actor = identities.requireActor(email);
     return receipts.replayOnly(
         new ReceiptKey(storeId, actor.id(), command.key()),
         fingerprint(command),
@@ -90,8 +90,7 @@ public class SurveyService {
   }
 
   @Transactional(readOnly = true)
-  public SurveyRevisionDetailView revision(Long storeId, String email, String surveyId, String id) {
-    actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
+  public SurveyRevisionDetailView revision(Long storeId, String surveyId, String id) {
     return revisions
         .findProjectedByIdAndStoreIdAndSurveyId(
             SurveyInput.id(id), storeId, SurveyInput.id(surveyId))
@@ -99,16 +98,14 @@ public class SurveyService {
   }
 
   @Transactional(readOnly = true)
-  public SurveyAnswerDetailView answer(Long storeId, String email, String id) {
-    actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
+  public SurveyAnswerDetailView answer(Long storeId, String id) {
     return answers
         .findProjectedByIdAndStoreId(SurveyInput.id(id), storeId)
         .orElseThrow(SurveyService::missing);
   }
 
   @Transactional(readOnly = true)
-  public SurveyCountsView counts(Long storeId, String email, String surveyId, String id) {
-    actors.require(storeId, email, PermissionCode.SURVEY_VIEW);
+  public SurveyCountsView counts(Long storeId, String surveyId, String id) {
     if (!revisions.existsByIdAndStoreIdAndSurveyId(
         SurveyInput.id(id), storeId, SurveyInput.id(surveyId))) throw missing();
     return answers.counts(storeId, id);
@@ -316,14 +313,6 @@ public class SurveyService {
             .sorted(Comparator.comparing(SurveyAnswers.Answer::questionKey))
             .map(x -> Arrays.asList(x.questionKey(), x.text(), x.optionKey()))
             .toList());
-  }
-
-  private PermissionCode permission(SurveyCommand command) {
-    return command instanceof SurveyCommand.Receive
-            || command instanceof SurveyCommand.Withdraw
-            || command instanceof SurveyCommand.Correct
-        ? PermissionCode.SURVEY_RECORD
-        : PermissionCode.SURVEY_MANAGE;
   }
 
   // 受領を持つ設問版・回答は物理削除しないので、対象が無いのは不変条件の破れであって業務拒否ではない。

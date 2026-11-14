@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -21,7 +20,6 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.StoreScopedEntity;
-import com.kizuna.survey.application.SurveyActors;
 import com.kizuna.survey.application.SurveyService;
 import com.kizuna.survey.application.SurveyViews.AnswerWritten;
 import com.kizuna.survey.application.SurveyViews.RevisionWritten;
@@ -43,8 +41,8 @@ import com.kizuna.survey.domain.SurveyValues.Operation;
 import com.kizuna.survey.domain.SurveyValues.QuestionType;
 import com.kizuna.survey.domain.SurveyValues.ReceivedVia;
 import com.kizuna.survey.domain.SurveyValues.RevisionStatus;
+import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PermissionCode;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -60,7 +58,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.projection.SpelAwareProxyProjectionFactory;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class SurveyApplicationTest {
@@ -71,7 +68,7 @@ class SurveyApplicationTest {
   private final SurveyAnswerRepository answers = mock(SurveyAnswerRepository.class);
   private final OperationReceipts operations = mock(OperationReceipts.class);
   private final SurveyHistoryRepository history = mock(SurveyHistoryRepository.class);
-  private final SurveyActors actors = mock(SurveyActors.class);
+  private final ActorIdentityService identities = mock(ActorIdentityService.class);
   private final BusinessAudit audit = mock(BusinessAudit.class);
   private final Map<String, SurveySeries> series = new HashMap<>();
   private final Map<String, SurveyRevision> versions = new HashMap<>();
@@ -90,11 +87,10 @@ class SurveyApplicationTest {
             answers,
             operations,
             history,
-            actors,
+            identities,
             audit,
             Clock.fixed(Instant.parse("2026-10-07T00:00:00Z"), ZoneOffset.UTC));
-    when(actors.require(eq(STORE_ID), anyString(), any()))
-        .thenReturn(new AuditActor(1L, "STAFF", "担当者"));
+    when(identities.requireActor(anyString())).thenReturn(new AuditActor(1L, "STAFF", "担当者"));
     when(surveys.saveAndFlush(any())).thenAnswer(call -> store(call.getArgument(0), series));
     when(revisions.saveAndFlush(any())).thenAnswer(call -> store(call.getArgument(0), versions));
     when(answers.saveAndFlush(any())).thenAnswer(call -> store(call.getArgument(0), responses));
@@ -271,8 +267,7 @@ class SurveyApplicationTest {
     service.write(STORE_ID, "actor", action(next, Operation.OPENED, "open-next"));
     assertThat(
             service
-                .revision(
-                    STORE_ID, "actor", first.revision().getSurveyId(), first.revision().getId())
+                .revision(STORE_ID, first.revision().getSurveyId(), first.revision().getId())
                 .getTitle())
         .isEqualTo("差替設問");
     assertThatThrownBy(
@@ -293,7 +288,7 @@ class SurveyApplicationTest {
     var successor = (AnswerWritten) service.write(STORE_ID, "actor", correction);
     assertThat(successor.answer().getRevisionId()).isEqualTo(original.answer().getRevisionId());
     assertThat(successor.answer().getSupersedesId()).isEqualTo(original.answer().getId());
-    var previous = service.answer(STORE_ID, "actor", original.answer().getId());
+    var previous = service.answer(STORE_ID, original.answer().getId());
     assertThat(previous.getAnswers().getFirst().text()).isEqualTo("  原文\n二行目  ");
     assertThat(previous.getStatus()).isEqualTo(AnswerStatus.WITHDRAWN);
     assertThat(previous.getSupersededById()).isEqualTo(successor.answer().getId());
@@ -340,7 +335,7 @@ class SurveyApplicationTest {
                 new SurveyCommand.Correct(
                     first.answer().getId(), 0L, "訂正根拠", input("訂正"), "correct"));
     assertThat(corrected.answer().getStatus()).isEqualTo(AnswerStatus.ACTIVE);
-    assertThat(service.answer(STORE_ID, "actor", first.answer().getId()).getSupersededById())
+    assertThat(service.answer(STORE_ID, first.answer().getId()).getSupersededById())
         .isEqualTo(corrected.answer().getId());
   }
 
@@ -362,12 +357,6 @@ class SurveyApplicationTest {
     var answered = (AnswerWritten) service.write(STORE_ID, "actor", receive(revision, "receive"));
     assertThat(answered.receipt().targetId()).isEqualTo(answered.answer().getId());
     verify(operations).once(eq(new ReceiptKey(STORE_ID, 1L, "receive")), anyString(), any(), any());
-
-    doThrow(new AccessDeniedException("権限なし"))
-        .when(actors)
-        .require(STORE_ID, "actor", PermissionCode.SURVEY_RECORD);
-    assertThatThrownBy(() -> service.replayOnly(STORE_ID, "actor", receive(revision, "receive")))
-        .isInstanceOf(AccessDeniedException.class);
   }
 
   @Test
@@ -416,13 +405,9 @@ class SurveyApplicationTest {
     assertThatThrownBy(
             () ->
                 service.revision(
-                    STORE_ID,
-                    "actor",
-                    "00000000-0000-7000-8000-000000000999",
-                    revision.revision().getId()))
+                    STORE_ID, "00000000-0000-7000-8000-000000000999", revision.revision().getId()))
         .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(
-            () -> service.answer(STORE_ID, "actor", "00000000-0000-7000-8000-000000000999"))
+    assertThatThrownBy(() -> service.answer(STORE_ID, "00000000-0000-7000-8000-000000000999"))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
             () ->

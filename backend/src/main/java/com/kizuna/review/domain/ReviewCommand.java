@@ -5,16 +5,12 @@ import com.kizuna.review.domain.ReviewValues.Basis;
 import com.kizuna.review.domain.ReviewValues.Operation;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.publication.Publication;
-import com.kizuna.user.domain.PermissionCode;
 import java.time.OffsetDateTime;
-import java.util.List;
 
 public sealed interface ReviewCommand {
   String key();
 
   String fingerprint();
-
-  List<PermissionCode> permissions();
 
   record Receive(ReviewInput input, String key) implements ReviewCommand {
     public Receive {
@@ -24,10 +20,6 @@ public sealed interface ReviewCommand {
 
     public String fingerprint() {
       return received(input);
-    }
-
-    public List<PermissionCode> permissions() {
-      return intake(input);
     }
   }
 
@@ -45,10 +37,6 @@ public sealed interface ReviewCommand {
     public String fingerprint() {
       return Fingerprint.of(type, reviewId, version, reason);
     }
-
-    public List<PermissionCode> permissions() {
-      return List.of(PermissionCode.REVIEW_MODERATE);
-    }
   }
 
   record Withdraw(String reviewId, Long version, String reason, String key)
@@ -62,10 +50,6 @@ public sealed interface ReviewCommand {
 
     public String fingerprint() {
       return Fingerprint.of(Operation.WITHDRAWN, reviewId, version, reason);
-    }
-
-    public List<PermissionCode> permissions() {
-      return List.of(PermissionCode.REVIEW_MANAGE);
     }
   }
 
@@ -90,10 +74,6 @@ public sealed interface ReviewCommand {
       return Fingerprint.of(
           Operation.PERMISSION_GRANTED, reviewId, version, basis, grantedAt, evidence);
     }
-
-    public List<PermissionCode> permissions() {
-      return List.of(PermissionCode.REVIEW_MANAGE);
-    }
   }
 
   record Revoke(String reviewId, Long version, OffsetDateTime receivedAt, String reason, String key)
@@ -108,10 +88,6 @@ public sealed interface ReviewCommand {
 
     public String fingerprint() {
       return Fingerprint.of(Operation.PERMISSION_REVOKED, reviewId, version, receivedAt, reason);
-    }
-
-    public List<PermissionCode> permissions() {
-      return List.of(PermissionCode.REVIEW_MANAGE);
     }
   }
 
@@ -134,10 +110,6 @@ public sealed interface ReviewCommand {
           publication.publishUntil(),
           publication.displayOrder());
     }
-
-    public List<PermissionCode> permissions() {
-      return List.of(PermissionCode.REVIEW_MODERATE);
-    }
   }
 
   record Correct(String reviewId, Long version, String reason, ReviewInput input, String key)
@@ -154,21 +126,10 @@ public sealed interface ReviewCommand {
       return Fingerprint.of(
           Operation.CORRECTION_RECEIVED, reviewId, version, reason, received(input));
     }
-
-    public List<PermissionCode> permissions() {
-      return intake(input);
-    }
   }
 
   private static String received(ReviewInput i) {
     return Fingerprint.of(
         "RECEIVED", i.body(), i.displayName(), i.receivedVia(), i.receivedAt(), i.originOrderId());
-  }
-
-  /** 関連受注を結ぶ受付は、受注を操作できる人にだけ許す。再送でも同じ権限を求める。 */
-  private static List<PermissionCode> intake(ReviewInput input) {
-    return input.originOrderId() == null
-        ? List.of(PermissionCode.REVIEW_MANAGE)
-        : List.of(PermissionCode.REVIEW_MANAGE, PermissionCode.ORDER_MANAGE);
   }
 }

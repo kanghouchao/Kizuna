@@ -23,8 +23,8 @@ import com.kizuna.review.domain.ReviewValues.Operation;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.publication.Publication;
+import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PermissionCode;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
@@ -44,13 +44,13 @@ public class ReviewService {
   private final ReviewPermissionRepository permissions;
   private final ReviewHistoryRepository history;
   private final OperationReceipts receipts;
-  private final ReviewActors actors;
+  private final ActorIdentityService identities;
   private final BusinessAudit audit;
   private final Clock clock;
 
   @Transactional
   public ReviewViews.Written write(Long storeId, String email, ReviewCommand command) {
-    var actor = actor(storeId, email, command);
+    var actor = identities.requireActor(email);
     return receipts.once(
         key(storeId, actor, command),
         command.fingerprint(),
@@ -76,20 +76,18 @@ public class ReviewService {
 
   @Transactional(readOnly = true)
   public ReviewViews.Written replayOnly(Long storeId, String email, ReviewCommand command) {
-    var actor = actor(storeId, email, command);
+    var actor = identities.requireActor(email);
     return receipts.replayOnly(
         key(storeId, actor, command), command.fingerprint(), receipt -> respond(storeId, receipt));
   }
 
   @Transactional(readOnly = true)
-  public ReviewViews.Detail detail(Long storeId, String email, String id) {
-    actors.require(storeId, email, PermissionCode.REVIEW_VIEW);
+  public ReviewViews.Detail detail(Long storeId, String id) {
     return response(storeId, find(storeId, id));
   }
 
   @Transactional(readOnly = true)
-  public Page<ReviewHistoryView> history(Long storeId, String email, String id, Pageable pageable) {
-    actors.require(storeId, email, PermissionCode.REVIEW_VIEW);
+  public Page<ReviewHistoryView> history(Long storeId, String id, Pageable pageable) {
     find(storeId, id);
     Specification<ReviewHistory> spec =
         (root, query, cb) ->
@@ -98,8 +96,7 @@ public class ReviewService {
   }
 
   @Transactional(readOnly = true)
-  public Page<ReviewViews.Summary> list(Long storeId, String email, ReviewSearch search) {
-    actors.require(storeId, email, PermissionCode.REVIEW_VIEW);
+  public Page<ReviewViews.Summary> list(Long storeId, ReviewSearch search) {
     return reviews
         .findBy(
             search.specification(storeId),
@@ -225,12 +222,6 @@ public class ReviewService {
     record(email, actor, old, Operation.CORRECTION_LINKED, before, c.reason(), row.getId(), null);
     record(email, actor, row, Operation.CORRECTION_RECEIVED, null, c.reason(), old.getId(), null);
     return new Result(row, Operation.CORRECTION_RECEIVED);
-  }
-
-  private AuditActor actor(Long storeId, String email, ReviewCommand command) {
-    AuditActor actor = null;
-    for (var permission : command.permissions()) actor = actors.require(storeId, email, permission);
-    return actor;
   }
 
   private ReviewRecord lock(Long storeId, ReviewCommand command) {

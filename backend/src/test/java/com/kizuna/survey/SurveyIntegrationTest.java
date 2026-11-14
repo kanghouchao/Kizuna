@@ -19,6 +19,7 @@ import com.kizuna.shared.web.WebBindingConfig;
 import com.kizuna.store.StoreShortNames;
 import com.kizuna.survey.api.SurveyController;
 import com.kizuna.survey.api.SurveyResponseController;
+import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Clock;
@@ -393,17 +394,13 @@ class SurveyIntegrationTest {
     send(answer + "/withdrawals", action(0, "foreign"), 404);
     assertThat(read("/surveys", 200).get("content").isEmpty()).isTrue();
     currentStore = storeId;
-    jdbc.update(
-        "delete from t_role_permissions where role_id=? and permission_id=(select id from t_permissions where code='SURVEY_RECORD')",
-        roleId);
+    without("PERM_SURVEY_RECORD");
     send(base + "/responses", receipt("first"), 403);
     read(answer, 200);
-    jdbc.update("update t_users set enabled=false where id=?", actorId);
+    without("PERM_SURVEY_VIEW");
     for (String path :
         List.of("/surveys", base, answer, base + "/response-counts", answer + "/history"))
       read(path, 403);
-    jdbc.update("update t_users set enabled=true,user_type='SERVICE' where id=?", actorId);
-    read(answer, 403);
   }
 
   @Test
@@ -563,6 +560,18 @@ class SurveyIntegrationTest {
     return resolvers.toArray(HandlerMethodArgumentResolver[]::new);
   }
 
+  /** 以後の要求を、指定した権限を外した担当者として送る。 */
+  private void without(String authority) {
+    auth =
+        new UsernamePasswordAuthenticationToken(
+            auth.getName(),
+            "unused",
+            auth.getAuthorities().stream()
+                .filter(granted -> !authority.equals(granted.getAuthority()))
+                .toList());
+    SecurityContextHolder.getContext().setAuthentication(auth);
+  }
+
   private JsonNode read(String path, int expected) throws Exception {
     return json.readTree(
         mvc.perform(get(path).principal(auth))
@@ -594,6 +603,7 @@ class SurveyIntegrationTest {
   @EnableJpaRepositories("com.kizuna")
   @ComponentScan(basePackages = "com.kizuna.survey.application")
   @Import({
+    ActorIdentityService.class,
     AuditWriter.class,
     BusinessAudit.class,
     OperationReceipts.class,

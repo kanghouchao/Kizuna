@@ -19,7 +19,6 @@ import com.kizuna.notificationdelivery.application.DeliveryContact;
 import com.kizuna.notificationdelivery.application.DeliveryDispatch;
 import com.kizuna.notificationdelivery.application.DeliveryRecipient;
 import com.kizuna.notificationdelivery.application.DeliveryTransports;
-import com.kizuna.notificationdelivery.application.NotificationActors;
 import com.kizuna.notificationdelivery.application.NotificationDeliveryTask;
 import com.kizuna.notificationdelivery.application.NotificationService;
 import com.kizuna.notificationdelivery.domain.DeliveryAttempt;
@@ -34,6 +33,7 @@ import com.kizuna.notificationdelivery.domain.NotificationDeliveryRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.task.execution.TaskContext;
+import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
 import com.kizuna.user.domain.PermissionCode;
 import java.time.Clock;
@@ -61,11 +61,12 @@ class NotificationApplicationTest {
   private final NotificationDeliveryRepository deliveries =
       mock(NotificationDeliveryRepository.class);
   private final DeliveryAttemptRepository attempts = mock(DeliveryAttemptRepository.class);
-  private final NotificationActors actors = mock(NotificationActors.class);
+  private final ActorIdentityService identities = mock(ActorIdentityService.class);
   private final DeliveryContact contacts = mock(DeliveryContact.class);
   private final DeliveryAudit audit = mock(DeliveryAudit.class);
   private final NotificationService service =
-      new NotificationService(deliveries, attempts, actors, contacts, audit, transports(), clock);
+      new NotificationService(
+          deliveries, attempts, identities, contacts, audit, transports(), clock);
 
   private static DeliveryTransports transports() {
     var email = mock(ContactTransport.class);
@@ -75,7 +76,7 @@ class NotificationApplicationTest {
 
   @BeforeEach
   void setup() {
-    when(actors.require(eq(STORE_ID), eq("actor"), any())).thenReturn(STAFF);
+    when(identities.requireActor("actor")).thenReturn(STAFF);
     when(contacts.resolve(eq(STORE_ID), any()))
         .thenReturn(new DeliveryRecipient("permitted@example.invalid", ContactDecision.ALLOWED));
   }
@@ -114,26 +115,24 @@ class NotificationApplicationTest {
     when(deliveries.findByIdAndAttributedStoreId("101", STORE_ID)).thenReturn(Optional.of(row));
     when(deliveries.findByIdAndAttributedStoreIdForUpdate("101", STORE_ID))
         .thenReturn(Optional.of(row));
-    assertThat(service.get(STORE_ID, "actor", "101").row().getId()).isEqualTo("101");
+    assertThat(service.get(STORE_ID, "101").row().getId()).isEqualTo("101");
     assertThat(service.queue(STORE_ID, "actor", "101", null, "確認済み", false).row().getStatus())
         .isEqualTo(DeliveryStatus.QUEUED);
     var pageable = PageRequest.of(0, 10);
     when(attempts.findByDeliveryId("101", pageable)).thenReturn(new PageImpl<>(List.of()));
     when(deliveries.findByAttributedStoreId(STORE_ID, pageable))
         .thenReturn(new PageImpl<>(List.of()));
-    service.history(STORE_ID, "actor", "101", pageable);
+    service.history(STORE_ID, "101", pageable);
     verify(attempts).findByDeliveryId("101", pageable);
-    service.list(STORE_ID, "actor", pageable);
+    service.list(STORE_ID, pageable);
     verify(deliveries).findByAttributedStoreId(STORE_ID, pageable);
   }
 
   @Test
   void anotherStoresDeliveryIsNotFound() {
     var other = STORE_ID + 1;
-    when(actors.require(eq(other), eq("actor"), any())).thenReturn(STAFF);
     when(deliveries.findByIdAndAttributedStoreId("101", STORE_ID)).thenReturn(Optional.of(row()));
-    assertThatThrownBy(() -> service.get(other, "actor", "101"))
-        .isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> service.get(other, "101")).isInstanceOf(NotFoundException.class);
     assertThatThrownBy(() -> service.queue(other, "actor", "101", null, "確認済み", false))
         .isInstanceOf(NotFoundException.class);
   }

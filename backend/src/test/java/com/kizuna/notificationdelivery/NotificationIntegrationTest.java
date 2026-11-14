@@ -279,7 +279,7 @@ class NotificationIntegrationTest {
   }
 
   private DeliveryResponse get(String id) {
-    return DeliveryResponse.of(notifications.get(storeId, email, id));
+    return DeliveryResponse.of(notifications.get(storeId, id));
   }
 
   private DeliveryResponse await(String id, String status) throws Exception {
@@ -290,7 +290,7 @@ class NotificationIntegrationTest {
     long deadline = System.nanoTime() + Duration.ofSeconds(15).toNanos();
     DeliveryResponse row;
     do {
-      row = DeliveryResponse.of(notifications.get(store, email, id));
+      row = DeliveryResponse.of(notifications.get(store, id));
       if (row.status().equals(status)) return row;
       Thread.sleep(20);
     } while (System.nanoTime() < deadline);
@@ -304,7 +304,7 @@ class NotificationIntegrationTest {
     runTask();
     await(row.id(), "SENT");
     assertThat(transport.results).containsExactly("permitted@example.invalid");
-    var history = notifications.history(storeId, email, row.id(), PageRequest.of(0, 10));
+    var history = notifications.history(storeId, row.id(), PageRequest.of(0, 10));
     assertThat(history.getContent()).hasSize(1);
     assertThat(history.getContent().getFirst().getStatus().name()).isEqualTo("SENT");
     assertThat(
@@ -350,7 +350,7 @@ class NotificationIntegrationTest {
     runTask();
     await(row.id(), "SENT");
     assertThat(transport.results).hasSize(1);
-    assertThat(notifications.history(storeId, email, row.id(), PageRequest.of(0, 10)).getContent())
+    assertThat(notifications.history(storeId, row.id(), PageRequest.of(0, 10)).getContent())
         .hasSize(2);
   }
 
@@ -362,7 +362,7 @@ class NotificationIntegrationTest {
     var failed = await(row.id(), "FAILED");
     assertThat(
             notifications
-                .history(storeId, email, row.id(), PageRequest.of(0, 10))
+                .history(storeId, row.id(), PageRequest.of(0, 10))
                 .getContent()
                 .getFirst()
                 .getFailureCode())
@@ -374,10 +374,7 @@ class NotificationIntegrationTest {
     assertThat(
             notifications
                 .history(
-                    storeId,
-                    email,
-                    row.id(),
-                    PageRequest.of(0, 10, Sort.by("attemptNumber").descending()))
+                    storeId, row.id(), PageRequest.of(0, 10, Sort.by("attemptNumber").descending()))
                 .getContent())
         .extracting(
             a -> a.getAttemptNumber(),
@@ -418,8 +415,7 @@ class NotificationIntegrationTest {
     assertThat(failed.attemptCount()).isEqualTo(2);
     var judged =
         notifications
-            .history(
-                storeId, email, unknown.id(), PageRequest.of(0, 10, Sort.by("id").descending()))
+            .history(storeId, unknown.id(), PageRequest.of(0, 10, Sort.by("id").descending()))
             .getContent()
             .getFirst();
     assertThat(judged.getAttemptNumber()).isEqualTo(2);
@@ -448,8 +444,7 @@ class NotificationIntegrationTest {
     runTask();
     await(unknown.id(), "SENT");
     assertThat(transport.results).hasSize(2);
-    assertThat(
-            notifications.history(storeId, email, unknown.id(), PageRequest.of(0, 10)).getContent())
+    assertThat(notifications.history(storeId, unknown.id(), PageRequest.of(0, 10)).getContent())
         .extracting(a -> a.getAttemptNumber())
         .containsExactlyInAnyOrder(1, 2, 3);
   }
@@ -487,7 +482,7 @@ class NotificationIntegrationTest {
   }
 
   @Test
-  void judgmentIsScopedToTheCurrentStoreAndRequiresSendPermission() throws Exception {
+  void judgmentIsScopedToTheCurrentStore() throws Exception {
     var unknown = unknownDelivery();
     assertThatThrownBy(
             () ->
@@ -499,11 +494,6 @@ class NotificationIntegrationTest {
                     DeliveryResolution.FAILED,
                     "別店舗から判定"))
         .isInstanceOf(NotFoundException.class);
-    jdbc.update(
-        "delete from t_role_permissions where permission_id=(select id from t_permissions where code='NOTIFICATION_SEND') and role_id in (select role_id from t_user_roles where user_id=?)",
-        operatorId);
-    assertThatThrownBy(() -> resolve(unknown, DeliveryResolution.FAILED, "権限なしで判定"))
-        .isInstanceOf(AccessDeniedException.class);
     assertThat(get(unknown.id()).status()).isEqualTo("UNKNOWN");
   }
 
@@ -602,7 +592,7 @@ class NotificationIntegrationTest {
   @Test
   void otherStoreAndDuplicateActionsAreRejected() {
     var row = draft();
-    assertThatThrownBy(() -> notifications.get(otherStore, email, row.id()))
+    assertThatThrownBy(() -> notifications.get(otherStore, row.id()))
         .isInstanceOf(NotFoundException.class);
     queue(row);
     assertThatThrownBy(() -> queue(row)).isInstanceOf(ConflictException.class);
@@ -642,7 +632,7 @@ class NotificationIntegrationTest {
     assertThat(transport.results).isEmpty();
     assertThat(
             notifications
-                .history(storeId, email, row.id(), PageRequest.of(0, 10))
+                .history(storeId, row.id(), PageRequest.of(0, 10))
                 .getContent()
                 .getFirst()
                 .getFailureCode())
@@ -854,7 +844,7 @@ class NotificationIntegrationTest {
     notifications.queue(otherStore, email, there.id(), there.version(), "内容確認済み", false);
     runTask();
     await(here.id(), "SENT");
-    assertThat(DeliveryResponse.of(notifications.get(otherStore, email, there.id())).status())
+    assertThat(DeliveryResponse.of(notifications.get(otherStore, there.id())).status())
         .isEqualTo("QUEUED");
     assertThat(transport.results).containsExactly("permitted@example.invalid");
 
@@ -1014,7 +1004,7 @@ class NotificationIntegrationTest {
     long deadline = System.nanoTime() + Duration.ofSeconds(15).toNanos();
     DeliveryResponse row;
     do {
-      row = DeliveryResponse.of(notifications.get(null, email, id));
+      row = DeliveryResponse.of(notifications.get(null, id));
       if (row.status().equals(status)) return row;
       Thread.sleep(20);
     } while (System.nanoTime() < deadline);
@@ -1024,7 +1014,7 @@ class NotificationIntegrationTest {
 
   private String lastFailure(String id) {
     return notifications
-        .history(null, email, id, PageRequest.of(0, 1, Sort.by("id").descending()))
+        .history(null, id, PageRequest.of(0, 1, Sort.by("id").descending()))
         .getContent()
         .getFirst()
         .getFailureCode();
@@ -1070,18 +1060,18 @@ class NotificationIntegrationTest {
   }
 
   @Test
-  void memberRowsAreSeparateFromStoreRowsAndNeedOnlyTheMemberPermissions() {
+  void memberRowsAreSeparateFromStoreRows() {
     var group = groupQueued(member("group@example.invalid", "ALLOWED", null, false));
     var store = draft();
-    assertThat(notifications.list(storeId, email, PageRequest.of(0, 50)).getContent())
+    assertThat(notifications.list(storeId, PageRequest.of(0, 50)).getContent())
         .extracting(NotificationDelivery::getId)
         .containsExactly(store.id());
-    assertThat(notifications.list(null, email, PageRequest.of(0, 50)).getContent())
+    assertThat(notifications.list(null, PageRequest.of(0, 50)).getContent())
         .extracting(NotificationDelivery::getId)
         .containsExactly(group.id());
-    assertThatThrownBy(() -> notifications.get(storeId, email, group.id()))
+    assertThatThrownBy(() -> notifications.get(storeId, group.id()))
         .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> notifications.get(null, email, store.id()))
+    assertThatThrownBy(() -> notifications.get(null, store.id()))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
             () -> notifications.queue(null, email, store.id(), store.version(), "グループから操作", false))
@@ -1091,52 +1081,13 @@ class NotificationIntegrationTest {
                 notifications.resolve(
                     null, email, store.id(), store.version(), DeliveryResolution.SENT, "グループから判定"))
         .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> notifications.history(null, email, store.id(), PageRequest.of(0, 10)))
+    assertThatThrownBy(() -> notifications.history(null, store.id(), PageRequest.of(0, 10)))
         .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(
-            () -> notifications.history(storeId, email, group.id(), PageRequest.of(0, 10)))
+    assertThatThrownBy(() -> notifications.history(storeId, group.id(), PageRequest.of(0, 10)))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
             () -> notifications.queue(storeId, email, group.id(), group.version(), "店舗から操作", true))
         .isInstanceOf(NotFoundException.class);
-
-    var storeOnly = staff("store-" + email, "NOTIFICATION_VIEW", "NOTIFICATION_SEND");
-    jdbc.update("insert into t_user_stores(user_id,store_id) values (?,?)", storeOnly, storeId);
-    assertThat(notifications.list(storeId, "store-" + email, PageRequest.of(0, 50))).hasSize(1);
-    assertThatThrownBy(() -> notifications.list(null, "store-" + email, PageRequest.of(0, 50)))
-        .isInstanceOf(AccessDeniedException.class);
-    assertThatThrownBy(() -> notifications.get(null, "store-" + email, group.id()))
-        .isInstanceOf(AccessDeniedException.class);
-
-    // 店舗集合が空でも、会員宛通知の権限があれば会員宛の行を扱える。
-    staff("member-" + email, "MEMBER_NOTIFICATION_VIEW", "MEMBER_NOTIFICATION_SEND");
-    assertThat(notifications.list(null, "member-" + email, PageRequest.of(0, 50)).getContent())
-        .extracting(NotificationDelivery::getId)
-        .containsExactly(group.id());
-    assertThat(notifications.history(null, "member-" + email, group.id(), PageRequest.of(0, 10)))
-        .isNotNull();
-    assertThatThrownBy(() -> notifications.list(storeId, "member-" + email, PageRequest.of(0, 50)))
-        .isInstanceOf(AccessDeniedException.class);
-  }
-
-  /** 指定した権限だけを持つロールを授与した、店舗集合が空の職員。 */
-  private Long staff(String address, String... permissions) {
-    var id =
-        jdbc.queryForObject(
-            "insert into t_users(email,display_name,user_type) values (?,'通知の担当','STAFF') returning id",
-            Long.class,
-            address);
-    var role =
-        jdbc.queryForObject(
-            "insert into t_roles(name,is_system) values (?,false) returning id",
-            Long.class,
-            UUID.randomUUID().toString());
-    jdbc.update(
-        "insert into t_role_permissions(role_id,permission_id) select ?,id from t_permissions where code = any(?)",
-        role,
-        permissions);
-    jdbc.update("insert into t_user_roles(user_id,role_id) values (?,?)", id, role);
-    return id;
   }
 
   @Test

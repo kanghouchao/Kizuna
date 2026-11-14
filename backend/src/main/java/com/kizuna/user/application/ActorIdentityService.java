@@ -1,5 +1,6 @@
 package com.kizuna.user.application;
 
+import com.kizuna.audit.recording.AuditActor;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -18,9 +19,19 @@ public class ActorIdentityService {
 
   @Transactional(readOnly = true)
   public Long requireUserId(String email) {
+    return require(email).getId();
+  }
+
+  /** 記録に残す実行者。授権は入口が判定済みなので、ここでは本人の行から ID・種別・表示名を読むだけにする。 */
+  @Transactional(readOnly = true)
+  public AuditActor requireActor(String email) {
+    User user = require(email);
+    return new AuditActor(user.getId(), user.getUserType().name(), user.getDisplayName());
+  }
+
+  private User require(String email) {
     return userRepository
         .findByEmail(email)
-        .map(User::getId)
         .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
   }
 }

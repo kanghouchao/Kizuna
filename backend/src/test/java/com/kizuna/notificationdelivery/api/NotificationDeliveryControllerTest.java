@@ -93,7 +93,7 @@ class NotificationDeliveryControllerTest {
   @WithMockUser(authorities = "PERM_NOTIFICATION_VIEW")
   void detailPassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(notifications.get(STORE_ID, "user", "101")).thenReturn(view());
+    when(notifications.get(STORE_ID, "101")).thenReturn(view());
 
     mockMvc
         .perform(
@@ -105,7 +105,7 @@ class NotificationDeliveryControllerTest {
         .andExpect(jsonPath("$.contact_decision").value("ALLOWED"))
         .andExpect(jsonPath("$.transport_availability").value("AVAILABLE"));
 
-    verify(notifications).get(STORE_ID, "user", "101");
+    verify(notifications).get(STORE_ID, "101");
   }
 
   @Test
@@ -143,7 +143,7 @@ class NotificationDeliveryControllerTest {
                     "could not execute statement",
                     new SQLException("duplicate key value", "23505"),
                     "uq_t_notification_deliveries_key")));
-    when(notifications.replay(eq(STORE_ID), eq("user"), any()))
+    when(notifications.replay(eq(STORE_ID), any()))
         .thenReturn(new NotificationService.Created(view(), false));
 
     mockMvc
@@ -163,7 +163,7 @@ class NotificationDeliveryControllerTest {
         .andExpect(jsonPath("$.contact_decision").value("ALLOWED"))
         .andExpect(jsonPath("$.transport_availability").value("AVAILABLE"));
 
-    verify(notifications).replay(eq(STORE_ID), eq("user"), any());
+    verify(notifications).replay(eq(STORE_ID), any());
   }
 
   @Test
@@ -219,7 +219,7 @@ class NotificationDeliveryControllerTest {
   void listIsAPageNewestFirst() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     var pageable = ArgumentCaptor.forClass(Pageable.class);
-    when(notifications.list(eq(STORE_ID), eq("user"), pageable.capture()))
+    when(notifications.list(eq(STORE_ID), pageable.capture()))
         .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 50), 0));
 
     mockMvc
@@ -241,7 +241,7 @@ class NotificationDeliveryControllerTest {
   void historyIsAPageNewestFirst() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     var pageable = ArgumentCaptor.forClass(Pageable.class);
-    when(notifications.history(eq(STORE_ID), eq("user"), eq("101"), pageable.capture()))
+    when(notifications.history(eq(STORE_ID), eq("101"), pageable.capture()))
         .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 50), 0));
 
     mockMvc
@@ -332,7 +332,7 @@ class NotificationDeliveryControllerTest {
     var attempt =
         DeliveryAttempt.resolution(
             row, 9L, "通知担当", OffsetDateTime.parse("2026-10-07T09:00:00+09:00"));
-    when(notifications.history(eq(STORE_ID), eq("user"), eq("101"), any()))
+    when(notifications.history(eq(STORE_ID), eq("101"), any()))
         .thenReturn(new PageImpl<>(List.of(attempt), PageRequest.of(0, 50), 1));
 
     mockMvc
@@ -382,7 +382,7 @@ class NotificationDeliveryControllerTest {
   @DisplayName("会員宛の通知は店舗集合に関わらず会員宛通知の権限で、店舗を持たない（null）として service を呼ぶこと")
   void memberRowsPassNoStoreForMemberNotificationHolders() throws Exception {
     when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of()));
-    when(notifications.list(isNull(), eq("user"), any()))
+    when(notifications.list(isNull(), any()))
         .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 50), 0));
     when(notifications.queue(null, "user", "101", 0L, "確認済み", false)).thenReturn(view());
 
@@ -398,7 +398,7 @@ class NotificationDeliveryControllerTest {
                 .content("{\"version\":0,\"reason\":\"確認済み\"}"))
         .andExpect(status().isOk());
 
-    verify(notifications).list(isNull(), eq("user"), any());
+    verify(notifications).list(isNull(), any());
     verify(notifications).queue(null, "user", "101", 0L, "確認済み", false);
   }
 

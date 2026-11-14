@@ -12,8 +12,8 @@ import com.kizuna.task.application.TaskLifecycle;
 import com.kizuna.task.application.TaskOptions;
 import com.kizuna.task.application.TaskQuery;
 import com.kizuna.task.execution.TaskExecutor;
+import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
-import com.kizuna.user.domain.PermissionCode;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -43,47 +43,41 @@ public class TaskExecutionController {
   private final TaskOptions options;
   private final TaskLifecycle lifecycle;
   private final TaskQuery query;
-  private final ServiceExecutionIdentityService identities;
+  private final ActorIdentityService identities;
   private final AppProperties properties;
   private final StoreScopeHolder storeScopes;
 
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_TASK_MANAGE')")
   public Page<ExecutionSummary> list(
-      Authentication auth,
       @PageableDefault(
               size = 50,
               sort = {"startedAt", "id"},
               direction = Sort.Direction.DESC)
           Pageable pageable) {
-    identities.requireOperator(auth.getName(), PermissionCode.TASK_MANAGE);
     return query.list(pageable).map(ExecutionSummary::of);
   }
 
   @GetMapping("/service-identities")
   @PreAuthorize("hasAuthority('PERM_TASK_MANAGE')")
   public Page<ServiceExecutionIdentityService.Candidate> candidates(
-      Authentication auth,
       @PageableDefault(
               size = 20,
               sort = {"displayName", "id"})
           Pageable pageable,
       @RequestParam(name = "task_name", defaultValue = "SERVICE_IDENTITY_CHECK") String taskName) {
-    identities.requireOperator(auth.getName(), PermissionCode.TASK_MANAGE);
     return options.candidates(taskName, pageable);
   }
 
   @GetMapping("/task-types")
   @PreAuthorize("hasAuthority('PERM_TASK_MANAGE')")
   public List<TaskOptions.TaskType> taskTypes(Authentication auth) {
-    identities.requireOperator(auth.getName(), PermissionCode.TASK_MANAGE);
     return options.taskTypes(auth.getName());
   }
 
   @GetMapping("/uncovered-stores")
   @PreAuthorize("hasAuthority('PERM_TASK_MANAGE')")
-  public List<UncoveredStoreResponse> uncoveredStores(Authentication auth) {
-    identities.requireOperator(auth.getName(), PermissionCode.TASK_MANAGE);
+  public List<UncoveredStoreResponse> uncoveredStores() {
     var scope = storeScopes.current();
     if (scope == null) throw new AccessDeniedException("授権店舗集合を解決できません");
     return options.uncoveredStores(scope).stream().map(UncoveredStoreResponse::of).toList();
@@ -91,8 +85,7 @@ public class TaskExecutionController {
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_TASK_MANAGE')")
-  public TaskExecutionResponse get(Authentication auth, @PathVariable Long id) {
-    identities.requireOperator(auth.getName(), PermissionCode.TASK_MANAGE);
+  public TaskExecutionResponse get(@PathVariable Long id) {
     return TaskExecutionResponse.of(lifecycle.get(id));
   }
 
@@ -100,7 +93,7 @@ public class TaskExecutionController {
   @PreAuthorize("hasAuthority('PERM_TASK_MANAGE')")
   public ResponseEntity<TaskExecutionResponse> execute(
       Authentication auth, @Valid @RequestBody TaskExecutionRequest req) {
-    var actor = identities.requireOperator(auth.getName(), PermissionCode.TASK_MANAGE);
+    var actor = identities.requireActor(auth.getName());
     var result = executor.execute(req.command(), actor);
     return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK)
         .body(TaskExecutionResponse.of(result.execution()));
@@ -110,7 +103,7 @@ public class TaskExecutionController {
   @PreAuthorize("hasAuthority('PERM_TASK_MANAGE')")
   public ResponseEntity<TaskExecutionResponse> retry(
       Authentication auth, @PathVariable Long id, @Valid @RequestBody ExecutionReasonRequest req) {
-    var actor = identities.requireOperator(auth.getName(), PermissionCode.TASK_MANAGE);
+    var actor = identities.requireActor(auth.getName());
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(TaskExecutionResponse.of(executor.retry(id, req.reason(), actor)));
   }
@@ -119,7 +112,7 @@ public class TaskExecutionController {
   @PreAuthorize("hasAuthority('PERM_TASK_MANAGE')")
   public TaskExecutionResponse interrupt(
       Authentication auth, @PathVariable Long id, @Valid @RequestBody ExecutionReasonRequest req) {
-    var actor = identities.requireOperator(auth.getName(), PermissionCode.TASK_MANAGE);
+    var actor = identities.requireActor(auth.getName());
     try {
       return TaskExecutionResponse.of(
           lifecycle.interrupt(

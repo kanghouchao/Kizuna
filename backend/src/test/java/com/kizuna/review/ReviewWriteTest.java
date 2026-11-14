@@ -8,7 +8,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -22,7 +21,6 @@ import com.kizuna.receipt.once.OperationReceipts;
 import com.kizuna.receipt.once.Receipt;
 import com.kizuna.receipt.once.ReceiptKey;
 import com.kizuna.review.api.dto.ReviewWriteResponse;
-import com.kizuna.review.application.ReviewActors;
 import com.kizuna.review.application.ReviewService;
 import com.kizuna.review.domain.ReviewCommand;
 import com.kizuna.review.domain.ReviewDetailsView;
@@ -36,8 +34,8 @@ import com.kizuna.review.domain.ReviewValues.ReceivedVia;
 import com.kizuna.review.domain.ReviewValues.Status;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.persistence.FluentPageCaptor;
+import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.PermissionCode;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -54,7 +52,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.projection.SpelAwareProxyProjectionFactory;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.util.ReflectionTestUtils;
 
 /** 口コミの書き込みが受領を経由し、業務行のロックを受領の業務の中で取ること。受領の振る舞いは receipt モジュールの試験が持つ。 */
@@ -66,7 +63,7 @@ class ReviewWriteTest {
   private final ReviewPermissionRepository permissions = mock(ReviewPermissionRepository.class);
   private final ReviewHistoryRepository history = mock(ReviewHistoryRepository.class);
   private final OperationReceipts operations = mock(OperationReceipts.class);
-  private final ReviewActors actors = mock(ReviewActors.class);
+  private final ActorIdentityService identities = mock(ActorIdentityService.class);
   private final BusinessAudit audit = mock(BusinessAudit.class);
   private final SpelAwareProxyProjectionFactory projections = new SpelAwareProxyProjectionFactory();
   private final ReviewService service =
@@ -76,15 +73,14 @@ class ReviewWriteTest {
           permissions,
           history,
           operations,
-          actors,
+          identities,
           audit,
           Clock.fixed(Instant.parse("2026-10-07T00:00:00Z"), ZoneOffset.UTC));
   private ReviewRecord row;
 
   @BeforeEach
   void setup() {
-    when(actors.require(eq(STORE_ID), anyString(), any()))
-        .thenReturn(new AuditActor(1L, "STAFF", "担当者"));
+    when(identities.requireActor(anyString())).thenReturn(new AuditActor(1L, "STAFF", "担当者"));
     row = ReviewRecord.receive(STORE_ID, input(null), 1L, "担当者", null, null);
     row.setId("00000000-0000-7000-8000-000000000010");
     row.setCreatedAt(AT);
@@ -149,7 +145,7 @@ class ReviewWriteTest {
             eq(approve("approve").fingerprint()),
             any(),
             any());
-    verify(actors).require(STORE_ID, "actor", PermissionCode.REVIEW_MODERATE);
+    verify(identities).requireActor("actor");
     verify(history).save(any());
     verify(audit)
         .record(
@@ -191,18 +187,5 @@ class ReviewWriteTest {
 
     verify(reviews, never()).findByIdAndStoreIdForUpdate(anyString(), anyLong());
     verifyNoInteractions(origins, history, audit);
-  }
-
-  @Test
-  void replayStillRequiresTheOrderAuthorityOfALinkedIntake() {
-    var receipt =
-        new ReviewCommand.Receive(input("00000000-0000-7000-8000-000000000090"), "intake");
-    doThrow(new AccessDeniedException("受注の権限なし"))
-        .when(actors)
-        .require(STORE_ID, "actor", PermissionCode.ORDER_MANAGE);
-
-    assertThatThrownBy(() -> service.replayOnly(STORE_ID, "actor", receipt))
-        .isInstanceOf(AccessDeniedException.class);
-    verifyNoInteractions(operations);
   }
 }
