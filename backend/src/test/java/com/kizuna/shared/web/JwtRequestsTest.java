@@ -57,12 +57,13 @@ class JwtRequestsTest {
 
   @Test
   @Order(1)
-  @DisplayName("指定した利用者 ID が handler の JwtClaims.userIdOf から返ること")
+  @DisplayName("指定した利用者 ID が handler の JwtClaims.userIdOf から返り、認証は要求の後も同じテストの間は残ること")
   void handlerReadsTheGivenUserId() throws Exception {
     mockMvc
         .perform(get("/jwt-requests-probe").with(jwtUser(42L, "PERM_OTHER", "PERM_PROBE")))
         .andExpect(status().isOk())
         .andExpect(content().string("42"));
+    assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
   }
 
   @Test
