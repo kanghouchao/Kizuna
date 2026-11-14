@@ -113,13 +113,13 @@ class StoreProfileAuditTest {
   @Test
   void collectionChangesAreDetected() {
     var request = new StoreProfileUpdateRequest();
-    request.setCustomTexts(Map.of("greeting", "ようこそ"));
+    request.setAccessNote("駅から徒歩 3 分");
     request.setSnsLinks(List.of(new SnsLink("x", "https://x.example.test/a", null)));
 
     service.update(STORE_ID, MAPPER.toPatch(request));
 
     assertThat(recorded.getFirst().getAfterValues())
-        .containsEntry("changed_fields", "custom_texts,sns_links");
+        .containsEntry("changed_fields", "access_note,sns_links");
   }
 
   @Test

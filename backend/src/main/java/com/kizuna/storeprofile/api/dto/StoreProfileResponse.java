@@ -4,7 +4,6 @@ import com.kizuna.storeprofile.domain.PartnerLink;
 import com.kizuna.storeprofile.domain.SnsLink;
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -26,8 +25,8 @@ public class StoreProfileResponse {
   private String address;
   private String phone;
   private String businessHours;
+  private String accessNote;
   private String pricingDescription;
-  private Map<String, String> customTexts;
   private List<SnsLink> snsLinks;
   private List<PartnerLink> partnerLinks;
   private OffsetDateTime createdAt;

@@ -26,8 +26,8 @@ export interface StoreProfileResponse {
   address?: string;
   phone?: string;
   business_hours?: string;
+  access_note?: string;
   pricing_description?: string;
-  custom_texts?: Record<string, string>;
   sns_links?: SnsLink[];
   partner_links?: PartnerLink[];
   created_at?: string;
@@ -46,8 +46,8 @@ export interface StoreProfileUpdateRequest {
   address?: string;
   phone?: string;
   business_hours?: string;
+  access_note?: string;
   pricing_description?: string;
-  custom_texts?: Record<string, string>;
   sns_links?: SnsLink[];
   partner_links?: PartnerLink[];
 }

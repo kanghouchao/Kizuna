@@ -228,21 +228,21 @@ export async function getStoreConfig(
 }
 
 /**
- * custom_texts のみ更新する（PUT /config, hasAuthority('PERM_STORE_PROFILE_MANAGE')）。
+ * access_note のみ更新する（PUT /config, hasAuthority('PERM_STORE_PROFILE_MANAGE')）。
  * MapStruct が NullValuePropertyMappingStrategy.IGNORE のため、他フィールドは送らず不変のまま。
  */
-export async function setCustomTexts(
+export async function setAccessNote(
   request: APIRequestContext,
   token: string,
-  customTexts: Record<string, string>,
+  accessNote: string,
 ): Promise<void> {
   const res = await request.put("/api/config", {
     headers: { ...STORE_HEADERS, Authorization: `Bearer ${token}` },
-    data: { custom_texts: customTexts },
+    data: { access_note: accessNote },
   });
   if (!res.ok()) {
     throw new Error(
-      `update custom_texts failed: ${res.status()} ${await res.text()}`,
+      `update access_note failed: ${res.status()} ${await res.text()}`,
     );
   }
 }

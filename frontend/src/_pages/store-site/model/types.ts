@@ -30,8 +30,8 @@ export interface SiteConfig {
   address?: string;
   phone?: string;
   business_hours?: string;
+  access_note?: string;
   pricing_description?: string;
-  custom_texts?: Record<string, string>;
   mv_url?: string;
   mv_type?: 'image' | 'video';
   sns_links?: SnsLink[];

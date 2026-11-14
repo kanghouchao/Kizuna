@@ -2,14 +2,14 @@ import { SiteConfig } from '../../model/types';
 
 interface StoreInfoSectionProps {
   siteConfig: SiteConfig;
-  accessNote?: string;
 }
 
 /**
  * 店舗情報（Server Component）。住所・電話・営業時間を定義リストで表示する。
  * null の項目は行ごと非表示。電話は tel: リンク。
  */
-export default function StoreInfoSection({ siteConfig, accessNote }: StoreInfoSectionProps) {
+export default function StoreInfoSection({ siteConfig }: StoreInfoSectionProps) {
+  const accessNote = siteConfig.access_note;
   const rows: { label: string; node: React.ReactNode }[] = [];
   if (siteConfig.address) rows.push({ label: '住所', node: siteConfig.address });
   if (siteConfig.phone)

@@ -6,10 +6,7 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -60,13 +57,11 @@ public class StoreProfile extends StoreScopedEntity {
   @Column(name = "business_hours", length = 500)
   private String businessHours;
 
+  @Column(name = "access_note", length = 500)
+  private String accessNote;
+
   @Column(name = "pricing_description", columnDefinition = "TEXT")
   private String pricingDescription;
-
-  @Type(JsonBinaryType.class)
-  @Column(name = "custom_texts", columnDefinition = "jsonb")
-  @Builder.Default
-  private Map<String, String> customTexts = new HashMap<>();
 
   @Type(JsonBinaryType.class)
   @Column(name = "sns_links", columnDefinition = "jsonb")
@@ -107,8 +102,8 @@ public class StoreProfile extends StoreScopedEntity {
     if (patch.address() != null) address = patch.address();
     if (patch.phone() != null) phone = patch.phone();
     if (patch.businessHours() != null) businessHours = patch.businessHours();
+    if (patch.accessNote() != null) accessNote = patch.accessNote();
     if (patch.pricingDescription() != null) pricingDescription = patch.pricingDescription();
-    if (patch.customTexts() != null) customTexts = new LinkedHashMap<>(patch.customTexts());
     if (patch.snsLinks() != null) snsLinks = new ArrayList<>(patch.snsLinks());
     if (patch.partnerLinks() != null) partnerLinks = new ArrayList<>(patch.partnerLinks());
   }

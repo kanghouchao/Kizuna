@@ -119,7 +119,7 @@ test('目視用のデータを投入する', async ({ request }) => {
       { name: 'ナイトワーク求人ナビ', url: 'https://example.com/partner-a' },
       { name: '銀座ナイトガイド', url: 'https://example.com/partner-b' },
     ],
-    custom_texts: { access_note: '銀座駅 A0 出口より徒歩 3 分' },
+    access_note: '銀座駅 A0 出口より徒歩 3 分',
     sns_links: [
       { platform: 'x', url: 'https://example.com/x', label: 'X' },
       { platform: 'instagram', url: 'https://example.com/ig', label: 'Instagram' },
