@@ -21,6 +21,8 @@ const PAYLOAD_KEYS = [
   'template_key',
 ];
 
+const ACCESS_NOTE_LABEL = 'アクセス補足（店舗情報ページに表示）';
+
 function initialData(overrides: Partial<StoreProfileResponse> = {}): StoreProfileResponse {
   return {
     id: '1',
@@ -35,7 +37,7 @@ function initialData(overrides: Partial<StoreProfileResponse> = {}): StoreProfil
     phone: '',
     business_hours: '',
     pricing_description: '',
-    custom_texts: { access_note: '既存メモ', modern_only_key: '他模版の値' },
+    custom_texts: { access_note: '既存メモ', other_key: '別の値' },
     sns_links: [{ platform: 'instagram', url: 'https://insta', label: '' }],
     partner_links: [],
     created_at: '',
@@ -113,16 +115,29 @@ describe('店舗プロフィールフォームの送信ペイロード', () => {
     expect(body.sns_links).toEqual([{ platform: 'line', url: 'https://insta', label: '' }]);
   });
 
-  it('模版テキストの編集後も現模版に無い custom_texts の key が保持されること', async () => {
-    const { container, onSubmit } = renderForm(initialData());
+  it('保存済みのアクセス補足が固定の項目に表示されること', () => {
+    renderForm(initialData());
 
-    const slot = container.querySelector('[name="custom_texts.access_note"]');
-    expect(slot).not.toBeNull();
-    fireEvent.change(slot as HTMLTextAreaElement, { target: { value: '新値' } });
+    expect(screen.getByLabelText(ACCESS_NOTE_LABEL)).toHaveValue('既存メモ');
+  });
+
+  it('テンプレートを切り替えてもアクセス補足の項目と入力値が変わらないこと', () => {
+    renderForm(initialData());
+
+    for (const name of [/モダン/, /クラシック/, /デフォルト/]) {
+      fireEvent.click(screen.getByRole('radio', { name }));
+      expect(screen.getByLabelText(ACCESS_NOTE_LABEL)).toHaveValue('既存メモ');
+    }
+  });
+
+  it('アクセス補足の編集後も custom_texts の他の key が保持されること', async () => {
+    const { onSubmit } = renderForm(initialData());
+
+    fireEvent.change(screen.getByLabelText(ACCESS_NOTE_LABEL), { target: { value: '新値' } });
 
     const body = await submitAndGetBody(onSubmit);
 
-    expect(body.custom_texts).toEqual({ access_note: '新値', modern_only_key: '他模版の値' });
+    expect(body.custom_texts).toEqual({ access_note: '新値', other_key: '別の値' });
   });
 
   it('テンプレートカードの選択が template_key に反映されること', async () => {
