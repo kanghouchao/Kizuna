@@ -22,6 +22,7 @@
 | `task test` | 前後端の単体テストとカバレッジゲート |
 | `task test:integration` | バックエンドの統合テスト（`*IntegrationTest`）を compose の使い捨て PostgreSQL・Redis で実行 |
 | `task e2e` | 独立した使い捨てスタックで E2E（`grep=正規表現` で対象を限定） |
+| `task demo` / `task demo:down` | 目視用の使い捨てスタックの起動／破棄。frontend は作業ツリーを読む開発モードで、店舗・キャスト・出勤・記事・口コミを投入済み（[E2E ガイド](e2e/README.md#目視用スタック)） |
 | `task format` | ホストの npm / Gradle による自動整形（差分を確認する） |
 | `task up` / `task down` | 開発スタックの起動／停止 |
 | `task -d infrastructure/development logs service=backend` | 開発環境の指定サービスのログ |
