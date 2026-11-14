@@ -111,7 +111,6 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
         onSubmit={handleSubmit(onSubmit)}
         className="space-y-10 bg-card text-card-foreground p-8 rounded-xl shadow-sm border"
       >
-        {/* 1. 基本設定 */}
         <section>
           <h3 className="text-lg font-semibold text-foreground mb-6 border-l-4 border-primary pl-3">
             基本設定
@@ -225,7 +224,6 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
           </div>
         </section>
 
-        {/* 2. ビジュアル設定 */}
         <section>
           <h3 className="text-lg font-semibold text-foreground mb-6 border-l-4 border-primary pl-3">
             ビジュアル設定
@@ -323,7 +321,6 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
           </div>
         </section>
 
-        {/* 3. SNSリンク */}
         <section>
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-lg font-semibold text-foreground border-l-4 border-primary pl-3">
@@ -407,7 +404,6 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
           </div>
         </section>
 
-        {/* 4. パートナーリンク */}
         <section>
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-lg font-semibold text-foreground border-l-4 border-primary pl-3">
