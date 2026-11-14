@@ -44,8 +44,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class ReviewController {
   private final ReviewService reviews;
 
+  // 関連受注を結ぶ受付・訂正は、受注を操作できる人にだけ許す。条件は要求の内容だけで決まるので入口で判定する。
   @PostMapping
-  @PreAuthorize("hasAuthority('PERM_REVIEW_VIEW') and hasAuthority('PERM_REVIEW_MANAGE')")
+  @PreAuthorize(
+      "hasAuthority('PERM_REVIEW_VIEW') and hasAuthority('PERM_REVIEW_MANAGE')"
+          + " and (#request.originOrderId() == null or hasAuthority('PERM_ORDER_MANAGE'))")
   public ResponseEntity<ReviewWriteResponse> create(
       @CurrentStore Long storeId, Authentication auth, @RequestBody ReviewCreateRequest request) {
     return write(storeId, auth, request.receipt(), true);
@@ -102,7 +105,9 @@ public class ReviewController {
   }
 
   @PostMapping("/{id}/corrections")
-  @PreAuthorize("hasAuthority('PERM_REVIEW_VIEW') and hasAuthority('PERM_REVIEW_MANAGE')")
+  @PreAuthorize(
+      "hasAuthority('PERM_REVIEW_VIEW') and hasAuthority('PERM_REVIEW_MANAGE')"
+          + " and (#request.originOrderId() == null or hasAuthority('PERM_ORDER_MANAGE'))")
   public ResponseEntity<ReviewWriteResponse> correct(
       @CurrentStore Long storeId,
       Authentication auth,
