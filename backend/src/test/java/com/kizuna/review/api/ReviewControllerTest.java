@@ -27,9 +27,11 @@ import com.kizuna.review.domain.ReviewValues.ReceivedVia;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
+import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -38,6 +40,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -269,6 +272,98 @@ class ReviewControllerTest {
             .andExpect(status().isForbidden());
 
     verifyNoInteractions(reviews);
+  }
+
+  private static final String ORIGIN = "00000000-0000-7000-8000-000000000201";
+
+  private static String intake(String originOrderId, String extra) {
+    return "{\"body\":\"本文\",\"received_via\":\"PAPER\",\"received_at\":\"2026-01-01T00:00:00Z\","
+        + (originOrderId == null ? "" : "\"origin_order_id\":\"" + originOrderId + "\",")
+        + extra
+        + "\"dedupe_key\":\"k\"}";
+  }
+
+  private static List<MockHttpServletRequestBuilder> intakes(String originOrderId) {
+    return List.of(
+        post("/reviews").contentType("application/json").content(intake(originOrderId, "")),
+        post("/reviews/" + ID + "/corrections")
+            .contentType("application/json")
+            .content(intake(originOrderId, "\"version\":0,\"reason\":\"訂正\",")));
+  }
+
+  private static ReviewViews.Written written(boolean replayed) {
+    return new ReviewViews.Written(
+        detail(),
+        new Receipt(
+            "50", Operation.RECEIVED.receiptName(), ID, Map.of("committed_version", 0L), replayed));
+  }
+
+  @Test
+  @DisplayName("関連受注を持つ受付・訂正は、受注の管理権限を欠くと 403 で service を呼ばないこと")
+  void intakeWithAnOriginOrderRequiresOrderManage() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+
+    for (var request : intakes(ORIGIN))
+      mockMvc
+          .perform(
+              request
+                  .with(holding(List.of("PERM_REVIEW_VIEW", "PERM_REVIEW_MANAGE")))
+                  .header("X-Store-ID", STORE_ID.toString()))
+          .andExpect(status().isForbidden());
+
+    verifyNoInteractions(reviews);
+  }
+
+  @Test
+  @DisplayName("関連受注を持つ受付・訂正は、受注の管理権限があれば service に届くこと")
+  void intakeWithAnOriginOrderPassesWithOrderManage() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(reviews.write(eq(STORE_ID), eq("user"), any())).thenReturn(written(false));
+
+    for (var request : intakes(ORIGIN))
+      mockMvc
+          .perform(
+              request
+                  .with(
+                      holding(
+                          List.of("PERM_REVIEW_VIEW", "PERM_REVIEW_MANAGE", "PERM_ORDER_MANAGE")))
+                  .header("X-Store-ID", STORE_ID.toString()))
+          .andExpect(status().isCreated());
+
+    verify(reviews).write(eq(STORE_ID), eq("user"), any(ReviewCommand.Receive.class));
+    verify(reviews).write(eq(STORE_ID), eq("user"), any(ReviewCommand.Correct.class));
+  }
+
+  @Test
+  @DisplayName("関連受注を持たない受付・訂正は、受注の管理権限が無くても初回・再送とも通ること")
+  void intakeWithoutAnOriginOrderNeedsNoOrderManage() throws Exception {
+    when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(reviews.write(eq(STORE_ID), eq("user"), any()))
+        .thenReturn(written(false))
+        .thenReturn(written(false))
+        .thenThrow(duplicateReceipt());
+    when(reviews.replayOnly(eq(STORE_ID), eq("user"), any())).thenReturn(written(true));
+
+    for (var expected : List.of(201, 200))
+      for (var request : intakes(null))
+        mockMvc
+            .perform(
+                request
+                    .with(holding(List.of("PERM_REVIEW_VIEW", "PERM_REVIEW_MANAGE")))
+                    .header("X-Store-ID", STORE_ID.toString()))
+            .andExpect(status().is(expected));
+
+    verify(reviews).replayOnly(eq(STORE_ID), eq("user"), any(ReviewCommand.Receive.class));
+    verify(reviews).replayOnly(eq(STORE_ID), eq("user"), any(ReviewCommand.Correct.class));
+  }
+
+  private static DataIntegrityViolationException duplicateReceipt() {
+    return new DataIntegrityViolationException(
+        "duplicate",
+        new ConstraintViolationException(
+            "could not execute statement",
+            new SQLException("duplicate key value", "23505"),
+            "uq_t_operation_receipts_key"));
   }
 
   /** 権限の判定だけを見るため、店舗集合の照合が掛からない Bearer 以外の主体を文脈と principal の両方に載せる。 */
