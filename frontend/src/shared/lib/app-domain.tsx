@@ -22,3 +22,14 @@ export function useAppDomain(): string {
   }
   return appDomain;
 }
+
+/**
+ * アプリドメインの origin。今のページと同じプロトコルとポートで組み立てる。
+ * 既定以外のポートで配信する環境で、ポートを落とすと別のスタックへ出てしまう。
+ */
+export function appOrigin(
+  appDomain: string,
+  { protocol, port }: Pick<Location, 'protocol' | 'port'> = window.location
+): string {
+  return `${protocol}//${appDomain}${port ? `:${port}` : ''}`;
+}

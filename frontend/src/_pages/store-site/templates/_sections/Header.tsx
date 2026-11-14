@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { useAppDomain } from '@/shared/lib';
+import { appOrigin, useAppDomain } from '@/shared/lib';
 
 interface HeaderProps {
   storeName: string;
@@ -30,9 +30,8 @@ export default function Header({ storeName, logoUrl }: HeaderProps) {
   const [reservationHref, setReservationHref] = useState<string | null>(null);
 
   useEffect(() => {
-    const { protocol, hostname } = window.location;
     setReservationHref(
-      `${protocol}//${appDomain}/member/reservations/new?store=${encodeURIComponent(hostname)}`
+      `${appOrigin(appDomain)}/member/reservations/new?store=${encodeURIComponent(window.location.hostname)}`
     );
   }, [appDomain]);
 
