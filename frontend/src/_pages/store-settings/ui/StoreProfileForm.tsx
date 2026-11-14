@@ -3,7 +3,6 @@
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import {
   getAllTemplateMetas,
-  getTemplateMeta,
   PartnerLink,
   SnsLink,
   StoreProfileResponse,
@@ -87,7 +86,6 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
   const { register, control, handleSubmit } = form;
 
   const templateKey = useWatch({ control, name: 'template_key' });
-  const textSlots = getTemplateMeta(templateKey).textSlots;
 
   const {
     fields: snsFields,
@@ -107,18 +105,10 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
     name: 'partner_links',
   });
 
-  const handleFormSubmit = (data: StoreProfileFormData) => {
-    // 現模版に無い既存 key を潰さないよう、保存済み custom_texts にマージする
-    onSubmit({
-      ...data,
-      custom_texts: { ...(initialData.custom_texts || {}), ...(data.custom_texts || {}) },
-    });
-  };
-
   return (
     <Form {...form}>
       <form
-        onSubmit={handleSubmit(handleFormSubmit)}
+        onSubmit={handleSubmit(onSubmit)}
         className="space-y-10 bg-card text-card-foreground p-8 rounded-xl shadow-sm border"
       >
         {/* 1. 基本設定 */}
@@ -129,8 +119,6 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="col-span-2 grid gap-2">
               <Label>テンプレート</Label>
-              {/* サムネイル付き予覧カードで模版を選択。選択中の key は既存 watch で
-                  模版テキスト欄の描画に連動する（追加配線は不要） */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {getAllTemplateMetas().map(meta => {
                   const selected = templateKey === meta.key;
@@ -215,6 +203,14 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
               />
             </div>
             <div className="col-span-2 grid gap-2">
+              <Label htmlFor="custom_texts.access_note">アクセス補足（店舗情報ページに表示）</Label>
+              <Textarea
+                id="custom_texts.access_note"
+                rows={3}
+                {...register('custom_texts.access_note')}
+              />
+            </div>
+            <div className="col-span-2 grid gap-2">
               <Label htmlFor="pricing_description">料金説明文</Label>
               <p className="text-xs text-muted-foreground">
                 料金ページの本文です。改行はそのまま公開サイトに表示されます。
@@ -227,31 +223,6 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
               />
             </div>
           </div>
-        </section>
-
-        {/* 模版テキスト */}
-        <section>
-          <h3 className="text-lg font-semibold text-foreground mb-6 border-l-4 border-primary pl-3">
-            模版テキスト
-          </h3>
-          {textSlots.length === 0 ? (
-            <div className="p-6 rounded-lg border border-dashed text-center text-muted-foreground text-sm">
-              この模版に追加のテキスト項目はありません
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {textSlots.map(slot => (
-                <div key={slot.key} className="grid gap-2">
-                  <Label htmlFor={`custom_texts.${slot.key}`}>{slot.label}</Label>
-                  <Textarea
-                    id={`custom_texts.${slot.key}`}
-                    rows={3}
-                    {...register(`custom_texts.${slot.key}`)}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
         </section>
 
         {/* 2. ビジュアル設定 */}
