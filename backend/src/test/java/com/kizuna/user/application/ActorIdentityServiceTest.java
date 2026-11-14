@@ -45,6 +45,26 @@ class ActorIdentityServiceTest {
   }
 
   @Test
+  void resolvesTheActorFromTheUserId() {
+    User user = mock(User.class);
+    when(user.getId()).thenReturn(42L);
+    when(user.getUserType()).thenReturn(UserType.STAFF);
+    when(user.getDisplayName()).thenReturn("担当者");
+    when(userRepository.findById(42L)).thenReturn(Optional.of(user));
+
+    assertThat(service.requireActor(42L)).isEqualTo(new AuditActor(42L, "STAFF", "担当者"));
+  }
+
+  @Test
+  void rejectsMissingUserId() {
+    when(userRepository.findById(404L)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.requireActor(404L))
+        .isInstanceOf(StaleSessionException.class)
+        .hasMessage("認証セッションの主体が存在しません");
+  }
+
+  @Test
   void rejectsMissingActor() {
     when(userRepository.findByEmail("missing@kizuna.test")).thenReturn(Optional.empty());
 

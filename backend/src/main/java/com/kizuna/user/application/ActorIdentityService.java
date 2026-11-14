@@ -29,9 +29,17 @@ public class ActorIdentityService {
     return new AuditActor(user.getId(), user.getUserType().name(), user.getDisplayName());
   }
 
+  @Transactional(readOnly = true)
+  public AuditActor requireActor(long userId) {
+    User user = userRepository.findById(userId).orElseThrow(ActorIdentityService::missing);
+    return new AuditActor(user.getId(), user.getUserType().name(), user.getDisplayName());
+  }
+
   private User require(String email) {
-    return userRepository
-        .findByEmail(email)
-        .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
+    return userRepository.findByEmail(email).orElseThrow(ActorIdentityService::missing);
+  }
+
+  private static StaleSessionException missing() {
+    return new StaleSessionException("認証セッションの主体が存在しません");
   }
 }
