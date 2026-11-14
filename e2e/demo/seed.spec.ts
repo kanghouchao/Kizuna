@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import { APP_URL } from '../base-url';
@@ -23,19 +23,19 @@ const PHOTOS = join(__dirname, 'photos');
 const SETUP_ADMIN = 'admin@kizuna.test';
 
 const CASTS = [
-  { name: '美咲', age: 24, height: 158, introduction: 'はじめまして。お話しするのが大好きです。\nお仕事帰りに、ふらっと立ち寄ってくださいね。' },
-  { name: 'あやか', age: 22, height: 162, introduction: '笑顔がチャームポイントと言われます。\nワインとゴルフのお話なら任せてください。' },
-  { name: '玲奈', age: 27, height: 165, bust: 86, waist: 58, hip: 87, introduction: '落ち着いた雰囲気でゆっくりお話ししたい方、ぜひ。\n日本酒を勉強中です。' },
-  { name: 'ゆい', age: 21, height: 154 },
-  { name: '七海', introduction: '海の近くで育ちました。旅行のお話を聞くのが好きです。' },
-  { name: 'さくら', age: 25, height: 160, bust: 84, waist: 57, hip: 85 },
-  { name: '麗', age: 29, height: 168, introduction: '銀座は 5 年目になります。\nお酒の選び方に迷ったら、お気軽にお尋ねください。' },
-  { name: 'かれん', age: 23, height: 156 },
-  { name: 'みお', introduction: '映画と猫の話になると止まりません。' },
-  { name: '凛', age: 26, height: 163, bust: 85, waist: 58, hip: 86, introduction: '静かに飲みたい夜に、隣でお付き合いします。' },
-  { name: 'アナスタシア・クリスティーナ', age: 24, height: 170, introduction: '名前が長いときの折り返しを確かめるためのキャストです。' },
+  { photo: 'cast-01.png', name: '美咲', age: 24, height: 158, introduction: 'はじめまして。お話しするのが大好きです。\nお仕事帰りに、ふらっと立ち寄ってくださいね。' },
+  { photo: 'cast-02.png', name: 'あやか', age: 22, height: 162, introduction: '笑顔がチャームポイントと言われます。\nワインとゴルフのお話なら任せてください。' },
+  { photo: 'cast-03.png', name: '玲奈', age: 27, height: 165, bust: 86, waist: 58, hip: 87, introduction: '落ち着いた雰囲気でゆっくりお話ししたい方、ぜひ。\n日本酒を勉強中です。' },
+  { photo: 'cast-04.png', name: 'ゆい', age: 21, height: 154 },
+  { photo: 'cast-05.png', name: '七海', introduction: '海の近くで育ちました。旅行のお話を聞くのが好きです。' },
+  { photo: 'cast-06.png', name: 'さくら', age: 25, height: 160, bust: 84, waist: 57, hip: 85 },
+  { photo: 'cast-07.png', name: '麗', age: 29, height: 168, introduction: '銀座は 5 年目になります。\nお酒の選び方に迷ったら、お気軽にお尋ねください。' },
+  { photo: 'cast-08.png', name: 'かれん', age: 23, height: 156 },
+  { photo: 'cast-09.png', name: 'みお', introduction: '映画と猫の話になると止まりません。' },
+  { photo: 'cast-10.png', name: '凛', age: 26, height: 163, bust: 85, waist: 58, hip: 86, introduction: '静かに飲みたい夜に、隣でお付き合いします。' },
+  { photo: 'cast-11.png', name: 'アナスタシア・クリスティーナ', age: 24, height: 170, introduction: '名前が長いときの折り返しを確かめるためのキャストです。' },
   // 写真の無いキャスト（写真が無いときの枠を確かめる）
-  { name: 'ひなた', age: 20, height: 152 },
+  { photo: undefined, name: 'ひなた', age: 20, height: 152 },
 ];
 
 const ARTICLES = [
@@ -128,10 +128,8 @@ test('目視用のデータを投入する', async ({ request }) => {
     ],
   });
 
-  const photos = readdirSync(PHOTOS).filter((file) => file.startsWith('cast-')).sort();
   const castIds: string[] = [];
-  for (const [index, cast] of CASTS.entries()) {
-    const photo = photos[index];
+  for (const [index, { photo, ...cast }] of CASTS.entries()) {
     const created = await post(request, token, '/api/casts', {
       ...cast,
       started_on: todayInTokyo(),

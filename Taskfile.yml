@@ -136,7 +136,10 @@ tasks:
         set -e
         PLAYWRIGHT_VERSION=$(jq -r '.devDependencies["@playwright/test"]' e2e/package.json | grep -oE '[0-9]+(\.[0-9]+)+' | head -1)
         export PLAYWRIGHT_VERSION
-        {{.COMPOSE}} run --rm e2e sh -c "npm install --legacy-peer-deps --no-audit --no-fund && npx playwright test -c demo/playwright.config.ts"
+        {{.COMPOSE}} run --rm e2e sh -c "npm install --legacy-peer-deps --no-audit --no-fund && npx playwright test -c demo/playwright.config.ts" || {
+          echo "❌ データ投入に失敗しました。スタックは起動したままです（調べ終えたら task demo:down）"
+          exit 1
+        }
       - |
         echo "✅ 目視用スタックを起動しました（止めるときは task demo:down）"
         echo "  全項目を設定した店舗: http://store1.kizuna.test:{{.PORT}}"
