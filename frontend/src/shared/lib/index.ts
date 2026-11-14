@@ -1,4 +1,4 @@
-export { AppDomainProvider, useAppDomain } from './app-domain';
+export { AppDomainProvider, appOrigin, useAppDomain } from './app-domain';
 export {
   default as redirectToLogin,
   currentReturnTarget,
