@@ -45,7 +45,7 @@ public class NotificationDeliveryController {
         Replays.write(
             DbConstraint.UQ_T_NOTIFICATION_DELIVERIES_KEY,
             () -> notifications.create(storeId, auth.getName(), content),
-            () -> notifications.replay(storeId, auth.getName(), content));
+            () -> notifications.replay(storeId, content));
     return ResponseEntity.status(created.created() ? 201 : 200)
         .body(DeliveryResponse.of(created.delivery()));
   }
@@ -54,16 +54,14 @@ public class NotificationDeliveryController {
   @PreAuthorize("hasAuthority('PERM_NOTIFICATION_VIEW')")
   public Page<DeliverySummary> list(
       @CurrentStore Long storeId,
-      Authentication auth,
       @PageableDefault(size = 50, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
-    return notifications.list(storeId, auth.getName(), pageable).map(DeliverySummary::of);
+    return notifications.list(storeId, pageable).map(DeliverySummary::of);
   }
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_NOTIFICATION_VIEW')")
-  public DeliveryResponse get(
-      @CurrentStore Long storeId, Authentication auth, @PathVariable String id) {
-    return DeliveryResponse.of(notifications.get(storeId, auth.getName(), id));
+  public DeliveryResponse get(@CurrentStore Long storeId, @PathVariable String id) {
+    return DeliveryResponse.of(notifications.get(storeId, id));
   }
 
   @PostMapping("/{id}/queue")
@@ -115,11 +113,8 @@ public class NotificationDeliveryController {
   @PreAuthorize("hasAuthority('PERM_NOTIFICATION_VIEW')")
   public Page<DeliveryAttemptResponse> history(
       @CurrentStore Long storeId,
-      Authentication auth,
       @PathVariable String id,
       @PageableDefault(size = 50, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
-    return notifications
-        .history(storeId, auth.getName(), id, pageable)
-        .map(DeliveryAttemptResponse::of);
+    return notifications.history(storeId, id, pageable).map(DeliveryAttemptResponse::of);
   }
 }

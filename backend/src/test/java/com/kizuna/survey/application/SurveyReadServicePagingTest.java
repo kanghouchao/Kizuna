@@ -30,7 +30,6 @@ class SurveyReadServicePagingTest {
   @Mock SurveyRevisionRepository revisions;
   @Mock SurveyAnswerRepository answers;
   @Mock SurveyHistoryRepository history;
-  @Mock SurveyActors actors;
   @InjectMocks SurveyReadService service;
 
   private final FluentPageCaptor pages = new FluentPageCaptor();
@@ -41,7 +40,7 @@ class SurveyReadServicePagingTest {
         .when(surveys)
         .findBy(ArgumentMatchers.<Specification<SurveySeries>>any(), any());
 
-    service.list(1L, "staff", PageRequest.of(2, 10), null, null, null, "CREATED_DESC");
+    service.list(1L, PageRequest.of(2, 10), null, null, null, "CREATED_DESC");
 
     assertThat(pages.captured().getSort())
         .containsExactly(
@@ -56,7 +55,7 @@ class SurveyReadServicePagingTest {
         .when(answers)
         .findBy(ArgumentMatchers.<Specification<SurveyAnswer>>any(), any());
 
-    service.answers(1L, "staff", ID, ID, PageRequest.of(0, 10), null, null, "RECEIVED_ASC");
+    service.answers(1L, ID, ID, PageRequest.of(0, 10), null, null, "RECEIVED_ASC");
 
     assertThat(pages.captured().getSort())
         .containsExactly(

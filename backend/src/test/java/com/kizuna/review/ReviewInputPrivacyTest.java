@@ -55,7 +55,8 @@ class ReviewInputPrivacyTest {
             "unused",
             List.of(
                 new SimpleGrantedAuthority("PERM_REVIEW_VIEW"),
-                new SimpleGrantedAuthority("PERM_REVIEW_MANAGE")));
+                new SimpleGrantedAuthority("PERM_REVIEW_MANAGE"),
+                new SimpleGrantedAuthority("PERM_ORDER_MANAGE")));
     TestSecurityContextHolder.setAuthentication(auth);
     String secret = "review-private@example.invalid 非公開本文";
     String valid =

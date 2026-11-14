@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.kizuna.audit.recording.AuditActor;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScope;
@@ -23,9 +24,8 @@ import com.kizuna.task.domain.ExecutionAttempt;
 import com.kizuna.task.execution.ExecutionResult;
 import com.kizuna.task.execution.TaskCommand;
 import com.kizuna.task.execution.TaskExecutor;
-import com.kizuna.user.application.ServiceExecutionIdentityService;
+import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.StoreScopeResolver;
-import com.kizuna.user.domain.PermissionCode;
 import com.kizuna.user.domain.User;
 import java.time.LocalDate;
 import java.util.Arrays;
@@ -54,7 +54,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
-/** 実行履歴が運用者の確認を経て、開始の新しい順を既定の並びとして Page で返すことの単体テスト。 */
+/** 実行履歴が開始の新しい順を既定の並びとして Page で返し、実行の記録に解決した実行者を渡すことの単体テスト。 */
 @WebMvcTest(TaskExecutionController.class)
 @Import({TaskExecutionControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
 class TaskExecutionControllerTest {
@@ -69,7 +69,7 @@ class TaskExecutionControllerTest {
   @MockitoBean private TaskOptions options;
   @MockitoBean private TaskLifecycle lifecycle;
   @MockitoBean private TaskQuery query;
-  @MockitoBean private ServiceExecutionIdentityService identities;
+  @MockitoBean private ActorIdentityService identities;
   @MockitoBean private AppProperties properties;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
   @MockitoBean private StoreScopeResolver storeScopeResolver;
@@ -89,7 +89,6 @@ class TaskExecutionControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 
-    verify(identities).requireOperator(eq("user"), eq(PermissionCode.TASK_MANAGE));
     assertThat(pageable.getValue().getPageSize()).isEqualTo(50);
     assertThat(pageable.getValue().getSort())
         .isEqualTo(
@@ -109,8 +108,6 @@ class TaskExecutionControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].id").value(3))
         .andExpect(jsonPath("$[0].name").value("新店"));
-
-    verify(identities).requireOperator(eq("user"), eq(PermissionCode.TASK_MANAGE));
   }
 
   @Test
@@ -225,7 +222,10 @@ class TaskExecutionControllerTest {
             null,
             null,
             null);
-    when(executor.execute(any(), any())).thenReturn(new TaskExecutor.Submission(execution, true));
+    var actor = new AuditActor(9L, "STAFF", "運用担当");
+    when(identities.requireActor("user")).thenReturn(actor);
+    when(executor.execute(any(), eq(actor)))
+        .thenReturn(new TaskExecutor.Submission(execution, true));
 
     mockMvc
         .perform(
@@ -237,7 +237,7 @@ class TaskExecutionControllerTest {
         .andExpect(jsonPath("$.execution.id").value(1))
         .andExpect(jsonPath("$.execution.task_name").value("NOTIFICATION_DELIVER"))
         .andExpect(jsonPath("$.execution.store_id").doesNotExist());
-    verify(executor).execute(command.capture(), any());
+    verify(executor).execute(command.capture(), eq(actor));
     assertThat(command.getValue())
         .isEqualTo(new TaskCommand("NOTIFICATION_DELIVER", "k", 10L, day, day));
 

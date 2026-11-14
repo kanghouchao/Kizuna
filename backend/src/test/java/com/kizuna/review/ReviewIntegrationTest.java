@@ -31,6 +31,7 @@ import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shared.web.StrictScalarJsonModule;
 import com.kizuna.shared.web.WebBindingConfig;
 import com.kizuna.store.StoreShortNames;
+import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Clock;
@@ -39,6 +40,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -295,9 +297,7 @@ class ReviewIntegrationTest {
             jdbc.queryForObject(
                 "select count(*) from t_review_history where review_id=?", Integer.class, id))
         .isEqualTo(3);
-    jdbc.update(
-        "delete from t_role_permissions where role_id=? and permission_id=(select id from t_permissions where code='REVIEW_MODERATE')",
-        roleId);
+    without("PERM_REVIEW_MODERATE");
     send("/" + id + "/decisions", decision, 403);
   }
 
@@ -477,11 +477,14 @@ class ReviewIntegrationTest {
     currentStore = otherStore;
     send("", input, 404);
     currentStore = storeId;
-    jdbc.update(
-        "delete from t_role_permissions where role_id=? and permission_id=(select id from t_permissions where code='ORDER_MANAGE')",
-        roleId);
+    without("PERM_ORDER_MANAGE");
     send("", input, 403);
     read("/" + received.get("review").get("id").asString(), 200);
+    Map<String, Object> unlinked = new HashMap<>(json.readValue(input, Map.class));
+    unlinked.remove("origin_order_id");
+    unlinked.put("dedupe_key", "unlinked-intake");
+    send("", json.writeValueAsString(unlinked), 201);
+    send("", json.writeValueAsString(unlinked), 200);
   }
 
   @Test
@@ -557,8 +560,6 @@ class ReviewIntegrationTest {
     currentStore = otherStore;
     assertThat(read("", 200).get("total_elements").asLong()).isZero();
     currentStore = storeId;
-    jdbc.update("update t_users set enabled=false where id=?", actorId);
-    read("", 403);
   }
 
   @Test
@@ -895,10 +896,6 @@ class ReviewIntegrationTest {
                 .content(next.replace("\"valid\"", "\"intake-only\"")))
         .andExpect(status().isForbidden());
     SecurityContextHolder.getContext().setAuthentication(auth);
-    jdbc.update(
-        "delete from t_role_permissions where role_id=? and permission_id=(select id from t_permissions where code='REVIEW_MODERATE')",
-        roleId);
-    publish(id, next.replace("\"valid\"", "\"demoted\""), 403);
     assertThat(read("/" + id, 200).get("version").asLong()).isEqualTo(1);
   }
 
@@ -1144,6 +1141,18 @@ class ReviewIntegrationTest {
     return resolvers.toArray(HandlerMethodArgumentResolver[]::new);
   }
 
+  /** 以後の要求を、指定した権限を外した担当者として送る。 */
+  private void without(String authority) {
+    auth =
+        new UsernamePasswordAuthenticationToken(
+            auth.getName(),
+            "unused",
+            auth.getAuthorities().stream()
+                .filter(granted -> !authority.equals(granted.getAuthority()))
+                .toList());
+    SecurityContextHolder.getContext().setAuthentication(auth);
+  }
+
   private JsonNode read(String path, int expected) throws Exception {
     return json.readTree(
         mvc.perform(get("/reviews" + path).principal(auth))
@@ -1179,6 +1188,7 @@ class ReviewIntegrationTest {
   @EnableJpaRepositories("com.kizuna")
   @ComponentScan(basePackageClasses = ReviewService.class)
   @Import({
+    ActorIdentityService.class,
     AuditWriter.class,
     BusinessAudit.class,
     OperationReceipts.class,

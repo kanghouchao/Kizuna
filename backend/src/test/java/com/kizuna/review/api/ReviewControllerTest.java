@@ -91,8 +91,7 @@ class ReviewControllerTest {
   @WithMockUser(authorities = "PERM_REVIEW_VIEW")
   void detailPassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(reviews.detail(STORE_ID, "user", "00000000-0000-7000-8000-000000000101"))
-        .thenReturn(detail());
+    when(reviews.detail(STORE_ID, "00000000-0000-7000-8000-000000000101")).thenReturn(detail());
 
     mockMvc
         .perform(
@@ -101,7 +100,7 @@ class ReviewControllerTest {
                 .principal(currentUser()))
         .andExpect(status().isOk());
 
-    verify(reviews).detail(STORE_ID, "user", "00000000-0000-7000-8000-000000000101");
+    verify(reviews).detail(STORE_ID, "00000000-0000-7000-8000-000000000101");
   }
 
   @Test
@@ -159,10 +158,7 @@ class ReviewControllerTest {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
     when(reviews.history(
-            eq(STORE_ID),
-            eq("user"),
-            eq("00000000-0000-7000-8000-000000000101"),
-            pageable.capture()))
+            eq(STORE_ID), eq("00000000-0000-7000-8000-000000000101"), pageable.capture()))
         .thenReturn(new PageImpl<>(List.of()));
 
     mockMvc
@@ -183,8 +179,7 @@ class ReviewControllerTest {
   void listOrdersByTheOrderParameterNotTheRequestSort() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<ReviewSearch> search = ArgumentCaptor.forClass(ReviewSearch.class);
-    when(reviews.list(eq(STORE_ID), eq("user"), search.capture()))
-        .thenReturn(new PageImpl<>(List.of()));
+    when(reviews.list(eq(STORE_ID), search.capture())).thenReturn(new PageImpl<>(List.of()));
 
     mockMvc
         .perform(

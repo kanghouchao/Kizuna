@@ -8,6 +8,7 @@ import com.kizuna.notificationdelivery.domain.NotificationDelivery;
 import com.kizuna.notificationdelivery.domain.NotificationDeliveryRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.persistence.Timestamps;
+import com.kizuna.user.application.ActorIdentityService;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.Optional;
@@ -22,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class NotificationService {
   private final NotificationDeliveryRepository deliveries;
   private final DeliveryAttemptRepository attempts;
-  private final NotificationActors actors;
+  private final ActorIdentityService identities;
   private final DeliveryContact contacts;
   private final DeliveryAudit audit;
   private final DeliveryTransports transports;
@@ -32,7 +33,7 @@ public class NotificationService {
 
   @Transactional
   public Created create(Long storeId, String email, DeliveryContent content) {
-    var actor = actors.require(storeId, email, NotificationActors.Action.MANAGE);
+    var actor = identities.requireActor(email);
     var existing = byKey(storeId, content.dedupeKey());
     if (existing.isPresent()) {
       existing.get().requireSame(content);
@@ -47,8 +48,7 @@ public class NotificationService {
   }
 
   @Transactional(readOnly = true)
-  public Created replay(Long storeId, String email, DeliveryContent content) {
-    actors.require(storeId, email, NotificationActors.Action.MANAGE);
+  public Created replay(Long storeId, DeliveryContent content) {
     var row =
         byKey(storeId, content.dedupeKey()).orElseThrow(() -> new NotFoundException("通知が見つかりません"));
     row.requireSame(content);
@@ -56,23 +56,21 @@ public class NotificationService {
   }
 
   @Transactional(readOnly = true)
-  public Page<NotificationDelivery> list(Long storeId, String email, Pageable pageable) {
-    actors.require(storeId, email, NotificationActors.Action.VIEW);
+  public Page<NotificationDelivery> list(Long storeId, Pageable pageable) {
     return storeId == null
         ? deliveries.findByAttributedStoreIdIsNull(pageable)
         : deliveries.findByAttributedStoreId(storeId, pageable);
   }
 
   @Transactional(readOnly = true)
-  public DeliveryView get(Long storeId, String email, String id) {
-    actors.require(storeId, email, NotificationActors.Action.VIEW);
+  public DeliveryView get(Long storeId, String id) {
     return response(storeId, require(storeId, id));
   }
 
   @Transactional
   public DeliveryView queue(
       Long storeId, String email, String id, Long version, String reason, boolean retry) {
-    var actor = actors.require(storeId, email, NotificationActors.Action.SEND);
+    var actor = identities.requireActor(email);
     var row = lock(storeId, id);
     contacts.resolve(storeId, row.content());
     row.queue(version, reason, retry);
@@ -89,7 +87,7 @@ public class NotificationService {
       Long version,
       DeliveryResolution outcome,
       String reason) {
-    var actor = actors.require(storeId, email, NotificationActors.Action.SEND);
+    var actor = identities.requireActor(email);
     var row = lock(storeId, id);
     row.resolve(version, outcome, reason);
     deliveries.flush();
@@ -100,8 +98,7 @@ public class NotificationService {
   }
 
   @Transactional(readOnly = true)
-  public Page<DeliveryAttempt> history(Long storeId, String email, String id, Pageable pageable) {
-    actors.require(storeId, email, NotificationActors.Action.VIEW);
+  public Page<DeliveryAttempt> history(Long storeId, String id, Pageable pageable) {
     require(storeId, id);
     return attempts.findByDeliveryId(id, pageable);
   }

@@ -120,7 +120,6 @@ public class ReviewController {
   @PreAuthorize("hasAuthority('PERM_REVIEW_VIEW')")
   public Page<ReviewSummaryResponse> list(
       @CurrentStore Long storeId,
-      Authentication auth,
       @PageableDefault(
               size = 20,
               sort = {})
@@ -131,10 +130,7 @@ public class ReviewController {
       @RequestParam(name = "permission_status", required = false) PermissionStatus permissionStatus,
       @RequestParam(defaultValue = "RECEIVED_DESC") ReviewSearch.Order sort) {
     return reviews
-        .list(
-            storeId,
-            auth.getName(),
-            new ReviewSearch(pageable, q, reviewId, status, permissionStatus, sort))
+        .list(storeId, new ReviewSearch(pageable, q, reviewId, status, permissionStatus, sort))
         .map(ReviewSummaryResponse::of);
   }
 
@@ -151,19 +147,17 @@ public class ReviewController {
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_REVIEW_VIEW')")
-  public ReviewResponse detail(
-      @CurrentStore Long storeId, Authentication auth, @PathVariable String id) {
-    return ReviewResponse.of(reviews.detail(storeId, auth.getName(), id));
+  public ReviewResponse detail(@CurrentStore Long storeId, @PathVariable String id) {
+    return ReviewResponse.of(reviews.detail(storeId, id));
   }
 
   @GetMapping("/{id}/history")
   @PreAuthorize("hasAuthority('PERM_REVIEW_VIEW')")
   public Page<ReviewHistoryResponse> history(
       @CurrentStore Long storeId,
-      Authentication auth,
       @PathVariable String id,
       @PageableDefault(size = 20, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
-    return reviews.history(storeId, auth.getName(), id, pageable).map(ReviewHistoryResponse::of);
+    return reviews.history(storeId, id, pageable).map(ReviewHistoryResponse::of);
   }
 
   private ResponseEntity<ReviewWriteResponse> write(

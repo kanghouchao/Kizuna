@@ -42,7 +42,7 @@ public class MemberNotificationDeliveryController {
         Replays.write(
             DbConstraint.UQ_T_NOTIFICATION_DELIVERIES_KEY,
             () -> notifications.create(null, auth.getName(), content),
-            () -> notifications.replay(null, auth.getName(), content));
+            () -> notifications.replay(null, content));
     return ResponseEntity.status(created.created() ? 201 : 200)
         .body(DeliveryResponse.of(created.delivery()));
   }
@@ -50,15 +50,14 @@ public class MemberNotificationDeliveryController {
   @GetMapping
   @PreAuthorize("hasAuthority('PERM_MEMBER_NOTIFICATION_VIEW')")
   public Page<DeliverySummary> list(
-      Authentication auth,
       @PageableDefault(size = 50, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
-    return notifications.list(null, auth.getName(), pageable).map(DeliverySummary::of);
+    return notifications.list(null, pageable).map(DeliverySummary::of);
   }
 
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_MEMBER_NOTIFICATION_VIEW')")
-  public DeliveryResponse get(Authentication auth, @PathVariable String id) {
-    return DeliveryResponse.of(notifications.get(null, auth.getName(), id));
+  public DeliveryResponse get(@PathVariable String id) {
+    return DeliveryResponse.of(notifications.get(null, id));
   }
 
   @PostMapping("/{id}/queue")
@@ -108,11 +107,8 @@ public class MemberNotificationDeliveryController {
   @GetMapping("/{id}/attempts")
   @PreAuthorize("hasAuthority('PERM_MEMBER_NOTIFICATION_VIEW')")
   public Page<DeliveryAttemptResponse> history(
-      Authentication auth,
       @PathVariable String id,
       @PageableDefault(size = 50, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
-    return notifications
-        .history(null, auth.getName(), id, pageable)
-        .map(DeliveryAttemptResponse::of);
+    return notifications.history(null, id, pageable).map(DeliveryAttemptResponse::of);
   }
 }
