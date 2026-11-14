@@ -112,6 +112,53 @@ tasks:
         export PLAYWRIGHT_VERSION
         docker compose -f e2e/docker-compose.e2e.yml run --rm e2e
 
+  demo:
+    desc: 目視用の使い捨てスタックを立てる（frontend は作業ツリーの開発モード、データ投入済み。port=18081 で公開ポートを変更可）
+    vars:
+      STACK_ID:
+        sh: basename "$(git rev-parse --show-toplevel)" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g'
+      COMPOSE: docker compose -f e2e/docker-compose.e2e.yml -f e2e/docker-compose.demo.yml
+      PORT: '{{default "18081" .port}}'
+    env:
+      COMPOSE_PROJECT_NAME: kizuna-demo-{{.STACK_ID}}
+      E2E_IMAGE_TAG: demo-{{.STACK_ID}}
+      DEMO_PORT: '{{.PORT}}'
+    cmds:
+      - |
+        command -v jq >/dev/null 2>&1 || { echo "❌ jq が必要です（Playwright 版数抽出に使用）"; exit 1; }
+      - task -d backend build DOCKER_TAG=demo-{{.STACK_ID}}
+      - docker buildx build --load --target deps -t kizuna-frontend-deps:demo-{{.STACK_ID}} frontend
+      # 初期設定は一度しか通らないため、残っているスタックは捨てて空から作り直す
+      - '{{.COMPOSE}} ps -aq | xargs -r docker rm -fv'
+      - '{{.COMPOSE}} down --remove-orphans'
+      - '{{.COMPOSE}} up -d --wait gateway'
+      - |
+        set -e
+        PLAYWRIGHT_VERSION=$(jq -r '.devDependencies["@playwright/test"]' e2e/package.json | grep -oE '[0-9]+(\.[0-9]+)+' | head -1)
+        export PLAYWRIGHT_VERSION
+        {{.COMPOSE}} run --rm e2e sh -c "npm install --legacy-peer-deps --no-audit --no-fund && npx playwright test -c demo/playwright.config.ts"
+      - |
+        echo "✅ 目視用スタックを起動しました（止めるときは task demo:down）"
+        echo "  全項目を設定した店舗: http://store1.kizuna.test:{{.PORT}}"
+        echo "  何も設定していない店舗: http://store2.kizuna.test:{{.PORT}}"
+        echo "  管理画面: http://kizuna.test:{{.PORT}}/auth/login（アカウントは e2e/README.md）"
+        echo "  型検査: docker compose -p kizuna-demo-{{.STACK_ID}} exec frontend npm run typecheck"
+
+  demo:down:
+    desc: 目視用の使い捨てスタックを破棄する
+    vars:
+      STACK_ID:
+        sh: basename "$(git rev-parse --show-toplevel)" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g'
+      COMPOSE: docker compose -f e2e/docker-compose.e2e.yml -f e2e/docker-compose.demo.yml
+    env:
+      COMPOSE_PROJECT_NAME: kizuna-demo-{{.STACK_ID}}
+    cmds:
+      # 匿名ボリューム（node_modules / .next）ごと回収する。名前付きボリュームは持たない
+      - '{{.COMPOSE}} ps -aq | xargs -r docker rm -fv'
+      - '{{.COMPOSE}} down --remove-orphans'
+      # 匿名ボリュームの掛け先としてホストに残る空ディレクトリ。空の node_modules は task format が依存を入れない原因になる
+      - rmdir frontend/node_modules frontend/.next 2>/dev/null || true
+
   format:
     desc: すべてのサービスのフォーマットを実行（service=frontend|backend で個別指定可）
     cmds:

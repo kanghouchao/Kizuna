@@ -1,0 +1,25 @@
+# 目視用スタック。docker-compose.e2e.yml に重ねて使う（root の `task demo`）。
+#
+# E2E との違いは二つだけ：frontend が作業ツリーを bind-mount した開発モードで動き、
+# gateway がホストの loopback にポートを一つ公開する。プロジェクト名とポートは root Taskfile が渡す。
+services:
+  frontend:
+    # 依存だけを入れた段階のイメージ。ソースは作業ツリーを読むので、編集がそのまま反映される
+    image: kizuna-frontend-deps:${E2E_IMAGE_TAG:-latest}
+    working_dir: /app
+    command: ["npx", "next", "dev", "-H", "0.0.0.0", "-p", "3000"]
+    volumes:
+      - ../frontend:/app
+      # イメージ側（linux）の node_modules と開発モードの生成物を、ホストの作業ツリーから分ける
+      - /app/node_modules
+      - /app/.next
+    deploy:
+      resources:
+        limits:
+          memory: ${FRONTEND_MEMORY_LIMIT:-4g}
+    healthcheck:
+      start_period: 90s
+
+  gateway:
+    ports:
+      - "127.0.0.1:${DEMO_PORT:-18081}:80"

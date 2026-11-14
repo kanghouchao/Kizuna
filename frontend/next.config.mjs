@@ -9,6 +9,9 @@ const nextConfig = {
     unoptimized: true,
   },
   output: 'standalone',
+  // 開発モードだけに効く。目視用スタックは localhost ではなく店舗のホスト名で開くため、
+  // 許可しないと HMR の接続が拒否され、編集が画面に反映されない
+  allowedDevOrigins: ['kizuna.test', '*.kizuna.test'],
   async rewrites() {
     return [];
   },
