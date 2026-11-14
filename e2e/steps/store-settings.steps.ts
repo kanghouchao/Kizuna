@@ -1,16 +1,16 @@
 import { expect, Page } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { APP_URL } from '../base-url';
-import { getStoreConfig, loginAsStoreAdmin, loginViaUiAndEnterStore, setCustomTexts, storeUrl, STORE1_ID } from './store-api';
+import { getStoreConfig, loginAsStoreAdmin, loginViaUiAndEnterStore, setAccessNote, storeUrl, STORE1_ID } from './store-api';
 
 const { Given, When, Then, After } = createBdd();
 
 const ACCESS_NOTE_LABEL = 'アクセス補足（店舗情報ページに表示）';
 const accessNoteTextarea = (page: Page) => page.getByLabel(ACCESS_NOTE_LABEL, { exact: true });
 
-let originalCustomTexts: Record<string, string> | null = null;
+let originalAccessNote = '';
 // 退避ステップが実際に成功したかの哨兵。退避前にシナリオが失敗した場合、
-// After が空オブジェクトで上書きして既存 custom_texts を消し飛ばすのを防ぐ。
+// After が空文字で上書きして既存のアクセス補足を消し飛ばすのを防ぐ。
 let snapshotCaptured = false;
 let testValue = '';
 
@@ -23,7 +23,7 @@ Given('店舗 {string} の管理画面にログインしている', async ({ pag
 Given('店舗設定の現在値を退避する', async ({ request }) => {
   const token = await loginAsStoreAdmin(request);
   const config = await getStoreConfig(request, token);
-  originalCustomTexts = (config.custom_texts as Record<string, string> | undefined) ?? null;
+  originalAccessNote = (config.access_note as string | null | undefined) ?? '';
   snapshotCaptured = true;
 });
 
@@ -44,14 +44,14 @@ Then('再読込後もアクセス補足が同じ検証値のままである', as
   await expect(accessNoteTextarea(page)).toHaveValue(testValue);
 });
 
-// custom_texts を退避値へ復元する（テスト失敗・途中クラッシュでも実行）。
-// ただし退避が成功していない場合は復元しない — 退避前の失敗で空オブジェクトを
-// PUT すると既存 custom_texts を消し飛ばすため。ベストエフォート。
+// アクセス補足を退避値へ復元する（テスト失敗・途中クラッシュでも実行）。
+// ただし退避が成功していない場合は復元しない — 退避前の失敗で空文字を
+// PUT すると既存のアクセス補足を消し飛ばすため。ベストエフォート。
 After({ tags: '@store-settings' }, async ({ request }) => {
   if (!snapshotCaptured) return;
   const token = await loginAsStoreAdmin(request);
-  await setCustomTexts(request, token, originalCustomTexts ?? {}).catch(() => {});
-  originalCustomTexts = null;
+  await setAccessNote(request, token, originalAccessNote).catch(() => {});
+  originalAccessNote = '';
   snapshotCaptured = false;
   testValue = '';
 });

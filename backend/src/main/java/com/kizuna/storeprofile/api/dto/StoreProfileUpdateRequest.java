@@ -5,7 +5,6 @@ import com.kizuna.storeprofile.domain.SnsLink;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Size;
 import java.util.List;
-import java.util.Map;
 import lombok.Data;
 
 @Data
@@ -39,9 +38,10 @@ public class StoreProfileUpdateRequest {
   @Size(max = 500)
   private String businessHours;
 
-  private String pricingDescription;
+  @Size(max = 500)
+  private String accessNote;
 
-  private Map<String, String> customTexts;
+  private String pricingDescription;
 
   @Valid private List<SnsLink> snsLinks;
 

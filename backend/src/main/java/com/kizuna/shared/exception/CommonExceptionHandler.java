@@ -82,7 +82,7 @@ public class CommonExceptionHandler {
    * のキーには設計上効かないため、そのまま載せると同一フィールドが方向によって別名になる。
    *
    * <p>直しはこの組み立て時に閉じる。{@code Map} のキーを一律に変換する形（{@code addKeySerializer}）を採ると、 キー自体が利用者の定義したデータである
-   * {@code CastResponse.customFields}／{@code StoreProfileResponse.customTexts} が静かに壊れる。
+   * {@code CastResponse.customFields} が静かに壊れる。
    */
   @ExceptionHandler(MethodArgumentNotValidException.class)
   public ResponseEntity<Map<String, Object>> handle(MethodArgumentNotValidException ex) {

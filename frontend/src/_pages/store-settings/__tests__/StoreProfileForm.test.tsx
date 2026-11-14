@@ -5,11 +5,11 @@ import type { StoreProfileResponse, StoreProfileUpdateRequest } from '@/entities
 // 送信ペイロードの形を固定する錨。プリミティブ置換で defaultValues や
 // フィールド配線が崩れると、この期待値が先に落ちる。
 const PAYLOAD_KEYS = [
+  'access_note',
   'address',
   'banner_url',
   'business_hours',
   'catch_copy',
-  'custom_texts',
   'description',
   'logo_url',
   'mv_type',
@@ -37,7 +37,7 @@ function initialData(overrides: Partial<StoreProfileResponse> = {}): StoreProfil
     phone: '',
     business_hours: '',
     pricing_description: '',
-    custom_texts: { access_note: '既存メモ', other_key: '別の値' },
+    access_note: '既存メモ',
     sns_links: [{ platform: 'instagram', url: 'https://insta', label: '' }],
     partner_links: [],
     created_at: '',
@@ -130,14 +130,14 @@ describe('店舗プロフィールフォームの送信ペイロード', () => {
     }
   });
 
-  it('アクセス補足の編集後も custom_texts の他の key が保持されること', async () => {
+  it('編集したアクセス補足が送信ペイロードに反映されること', async () => {
     const { onSubmit } = renderForm(initialData());
 
     fireEvent.change(screen.getByLabelText(ACCESS_NOTE_LABEL), { target: { value: '新値' } });
 
     const body = await submitAndGetBody(onSubmit);
 
-    expect(body.custom_texts).toEqual({ access_note: '新値', other_key: '別の値' });
+    expect(body.access_note).toBe('新値');
   });
 
   it('テンプレートカードの選択が template_key に反映されること', async () => {

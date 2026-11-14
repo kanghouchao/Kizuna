@@ -37,8 +37,8 @@ interface StoreProfileFormData {
   address: string;
   phone: string;
   business_hours: string;
+  access_note: string;
   pricing_description: string;
-  custom_texts: Record<string, string>;
   sns_links: SnsLink[];
   partner_links: PartnerLink[];
 }
@@ -77,8 +77,8 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
       address: initialData.address || '',
       phone: initialData.phone || '',
       business_hours: initialData.business_hours || '',
+      access_note: initialData.access_note || '',
       pricing_description: initialData.pricing_description || '',
-      custom_texts: initialData.custom_texts || {},
       sns_links: initialData.sns_links || [],
       partner_links: initialData.partner_links || [],
     },
@@ -202,12 +202,8 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
               />
             </div>
             <div className="col-span-2 grid gap-2">
-              <Label htmlFor="custom_texts.access_note">アクセス補足（店舗情報ページに表示）</Label>
-              <Textarea
-                id="custom_texts.access_note"
-                rows={3}
-                {...register('custom_texts.access_note')}
-              />
+              <Label htmlFor="access_note">アクセス補足（店舗情報ページに表示）</Label>
+              <Textarea id="access_note" rows={3} maxLength={500} {...register('access_note')} />
             </div>
             <div className="col-span-2 grid gap-2">
               <Label htmlFor="pricing_description">料金説明文</Label>

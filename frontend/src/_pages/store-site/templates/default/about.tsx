@@ -21,10 +21,7 @@ export default async function DefaultAboutPage({ store }: StoreSitePageProps) {
       <Header storeName={storeName} logoUrl={siteConfig.logo_url} />
       <main className="grow">
         <PageHero title="店舗情報・アクセス" />
-        <StoreInfoSection
-          siteConfig={siteConfig}
-          accessNote={siteConfig.custom_texts?.['access_note']}
-        />
+        <StoreInfoSection siteConfig={siteConfig} />
       </main>
       <Footer
         storeName={storeName}

@@ -66,8 +66,8 @@ public class StoreProfileService {
     values.put("address", profile.getAddress());
     values.put("phone", profile.getPhone());
     values.put("business_hours", profile.getBusinessHours());
+    values.put("access_note", profile.getAccessNote());
     values.put("pricing_description", profile.getPricingDescription());
-    values.put("custom_texts", profile.getCustomTexts());
     values.put("sns_links", profile.getSnsLinks());
     values.put("partner_links", profile.getPartnerLinks());
     return values;

@@ -69,6 +69,10 @@ databaseChangeLog:
                   type: VARCHAR(500)
                   remarks: 営業時間（自由テキスト）
               - column:
+                  name: access_note
+                  type: VARCHAR(500)
+                  remarks: アクセス補足（店舗情報ページに表示）
+              - column:
                   name: pricing_description
                   type: TEXT
                   remarks: 料金説明文（料金ページの本文）
@@ -80,10 +84,6 @@ databaseChangeLog:
                   name: partner_links
                   type: JSONB
                   remarks: 提携先リンク一覧 (JSON Array)
-              - column:
-                  name: custom_texts
-                  type: JSONB
-                  remarks: テンプレート別テキストスロット（key→text。テンプレート切替時も他テンプレートの key を保持）
               - column:
                   name: created_at
                   type: TIMESTAMP WITH TIME ZONE
