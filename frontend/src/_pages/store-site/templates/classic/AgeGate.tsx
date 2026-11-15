@@ -1,6 +1,7 @@
 'use client';
 
 import { AlertDialog } from '@base-ui/react/alert-dialog';
+import { useRef } from 'react';
 import { useAgeCheck } from '../../model/useAgeCheck';
 import { classicRootClass } from './fonts';
 
@@ -11,10 +12,12 @@ interface AgeGateProps {
 /**
  * 年齢確認の画面。同意するまで後ろのページへフォーカスが抜けないよう、モーダルとして開く。
  * 覆いは同意の記録を読む前から敷き、ページが一瞬でも先に見えないようにする。
+ * 開いた直後のフォーカスは「いいえ」に置く。「はい」に置くと Enter 一つで同意が記録される。
  */
 export default function AgeGate({ storeName }: AgeGateProps) {
   const { phase, accept, decline, leave } = useAgeCheck();
   const declined = phase === 'declined';
+  const declineRef = useRef<HTMLButtonElement>(null);
 
   return (
     <>
@@ -22,7 +25,7 @@ export default function AgeGate({ storeName }: AgeGateProps) {
       <AlertDialog.Root open={phase === 'gate' || declined}>
         <AlertDialog.Portal className={classicRootClass}>
           <AlertDialog.Backdrop className="c-gate-backdrop" />
-          <AlertDialog.Popup className="c-gate">
+          <AlertDialog.Popup className="c-gate" initialFocus={declineRef}>
             <div className="c-gate-card">
               <p className="c-gate-name c-v c-name c-display">{storeName}</p>
               {declined ? (
@@ -50,7 +53,7 @@ export default function AgeGate({ storeName }: AgeGateProps) {
                     <button type="button" className="c-gate-yes" onClick={accept}>
                       はい
                     </button>
-                    <button type="button" className="c-gate-no" onClick={decline}>
+                    <button ref={declineRef} type="button" className="c-gate-no" onClick={decline}>
                       いいえ
                     </button>
                   </div>

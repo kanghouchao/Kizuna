@@ -59,7 +59,6 @@
   text-combine-upright: all;
 }
 
-/* ---- 骨格 ---- */
 .classic-site .c-shell {
   min-width: 0;
 }
@@ -71,9 +70,8 @@
   padding: 0 var(--classic-gutter) 72px;
 }
 
-/* ---- 右端の縦書きのナビ ----
-   幅と高さの両方が足りる画面だけに出す。足りない画面は上部バーと引き出しに替えるので、
-   下端の項目が画面の外へ切れることがない。 */
+/* 右端の縦書きのナビは、幅と高さの両方が足りる画面だけに出す。足りない画面は上部バーと
+   引き出しに替えるので、下端の項目が画面の外へ切れることがない。 */
 .classic-site .c-rail {
   display: none;
 }
@@ -213,7 +211,6 @@
   font-size: 17px;
 }
 
-/* ---- 上部バーと引き出し ---- */
 .classic-site .c-topbar {
   position: sticky;
   top: 0;
@@ -391,7 +388,6 @@
   gap: 10px 18px;
 }
 
-/* ---- 年齢確認 ---- */
 .classic-site .c-gate-cover,
 .classic-site .c-gate-backdrop {
   position: fixed;
@@ -521,7 +517,6 @@
   color: var(--classic-ink-2);
 }
 
-/* ---- 写真の額と、写真の無いときの文字札 ---- */
 .classic-site .c-frame {
   position: relative;
   padding: 5px;
@@ -559,7 +554,6 @@
   line-height: 1;
 }
 
-/* ---- 区画: 本文と、余白に立てた縦書きの見出し ---- */
 .classic-site .c-sec {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -637,7 +631,6 @@
   color: var(--classic-ink-2);
 }
 
-/* ---- トップ: 冒頭 ---- */
 .classic-site .c-open {
   display: flex;
   flex-direction: column;
@@ -673,6 +666,16 @@
 
 .classic-site .c-open-catch:first-of-type {
   margin-block-start: 2.2em;
+}
+
+.classic-site .c-open-catch-flat {
+  max-width: 30em;
+  margin: 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  font-size: clamp(15px, 1.6vw, 19px);
+  line-height: 2;
+  letter-spacing: 0.2em;
 }
 
 .classic-site .c-open-side {
@@ -766,7 +769,6 @@
   }
 }
 
-/* ---- 映像 ---- */
 .classic-site .c-mv {
   width: min(100%, 760px);
 }
@@ -783,7 +785,6 @@
   object-fit: cover;
 }
 
-/* ---- トップ: キャストの横送り ---- */
 .classic-site .c-strip {
   display: flex;
   gap: 30px;
@@ -849,7 +850,6 @@
   color: var(--classic-ink-2);
 }
 
-/* ---- 予約の区画 ---- */
 .classic-site .c-cta {
   display: flex;
   flex-wrap: wrap;
@@ -868,7 +868,6 @@
   gap: 10px 24px;
 }
 
-/* ---- ページの見出し（一覧・詳細） ---- */
 .classic-site .c-crumb {
   display: flex;
   flex-wrap: wrap;
@@ -927,7 +926,6 @@
   }
 }
 
-/* ---- キャスト一覧: 目録の行 ---- */
 .classic-site .c-rows {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1039,7 +1037,6 @@
   }
 }
 
-/* ---- キャスト詳細: 冊子の頁 ---- */
 .classic-site .c-book {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -1189,7 +1186,6 @@
   border-top: 1px solid var(--classic-rule);
 }
 
-/* ---- フッター ---- */
 .classic-site .c-foot {
   border-top: 3px double var(--classic-rule);
   background-color: var(--classic-paper-deep);
@@ -1263,7 +1259,7 @@
   color: var(--classic-ink-2);
 }
 
-/* ---- 動き: 墨がにじむように現れるだけ ---- */
+/* 動きは、墨がにじむように現れるだけにとどめる */
 @keyframes classic-ink {
   from {
     opacity: 0;

@@ -6,12 +6,22 @@ import MemberReservationLink from './MemberReservationLink';
 import { nameScaleStyle } from './nameScale';
 import Portrait from './Portrait';
 
+/** 縦書きの題字に並べられるキャッチコピーの列数と、1 列に入る字数の目安。 */
+const CATCH_MAX_COLUMNS = 4;
+const CATCH_COLUMN_CHARS = 14;
+
 /** 店舗トップページ（classic テンプレート）。縦書きの店名を右、二重罫の Banner を左に置く。 */
 export default function ClassicTemplate({ store, siteConfig, casts }: StoreSitePageProps<'page'>) {
   const catchLines = (siteConfig.catch_copy ?? '')
     .split(/\r?\n/)
     .map(line => line.trim())
     .filter(Boolean);
+  // 縦書きは行ごとに列が増える。版面の幅に収まらない長さは、横書きで本文の側へ回す
+  const catchColumns = catchLines.reduce(
+    (total, line) => total + Math.ceil(Array.from(line).length / CATCH_COLUMN_CHARS),
+    0
+  );
+  const catchVertical = catchColumns <= CATCH_MAX_COLUMNS;
   const banner = siteConfig.banner_url;
   const bare = !banner && catchLines.length === 0;
   const count = String(casts.length);
@@ -23,14 +33,17 @@ export default function ClassicTemplate({ store, siteConfig, casts }: StoreSiteP
           <h1 className="c-open-name c-name c-display" style={nameScaleStyle(store.name)}>
             {store.name}
           </h1>
-          {catchLines.map((line, index) => (
-            <p key={index} className="c-open-catch c-display">
-              {line}
-            </p>
-          ))}
+          {catchVertical &&
+            catchLines.map((line, index) => (
+              <p key={index} className="c-open-catch c-display">
+                {line}
+              </p>
+            ))}
         </div>
 
         <div className="c-open-side">
+          {!catchVertical && <p className="c-open-catch-flat c-display">{catchLines.join('\n')}</p>}
+
           {banner && (
             <div className="c-frame c-open-banner">
               <div className="c-frame-in">
