@@ -1,7 +1,9 @@
 package com.kizuna.settings.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -28,7 +30,6 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.servlet.MockMvc;
@@ -53,14 +54,13 @@ class SystemConfigControllerTest {
 
   @Test
   @DisplayName("PERM_SYSTEM_CONFIG_MANAGE 権限があれば設定一覧を取得できること")
-  @WithMockUser(authorities = "PERM_SYSTEM_CONFIG_MANAGE")
   void listWithAuthority() throws Exception {
     // 準備
     when(systemConfigService.getAllConfigs()).thenReturn(List.of(view("site_name", "Kizuna")));
 
     // 実行・検証
     mockMvc
-        .perform(get("/system-configs"))
+        .perform(get("/system-configs").with(jwtUser(42L, "PERM_SYSTEM_CONFIG_MANAGE")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].config_key").value("site_name"));
   }
@@ -68,7 +68,6 @@ class SystemConfigControllerTest {
   // 秘匿設定は値を null で受け取り、応答は null の項目を書かないため config_value そのものが現れない。
   @Test
   @DisplayName("設定一覧の要素は snake_case の全項目を返し、秘匿設定の値を出さないこと")
-  @WithMockUser(authorities = "PERM_SYSTEM_CONFIG_MANAGE")
   void listWritesEveryFieldAndOmitsMaskedValue() throws Exception {
     OffsetDateTime at = OffsetDateTime.of(2026, 1, 2, 3, 4, 5, 0, ZoneOffset.UTC);
     when(systemConfigService.getAllConfigs())
@@ -80,7 +79,7 @@ class SystemConfigControllerTest {
                     2L, "smtp_password", null, "SMTP", "パスワード", "STRING", true, at, at)));
 
     mockMvc
-        .perform(get("/system-configs"))
+        .perform(get("/system-configs").with(jwtUser(42L, "PERM_SYSTEM_CONFIG_MANAGE")))
         .andExpect(status().isOk())
         .andExpect(
             content()
@@ -98,31 +97,31 @@ class SystemConfigControllerTest {
 
   @Test
   @DisplayName("PERM_SYSTEM_CONFIG_MANAGE 権限がなければ 403 を返すこと")
-  @WithMockUser(authorities = "OTHER_PERMISSION")
   void listWithoutAuthority() throws Exception {
     // 実行・検証
-    mockMvc.perform(get("/system-configs")).andExpect(status().isForbidden());
+    mockMvc
+        .perform(get("/system-configs").with(jwtUser(42L, "OTHER_PERMISSION")))
+        .andExpect(status().isForbidden());
   }
 
   @Test
   @DisplayName("PERM_SYSTEM_CONFIG_MANAGE 権限がなければ更新も 403 を返すこと")
-  @WithMockUser(authorities = "OTHER_PERMISSION")
   void updateWithoutAuthority() throws Exception {
     // 実行・検証
     mockMvc
         .perform(
             put("/system-configs/site_name")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"config_value\":\"新しい名前\"}"))
+                .content("{\"config_value\":\"新しい名前\"}")
+                .with(jwtUser(42L, "OTHER_PERMISSION")))
         .andExpect(status().isForbidden());
   }
 
   @Test
   @DisplayName("存在しない設定キーの更新は 400 とエラーメッセージを返すこと")
-  @WithMockUser(authorities = "PERM_SYSTEM_CONFIG_MANAGE")
   void updateUnknownKey() throws Exception {
     // 準備
-    when(systemConfigService.updateConfig(any(String.class), any(String.class)))
+    when(systemConfigService.updateConfig(eq(42L), any(String.class), any(String.class)))
         .thenThrow(new ServiceException("設定キーが見つかりません: unknown_key"));
 
     // 実行・検証
@@ -130,7 +129,8 @@ class SystemConfigControllerTest {
         .perform(
             put("/system-configs/unknown_key")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"config_value\":\"v\"}"))
+                .content("{\"config_value\":\"v\"}")
+                .with(jwtUser(42L, "PERM_SYSTEM_CONFIG_MANAGE")))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.error").value("設定キーが見つかりません: unknown_key"));
   }
@@ -138,22 +138,22 @@ class SystemConfigControllerTest {
   /** 実在する設定キー（{@code seed} が入れる形）が path 変数として欠けずにサービスへ届くことを固定する。 */
   @Test
   @DisplayName("更新の宛先は path の設定キーで、値だけを本体で受けること")
-  @WithMockUser(authorities = "PERM_SYSTEM_CONFIG_MANAGE")
   void updateAddressesTheKeyInThePath() throws Exception {
-    when(systemConfigService.updateConfig(any(String.class), any(String.class)))
+    when(systemConfigService.updateConfig(eq(42L), any(String.class), any(String.class)))
         .thenReturn(view("line_channel_id", "1234567890"));
 
     mockMvc
         .perform(
             put("/system-configs/line_channel_id")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"config_value\":\"1234567890\"}"))
+                .content("{\"config_value\":\"1234567890\"}")
+                .with(jwtUser(42L, "PERM_SYSTEM_CONFIG_MANAGE")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.config_key").value("line_channel_id"));
 
     ArgumentCaptor<String> key = ArgumentCaptor.forClass(String.class);
     ArgumentCaptor<String> value = ArgumentCaptor.forClass(String.class);
-    verify(systemConfigService).updateConfig(key.capture(), value.capture());
+    verify(systemConfigService).updateConfig(eq(42L), key.capture(), value.capture());
     assertThat(key.getValue()).isEqualTo("line_channel_id");
     assertThat(value.getValue()).isEqualTo("1234567890");
   }

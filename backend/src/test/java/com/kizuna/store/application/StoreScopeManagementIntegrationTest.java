@@ -38,7 +38,6 @@ import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
@@ -59,8 +58,6 @@ import org.springframework.orm.jpa.SharedEntityManagerCreator;
 import org.springframework.orm.jpa.hibernate.SpringBeanContainer;
 import org.springframework.orm.jpa.vendor.HibernateJpaDialect;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -78,6 +75,7 @@ class StoreScopeManagementIntegrationTest {
   private TransactionTemplate transactions;
   private StoreRegistryService stores;
   private Long managerId;
+  private long actor;
   private long hqId;
   private List<Long> hqStoresAfterSetup;
   private long storeA;
@@ -104,15 +102,10 @@ class StoreScopeManagementIntegrationTest {
             .getBean(InitialSetupService.class)
             .register(new InitialSetupCommand(HQ, UUID.randomUUID().toString(), "統括"));
     hqStoresAfterSetup = storeIdsOf(hqId);
-    actAs(HQ);
+    actor = hqId;
     storeA = create();
     storeB = create();
     managerId = saveUser(MANAGER, Set.of(storeA));
-  }
-
-  @AfterEach
-  void clear() {
-    SecurityContextHolder.clearContext();
   }
 
   @AfterAll
@@ -160,16 +153,18 @@ class StoreScopeManagementIntegrationTest {
 
   @Test
   void storeOutsideTheSetCannotBeReadUpdatedOrDeleted() {
-    actAs(MANAGER);
+    actor = managerId;
     var onlyA = new StoreScope(Set.of(storeA));
     String outside = String.valueOf(storeB);
     long auditsBefore = audits(storeB);
 
     assertThatThrownBy(() -> stores.getById(onlyA, outside)).isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
-            () -> stores.update(onlyA, outside, new StorePatch("改名", StoreShortNames.next())))
+            () ->
+                stores.update(actor, onlyA, outside, new StorePatch("改名", StoreShortNames.next())))
         .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> stores.delete(onlyA, outside)).isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> stores.delete(actor, onlyA, outside))
+        .isInstanceOf(NotFoundException.class);
 
     assertThat(stores.getById(new StoreScope(Set.of(storeB)), outside).name()).isEqualTo("検証店");
     assertThat(audits(storeB)).isEqualTo(auditsBefore);
@@ -177,16 +172,16 @@ class StoreScopeManagementIntegrationTest {
 
   @Test
   void storeInsideTheSetCanBeReadUpdatedAndDeleted() {
-    actAs(HQ);
+    actor = hqId;
     long target = create();
     long holder = saveUser(UUID.randomUUID() + "@example.test", Set.of(target));
-    actAs(emailOf(holder));
+    actor = holder;
     var scope = new StoreScope(Set.of(target));
     String id = String.valueOf(target);
 
     assertThat(stores.getById(scope, id).id()).isEqualTo(target);
-    stores.update(scope, id, new StorePatch("改名後", StoreShortNames.next()));
-    stores.delete(scope, id);
+    stores.update(actor, scope, id, new StorePatch("改名後", StoreShortNames.next()));
+    stores.delete(actor, scope, id);
 
     assertThat(jdbc.queryForObject("select count(*) from t_stores where id=?", Long.class, target))
         .isZero();
@@ -194,7 +189,7 @@ class StoreScopeManagementIntegrationTest {
 
   @Test
   void specificCreatorGainsTheNewStoreInTheSameTransaction() {
-    actAs(MANAGER);
+    actor = managerId;
 
     long created = create();
 
@@ -215,7 +210,7 @@ class StoreScopeManagementIntegrationTest {
     assertThat(hqStoresAfterSetup).as("初期設定の直後の統括は店舗集合が空").isEmpty();
     assertThat(storeIdsOf(hqId)).as("作成した店舗は作成者の集合へ加わる").contains(storeA, storeB);
 
-    actAs(HQ);
+    actor = hqId;
     long created = create();
 
     assertThat(storeIdsOf(hqId)).contains(created);
@@ -223,6 +218,7 @@ class StoreScopeManagementIntegrationTest {
 
   private long create() {
     return stores.create(
+        actor,
         new StoreCreateCommand("検証店", StoreShortNames.next(), UUID.randomUUID() + ".example.test"));
   }
 
@@ -244,10 +240,6 @@ class StoreScopeManagementIntegrationTest {
                 .getId());
   }
 
-  private String emailOf(long userId) {
-    return jdbc.queryForObject("select email from t_users where id=?", String.class, userId);
-  }
-
   private List<Long> storeIdsOf(long userId) {
     return jdbc.queryForList(
         "select store_id from t_user_stores where user_id=?", Long.class, userId);
@@ -256,11 +248,6 @@ class StoreScopeManagementIntegrationTest {
   private long audits(long storeId) {
     return jdbc.queryForObject(
         "select count(*) from t_audit_events where originating_store_id=?", Long.class, storeId);
-  }
-
-  private static void actAs(String email) {
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken(email, null, List.of()));
   }
 
   @Configuration

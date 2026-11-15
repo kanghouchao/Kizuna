@@ -1,5 +1,6 @@
 package com.kizuna.user.api;
 
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.user.api.dto.RoleSummaryResponse;
 import com.kizuna.user.api.dto.ServiceIdentityCreateRequest;
 import com.kizuna.user.api.dto.ServiceIdentityResponse;
@@ -7,6 +8,7 @@ import com.kizuna.user.api.dto.ServiceIdentitySummaryResponse;
 import com.kizuna.user.api.dto.ServiceIdentityUpdateRequest;
 import com.kizuna.user.application.ServiceIdentityService;
 import jakarta.validation.Valid;
+import java.security.Principal;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -63,30 +65,35 @@ public class ServiceIdentityController {
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_SERVICE_ID_MANAGE')")
   public ResponseEntity<ServiceIdentityResponse> create(
-      @Valid @RequestBody ServiceIdentityCreateRequest req) {
+      @Valid @RequestBody ServiceIdentityCreateRequest req, Principal principal) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(ServiceIdentityResponse.of(serviceIdentityService.create(req.command())));
+        .body(
+            ServiceIdentityResponse.of(
+                serviceIdentityService.create(JwtClaims.userIdOf(principal), req.command())));
   }
 
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_SERVICE_ID_MANAGE')")
   public ResponseEntity<ServiceIdentityResponse> update(
-      @PathVariable Long id, @Valid @RequestBody ServiceIdentityUpdateRequest req) {
+      @PathVariable Long id,
+      @Valid @RequestBody ServiceIdentityUpdateRequest req,
+      Principal principal) {
     return ResponseEntity.ok(
-        ServiceIdentityResponse.of(serviceIdentityService.update(id, req.command())));
+        ServiceIdentityResponse.of(
+            serviceIdentityService.update(JwtClaims.userIdOf(principal), id, req.command())));
   }
 
   @PostMapping("/{id}/suspension")
   @PreAuthorize("hasAuthority('PERM_SERVICE_ID_MANAGE')")
-  public ResponseEntity<Void> suspend(@PathVariable Long id) {
-    serviceIdentityService.suspend(id);
+  public ResponseEntity<Void> suspend(@PathVariable Long id, Principal principal) {
+    serviceIdentityService.suspend(JwtClaims.userIdOf(principal), id);
     return ResponseEntity.noContent().build();
   }
 
   @PostMapping("/{id}/resumption")
   @PreAuthorize("hasAuthority('PERM_SERVICE_ID_MANAGE')")
-  public ResponseEntity<Void> resume(@PathVariable Long id) {
-    serviceIdentityService.resume(id);
+  public ResponseEntity<Void> resume(@PathVariable Long id, Principal principal) {
+    serviceIdentityService.resume(JwtClaims.userIdOf(principal), id);
     return ResponseEntity.noContent().build();
   }
 }

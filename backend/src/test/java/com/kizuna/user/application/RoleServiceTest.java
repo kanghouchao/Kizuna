@@ -187,7 +187,7 @@ class RoleServiceTest {
               return saved;
             });
 
-    RoleViews.Detail res = service.create(createCommand("受付", Set.of("ORDER_MANAGE")));
+    RoleViews.Detail res = service.create(9L, createCommand("受付", Set.of("ORDER_MANAGE")));
 
     assertThat(roleCaptor.getValue().getName()).isEqualTo("受付");
     assertThat(roleCaptor.getValue().getSystemRole()).as("API 経由の作成は常に自作ロール").isFalse();
@@ -200,7 +200,7 @@ class RoleServiceTest {
   void create_unknownPermissionCode_throwsWithoutSaving() {
     when(permissionRepository.findByCodeIn(Set.of("NOT_A_CODE"))).thenReturn(List.of());
 
-    assertThatThrownBy(() -> service.create(createCommand("受付", Set.of("NOT_A_CODE"))))
+    assertThatThrownBy(() -> service.create(9L, createCommand("受付", Set.of("NOT_A_CODE"))))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("権限");
 
@@ -220,7 +220,7 @@ class RoleServiceTest {
                     new SQLException("duplicate key value violates unique constraint"),
                     "uq_t_roles_name")));
 
-    assertThatThrownBy(() -> service.create(createCommand("店長", Set.of("ORDER_MANAGE"))))
+    assertThatThrownBy(() -> service.create(9L, createCommand("店長", Set.of("ORDER_MANAGE"))))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("ロール名");
   }
@@ -234,7 +234,7 @@ class RoleServiceTest {
     when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
 
     RoleViews.Detail res =
-        service.update(7L, updateCommand("受付リーダー", Set.of("CUSTOMER_MANAGE"), 0L));
+        service.update(9L, 7L, updateCommand("受付リーダー", Set.of("CUSTOMER_MANAGE"), 0L));
 
     assertThat(existing.getName()).isEqualTo("受付リーダー");
     assertThat(existing.getPermissionIds()).containsExactly(CUSTOMER_MANAGE_ID);
@@ -252,7 +252,7 @@ class RoleServiceTest {
     when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
     when(roleManageHolderGuard.lockRoleHolders(7L)).thenReturn(List.of(staff, serviceIdentity));
 
-    service.update(7L, updateCommand("受付", Set.of("CUSTOMER_MANAGE"), 0L));
+    service.update(9L, 7L, updateCommand("受付", Set.of("CUSTOMER_MANAGE"), 0L));
 
     assertThat(staff.getCredentialVersion()).isEqualTo(1L);
     assertThat(serviceIdentity.getCredentialVersion()).isEqualTo(1L);
@@ -272,7 +272,7 @@ class RoleServiceTest {
     when(roleRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(existing));
     when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
 
-    service.update(7L, updateCommand("受付リーダー", Set.of("ORDER_MANAGE"), 0L));
+    service.update(9L, 7L, updateCommand("受付リーダー", Set.of("ORDER_MANAGE"), 0L));
 
     verifyNoInteractions(userRepository, roleManageHolderGuard);
     assertThat(events).isEmpty();
@@ -298,7 +298,8 @@ class RoleServiceTest {
         .thenReturn(List.of(permission(ORDER_MANAGE_ID, PermissionCode.ORDER_MANAGE)));
     when(roleRepository.findByIdForUpdate(404L)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.update(404L, updateCommand("受付", Set.of("ORDER_MANAGE"), 0L)))
+    assertThatThrownBy(
+            () -> service.update(9L, 404L, updateCommand("受付", Set.of("ORDER_MANAGE"), 0L)))
         .isInstanceOf(NotFoundException.class);
   }
 
@@ -311,7 +312,7 @@ class RoleServiceTest {
     when(roleRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(existing));
 
     assertThatThrownBy(
-            () -> service.update(7L, updateCommand("受付リーダー", Set.of("CUSTOMER_MANAGE"), 2L)))
+            () -> service.update(9L, 7L, updateCommand("受付リーダー", Set.of("CUSTOMER_MANAGE"), 2L)))
         .isInstanceOf(StaleRoleUpdateException.class);
 
     assertThat(existing.getName()).isEqualTo("受付");
@@ -325,7 +326,8 @@ class RoleServiceTest {
         .thenReturn(List.of(permission(CUSTOMER_MANAGE_ID, PermissionCode.CUSTOMER_MANAGE)));
     when(roleRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(existing));
 
-    assertThatThrownBy(() -> service.update(1L, updateCommand("別名", Set.of("CUSTOMER_MANAGE"), 0L)))
+    assertThatThrownBy(
+            () -> service.update(9L, 1L, updateCommand("別名", Set.of("CUSTOMER_MANAGE"), 0L)))
         .isInstanceOf(SystemRoleImmutableException.class);
 
     verify(roleRepository, never()).saveAndFlush(any());
@@ -341,7 +343,7 @@ class RoleServiceTest {
     when(roleRepository.findIdsByPermissionCode("ROLE_MANAGE")).thenReturn(Set.of());
     when(roleRepository.saveAndFlush(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-    service.update(1L, updateCommand("統括", Set.of("CUSTOMER_MANAGE"), 0L));
+    service.update(9L, 1L, updateCommand("統括", Set.of("CUSTOMER_MANAGE"), 0L));
 
     assertThat(existing.getPermissionIds()).containsExactly(CUSTOMER_MANAGE_ID);
     assertThat(existing.getName()).isEqualTo("統括");
@@ -361,7 +363,8 @@ class RoleServiceTest {
         .requireAfterRolePermissionRemoval(GUARDED_ROLE);
 
     assertThatThrownBy(
-            () -> service.update(GUARDED_ROLE, updateCommand("IT管理", Set.of("STORE_MANAGE"), 0L)))
+            () ->
+                service.update(9L, GUARDED_ROLE, updateCommand("IT管理", Set.of("STORE_MANAGE"), 0L)))
         .isInstanceOf(LastRoleManageHolderException.class);
 
     assertThat(existing.getPermissionIds()).containsExactly(ROLE_MANAGE_ID);
@@ -379,7 +382,7 @@ class RoleServiceTest {
         .thenReturn(Set.of(GUARDED_ROLE, OTHER_ROLE_MANAGE_ROLE));
     when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
 
-    service.update(GUARDED_ROLE, updateCommand("IT管理", Set.of("STORE_MANAGE"), 0L));
+    service.update(9L, GUARDED_ROLE, updateCommand("IT管理", Set.of("STORE_MANAGE"), 0L));
 
     assertThat(existing.getPermissionIds()).containsExactly(ORDER_MANAGE_ID);
     var order = inOrder(roleRepository, roleManageHolderGuard);
@@ -396,7 +399,7 @@ class RoleServiceTest {
     when(roleRepository.findByIdForUpdate(GUARDED_ROLE)).thenReturn(Optional.of(existing));
     when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
 
-    service.update(GUARDED_ROLE, updateCommand("IT管理（改名）", Set.of("ROLE_MANAGE"), 0L));
+    service.update(9L, GUARDED_ROLE, updateCommand("IT管理（改名）", Set.of("ROLE_MANAGE"), 0L));
 
     assertThat(existing.getName()).isEqualTo("IT管理（改名）");
     verifyNoInteractions(roleManageHolderGuard);
@@ -412,7 +415,7 @@ class RoleServiceTest {
         .thenReturn(Set.of(GUARDED_ROLE));
     when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
 
-    service.update(GUARDED_ROLE, updateCommand("IT管理", Set.of("STORE_MANAGE"), 0L));
+    service.update(9L, GUARDED_ROLE, updateCommand("IT管理", Set.of("STORE_MANAGE"), 0L));
 
     verify(roleManageHolderGuard).requireAfterRolePermissionRemoval(GUARDED_ROLE);
   }
@@ -421,7 +424,7 @@ class RoleServiceTest {
   void delete_unknownId_throwsNotFound() {
     when(roleRepository.findById(404L)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.delete(404L)).isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> service.delete(9L, 404L)).isInstanceOf(NotFoundException.class);
     verify(roleRepository, never()).delete(any());
   }
 
@@ -431,7 +434,7 @@ class RoleServiceTest {
     when(roleRepository.findById(7L)).thenReturn(Optional.of(existing));
     when(userRepository.existsByRoleId(7L)).thenReturn(false);
 
-    service.delete(7L);
+    service.delete(9L, 7L);
 
     verify(roleRepository).delete(existing);
   }
@@ -441,7 +444,8 @@ class RoleServiceTest {
     Role existing = role(1L, "HQ管理者", true, Set.of(ORDER_MANAGE_ID));
     when(roleRepository.findById(1L)).thenReturn(Optional.of(existing));
 
-    assertThatThrownBy(() -> service.delete(1L)).isInstanceOf(SystemRoleImmutableException.class);
+    assertThatThrownBy(() -> service.delete(9L, 1L))
+        .isInstanceOf(SystemRoleImmutableException.class);
 
     verify(roleRepository, never()).delete(any());
   }
@@ -452,7 +456,7 @@ class RoleServiceTest {
     when(roleRepository.findById(7L)).thenReturn(Optional.of(existing));
     when(userRepository.existsByRoleId(7L)).thenReturn(true);
 
-    assertThatThrownBy(() -> service.delete(7L)).isInstanceOf(RoleInUseException.class);
+    assertThatThrownBy(() -> service.delete(9L, 7L)).isInstanceOf(RoleInUseException.class);
 
     verify(roleRepository, never()).delete(any());
   }
@@ -473,7 +477,7 @@ class RoleServiceTest {
         .when(roleRepository)
         .flush();
 
-    assertThatThrownBy(() -> service.delete(7L)).isInstanceOf(RoleInUseException.class);
+    assertThatThrownBy(() -> service.delete(9L, 7L)).isInstanceOf(RoleInUseException.class);
   }
 
   @Test
@@ -492,7 +496,7 @@ class RoleServiceTest {
                 "fk_t_role_permissions_role"));
     doThrow(violation).when(roleRepository).flush();
 
-    assertThatThrownBy(() -> service.delete(7L)).isSameAs(violation);
+    assertThatThrownBy(() -> service.delete(9L, 7L)).isSameAs(violation);
   }
 
   @Test
@@ -511,7 +515,7 @@ class RoleServiceTest {
                 "name"));
     when(roleRepository.saveAndFlush(any())).thenThrow(violation);
 
-    assertThatThrownBy(() -> service.create(createCommand("店長", Set.of("ORDER_MANAGE"))))
+    assertThatThrownBy(() -> service.create(9L, createCommand("店長", Set.of("ORDER_MANAGE"))))
         .isSameAs(violation);
   }
 
@@ -524,7 +528,7 @@ class RoleServiceTest {
     when(roleRepository.findIdsByPermissionCode("ROLE_MANAGE")).thenReturn(Set.of());
     when(roleRepository.saveAndFlush(existing)).thenReturn(existing);
 
-    service.update(GUARDED_ROLE, updateCommand("受付", Set.of("CUSTOMER_MANAGE"), 0L));
+    service.update(9L, GUARDED_ROLE, updateCommand("受付", Set.of("CUSTOMER_MANAGE"), 0L));
 
     verify(roleManageHolderGuard, never()).requireAfterRolePermissionRemoval(any());
   }

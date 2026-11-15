@@ -35,19 +35,27 @@ public class MediumService {
   }
 
   @Transactional
-  public String create(Long storeId, String name) {
+  public String create(Long storeId, long actorId, String name) {
     String normalized = Medium.normalizeName(name);
     requireUnique(storeId, normalized);
     var medium = Medium.builder().name(normalized).build();
     medium.setStoreId(storeId);
     flushUnique(() -> media.saveAndFlush(medium));
-    audit.recordCurrent(
-        storeId, "MEDIUM_CREATED", TARGET, medium.getId(), Map.of(), snapshot(medium));
+    audit.recordById(
+        actorId,
+        storeId,
+        "MEDIUM_CREATED",
+        TARGET,
+        medium.getId(),
+        null,
+        null,
+        Map.of(),
+        snapshot(medium));
     return medium.getId();
   }
 
   @Transactional
-  public Medium rename(Long storeId, String id, String name, long version) {
+  public Medium rename(Long storeId, long actorId, String id, String name, long version) {
     var medium = find(storeId, id, version);
     String normalized = Medium.normalizeName(name);
     if (normalized.equals(medium.getName())) return medium;
@@ -57,32 +65,34 @@ public class MediumService {
     flushUnique(media::flush);
     var after = new HashMap<>(snapshot(medium));
     after.put("redacted_fields_changed", "name");
-    audit.recordCurrent(storeId, "MEDIUM_RENAMED", TARGET, id, before, after);
+    audit.recordById(actorId, storeId, "MEDIUM_RENAMED", TARGET, id, null, null, before, after);
     return medium;
   }
 
   @Transactional
-  public Medium stop(Long storeId, String id, long version) {
+  public Medium stop(Long storeId, long actorId, String id, long version) {
     var medium = find(storeId, id, version);
     var before = snapshot(medium);
     medium.stop();
     media.flush();
-    audit.recordCurrent(storeId, "MEDIUM_STOPPED", TARGET, id, before, snapshot(medium));
+    audit.recordById(
+        actorId, storeId, "MEDIUM_STOPPED", TARGET, id, null, null, before, snapshot(medium));
     return medium;
   }
 
   @Transactional
-  public Medium resume(Long storeId, String id, long version) {
+  public Medium resume(Long storeId, long actorId, String id, long version) {
     var medium = find(storeId, id, version);
     var before = snapshot(medium);
     medium.resume();
     media.flush();
-    audit.recordCurrent(storeId, "MEDIUM_RESUMED", TARGET, id, before, snapshot(medium));
+    audit.recordById(
+        actorId, storeId, "MEDIUM_RESUMED", TARGET, id, null, null, before, snapshot(medium));
     return medium;
   }
 
   @Transactional
-  public void delete(Long storeId, String id, long version) {
+  public void delete(Long storeId, long actorId, String id, long version) {
     var medium = find(storeId, id, version);
     var before = snapshot(medium);
     media.delete(medium);
@@ -95,7 +105,16 @@ public class MediumService {
             DbConstraint.FK_T_ADVERTISING_COSTS_MEDIUM, MediumService::referenced,
             DbConstraint.FK_T_ORDERS_MEDIUM, MediumService::referenced,
             DbConstraint.FK_T_APPLICANTS_MEDIUM, MediumService::referenced));
-    audit.recordCurrent(storeId, "MEDIUM_DELETED", TARGET, id, before, Map.of("exists", "false"));
+    audit.recordById(
+        actorId,
+        storeId,
+        "MEDIUM_DELETED",
+        TARGET,
+        id,
+        null,
+        null,
+        before,
+        Map.of("exists", "false"));
   }
 
   private Medium find(Long storeId, String id, long version) {

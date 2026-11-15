@@ -7,7 +7,6 @@ import java.util.HashSet;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.modulith.NamedInterface;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,22 +21,23 @@ public class CreatedStoreGrant {
   private final UserRepository users;
   private final BusinessAudit businessAudit;
 
-  public void grantToCurrent(Long storeId) {
-    var auth = SecurityContextHolder.getContext().getAuthentication();
-    if (auth == null || !auth.isAuthenticated()) throw missingCreator();
+  public void grantToCreator(long creatorId, Long storeId) {
     // 同じ利用者の並行する作成や授権編集との取りこぼしを防ぐため、行を押さえてから読み直す。
     User creator =
-        users.findByEmailForUpdate(auth.getName()).orElseThrow(CreatedStoreGrant::missingCreator);
+        users.findByIdForUpdate(creatorId).orElseThrow(CreatedStoreGrant::missingCreator);
     var before = BusinessAudit.grants(creator);
     Set<Long> storeIds = new HashSet<>(creator.getStoreIds());
     storeIds.add(storeId);
     creator.reassignStores(storeIds);
     users.save(creator);
-    businessAudit.recordCurrent(
+    businessAudit.recordById(
+        creatorId,
         null,
         "STAFF_GRANTS_CHANGED",
         "USER_GRANTS",
         creator.getId().toString(),
+        null,
+        null,
         before,
         BusinessAudit.grants(creator));
   }

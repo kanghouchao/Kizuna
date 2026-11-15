@@ -3,7 +3,6 @@ package com.kizuna.storeprofile.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -28,11 +27,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class StoreProfileAuditTest {
@@ -47,9 +43,6 @@ class StoreProfileAuditTest {
 
   @BeforeEach
   void setup() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken("operator@example.test", null, List.of()));
     service =
         new StoreProfileService(
             profiles, new BusinessAudit(users, new AuditWriter(events, Clock.systemUTC())));
@@ -62,7 +55,7 @@ class StoreProfileAuditTest {
             .roleIds(Set.of(1L))
             .build();
     actor.setId(9L);
-    when(users.findByEmail(anyString())).thenReturn(Optional.of(actor));
+    when(users.findById(9L)).thenReturn(Optional.of(actor));
     when(events.saveAndFlush(any()))
         .thenAnswer(
             call -> {
@@ -83,11 +76,6 @@ class StoreProfileAuditTest {
             });
   }
 
-  @AfterEach
-  void clear() {
-    SecurityContextHolder.clearContext();
-  }
-
   @Test
   void recordsOnlyChangedFieldNamesNeverValues() {
     var request = new StoreProfileUpdateRequest();
@@ -95,7 +83,7 @@ class StoreProfileAuditTest {
     request.setDescription("新しい紹介文");
     request.setMvType("image");
 
-    service.update(STORE_ID, MAPPER.toPatch(request));
+    service.update(STORE_ID, 9L, MAPPER.toPatch(request));
 
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
@@ -116,7 +104,7 @@ class StoreProfileAuditTest {
     request.setAccessNote("駅から徒歩 3 分");
     request.setSnsLinks(List.of(new SnsLink("x", "https://x.example.test/a", null)));
 
-    service.update(STORE_ID, MAPPER.toPatch(request));
+    service.update(STORE_ID, 9L, MAPPER.toPatch(request));
 
     assertThat(recorded.getFirst().getAfterValues())
         .containsEntry("changed_fields", "access_note,sns_links");
@@ -128,7 +116,7 @@ class StoreProfileAuditTest {
     var request = new StoreProfileUpdateRequest();
     request.setSnsLinks(new ArrayList<>());
 
-    service.update(STORE_ID, MAPPER.toPatch(request));
+    service.update(STORE_ID, 9L, MAPPER.toPatch(request));
 
     assertThat(recorded.getFirst().getAfterValues()).containsEntry("changed_fields", "sns_links");
   }
@@ -140,8 +128,8 @@ class StoreProfileAuditTest {
     same.setDescription("元の紹介文");
     same.setSnsLinks(new ArrayList<>());
 
-    service.update(STORE_ID, MAPPER.toPatch(same));
-    service.update(STORE_ID, MAPPER.toPatch(new StoreProfileUpdateRequest()));
+    service.update(STORE_ID, 9L, MAPPER.toPatch(same));
+    service.update(STORE_ID, 9L, MAPPER.toPatch(new StoreProfileUpdateRequest()));
 
     assertThat(recorded).isEmpty();
   }
@@ -152,7 +140,7 @@ class StoreProfileAuditTest {
     var request = new StoreProfileUpdateRequest();
     request.setPhone("03-0000-0000");
 
-    assertThatThrownBy(() -> service.update(STORE_ID, MAPPER.toPatch(request)))
+    assertThatThrownBy(() -> service.update(STORE_ID, 9L, MAPPER.toPatch(request)))
         .isInstanceOf(IllegalStateException.class);
 
     assertThat(recorded).isEmpty();
@@ -164,7 +152,7 @@ class StoreProfileAuditTest {
     var request = new StoreProfileUpdateRequest();
     request.setPhone("03-0000-0000");
 
-    assertThatThrownBy(() -> service.update(STORE_ID, MAPPER.toPatch(request)))
+    assertThatThrownBy(() -> service.update(STORE_ID, 9L, MAPPER.toPatch(request)))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("audit");
   }

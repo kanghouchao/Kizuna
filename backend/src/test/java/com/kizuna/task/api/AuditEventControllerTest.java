@@ -1,5 +1,6 @@
 package com.kizuna.task.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -33,7 +34,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -57,7 +57,6 @@ class AuditEventControllerTest {
 
   @Test
   @DisplayName("一覧は呼び出し者の店舗集合と記録の新しい順の既定の並びで reader を呼び、Page で返すこと")
-  @WithMockUser(authorities = "PERM_AUDIT_VIEW")
   void listPassesTheCallersStoreSetNewestFirst() throws Exception {
     when(storeScopes.current()).thenReturn(STORE_ONE);
     var pageable = ArgumentCaptor.forClass(Pageable.class);
@@ -65,7 +64,7 @@ class AuditEventControllerTest {
         .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 50), 0));
 
     mockMvc
-        .perform(get("/audit-events"))
+        .perform(get("/audit-events").with(jwtUser(9L, "PERM_AUDIT_VIEW")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 
@@ -76,7 +75,6 @@ class AuditEventControllerTest {
 
   @Test
   @DisplayName("単件は呼び出し者の店舗集合で reader を呼ぶこと")
-  @WithMockUser(authorities = "PERM_AUDIT_VIEW")
   void getPassesTheCallersStoreSet() throws Exception {
     when(storeScopes.current()).thenReturn(STORE_ONE);
     var summary =
@@ -96,31 +94,37 @@ class AuditEventControllerTest {
     when(reader.get(STORE_ONE, 7L)).thenReturn(new AuditEventResponse(summary, Map.of(), Map.of()));
 
     mockMvc
-        .perform(get("/audit-events/7"))
+        .perform(get("/audit-events/7").with(jwtUser(9L, "PERM_AUDIT_VIEW")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.event.id").value(7));
   }
 
   @Test
   @DisplayName("店舗集合を解決できない呼び出しは 403 で、reader を呼ばないこと")
-  @WithMockUser(authorities = "PERM_AUDIT_VIEW")
   void unresolvedStoreSetIsForbidden() throws Exception {
     when(storeScopes.current()).thenReturn(null);
 
-    mockMvc.perform(get("/audit-events")).andExpect(status().isForbidden());
-    mockMvc.perform(get("/audit-events/7")).andExpect(status().isForbidden());
+    mockMvc
+        .perform(get("/audit-events").with(jwtUser(9L, "PERM_AUDIT_VIEW")))
+        .andExpect(status().isForbidden());
+    mockMvc
+        .perform(get("/audit-events/7").with(jwtUser(9L, "PERM_AUDIT_VIEW")))
+        .andExpect(status().isForbidden());
 
     verifyNoInteractions(reader);
   }
 
   @Test
   @DisplayName("閲覧権限の無い者は一覧も単件も 403 で、reader を呼ばないこと")
-  @WithMockUser(authorities = "PERM_TASK_MANAGE")
   void callerWithoutAuditViewIsForbidden() throws Exception {
     when(storeScopes.current()).thenReturn(STORE_ONE);
 
-    mockMvc.perform(get("/audit-events")).andExpect(status().isForbidden());
-    mockMvc.perform(get("/audit-events/7")).andExpect(status().isForbidden());
+    mockMvc
+        .perform(get("/audit-events").with(jwtUser(9L, "PERM_TASK_MANAGE")))
+        .andExpect(status().isForbidden());
+    mockMvc
+        .perform(get("/audit-events/7").with(jwtUser(9L, "PERM_TASK_MANAGE")))
+        .andExpect(status().isForbidden());
 
     verifyNoInteractions(reader);
   }

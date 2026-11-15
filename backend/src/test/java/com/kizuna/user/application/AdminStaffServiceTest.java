@@ -66,7 +66,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class AdminStaffServiceTest {
 
-  private static final String ACTOR = "actor@kizuna.test";
+  private static final long ACTOR = 1L;
   private static final Pageable PAGEABLE = PageRequest.of(0, 20);
 
   /** 権限 id。ADMIN_ROLE は {1,2,3,ROLE_MANAGE}、MANAGER_ROLE は {1,2}、STAFF_ROLE は {1}。 */
@@ -187,8 +187,8 @@ class AdminStaffServiceTest {
 
   /** 行使者を差し込む。店舗集合は保持器（要求ごとの解決器）に、権限はロールから。 */
   private User actor(Set<Long> roleIds, Set<Long> storeIds) {
-    User actor = staff(1L, ACTOR, roleIds, storeIds);
-    when(repository.findByEmail(ACTOR)).thenReturn(Optional.of(actor));
+    User actor = staff(ACTOR, "actor@kizuna.test", roleIds, storeIds);
+    when(repository.findById(ACTOR)).thenReturn(Optional.of(actor));
     holder.install(() -> new StoreScope(storeIds));
     return actor;
   }
@@ -420,8 +420,16 @@ class AdminStaffServiceTest {
     assertThat(target.getCredentialVersion()).as("ロール集合の変更で再ログインさせる").isEqualTo(1L);
     assertThat(events).containsExactly(new UserCredentialsChanged(2L, 1L));
     verify(businessAudit)
-        .recordCurrent(
-            eq(null), eq("STAFF_GRANTS_CHANGED"), eq("USER_GRANTS"), eq("2"), any(), any());
+        .recordById(
+            eq(ACTOR),
+            eq(null),
+            eq("STAFF_GRANTS_CHANGED"),
+            eq("USER_GRANTS"),
+            eq("2"),
+            eq(null),
+            eq(null),
+            any(),
+            any());
   }
 
   @Test
@@ -471,7 +479,7 @@ class AdminStaffServiceTest {
 
     verify(credentialOperations).stop(target);
     verify(businessAudit)
-        .record(
+        .recordById(
             eq(ACTOR),
             eq(null),
             eq("STAFF_ACCOUNT_SUSPENDED"),

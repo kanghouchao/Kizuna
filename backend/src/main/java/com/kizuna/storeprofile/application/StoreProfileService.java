@@ -29,7 +29,7 @@ public class StoreProfileService {
   }
 
   @Transactional
-  public StoreProfile update(Long storeId, StoreProfilePatch patch) {
+  public StoreProfile update(Long storeId, long actorId, StoreProfilePatch patch) {
     StoreProfile config =
         storeProfileRepository
             .findByStoreId(storeId)
@@ -40,11 +40,14 @@ public class StoreProfileService {
     var saved = storeProfileRepository.saveAndFlush(config);
     var changed = changedFields(before, snapshot(saved));
     if (!changed.isEmpty()) {
-      businessAudit.recordCurrent(
+      businessAudit.recordById(
+          actorId,
           storeId,
           "STORE_PROFILE_UPDATED",
           "STORE_PROFILE",
           String.valueOf(storeId),
+          null,
+          null,
           Map.of("version", String.valueOf(versionBefore)),
           Map.of(
               "version", String.valueOf(saved.getVersion()),

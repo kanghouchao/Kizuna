@@ -249,12 +249,13 @@ class NotificationIntegrationTest {
 
   private DeliveryResponse draft() {
     var source = guest();
-    return DeliveryResponse.of(notifications.create(storeId, email, content(source)).delivery());
+    return DeliveryResponse.of(
+        notifications.create(storeId, operatorId, content(source)).delivery());
   }
 
   private DeliveryResponse queue(DeliveryResponse row) {
     return DeliveryResponse.of(
-        notifications.queue(storeId, email, row.id(), row.version(), "内容確認済み", false));
+        notifications.queue(storeId, operatorId, row.id(), row.version(), "内容確認済み", false));
   }
 
   private void submitTask() {
@@ -323,7 +324,7 @@ class NotificationIntegrationTest {
                 "select display_name from t_users where id=?", String.class, serviceId));
     var sent = get(row.id());
     assertThatThrownBy(
-            () -> notifications.queue(storeId, email, row.id(), sent.version(), "再送", true))
+            () -> notifications.queue(storeId, operatorId, row.id(), sent.version(), "再送", true))
         .isInstanceOf(ConflictException.class);
   }
 
@@ -346,7 +347,7 @@ class NotificationIntegrationTest {
     var blocked = await(row.id(), "BLOCKED");
     assertThat(transport.results).isEmpty();
     jdbc.update("update t_customer_contacts set business_status='ALLOWED' where id=?", contact);
-    notifications.queue(storeId, email, row.id(), blocked.version(), "同意再確認", true);
+    notifications.queue(storeId, operatorId, row.id(), blocked.version(), "同意再確認", true);
     runTask();
     await(row.id(), "SENT");
     assertThat(transport.results).hasSize(1);
@@ -368,7 +369,7 @@ class NotificationIntegrationTest {
                 .getFailureCode())
         .isEqualTo("UNAVAILABLE");
     transport.outcome = ContactTransport.Result.SENT;
-    notifications.queue(storeId, email, row.id(), failed.version(), "未送信の結果を確認して再試行", true);
+    notifications.queue(storeId, operatorId, row.id(), failed.version(), "未送信の結果を確認して再試行", true);
     runTask();
     await(row.id(), "SENT");
     assertThat(
@@ -388,7 +389,8 @@ class NotificationIntegrationTest {
     runTask();
     var unknown = await(next.id(), "UNKNOWN");
     assertThatThrownBy(
-            () -> notifications.queue(storeId, email, next.id(), unknown.version(), "再送", true))
+            () ->
+                notifications.queue(storeId, operatorId, next.id(), unknown.version(), "再送", true))
         .isInstanceOf(ConflictException.class);
   }
 
@@ -404,7 +406,7 @@ class NotificationIntegrationTest {
   private DeliveryResponse resolve(
       DeliveryResponse row, DeliveryResolution outcome, String reason) {
     return DeliveryResponse.of(
-        notifications.resolve(storeId, email, row.id(), row.version(), outcome, reason));
+        notifications.resolve(storeId, operatorId, row.id(), row.version(), outcome, reason));
   }
 
   @Test
@@ -440,7 +442,7 @@ class NotificationIntegrationTest {
         .contains("FAILED")
         .doesNotContain("機密な本文", "受付確認", "未配信を確認", "example.invalid");
 
-    notifications.queue(storeId, email, unknown.id(), failed.version(), "未送達の判定にもとづき再送", true);
+    notifications.queue(storeId, operatorId, unknown.id(), failed.version(), "未送達の判定にもとづき再送", true);
     runTask();
     await(unknown.id(), "SENT");
     assertThat(transport.results).hasSize(2);
@@ -455,7 +457,8 @@ class NotificationIntegrationTest {
     var sent = resolve(unknown, DeliveryResolution.SENT, "提供元で配信済みを確認");
     assertThat(sent.status()).isEqualTo("SENT");
     assertThatThrownBy(
-            () -> notifications.queue(storeId, email, unknown.id(), sent.version(), "再送", true))
+            () ->
+                notifications.queue(storeId, operatorId, unknown.id(), sent.version(), "再送", true))
         .isInstanceOf(ConflictException.class);
     assertThatThrownBy(() -> resolve(sent, DeliveryResolution.FAILED, "判定の上書き"))
         .isInstanceOf(ConflictException.class);
@@ -488,7 +491,7 @@ class NotificationIntegrationTest {
             () ->
                 notifications.resolve(
                     otherStore,
-                    email,
+                    operatorId,
                     unknown.id(),
                     unknown.version(),
                     DeliveryResolution.FAILED,
@@ -562,7 +565,7 @@ class NotificationIntegrationTest {
         .containsExactly("送信前SERVICE");
     var sent = get(first.id());
     assertThatThrownBy(
-            () -> notifications.queue(storeId, email, first.id(), sent.version(), "再送", true))
+            () -> notifications.queue(storeId, operatorId, first.id(), sent.version(), "再送", true))
         .isInstanceOf(ConflictException.class);
   }
 
@@ -585,7 +588,9 @@ class NotificationIntegrationTest {
     var unknown = await(row.id(), "UNKNOWN");
     assertThat(transport.results).hasSize(1);
     assertThatThrownBy(
-            () -> notifications.queue(storeId, email, row.id(), unknown.version(), "結果を再確認", true))
+            () ->
+                notifications.queue(
+                    storeId, operatorId, row.id(), unknown.version(), "結果を再確認", true))
         .isInstanceOf(ConflictException.class);
   }
 
@@ -598,8 +603,8 @@ class NotificationIntegrationTest {
     assertThatThrownBy(() -> queue(row)).isInstanceOf(ConflictException.class);
     String source = guest();
     var input = content(source);
-    var a = notifications.create(storeId, email, input);
-    var b = notifications.create(storeId, email, input);
+    var a = notifications.create(storeId, operatorId, input);
+    var b = notifications.create(storeId, operatorId, input);
     assertThat(a.delivery().row().getId()).isEqualTo(b.delivery().row().getId());
     assertThat(b.created()).isFalse();
   }
@@ -684,7 +689,7 @@ class NotificationIntegrationTest {
             c.body(),
             OffsetDateTime.now().plusDays(1),
             c.dedupeKey());
-    var row = DeliveryResponse.of(notifications.create(storeId, email, future).delivery());
+    var row = DeliveryResponse.of(notifications.create(storeId, operatorId, future).delivery());
     queue(row);
     runTask();
     assertThat(get(row.id()).status()).isEqualTo("QUEUED");
@@ -757,7 +762,7 @@ class NotificationIntegrationTest {
             "本文",
             OffsetDateTime.now().minusMinutes(1),
             UUID.randomUUID().toString());
-    var row = DeliveryResponse.of(notifications.create(storeId, email, input).delivery());
+    var row = DeliveryResponse.of(notifications.create(storeId, operatorId, input).delivery());
     queue(row);
     runTask();
     await(row.id(), "SENT");
@@ -787,7 +792,7 @@ class NotificationIntegrationTest {
             "本文",
             OffsetDateTime.now().minusMinutes(1),
             UUID.randomUUID().toString());
-    var next = DeliveryResponse.of(notifications.create(storeId, email, nextInput).delivery());
+    var next = DeliveryResponse.of(notifications.create(storeId, operatorId, nextInput).delivery());
     queue(next);
     runTask();
     await(next.id(), "BLOCKED");
@@ -800,9 +805,9 @@ class NotificationIntegrationTest {
     assertThat(options.candidates("NOTIFICATION_DELIVER", PageRequest.of(0, 100)).getContent())
         .extracting(ServiceExecutionIdentityService.Candidate::id)
         .contains(serviceId);
-    assertThat(options.taskTypes(email)).extracting(TaskOptions.TaskType::name).isSorted();
+    assertThat(options.taskTypes(operatorId)).extracting(TaskOptions.TaskType::name).isSorted();
     var delivery =
-        options.taskTypes(email).stream()
+        options.taskTypes(operatorId).stream()
             .filter(t -> t.name().equals("NOTIFICATION_DELIVER"))
             .findFirst()
             .orElseThrow();
@@ -840,8 +845,9 @@ class NotificationIntegrationTest {
               return context.getBean(OrderApplicationRepository.class).saveAndFlush(row).getId();
             });
     var there =
-        DeliveryResponse.of(notifications.create(otherStore, email, content(source)).delivery());
-    notifications.queue(otherStore, email, there.id(), there.version(), "内容確認済み", false);
+        DeliveryResponse.of(
+            notifications.create(otherStore, operatorId, content(source)).delivery());
+    notifications.queue(otherStore, operatorId, there.id(), there.version(), "内容確認済み", false);
     runTask();
     await(here.id(), "SENT");
     assertThat(DeliveryResponse.of(notifications.get(otherStore, there.id())).status())
@@ -994,10 +1000,10 @@ class NotificationIntegrationTest {
     var row =
         DeliveryResponse.of(
             notifications
-                .create(null, email, memberContent(member, DeliveryPurpose.BUSINESS))
+                .create(null, operatorId, memberContent(member, DeliveryPurpose.BUSINESS))
                 .delivery());
     return DeliveryResponse.of(
-        notifications.queue(null, email, row.id(), row.version(), "内容確認済み", false));
+        notifications.queue(null, operatorId, row.id(), row.version(), "内容確認済み", false));
   }
 
   private DeliveryResponse awaitGroup(String id, String status) throws Exception {
@@ -1074,19 +1080,28 @@ class NotificationIntegrationTest {
     assertThatThrownBy(() -> notifications.get(null, store.id()))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
-            () -> notifications.queue(null, email, store.id(), store.version(), "グループから操作", false))
+            () ->
+                notifications.queue(
+                    null, operatorId, store.id(), store.version(), "グループから操作", false))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
             () ->
                 notifications.resolve(
-                    null, email, store.id(), store.version(), DeliveryResolution.SENT, "グループから判定"))
+                    null,
+                    operatorId,
+                    store.id(),
+                    store.version(),
+                    DeliveryResolution.SENT,
+                    "グループから判定"))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(() -> notifications.history(null, store.id(), PageRequest.of(0, 10)))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(() -> notifications.history(storeId, group.id(), PageRequest.of(0, 10)))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(
-            () -> notifications.queue(storeId, email, group.id(), group.version(), "店舗から操作", true))
+            () ->
+                notifications.queue(
+                    storeId, operatorId, group.id(), group.version(), "店舗から操作", true))
         .isInstanceOf(NotFoundException.class);
   }
 
@@ -1096,14 +1111,14 @@ class NotificationIntegrationTest {
     assertThatThrownBy(
             () ->
                 notifications.create(
-                    storeId, email, memberContent(member, DeliveryPurpose.BUSINESS)))
+                    storeId, operatorId, memberContent(member, DeliveryPurpose.BUSINESS)))
         .isInstanceOf(ServiceException.class);
-    assertThatThrownBy(() -> notifications.create(null, email, content(guest())))
+    assertThatThrownBy(() -> notifications.create(null, operatorId, content(guest())))
         .isInstanceOf(ServiceException.class);
     assertThatThrownBy(
             () ->
                 notifications.create(
-                    null, email, memberContent(Long.MAX_VALUE, DeliveryPurpose.BUSINESS)))
+                    null, operatorId, memberContent(Long.MAX_VALUE, DeliveryPurpose.BUSINESS)))
         .isInstanceOf(NotFoundException.class);
     assertThat(jdbc.queryForObject("select count(*) from t_notification_deliveries", Long.class))
         .isZero();
@@ -1118,14 +1133,19 @@ class NotificationIntegrationTest {
     jdbc.update(
         "insert into t_member_notification_settings(member_id,purpose,status) values (?,'BUSINESS','ALLOWED')",
         member);
-    notifications.queue(null, email, blocked.id(), blocked.version(), "本人が許可したので再送", true);
+    notifications.queue(null, operatorId, blocked.id(), blocked.version(), "本人が許可したので再送", true);
     transport.outcome = ContactTransport.Result.UNKNOWN;
     runTask();
     var unknown = awaitGroup(blocked.id(), "UNKNOWN");
     var judged =
         DeliveryResponse.of(
             notifications.resolve(
-                null, email, unknown.id(), unknown.version(), DeliveryResolution.SENT, "受信を確認"));
+                null,
+                operatorId,
+                unknown.id(),
+                unknown.version(),
+                DeliveryResolution.SENT,
+                "受信を確認"));
     assertThat(judged.status()).isEqualTo("SENT");
     assertThat(transport.results).containsExactly("later@example.invalid");
 

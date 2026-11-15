@@ -2,6 +2,7 @@ package com.kizuna.survey.api;
 
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.shared.web.Replays;
 import com.kizuna.survey.api.dto.SurveyAnswerCreateRequest;
 import com.kizuna.survey.api.dto.SurveyAnswerSummaryResponse;
@@ -22,6 +23,7 @@ import com.kizuna.survey.domain.SurveyCommand;
 import com.kizuna.survey.domain.SurveyValues.AnswerStatus;
 import com.kizuna.survey.domain.SurveyValues.Operation;
 import com.kizuna.survey.domain.SurveyValues.RevisionStatus;
+import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -29,7 +31,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -49,20 +50,20 @@ public class SurveyController {
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW') and hasAuthority('PERM_SURVEY_MANAGE')")
   public ResponseEntity<SurveyWriteResponse> create(
-      @CurrentStore Long storeId, Authentication auth, @RequestBody SurveyCreateRequest r) {
-    return write(storeId, auth, new SurveyCommand.Create(r.definition(), r.dedupeKey()), true);
+      @CurrentStore Long storeId, Principal principal, @RequestBody SurveyCreateRequest r) {
+    return write(storeId, principal, new SurveyCommand.Create(r.definition(), r.dedupeKey()), true);
   }
 
   @PostMapping("/{sid}/revisions")
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW') and hasAuthority('PERM_SURVEY_MANAGE')")
   public ResponseEntity<SurveyWriteResponse> revise(
       @CurrentStore Long storeId,
-      Authentication auth,
+      Principal principal,
       @PathVariable String sid,
       @RequestBody SurveyRevisionCreateRequest r) {
     return write(
         storeId,
-        auth,
+        principal,
         new SurveyCommand.Revise(sid, r.basedOnRevisionId(), r.definition(), r.dedupeKey()),
         true);
   }
@@ -71,13 +72,13 @@ public class SurveyController {
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW') and hasAuthority('PERM_SURVEY_MANAGE')")
   public ResponseEntity<SurveyWriteResponse> replace(
       @CurrentStore Long storeId,
-      Authentication auth,
+      Principal principal,
       @PathVariable String sid,
       @PathVariable String rid,
       @RequestBody SurveyRevisionReplaceRequest r) {
     return write(
         storeId,
-        auth,
+        principal,
         new SurveyCommand.Replace(sid, rid, r.version(), r.definition(), r.dedupeKey()),
         false);
   }
@@ -86,13 +87,13 @@ public class SurveyController {
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW') and hasAuthority('PERM_SURVEY_MANAGE')")
   public ResponseEntity<SurveyWriteResponse> open(
       @CurrentStore Long storeId,
-      Authentication auth,
+      Principal principal,
       @PathVariable String sid,
       @PathVariable String rid,
       @RequestBody SurveyRevisionActionRequest r) {
     return write(
         storeId,
-        auth,
+        principal,
         new SurveyCommand.RevisionAction(
             sid, rid, r.version(), Operation.OPENED, r.reason(), r.dedupeKey()),
         false);
@@ -102,13 +103,13 @@ public class SurveyController {
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW') and hasAuthority('PERM_SURVEY_MANAGE')")
   public ResponseEntity<SurveyWriteResponse> close(
       @CurrentStore Long storeId,
-      Authentication auth,
+      Principal principal,
       @PathVariable String sid,
       @PathVariable String rid,
       @RequestBody SurveyRevisionActionRequest r) {
     return write(
         storeId,
-        auth,
+        principal,
         new SurveyCommand.RevisionAction(
             sid, rid, r.version(), Operation.CLOSED, r.reason(), r.dedupeKey()),
         false);
@@ -118,13 +119,13 @@ public class SurveyController {
   @PreAuthorize("hasAuthority('PERM_SURVEY_VIEW') and hasAuthority('PERM_SURVEY_RECORD')")
   public ResponseEntity<SurveyWriteResponse> receive(
       @CurrentStore Long storeId,
-      Authentication auth,
+      Principal principal,
       @PathVariable String sid,
       @PathVariable String rid,
       @RequestBody SurveyAnswerCreateRequest r) {
     return write(
         storeId,
-        auth,
+        principal,
         new SurveyCommand.Receive(sid, rid, r.revisionVersion(), r.input(), r.dedupeKey()),
         true);
   }
@@ -210,13 +211,14 @@ public class SurveyController {
   }
 
   private ResponseEntity<SurveyWriteResponse> write(
-      Long storeId, Authentication auth, SurveyCommand command, boolean create) {
+      Long storeId, Principal principal, SurveyCommand command, boolean create) {
+    long actorId = JwtClaims.userIdOf(principal);
     var result =
         SurveyWriteResponse.of(
             Replays.write(
                 DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-                () -> service.write(storeId, auth.getName(), command),
-                () -> service.replayOnly(storeId, auth.getName(), command)));
+                () -> service.write(storeId, actorId, command),
+                () -> service.replayOnly(storeId, actorId, command)));
     return ResponseEntity.status(create && !result.operation().replayed() ? 201 : 200).body(result);
   }
 }

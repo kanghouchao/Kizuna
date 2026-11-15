@@ -1,11 +1,14 @@
 package com.kizuna.auth.api.auth;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -13,6 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.kizuna.auth.application.AuthService;
 import com.kizuna.auth.application.AuthSessionService;
 import com.kizuna.auth.application.IssuedSession;
+import com.kizuna.auth.application.MeView;
 import com.kizuna.auth.infrastructure.IssuedJwt;
 import com.kizuna.auth.infrastructure.RefreshTokenCookies;
 import com.kizuna.auth.infrastructure.RefreshTokenRejectedException;
@@ -27,6 +31,8 @@ import com.kizuna.user.application.StoreScopeResolver;
 import jakarta.servlet.http.Cookie;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -255,6 +261,44 @@ class AuthControllerTest {
                 .cookie(new Cookie(RefreshTokenCookies.NAME, cookie)))
         .andReturn()
         .getResponse();
+  }
+
+  @Test
+  @DisplayName("本人資料の取得・更新とパスワード変更は、トークンの利用者 ID で本人を引かせること")
+  void selfServiceUsesTheTokenUserId() throws Exception {
+    var me = new MeView("user-42@example.com", "本人", "STAFF", List.of(), false, true);
+    when(authService.me(42L)).thenReturn(Optional.of(me));
+    when(authService.updateMe(42L, "新しい名前")).thenReturn(me);
+
+    mockMvc
+        .perform(get("/me").with(jwtUser(42L)))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.display_name").value("本人"));
+    mockMvc
+        .perform(
+            put("/me")
+                .with(jwtUser(42L))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"display_name\":\"新しい名前\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.display_name").value("本人"));
+    mockMvc
+        .perform(
+            put("/me/password")
+                .with(jwtUser(42L))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"current_password\":\"old-pass\",\"new_password\":\"new-password-1\"}"))
+        .andExpect(status().isNoContent());
+
+    verify(authService).changePassword(42L, "old-pass", "new-password-1");
+  }
+
+  @Test
+  @DisplayName("トークンの利用者の行が無ければ本人資料は 401 になること")
+  void meWithoutTheUserRowIsUnauthorized() throws Exception {
+    when(authService.me(42L)).thenReturn(Optional.empty());
+
+    mockMvc.perform(get("/me").with(jwtUser(42L))).andExpect(status().isUnauthorized());
   }
 
   private static void assertIssuedCookie(String setCookie) {

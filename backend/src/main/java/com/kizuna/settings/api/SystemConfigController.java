@@ -3,7 +3,9 @@ package com.kizuna.settings.api;
 import com.kizuna.settings.api.dto.SystemConfigResponse;
 import com.kizuna.settings.api.dto.SystemConfigUpdateRequest;
 import com.kizuna.settings.application.SystemConfigService;
+import com.kizuna.shared.web.JwtClaims;
 import jakarta.validation.Valid;
+import java.security.Principal;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -40,8 +42,12 @@ public class SystemConfigController {
   @PutMapping("/{key}")
   @PreAuthorize("hasAuthority('PERM_SYSTEM_CONFIG_MANAGE')")
   public ResponseEntity<SystemConfigResponse> update(
-      @PathVariable String key, @Valid @RequestBody SystemConfigUpdateRequest request) {
+      @PathVariable String key,
+      @Valid @RequestBody SystemConfigUpdateRequest request,
+      Principal principal) {
     return ResponseEntity.ok(
-        SystemConfigResponse.of(systemConfigService.updateConfig(key, request.getConfigValue())));
+        SystemConfigResponse.of(
+            systemConfigService.updateConfig(
+                JwtClaims.userIdOf(principal), key, request.getConfigValue())));
   }
 }

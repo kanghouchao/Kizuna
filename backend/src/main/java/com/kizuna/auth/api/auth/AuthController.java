@@ -11,6 +11,7 @@ import com.kizuna.auth.application.IssuedSession;
 import com.kizuna.auth.infrastructure.RefreshTokenCookies;
 import com.kizuna.auth.infrastructure.RefreshTokenRejectedException;
 import com.kizuna.shared.exception.StaleSessionException;
+import com.kizuna.shared.web.JwtClaims;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
 import java.security.Principal;
@@ -90,7 +91,7 @@ public class AuthController {
     // 行が引けない＝無効なのはセッション（トークンの指す主体が存在しない）。404 にすると
     // 前端の全域 401 経路（再ログインへの差し戻し）に乗らないため、updateMe と同じ例外へ揃える。
     return authService
-        .me(principal.getName())
+        .me(JwtClaims.userIdOf(principal))
         .map(me -> ResponseEntity.ok(MeResponse.of(me)))
         .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
   }
@@ -100,7 +101,7 @@ public class AuthController {
   public ResponseEntity<MeResponse> updateMe(
       Principal principal, @Valid @RequestBody MeUpdateRequest req) {
     return ResponseEntity.ok(
-        MeResponse.of(authService.updateMe(principal.getName(), req.getDisplayName())));
+        MeResponse.of(authService.updateMe(JwtClaims.userIdOf(principal), req.getDisplayName())));
   }
 
   /** パスワード変更。版の増分により全端末のセッションが失効するため、クライアントは再ログインが必要。 */
@@ -109,7 +110,7 @@ public class AuthController {
   public ResponseEntity<Void> changePassword(
       Principal principal, @Valid @RequestBody PasswordChangeRequest request) {
     authService.changePassword(
-        principal.getName(), request.getCurrentPassword(), request.getNewPassword());
+        JwtClaims.userIdOf(principal), request.getCurrentPassword(), request.getNewPassword());
     return ResponseEntity.noContent().build();
   }
 

@@ -107,7 +107,7 @@ public class StoreRegistryService {
    * <p>ドメインの重複は、制約違反を捕まえるのではなく事前に照会して判定する — 一意制約はここを擦り抜けた競合を受け止める 最後の一枚（409）であり、業務上の重複判定を委ねる先ではない。
    */
   @Transactional
-  public Long create(StoreCreateCommand command) {
+  public Long create(long actorId, StoreCreateCommand command) {
     if (storeRepository.findByDomain(command.domain()).isPresent()) {
       throw new ServiceException("このドメインは既に登録されています");
     }
@@ -115,8 +115,9 @@ public class StoreRegistryService {
         saveShortNameUnique(new Store(command.name(), command.shortName(), command.domain()));
     storeProfileRepository.save(StoreProfile.createDefault(saved.getId()));
     // 監査が作成者を読むより先に呼ぶ。先に読まれていると、作成者の行ロックが版照合付きの昇格になる。
-    createdStoreGrant.grantToCurrent(saved.getId());
+    createdStoreGrant.grantToCreator(actorId, saved.getId());
     record(
+        actorId,
         saved.getId(),
         "STORE_CREATED",
         Map.of(),
@@ -133,7 +134,7 @@ public class StoreRegistryService {
   // domain はメソッド本体のローカルにしか現れずキーとして書けない。delete と同じ全件失効に揃える。
   @Transactional
   @CacheEvict(value = DOMAIN_CACHE, allEntries = true)
-  public void update(StoreScope scope, String id, StorePatch patch) {
+  public void update(long actorId, StoreScope scope, String id, StorePatch patch) {
     var store = storeRepository.findById(requireInScope(scope, id)).orElseThrow(() -> notFound(id));
     String versionBefore = String.valueOf(store.getVersion());
     boolean renamed = !Objects.equals(store.getName(), patch.name());
@@ -149,6 +150,7 @@ public class StoreRegistryService {
     }
     if (!changed.isEmpty()) {
       record(
+          actorId,
           store.getId(),
           "STORE_UPDATED",
           Map.of("version", versionBefore),
@@ -178,7 +180,7 @@ public class StoreRegistryService {
    */
   @Transactional
   @CacheEvict(value = DOMAIN_CACHE, allEntries = true)
-  public void delete(StoreScope scope, String id) {
+  public void delete(long actorId, StoreScope scope, String id) {
     Long storeId = requireInScope(scope, id);
     Store store = storeRepository.findByIdForUpdate(storeId).orElseThrow(() -> notFound(id));
     if (store.getStatus() == StoreStatus.ACTIVE) {
@@ -210,12 +212,22 @@ public class StoreRegistryService {
     } catch (DataIntegrityViolationException ex) {
       throw IntegrityViolations.translate(ex, DELETION_VIOLATIONS);
     }
-    record(storeId, "STORE_DELETED", before, Map.of("exists", "false", "cascade_deleted", cascade));
+    record(
+        actorId,
+        storeId,
+        "STORE_DELETED",
+        before,
+        Map.of("exists", "false", "cascade_deleted", cascade));
   }
 
   private void record(
-      Long storeId, String action, Map<String, String> before, Map<String, String> after) {
-    businessAudit.recordCurrent(storeId, action, "STORE", String.valueOf(storeId), before, after);
+      long actorId,
+      Long storeId,
+      String action,
+      Map<String, String> before,
+      Map<String, String> after) {
+    businessAudit.recordById(
+        actorId, storeId, action, "STORE", String.valueOf(storeId), null, null, before, after);
   }
 
   /** 集合外の店舗は存在しない扱い（404）にする。業務上の検証より先に判定し、集合外の店舗の状態（稼働中・略称の重複）を応答で漏らさない。 */

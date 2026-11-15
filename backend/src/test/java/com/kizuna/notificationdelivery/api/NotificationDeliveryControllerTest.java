@@ -1,5 +1,6 @@
 package com.kizuna.notificationdelivery.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -31,12 +32,11 @@ import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Stream;
 import org.hibernate.exception.ConstraintViolationException;
-import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -50,12 +50,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
@@ -83,14 +77,13 @@ class NotificationDeliveryControllerTest {
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
   @MockitoBean StoreScopeResolver storeScopeResolver;
 
-  /** handler は Authentication を要求の principal から受けるため、模擬利用者を principal にも載せる。 */
-  private static Authentication currentUser() {
-    return SecurityContextHolder.getContext().getAuthentication();
+  @BeforeEach
+  void installStoreScope() {
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(STORE_ID)));
   }
 
   @Test
   @DisplayName("通知詳細は名乗られた店舗の id で service を呼ぶこと")
-  @WithMockUser(authorities = "PERM_NOTIFICATION_VIEW")
   void detailPassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(notifications.get(STORE_ID, "101")).thenReturn(view());
@@ -99,7 +92,7 @@ class NotificationDeliveryControllerTest {
         .perform(
             get("/notification-deliveries/101")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(currentUser()))
+                .with(jwtUser(42L, "PERM_NOTIFICATION_VIEW")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value("101"))
         .andExpect(jsonPath("$.contact_decision").value("ALLOWED"))
@@ -110,32 +103,30 @@ class NotificationDeliveryControllerTest {
 
   @Test
   @DisplayName("送信予約は名乗られた店舗の id で service を呼ぶこと")
-  @WithMockUser(authorities = {"PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_SEND"})
   void queuePassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(notifications.queue(STORE_ID, "user", "101", 0L, "確認済み", false)).thenReturn(view());
+    when(notifications.queue(STORE_ID, 42L, "101", 0L, "確認済み", false)).thenReturn(view());
 
     mockMvc
         .perform(
             post("/notification-deliveries/101/queue")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(currentUser())
                 .contentType("application/json")
-                .content("{\"version\":0,\"reason\":\"確認済み\"}"))
+                .content("{\"version\":0,\"reason\":\"確認済み\"}")
+                .with(jwtUser(42L, "PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_SEND")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value("101"))
         .andExpect(jsonPath("$.contact_decision").value("ALLOWED"))
         .andExpect(jsonPath("$.transport_availability").value("AVAILABLE"));
 
-    verify(notifications).queue(STORE_ID, "user", "101", 0L, "確認済み", false);
+    verify(notifications).queue(STORE_ID, 42L, "101", 0L, "確認済み", false);
   }
 
   @Test
   @DisplayName("同じ重複排除キーの同時作成に敗れた要求は、既存の下書きの読み直しとして 200 を返すこと")
-  @WithMockUser(authorities = {"PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_MANAGE"})
   void losingTheDedupeKeyRaceReplaysTheExistingDraft() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(notifications.create(eq(STORE_ID), eq("user"), any()))
+    when(notifications.create(eq(STORE_ID), eq(42L), any()))
         .thenThrow(
             new DataIntegrityViolationException(
                 "duplicate",
@@ -150,14 +141,14 @@ class NotificationDeliveryControllerTest {
         .perform(
             post("/notification-deliveries")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(currentUser())
                 .contentType("application/json")
                 .content(
                     """
                     {"source_type":"ORDER","source_id":"00000000-0000-7000-8000-000000000001","channel":"EMAIL","purpose":"BUSINESS",
                      "subject":"件名","body":"本文","scheduled_at":"2026-10-07T00:00:00Z",
                      "dedupe_key":"race"}
-                    """))
+                    """)
+                .with(jwtUser(42L, "PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_MANAGE")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value("101"))
         .andExpect(jsonPath("$.contact_decision").value("ALLOWED"))
@@ -168,7 +159,6 @@ class NotificationDeliveryControllerTest {
 
   @Test
   @DisplayName("作成口は販促の通知を 400 で拒み、service を呼ばないこと")
-  @WithMockUser(authorities = {"PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_MANAGE"})
   void creationRejectsMarketing() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
@@ -176,23 +166,22 @@ class NotificationDeliveryControllerTest {
         .perform(
             post("/notification-deliveries")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(currentUser())
                 .contentType("application/json")
                 .content(
                     """
                     {"source_type":"ORDER","source_id":"00000000-0000-7000-8000-000000000001","channel":"EMAIL","purpose":"MARKETING",
                      "subject":"件名","body":"本文","scheduled_at":"2026-10-07T00:00:00Z",
                      "dedupe_key":"promo"}
-                    """))
+                    """)
+                .with(jwtUser(42L, "PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_MANAGE")))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.error").value("作成できる通知は業務連絡だけです"));
 
-    verify(notifications, never()).create(any(), any(), any());
+    verify(notifications, never()).create(any(), anyLong(), any());
   }
 
   @Test
   @DisplayName("作成口は未定義のチャネルを 400 で拒むこと")
-  @WithMockUser(authorities = {"PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_MANAGE"})
   void creationRejectsUnknownChannel() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
@@ -200,22 +189,21 @@ class NotificationDeliveryControllerTest {
         .perform(
             post("/notification-deliveries")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(currentUser())
                 .contentType("application/json")
                 .content(
                     """
                     {"source_type":"ORDER","source_id":"00000000-0000-7000-8000-000000000001","channel":"SMS","purpose":"BUSINESS",
                      "subject":"件名","body":"本文","scheduled_at":"2026-10-07T00:00:00Z",
                      "dedupe_key":"sms"}
-                    """))
+                    """)
+                .with(jwtUser(42L, "PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_MANAGE")))
         .andExpect(status().isBadRequest());
 
-    verify(notifications, never()).create(any(), any(), any());
+    verify(notifications, never()).create(any(), anyLong(), any());
   }
 
   @Test
   @DisplayName("通知一覧は新しい順を既定の並びとして名乗られた店舗で service を呼び、Page で返すこと")
-  @WithMockUser(authorities = "PERM_NOTIFICATION_VIEW")
   void listIsAPageNewestFirst() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     var pageable = ArgumentCaptor.forClass(Pageable.class);
@@ -226,7 +214,7 @@ class NotificationDeliveryControllerTest {
         .perform(
             get("/notification-deliveries")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(currentUser()))
+                .with(jwtUser(42L, "PERM_NOTIFICATION_VIEW")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 
@@ -237,7 +225,6 @@ class NotificationDeliveryControllerTest {
 
   @Test
   @DisplayName("送信履歴は新しい順を既定の並びとして名乗られた店舗で service を呼び、Page で返すこと")
-  @WithMockUser(authorities = "PERM_NOTIFICATION_VIEW")
   void historyIsAPageNewestFirst() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     var pageable = ArgumentCaptor.forClass(Pageable.class);
@@ -248,7 +235,7 @@ class NotificationDeliveryControllerTest {
         .perform(
             get("/notification-deliveries/101/attempts")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(currentUser()))
+                .with(jwtUser(42L, "PERM_NOTIFICATION_VIEW")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 
@@ -258,29 +245,27 @@ class NotificationDeliveryControllerTest {
 
   @Test
   @DisplayName("結果不明の判定は名乗られた店舗・版・判定・理由で service を呼び、201 で通知を返すこと")
-  @WithMockUser(authorities = {"PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_SEND"})
   void resolutionPassesTheCurrentStoreAndOutcome() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(notifications.resolve(STORE_ID, "user", "101", 3L, DeliveryResolution.FAILED, "未配信を確認"))
+    when(notifications.resolve(STORE_ID, 42L, "101", 3L, DeliveryResolution.FAILED, "未配信を確認"))
         .thenReturn(view());
 
     mockMvc
         .perform(
             post("/notification-deliveries/101/resolutions")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(currentUser())
                 .contentType("application/json")
-                .content("{\"version\":3,\"outcome\":\"FAILED\",\"reason\":\"未配信を確認\"}"))
+                .content("{\"version\":3,\"outcome\":\"FAILED\",\"reason\":\"未配信を確認\"}")
+                .with(jwtUser(42L, "PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_SEND")))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.id").value("101"))
         .andExpect(jsonPath("$.attempt_count").value(0));
 
-    verify(notifications).resolve(STORE_ID, "user", "101", 3L, DeliveryResolution.FAILED, "未配信を確認");
+    verify(notifications).resolve(STORE_ID, 42L, "101", 3L, DeliveryResolution.FAILED, "未配信を確認");
   }
 
   @Test
   @DisplayName("送信権限の無い職員の判定は 403 で、service を呼ばないこと")
-  @WithMockUser(authorities = {"PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_MANAGE"})
   void resolutionRequiresSendPermission() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
@@ -288,17 +273,16 @@ class NotificationDeliveryControllerTest {
         .perform(
             post("/notification-deliveries/101/resolutions")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(currentUser())
                 .contentType("application/json")
-                .content("{\"version\":3,\"outcome\":\"SENT\",\"reason\":\"確認\"}"))
+                .content("{\"version\":3,\"outcome\":\"SENT\",\"reason\":\"確認\"}")
+                .with(jwtUser(42L, "PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_MANAGE")))
         .andExpect(status().isForbidden());
 
-    verify(notifications, never()).resolve(any(), any(), any(), any(), any(), any());
+    verify(notifications, never()).resolve(any(), anyLong(), any(), any(), any(), any());
   }
 
   @Test
   @DisplayName("判定は送達済み・未送達の二つだけで、結果不明や空の理由は 400 で拒むこと")
-  @WithMockUser(authorities = {"PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_SEND"})
   void resolutionRejectsOtherOutcomesAndBlankReason() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
@@ -313,17 +297,16 @@ class NotificationDeliveryControllerTest {
           .perform(
               post("/notification-deliveries/101/resolutions")
                   .header("X-Store-ID", STORE_ID.toString())
-                  .principal(currentUser())
                   .contentType("application/json")
-                  .content(body))
+                  .content(body)
+                  .with(jwtUser(42L, "PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_SEND")))
           .andExpect(status().isBadRequest());
 
-    verify(notifications, never()).resolve(any(), any(), any(), any(), any(), any());
+    verify(notifications, never()).resolve(any(), anyLong(), any(), any(), any(), any());
   }
 
   @Test
   @DisplayName("職員の判定の試行は実行 ID を持たず、失敗コード MANUAL_RESOLUTION で返ること")
-  @WithMockUser(authorities = "PERM_NOTIFICATION_VIEW")
   void historyShowsManualResolutionWithoutExecution() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     var row = view().row();
@@ -339,7 +322,7 @@ class NotificationDeliveryControllerTest {
         .perform(
             get("/notification-deliveries/101/attempts")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(currentUser()))
+                .with(jwtUser(42L, "PERM_NOTIFICATION_VIEW")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].status").value("FAILED"))
         .andExpect(jsonPath("$.content[0].failure_code").value("MANUAL_RESOLUTION"))
@@ -348,30 +331,13 @@ class NotificationDeliveryControllerTest {
         .andExpect(jsonPath("$.content[0].actor_name").doesNotExist());
   }
 
-  /** 店舗集合の解決は JwtAuthenticationToken の主体にだけ掛かるので、Bearer の職員を文脈と principal の両方に載せる。 */
-  private static RequestPostProcessor staff(String... permissions) {
-    var token =
-        new JwtAuthenticationToken(
-            Jwt.withTokenValue("staff").header("alg", "none").subject("user").build(),
-            Arrays.stream(permissions).map(SimpleGrantedAuthority::new).toList(),
-            "user");
-    SecurityContextHolder.getContext().setAuthentication(token);
-    return request -> {
-      request.setUserPrincipal(token);
-      return request;
-    };
-  }
-
-  @AfterEach
-  void clearAuthentication() {
-    SecurityContextHolder.clearContext();
-  }
-
   @Test
   @DisplayName("店舗の通知は X-Store-ID を要し、名乗らなければどの端点も 400 で service に届かないこと")
   void storeRowsRequireTheStoreHeader() throws Exception {
     when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(1L)));
-    var all = staff("PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_MANAGE", "PERM_NOTIFICATION_SEND");
+    var all =
+        jwtUser(
+            42L, "PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_MANAGE", "PERM_NOTIFICATION_SEND");
     for (var request : requests("/notification-deliveries", all))
       mockMvc.perform(request).andExpect(status().isBadRequest());
 
@@ -384,22 +350,24 @@ class NotificationDeliveryControllerTest {
     when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of()));
     when(notifications.list(isNull(), any()))
         .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 50), 0));
-    when(notifications.queue(null, "user", "101", 0L, "確認済み", false)).thenReturn(view());
+    when(notifications.queue(null, 42L, "101", 0L, "確認済み", false)).thenReturn(view());
 
     mockMvc
         .perform(
-            get("/member-notification-deliveries").with(staff("PERM_MEMBER_NOTIFICATION_VIEW")))
+            get("/member-notification-deliveries")
+                .with(jwtUser(42L, "PERM_MEMBER_NOTIFICATION_VIEW")))
         .andExpect(status().isOk());
     mockMvc
         .perform(
             post("/member-notification-deliveries/101/queue")
-                .with(staff("PERM_MEMBER_NOTIFICATION_VIEW", "PERM_MEMBER_NOTIFICATION_SEND"))
+                .with(
+                    jwtUser(42L, "PERM_MEMBER_NOTIFICATION_VIEW", "PERM_MEMBER_NOTIFICATION_SEND"))
                 .contentType("application/json")
                 .content("{\"version\":0,\"reason\":\"確認済み\"}"))
         .andExpect(status().isOk());
 
     verify(notifications).list(isNull(), any());
-    verify(notifications).queue(null, "user", "101", 0L, "確認済み", false);
+    verify(notifications).queue(null, 42L, "101", 0L, "確認済み", false);
   }
 
   @Test
@@ -407,7 +375,8 @@ class NotificationDeliveryControllerTest {
   void storeNotificationPermissionsDoNotOpenMemberRows() throws Exception {
     when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(1L)));
     var store =
-        staff("PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_MANAGE", "PERM_NOTIFICATION_SEND");
+        jwtUser(
+            42L, "PERM_NOTIFICATION_VIEW", "PERM_NOTIFICATION_MANAGE", "PERM_NOTIFICATION_SEND");
     for (var request : requests("/member-notification-deliveries", store))
       mockMvc.perform(request).andExpect(status().isForbidden());
 
@@ -420,7 +389,8 @@ class NotificationDeliveryControllerTest {
     when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(STORE_ID)));
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     var member =
-        staff(
+        jwtUser(
+            42L,
             "PERM_MEMBER_NOTIFICATION_VIEW",
             "PERM_MEMBER_NOTIFICATION_MANAGE",
             "PERM_MEMBER_NOTIFICATION_SEND");
@@ -445,7 +415,8 @@ class NotificationDeliveryControllerTest {
               : "/notification-deliveries";
       for (var missing : List.of("VIEW", "MANAGE", "SEND")) {
         var held =
-            staff(
+            jwtUser(
+                42L,
                 Stream.of("VIEW", "MANAGE", "SEND")
                     .filter(p -> !p.equals(missing))
                     .map(prefix::concat)

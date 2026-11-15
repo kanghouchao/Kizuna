@@ -1,7 +1,10 @@
 package com.kizuna.auth.api.auth;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -130,5 +133,19 @@ class LineControllerTest {
 
     assertThat(response.getHeader(HttpHeaders.SET_COOKIE))
         .startsWith("refresh_token=refresh-token;");
+  }
+
+  @Test
+  @DisplayName("LINE の連携はトークンの利用者 ID を本人として service へ渡す")
+  void linkPassesTheTokenUserId() throws Exception {
+    mockMvc
+        .perform(
+            post("/me/line")
+                .with(jwtUser(42L))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(AUTHORIZATION))
+        .andExpect(status().isNoContent());
+
+    verify(lineAuthService).link(eq(42L), any());
   }
 }

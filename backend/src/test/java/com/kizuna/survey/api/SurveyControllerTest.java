@@ -1,5 +1,6 @@
 package com.kizuna.survey.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -15,6 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.kizuna.receipt.once.Receipt;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.survey.application.SurveyReadService;
 import com.kizuna.survey.application.SurveyService;
@@ -29,7 +31,8 @@ import com.kizuna.survey.domain.SurveyValues.QuestionType;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.util.List;
 import java.util.Map;
-import org.junit.jupiter.api.AfterEach;
+import java.util.Set;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -41,12 +44,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
@@ -75,21 +73,23 @@ class SurveyControllerTest {
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
   @MockitoBean StoreScopeResolver storeScopeResolver;
 
-  /** handler は Authentication を要求の principal から受けるため、模擬利用者を principal にも載せる。 */
-  private static Authentication currentUser() {
-    return SecurityContextHolder.getContext().getAuthentication();
+  @BeforeEach
+  void installStoreScope() {
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(STORE_ID)));
   }
 
   @Test
   @DisplayName("アンケート一覧は名乗られた店舗の id で service を呼ぶこと")
-  @WithMockUser(authorities = "PERM_SURVEY_VIEW")
   void listPassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(reads.list(any(), any(), any(), any(), any(), any()))
         .thenReturn(new PageImpl<>(List.of()));
 
     mockMvc
-        .perform(get("/surveys").header("X-Store-ID", STORE_ID.toString()).principal(currentUser()))
+        .perform(
+            get("/surveys")
+                .header("X-Store-ID", STORE_ID.toString())
+                .with(jwtUser(42L, "PERM_SURVEY_VIEW")))
         .andExpect(status().isOk());
 
     verify(reads)
@@ -104,10 +104,9 @@ class SurveyControllerTest {
 
   @Test
   @DisplayName("アンケート作成は名乗られた店舗の id で service を呼ぶこと")
-  @WithMockUser(authorities = {"PERM_SURVEY_VIEW", "PERM_SURVEY_MANAGE"})
   void createPassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(service.write(eq(STORE_ID), eq("user"), any()))
+    when(service.write(eq(STORE_ID), eq(42L), any()))
         .thenReturn(
             new RevisionWritten(
                 revision(),
@@ -122,23 +121,22 @@ class SurveyControllerTest {
         .perform(
             post("/surveys")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(currentUser())
                 .contentType("application/json")
                 .content(
                     """
                     {"title":"利用後アンケート","questions":[{"question_key":"q1","type":"TEXT","prompt":"ご意見","required":true,"options":[]}],"dedupe_key":"create"}
-                    """))
+                    """)
+                .with(jwtUser(42L, "PERM_SURVEY_VIEW", "PERM_SURVEY_MANAGE")))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.revision.id").value("r1"))
         .andExpect(jsonPath("$.revision.survey_id").value("s1"))
         .andExpect(jsonPath("$.operation.resource_id").value("r1"));
 
-    verify(service).write(eq(STORE_ID), eq("user"), any(SurveyCommand.Create.class));
+    verify(service).write(eq(STORE_ID), eq(42L), any(SurveyCommand.Create.class));
   }
 
   @Test
   @DisplayName("回答詳細は名乗られた店舗の id で service を呼ぶこと")
-  @WithMockUser(authorities = "PERM_SURVEY_VIEW")
   void answerPassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
@@ -146,7 +144,7 @@ class SurveyControllerTest {
         .perform(
             get("/survey-responses/101")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(currentUser()))
+                .with(jwtUser(42L, "PERM_SURVEY_VIEW")))
         .andExpect(status().isOk());
 
     verify(service).answer(STORE_ID, "101");
@@ -154,7 +152,6 @@ class SurveyControllerTest {
 
   @Test
   @DisplayName("改訂と回答の履歴は新しい順の Page で返すこと")
-  @WithMockUser(authorities = "PERM_SURVEY_VIEW")
   void historiesArePagesNewestFirst() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<Pageable> revisions = ArgumentCaptor.forClass(Pageable.class);
@@ -168,14 +165,14 @@ class SurveyControllerTest {
         .perform(
             get("/surveys/s1/revisions/r1/history")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(currentUser()))
+                .with(jwtUser(42L, "PERM_SURVEY_VIEW")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
     mockMvc
         .perform(
             get("/survey-responses/101/history")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(currentUser()))
+                .with(jwtUser(42L, "PERM_SURVEY_VIEW")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 
@@ -186,7 +183,6 @@ class SurveyControllerTest {
 
   @Test
   @DisplayName("設問版と回答の一覧は Page で返し、範囲外のページを 400 にすること")
-  @WithMockUser(authorities = "PERM_SURVEY_VIEW")
   void revisionAndAnswerListsArePages() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<Pageable> revisions = ArgumentCaptor.forClass(Pageable.class);
@@ -207,7 +203,7 @@ class SurveyControllerTest {
         .perform(
             get("/surveys/s1/revisions")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(currentUser()))
+                .with(jwtUser(42L, "PERM_SURVEY_VIEW")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
     mockMvc
@@ -216,7 +212,7 @@ class SurveyControllerTest {
                 .param("sort", "RECEIVED_ASC")
                 .param("page", "2")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(currentUser()))
+                .with(jwtUser(42L, "PERM_SURVEY_VIEW")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
     mockMvc
@@ -225,7 +221,7 @@ class SurveyControllerTest {
                 .param("page", "99999999")
                 .param("size", "100")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(currentUser()))
+                .with(jwtUser(42L, "PERM_SURVEY_VIEW")))
         .andExpect(status().isBadRequest());
 
     assertThat(revisions.getValue())
@@ -291,21 +287,8 @@ class SurveyControllerTest {
     verifyNoInteractions(service, reads);
   }
 
-  /** 権限の判定だけを見るため、店舗集合の照合が掛からない Bearer 以外の主体を文脈と principal の両方に載せる。 */
   private static RequestPostProcessor holding(List<String> permissions) {
-    var token =
-        new UsernamePasswordAuthenticationToken(
-            "user", "unused", permissions.stream().map(SimpleGrantedAuthority::new).toList());
-    SecurityContextHolder.getContext().setAuthentication(token);
-    return request -> {
-      request.setUserPrincipal(token);
-      return request;
-    };
-  }
-
-  @AfterEach
-  void clearAuthentication() {
-    SecurityContextHolder.clearContext();
+    return jwtUser(42L, permissions.toArray(String[]::new));
   }
 
   private static SurveyRevision revision() {

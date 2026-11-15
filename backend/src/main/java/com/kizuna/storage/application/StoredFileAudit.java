@@ -27,15 +27,23 @@ public class StoredFileAudit {
   }
 
   public void recordUpload(
-      long storeId, String relativePath, String bucket, long size, String contentType) {
+      long storeId,
+      long actorId,
+      String relativePath,
+      String bucket,
+      long size,
+      String contentType) {
     try {
       independent.executeWithoutResult(
           status ->
-              businessAudit.recordCurrent(
+              businessAudit.recordById(
+                  actorId,
                   storeId,
                   "FILE_UPLOADED",
                   "STORED_FILE",
                   relativePath,
+                  null,
+                  null,
                   Map.of("exists", "false"),
                   Map.of(
                       "bucket", bucket,

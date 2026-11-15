@@ -63,7 +63,7 @@ class RoleGrantLockOrderIntegrationTest {
   private TransactionTemplate transaction;
   private JdbcTemplate jdbc;
   private ExecutorService executor;
-  private String actorEmail;
+  private long actorId;
 
   enum GrantPath {
     STAFF_CREATE,
@@ -80,7 +80,7 @@ class RoleGrantLockOrderIntegrationTest {
     scopes = context.getBean(StoreScopeHolder.class);
     transaction = new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
     jdbc = new JdbcTemplate(context.getBean(DataSource.class));
-    actorEmail = createStaff(createRole(PermissionCode.ROLE_MANAGE)).getEmail();
+    actorId = createStaff(createRole(PermissionCode.ROLE_MANAGE)).getId();
   }
 
   @AfterAll
@@ -144,25 +144,28 @@ class RoleGrantLockOrderIntegrationTest {
                 "付与検証",
                 Set.of(granted),
                 Set.of());
-        yield context.getBean(AdminStaffService.class).create(command, actorEmail).id();
+        yield context.getBean(AdminStaffService.class).create(command, actorId).id();
       }
       case STAFF_UPDATE -> {
         var command =
             new StaffCommand.UpdateGrants(Set.of(kept, granted), Set.of(), target.getVersion());
         yield context
             .getBean(AdminStaffService.class)
-            .update(target.getId(), command, actorEmail)
+            .update(target.getId(), command, actorId)
             .id();
       }
       case SERVICE_CREATE -> {
         var command = new ServiceIdentityCommand.Create("付与検証", Set.of(granted), Set.of());
-        yield context.getBean(ServiceIdentityService.class).create(command).id();
+        yield context.getBean(ServiceIdentityService.class).create(actorId, command).id();
       }
       case SERVICE_UPDATE -> {
         var command =
             new ServiceIdentityCommand.UpdateGrants(
                 Set.of(kept, granted), Set.of(), target.getVersion());
-        yield context.getBean(ServiceIdentityService.class).update(target.getId(), command).id();
+        yield context
+            .getBean(ServiceIdentityService.class)
+            .update(actorId, target.getId(), command)
+            .id();
       }
     };
   }

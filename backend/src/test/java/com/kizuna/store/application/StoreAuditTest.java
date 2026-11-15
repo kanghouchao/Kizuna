@@ -3,7 +3,6 @@ package com.kizuna.store.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -33,13 +32,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.cache.CacheManager;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class StoreAuditTest {
@@ -56,9 +52,6 @@ class StoreAuditTest {
 
   @BeforeEach
   void setup() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken("operator@example.test", null, List.of()));
     var users = mock(UserRepository.class);
     var actor =
         User.builder()
@@ -69,7 +62,7 @@ class StoreAuditTest {
             .roleIds(Set.of(1L))
             .build();
     actor.setId(9L);
-    when(users.findByEmail(anyString())).thenReturn(Optional.of(actor));
+    when(users.findById(9L)).thenReturn(Optional.of(actor));
     when(events.saveAndFlush(any()))
         .thenAnswer(
             call -> {
@@ -107,16 +100,11 @@ class StoreAuditTest {
             });
   }
 
-  @AfterEach
-  void clear() {
-    SecurityContextHolder.clearContext();
-  }
-
   @Test
   void createRecordsStateVersionAndDomainUnderTheNewStoreId() {
     var command = new StoreCreateCommand("新店舗", "新", "new.example.test");
 
-    registry.create(command);
+    registry.create(9L, command);
 
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("STORE_CREATED");
@@ -139,7 +127,7 @@ class StoreAuditTest {
     when(stores.findByDomain("old.example.test")).thenReturn(Optional.of(store));
     var command = new StoreCreateCommand("重複", null, "old.example.test");
 
-    assertThatThrownBy(() -> registry.create(command)).isInstanceOf(ServiceException.class);
+    assertThatThrownBy(() -> registry.create(9L, command)).isInstanceOf(ServiceException.class);
 
     assertThat(recorded).isEmpty();
   }
@@ -148,7 +136,7 @@ class StoreAuditTest {
   void renameRecordsFieldNameAndVersionsButNeverNames() {
     var patch = new StorePatch("新名称", "旧");
 
-    registry.update(ALL, "7", patch);
+    registry.update(9L, ALL, "7", patch);
 
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("STORE_UPDATED");
@@ -163,7 +151,7 @@ class StoreAuditTest {
   void sameNameUpdateRecordsNothing() {
     var patch = new StorePatch("旧名称", "旧");
 
-    registry.update(ALL, "7", patch);
+    registry.update(9L, ALL, "7", patch);
 
     assertThat(recorded).isEmpty();
   }
@@ -172,7 +160,7 @@ class StoreAuditTest {
   void shortNameChangeRecordsFieldNameOnly() {
     var patch = new StorePatch("旧名称", "新");
 
-    registry.update(ALL, "7", patch);
+    registry.update(9L, ALL, "7", patch);
 
     var event = recorded.getFirst();
     assertThat(event.getAfterValues())
@@ -186,7 +174,7 @@ class StoreAuditTest {
     var shifts = cascade("t_shifts", 0);
     when(stores.countCascade(STORE_ID)).thenReturn(List.of(profiles, shifts));
 
-    registry.delete(ALL, "7");
+    registry.delete(9L, ALL, "7");
 
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("STORE_DELETED");
@@ -206,21 +194,21 @@ class StoreAuditTest {
   @Test
   void rejectedOrConstraintFailedDeletionRecordsNothing() {
     when(orders.existsForStore(STORE_ID)).thenReturn(true);
-    assertThatThrownBy(() -> registry.delete(ALL, "7")).isInstanceOf(ServiceException.class);
+    assertThatThrownBy(() -> registry.delete(9L, ALL, "7")).isInstanceOf(ServiceException.class);
 
     when(orders.existsForStore(STORE_ID)).thenReturn(false);
     doThrow(new DataIntegrityViolationException("fk")).when(stores).flush();
-    assertThatThrownBy(() -> registry.delete(ALL, "7")).isInstanceOf(RuntimeException.class);
+    assertThatThrownBy(() -> registry.delete(9L, ALL, "7")).isInstanceOf(RuntimeException.class);
 
     store.activate();
-    assertThatThrownBy(() -> registry.delete(ALL, "7")).isInstanceOf(ServiceException.class);
+    assertThatThrownBy(() -> registry.delete(9L, ALL, "7")).isInstanceOf(ServiceException.class);
 
     assertThat(recorded).isEmpty();
   }
 
   @Test
   void activationRecordsStateAndVersionTransition() {
-    activation.activate(STORE_ID);
+    activation.activate(STORE_ID, 9L);
 
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("STORE_ACTIVATED");
@@ -234,10 +222,11 @@ class StoreAuditTest {
 
   @Test
   void repeatedActivationRecordsNothing() {
-    activation.activate(STORE_ID);
+    activation.activate(STORE_ID, 9L);
     recorded.clear();
 
-    assertThatThrownBy(() -> activation.activate(STORE_ID)).isInstanceOf(ServiceException.class);
+    assertThatThrownBy(() -> activation.activate(STORE_ID, 9L))
+        .isInstanceOf(ServiceException.class);
 
     assertThat(recorded).isEmpty();
     verify(stores).saveAndFlush(any());

@@ -56,7 +56,9 @@ class StoreProfileServiceTest {
 
     StoreProfile saved =
         storeProfileService.update(
-            STORE_ID, patch("https://example.com/new-logo.png", "Updated description", null, null));
+            STORE_ID,
+            9L,
+            patch("https://example.com/new-logo.png", "Updated description", null, null));
 
     assertThat(saved.getLogoUrl()).isEqualTo("https://example.com/new-logo.png");
     assertThat(saved.getDescription()).isEqualTo("Updated description");
@@ -72,7 +74,8 @@ class StoreProfileServiceTest {
     List<SnsLink> newSnsLinks =
         List.of(SnsLink.builder().platform("twitter").url("https://twitter.com/test").build());
 
-    StoreProfile saved = storeProfileService.update(STORE_ID, patch(null, null, newSnsLinks, null));
+    StoreProfile saved =
+        storeProfileService.update(STORE_ID, 9L, patch(null, null, newSnsLinks, null));
 
     assertThat(saved.getSnsLinks()).hasSize(1);
     assertThat(saved.getSnsLinks().get(0).getPlatform()).isEqualTo("twitter");
@@ -88,7 +91,7 @@ class StoreProfileServiceTest {
         List.of(PartnerLink.builder().name("Partner1").url("https://partner.com").build());
 
     StoreProfile saved =
-        storeProfileService.update(STORE_ID, patch(null, null, null, newPartnerLinks));
+        storeProfileService.update(STORE_ID, 9L, patch(null, null, null, newPartnerLinks));
 
     assertThat(saved.getPartnerLinks()).hasSize(1);
     assertThat(saved.getPartnerLinks().get(0).getName()).isEqualTo("Partner1");
@@ -98,7 +101,8 @@ class StoreProfileServiceTest {
   void update_throwsExceptionIfNotExists() {
     when(storeProfileRepository.findByStoreId(STORE_ID)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> storeProfileService.update(STORE_ID, patch(null, null, null, null)))
+    assertThatThrownBy(
+            () -> storeProfileService.update(STORE_ID, 9L, patch(null, null, null, null)))
         .isInstanceOf(NotFoundException.class)
         .hasMessage("店舗設定が見つかりません");
   }

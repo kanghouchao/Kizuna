@@ -233,10 +233,10 @@ class LineAuthServiceTest {
   void linkAttachesLineUserToAuthenticatedUser() {
     stubVerifiedIdentity();
     User user = member("member@kizuna.test");
-    when(userRepository.findByEmail("member@kizuna.test")).thenReturn(Optional.of(user));
+    when(userRepository.findById(10L)).thenReturn(Optional.of(user));
     when(userRepository.existsByLineUserId("U-line-1")).thenReturn(false);
 
-    lineAuthService.link("member@kizuna.test", authorizationCommand());
+    lineAuthService.link(10L, authorizationCommand());
 
     assertThat(user.getLineUserId()).isEqualTo("U-line-1");
     verify(userRepository).saveAndFlush(user);
@@ -247,7 +247,7 @@ class LineAuthServiceTest {
   void linkMapsConcurrentUniqueViolationToConflict() {
     stubVerifiedIdentity();
     User user = member("member@kizuna.test");
-    when(userRepository.findByEmail("member@kizuna.test")).thenReturn(Optional.of(user));
+    when(userRepository.findById(10L)).thenReturn(Optional.of(user));
     when(userRepository.existsByLineUserId("U-line-1")).thenReturn(false);
     when(userRepository.saveAndFlush(user))
         .thenThrow(
@@ -258,7 +258,7 @@ class LineAuthServiceTest {
                     new SQLException("duplicate key value violates unique constraint"),
                     "uq_t_users_line_user_id")));
 
-    assertThatThrownBy(() -> lineAuthService.link("member@kizuna.test", authorizationCommand()))
+    assertThatThrownBy(() -> lineAuthService.link(10L, authorizationCommand()))
         .isInstanceOf(ConflictException.class);
   }
 
@@ -268,9 +268,9 @@ class LineAuthServiceTest {
     stubVerifiedIdentity();
     User user = member("member@kizuna.test");
     user.linkLine("U-line-1");
-    when(userRepository.findByEmail("member@kizuna.test")).thenReturn(Optional.of(user));
+    when(userRepository.findById(10L)).thenReturn(Optional.of(user));
 
-    assertThatThrownBy(() -> lineAuthService.link("member@kizuna.test", authorizationCommand()))
+    assertThatThrownBy(() -> lineAuthService.link(10L, authorizationCommand()))
         .isInstanceOf(LineAlreadyLinkedException.class);
     verify(userRepository, never()).save(any());
   }
@@ -280,10 +280,9 @@ class LineAuthServiceTest {
   void linkRejectsLineUserAlreadyBoundToAnotherAccount() {
     stubVerifiedIdentity();
     when(userRepository.existsByLineUserId("U-line-1")).thenReturn(true);
-    when(userRepository.findByEmail("member@kizuna.test"))
-        .thenReturn(Optional.of(member("member@kizuna.test")));
+    when(userRepository.findById(10L)).thenReturn(Optional.of(member("member@kizuna.test")));
 
-    assertThatThrownBy(() -> lineAuthService.link("member@kizuna.test", authorizationCommand()))
+    assertThatThrownBy(() -> lineAuthService.link(10L, authorizationCommand()))
         .isInstanceOf(ConflictException.class);
     verify(userRepository, never()).save(any());
   }

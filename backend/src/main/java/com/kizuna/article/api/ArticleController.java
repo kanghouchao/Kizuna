@@ -9,8 +9,10 @@ import com.kizuna.article.api.dto.ArticleResponse;
 import com.kizuna.article.api.dto.ArticleSummaryResponse;
 import com.kizuna.article.application.ArticleService;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
+import java.security.Principal;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import lombok.RequiredArgsConstructor;
@@ -42,9 +44,14 @@ public class ArticleController {
   @ResponseStatus(HttpStatus.CREATED)
   @PreAuthorize("hasAuthority('PERM_ARTICLE_MANAGE')")
   public ArticleIdResponse create(
-      @CurrentStore Long storeId, @Valid @RequestBody ArticleRequest request) {
+      @CurrentStore Long storeId, @Valid @RequestBody ArticleRequest request, Principal principal) {
     return new ArticleIdResponse(
-        articles.create(storeId, request.title(), request.body(), request.coverImageUrl()));
+        articles.create(
+            storeId,
+            JwtClaims.userIdOf(principal),
+            request.title(),
+            request.body(),
+            request.coverImageUrl()));
   }
 
   @GetMapping
@@ -89,10 +96,12 @@ public class ArticleController {
   public ArticleResponse edit(
       @CurrentStore Long storeId,
       @PathVariable String id,
-      @Valid @RequestBody ArticleRequest request) {
+      @Valid @RequestBody ArticleRequest request,
+      Principal principal) {
     var article =
         articles.edit(
             storeId,
+            JwtClaims.userIdOf(principal),
             id,
             request.title(),
             request.body(),
@@ -106,8 +115,11 @@ public class ArticleController {
   public ArticleResponse publish(
       @CurrentStore Long storeId,
       @PathVariable String id,
-      @Valid @RequestBody ArticlePublicationRequest request) {
-    var article = articles.publish(storeId, id, request.publication(), request.version());
+      @Valid @RequestBody ArticlePublicationRequest request,
+      Principal principal) {
+    var article =
+        articles.publish(
+            storeId, JwtClaims.userIdOf(principal), id, request.publication(), request.version());
     return ArticleResponse.of(article, now());
   }
 
@@ -115,8 +127,11 @@ public class ArticleController {
   @ResponseStatus(HttpStatus.NO_CONTENT)
   @PreAuthorize("hasAuthority('PERM_ARTICLE_MANAGE')")
   public void delete(
-      @CurrentStore Long storeId, @PathVariable String id, @RequestParam long version) {
-    articles.delete(storeId, id, version);
+      @CurrentStore Long storeId,
+      @PathVariable String id,
+      @RequestParam long version,
+      Principal principal) {
+    articles.delete(storeId, JwtClaims.userIdOf(principal), id, version);
   }
 
   private OffsetDateTime now() {

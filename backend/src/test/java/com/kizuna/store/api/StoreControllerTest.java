@@ -1,5 +1,6 @@
 package com.kizuna.store.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
@@ -43,7 +44,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.servlet.MockMvc;
@@ -78,13 +78,14 @@ class StoreControllerTest {
 
   @Test
   @DisplayName("GET /stores?sort=name でも id が副キーとして補われること")
-  @WithMockUser(authorities = "PERM_STORE_MANAGE")
   void listAppendsIdTiebreakerWhenCallerOverridesSort() throws Exception {
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
     Page<StoreView> empty = new PageImpl<>(List.of());
     when(storeRegistryService.list(eq(SCOPE), any(), pageableCaptor.capture())).thenReturn(empty);
 
-    mockMvc.perform(get("/stores?sort=name")).andExpect(status().isOk());
+    mockMvc
+        .perform(get("/stores?sort=name").with(jwtUser(42L, "PERM_STORE_MANAGE")))
+        .andExpect(status().isOk());
 
     assertThat(pageableCaptor.getValue().getSort().getOrderFor("id")).isNotNull();
   }
@@ -93,68 +94,70 @@ class StoreControllerTest {
   // ハンドラ引数の検査（@Valid）が効いていることを固定する。
   @Test
   @DisplayName("PUT /stores/{id} は name と short_name の要求を受け付けて 204 を返すこと")
-  @WithMockUser(authorities = "PERM_STORE_MANAGE")
   void updateAcceptsNameAndShortName() throws Exception {
     mockMvc
         .perform(
             put("/stores/1")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"name\": \"店舗\", \"short_name\": \"店\"}"))
+                .content("{\"name\": \"店舗\", \"short_name\": \"店\"}")
+                .with(jwtUser(42L, "PERM_STORE_MANAGE")))
         .andExpect(status().isNoContent());
 
-    verify(storeRegistryService).update(eq(SCOPE), eq("1"), any());
+    verify(storeRegistryService).update(eq(42L), eq(SCOPE), eq("1"), any());
   }
 
   @ParameterizedTest
   @ValueSource(strings = {"", "   ", "\u3000\u3000", "ABCD", "新宿西口"})
   @DisplayName("略称が空・空白のみ・4 文字以上なら 400 と日本語の検証メッセージを返すこと")
-  @WithMockUser(authorities = "PERM_STORE_MANAGE")
   void rejectsInvalidShortName(String shortName) throws Exception {
     mockMvc
         .perform(
             put("/stores/1")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"name\": \"店舗\", \"short_name\": \"" + shortName + "\"}"))
+                .content("{\"name\": \"店舗\", \"short_name\": \"" + shortName + "\"}")
+                .with(jwtUser(42L, "PERM_STORE_MANAGE")))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.details.short_name").value(containsString("略称")));
   }
 
   @Test
   @DisplayName("short_name を欠く要求は 400 になること")
-  @WithMockUser(authorities = "PERM_STORE_MANAGE")
   void rejectsMissingShortName() throws Exception {
     mockMvc
         .perform(
-            put("/stores/1").contentType(MediaType.APPLICATION_JSON).content("{\"name\": \"店舗\"}"))
+            put("/stores/1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\": \"店舗\"}")
+                .with(jwtUser(42L, "PERM_STORE_MANAGE")))
         .andExpect(status().isBadRequest());
   }
 
   @ParameterizedTest
   @ValueSource(strings = {"新宿西", "A", "𠮷𠮷𠮷", " 新宿 ", "\u3000新\u3000", "\u00A0新宿西\u00A0"})
   @DisplayName("全角・半角とも 1 文字、前後の空白は除いて数えること")
-  @WithMockUser(authorities = "PERM_STORE_MANAGE")
   void acceptsShortNameCountedByCodePointAfterTrim(String shortName) throws Exception {
     mockMvc
         .perform(
             put("/stores/1")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"name\": \"店舗\", \"short_name\": \"" + shortName + "\"}"))
+                .content("{\"name\": \"店舗\", \"short_name\": \"" + shortName + "\"}")
+                .with(jwtUser(42L, "PERM_STORE_MANAGE")))
         .andExpect(status().isNoContent());
   }
 
   // 作成応答が id を載せるのは、呼出側が一覧を引き直さずに新しい店舗を名指しできるようにするため。
   @Test
   @DisplayName("POST /stores は 201 で新規 id を返すこと")
-  @WithMockUser(authorities = "PERM_STORE_MANAGE")
   void createRespondsWithCreatedAndTheNewId() throws Exception {
-    when(storeRegistryService.create(any())).thenReturn(42L);
+    when(storeRegistryService.create(eq(42L), any())).thenReturn(42L);
 
     mockMvc
         .perform(
             post("/stores")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
-                    "{\"name\": \"新店舗\", \"short_name\": \"新店\", \"domain\": \"new-store.kizuna.test\"}"))
+                    "{\"name\": \"新店舗\", \"short_name\": \"新店\", \"domain\": \"new-store.kizuna.test\"}")
+                .with(jwtUser(42L, "PERM_STORE_MANAGE")))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.id").value(42));
   }
@@ -162,11 +165,13 @@ class StoreControllerTest {
   @ParameterizedTest
   @ValueSource(strings = {"", "   ", "ABCD", "新宿西口"})
   @DisplayName("POST /stores も不正な略称を 400 と日本語の検証メッセージで拒むこと")
-  @WithMockUser(authorities = "PERM_STORE_MANAGE")
   void createRejectsInvalidShortName(String shortName) throws Exception {
     mockMvc
         .perform(
-            post("/stores").contentType(MediaType.APPLICATION_JSON).content(createBody(shortName)))
+            post("/stores")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createBody(shortName))
+                .with(jwtUser(42L, "PERM_STORE_MANAGE")))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.details.short_name").value(containsString("略称")));
   }
@@ -174,13 +179,15 @@ class StoreControllerTest {
   @ParameterizedTest
   @ValueSource(strings = {"新宿西", " 新宿西 ", "\u00A0新宿西\u00A0"})
   @DisplayName("POST /stores は空白を除いて全角 3 文字になる略称を受け付けること")
-  @WithMockUser(authorities = "PERM_STORE_MANAGE")
   void createAcceptsThreeFullWidthCharacters(String shortName) throws Exception {
-    when(storeRegistryService.create(any())).thenReturn(1L);
+    when(storeRegistryService.create(eq(42L), any())).thenReturn(1L);
 
     mockMvc
         .perform(
-            post("/stores").contentType(MediaType.APPLICATION_JSON).content(createBody(shortName)))
+            post("/stores")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(createBody(shortName))
+                .with(jwtUser(42L, "PERM_STORE_MANAGE")))
         .andExpect(status().isCreated());
   }
 
@@ -230,12 +237,11 @@ class StoreControllerTest {
 
   @Test
   @DisplayName("GET /stores/me は授権店舗を id・name・short_name・status だけで返すこと")
-  @WithMockUser(authorities = "PERM_STORE_MANAGE")
   void listAuthorizedWritesOnlySummaryFields() throws Exception {
     when(adminStoreService.listAuthorizedStores()).thenReturn(List.of(STORE));
 
     mockMvc
-        .perform(get("/stores/me"))
+        .perform(get("/stores/me").with(jwtUser(42L, "PERM_STORE_MANAGE")))
         .andExpect(status().isOk())
         .andExpect(
             content()
@@ -248,12 +254,15 @@ class StoreControllerTest {
 
   @Test
   @DisplayName("店舗集合を解決できない要求は店舗の管理で 403 になること")
-  @WithMockUser(authorities = "PERM_STORE_MANAGE")
   void unresolvedScopeIsForbidden() throws Exception {
     when(storeScopeHolder.current()).thenReturn(null);
 
-    mockMvc.perform(get("/stores/1")).andExpect(status().isForbidden());
-    mockMvc.perform(delete("/stores/1")).andExpect(status().isForbidden());
+    mockMvc
+        .perform(get("/stores/1").with(jwtUser(42L, "PERM_STORE_MANAGE")))
+        .andExpect(status().isForbidden());
+    mockMvc
+        .perform(delete("/stores/1").with(jwtUser(42L, "PERM_STORE_MANAGE")))
+        .andExpect(status().isForbidden());
 
     verifyNoInteractions(storeRegistryService);
   }

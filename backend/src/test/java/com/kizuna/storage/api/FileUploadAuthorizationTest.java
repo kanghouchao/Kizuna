@@ -3,6 +3,7 @@ package com.kizuna.storage.api;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -12,6 +13,7 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.storage.application.FileStorageService;
 import com.kizuna.storage.application.StoredFileAudit;
 import com.kizuna.user.application.StoreScopeResolver;
@@ -73,6 +75,10 @@ class FileUploadAuthorizationTest {
   @ValueSource(strings = {"PERM_STORE_PROFILE_MANAGE", "PERM_CAST_MANAGE", "PERM_ARTICLE_MANAGE"})
   void holderOfAnImageManagingPermissionCanUpload(String authority) throws Exception {
     mvc.perform(upload(authority)).andExpect(status().isCreated());
+
+    verify(audit)
+        .recordUpload(
+            eq(1L), eq(42L), eq("public/1/x/y.png"), eq("public"), eq(3L), eq("image/png"));
   }
 
   @ParameterizedTest
@@ -86,6 +92,9 @@ class FileUploadAuthorizationTest {
         .file(new MockMultipartFile("file", "y.png", "image/png", new byte[] {1, 2, 3}))
         .param("purpose", "article-cover")
         .header("X-Store-ID", "1")
-        .with(jwt().authorities(new SimpleGrantedAuthority(authority)));
+        .with(
+            jwt()
+                .jwt(token -> token.claim(JwtClaims.USER_ID, 42L))
+                .authorities(new SimpleGrantedAuthority(authority)));
   }
 }

@@ -2,6 +2,7 @@ package com.kizuna.member.api.me;
 
 import com.kizuna.member.api.dto.MemberHomeResponse;
 import com.kizuna.member.application.MemberSelfService;
+import com.kizuna.shared.web.JwtClaims;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +22,7 @@ public class MemberHomeController {
   @GetMapping
   @PreAuthorize("hasRole('MEMBER')")
   public ResponseEntity<MemberHomeResponse> home(Principal principal) {
-    return ResponseEntity.ok(MemberHomeResponse.of(memberSelfService.home(principal.getName())));
+    return ResponseEntity.ok(
+        MemberHomeResponse.of(memberSelfService.home(JwtClaims.userIdOf(principal))));
   }
 }

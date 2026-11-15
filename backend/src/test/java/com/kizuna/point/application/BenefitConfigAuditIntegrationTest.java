@@ -175,9 +175,9 @@ class BenefitConfigAuditIntegrationTest {
     seed(secretKey, "旧秘密", true);
     seed(plainKey, "old.example.test", false);
 
-    configs.updateConfig(secretKey, SECRET);
-    configs.updateConfig(plainKey, "new.example.test");
-    configs.updateConfig(plainKey, "new.example.test");
+    configs.updateConfig(ordinaryId, secretKey, SECRET);
+    configs.updateConfig(ordinaryId, plainKey, "new.example.test");
+    configs.updateConfig(ordinaryId, plainKey, "new.example.test");
 
     var secretRow = audit(secretKey);
     assertThat(secretRow)
@@ -197,7 +197,7 @@ class BenefitConfigAuditIntegrationTest {
 
     failAuditFor("SYSTEM_CONFIG_UPDATED", "SYSTEM_CONFIG_UPDATED");
     try {
-      assertThatThrownBy(() -> configs.updateConfig(plainKey, "rolled.example.test"))
+      assertThatThrownBy(() -> configs.updateConfig(ordinaryId, plainKey, "rolled.example.test"))
           .isInstanceOf(DataIntegrityViolationException.class);
     } finally {
       jdbc.execute("alter table t_audit_events drop constraint ck_benefit_config_audit_test");

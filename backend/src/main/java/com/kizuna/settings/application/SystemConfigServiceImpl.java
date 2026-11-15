@@ -72,7 +72,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
   @Transactional
   // どのキーが更新されても確実に無効化するため全消去（設定更新は低頻度の管理操作）
   @CacheEvict(value = "systemConfigValues", allEntries = true)
-  public SystemConfigView updateConfig(String configKey, String configValue) {
+  public SystemConfigView updateConfig(long actorId, String configKey, String configValue) {
     SystemConfig config =
         systemConfigRepository
             .findByConfigKey(configKey)
@@ -86,19 +86,27 @@ public class SystemConfigServiceImpl implements SystemConfigService {
     SystemConfig saved = systemConfigRepository.save(config);
     String newValue = Objects.toString(saved.getConfigValue(), "");
     if (!oldValue.equals(newValue)) {
-      auditUpdate(saved, oldValue, newValue);
+      auditUpdate(actorId, saved, oldValue, newValue);
     }
     return SystemConfigView.masked(saved);
   }
 
-  private void auditUpdate(SystemConfig config, String oldValue, String newValue) {
+  private void auditUpdate(long actorId, SystemConfig config, String oldValue, String newValue) {
     boolean valueAudited =
         !Boolean.TRUE.equals(config.getSecret()) && isValueAudited(config.getConfigKey());
     Map<String, String> before = valueAudited ? Map.of("config_value", oldValue) : Map.of();
     Map<String, String> after =
         valueAudited ? Map.of("config_value", newValue) : Map.of("changed", "true");
-    businessAudit.recordCurrent(
-        null, "SYSTEM_CONFIG_UPDATED", "SYSTEM_CONFIG", config.getConfigKey(), before, after);
+    businessAudit.recordById(
+        actorId,
+        null,
+        "SYSTEM_CONFIG_UPDATED",
+        "SYSTEM_CONFIG",
+        config.getConfigKey(),
+        null,
+        null,
+        before,
+        after);
   }
 
   private static boolean isValueAudited(String configKey) {

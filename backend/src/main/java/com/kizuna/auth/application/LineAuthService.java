@@ -85,11 +85,11 @@ public class LineAuthService {
 
   /** 認証済みの本人に LINE アカウントを連携する。連携の解除・付け替えは提供しない。 */
   @Transactional
-  public void link(String email, LineAuthorizationCommand command) {
+  public void link(long userId, LineAuthorizationCommand command) {
     LineIdentity identity = verify(command);
     User user =
         userRepository
-            .findByEmail(email)
+            .findById(userId)
             .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
     // 連携先を取り合うのは未連携の身分だけ。連携済み本人の再連携は、相手が同じ LINE アカウントであっても
     // linkLine が集約の不変条件として拒否する（付け替えを提供しないため、理由の表示も本人側の事実に揃える）。

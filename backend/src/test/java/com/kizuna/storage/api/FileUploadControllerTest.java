@@ -9,9 +9,11 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.storage.api.dto.FileUploadResponse;
 import com.kizuna.storage.application.FileStorageService;
 import com.kizuna.storage.application.StoredFileAudit;
+import java.security.Principal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,6 +22,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.multipart.MultipartFile;
 
 @ExtendWith(MockitoExtension.class)
@@ -30,6 +34,10 @@ class FileUploadControllerTest {
   @Mock private StoredFileAudit storedFileAudit;
 
   private FileUploadController controller;
+
+  private static final Principal ACTOR =
+      new JwtAuthenticationToken(
+          Jwt.withTokenValue("token").header("alg", "HS256").claim(JwtClaims.USER_ID, 42L).build());
 
   @BeforeEach
   void setUp() {
@@ -46,7 +54,8 @@ class FileUploadControllerTest {
     when(file.getOriginalFilename()).thenReturn("y.jpg");
     when(file.getSize()).thenReturn(4L);
 
-    ResponseEntity<FileUploadResponse> res = controller.upload(5L, file, "store-logo", "public");
+    ResponseEntity<FileUploadResponse> res =
+        controller.upload(5L, file, "store-logo", "public", ACTOR);
 
     assertThat(res.getStatusCode()).isEqualTo(HttpStatus.CREATED);
     verify(fileStorageService).store(5L, "public", "store-logo", file);
@@ -62,13 +71,13 @@ class FileUploadControllerTest {
     when(file.getSize()).thenReturn(4L);
     when(file.getContentType()).thenReturn("image/jpeg");
 
-    controller.upload(5L, file, "store-logo", "public");
+    controller.upload(5L, file, "store-logo", "public", ACTOR);
 
     var order = inOrder(fileStorageService, storedFileAudit);
     order.verify(fileStorageService).store(5L, "public", "store-logo", file);
     order
         .verify(storedFileAudit)
-        .recordUpload(5L, "public/5/store-logo/y.jpg", "public", 4L, "image/jpeg");
+        .recordUpload(5L, 42L, "public/5/store-logo/y.jpg", "public", 4L, "image/jpeg");
   }
 
   @Test
@@ -77,7 +86,7 @@ class FileUploadControllerTest {
     when(fileStorageService.store(5L, "public", "store-logo", file))
         .thenThrow(new IllegalStateException("s3"));
 
-    assertThatThrownBy(() -> controller.upload(5L, file, "store-logo", "public"))
+    assertThatThrownBy(() -> controller.upload(5L, file, "store-logo", "public", ACTOR))
         .isInstanceOf(IllegalStateException.class);
 
     verifyNoInteractions(storedFileAudit);
@@ -89,7 +98,7 @@ class FileUploadControllerTest {
     when(fileStorageService.store(5L, "public", "store-logo", file))
         .thenThrow(new ServiceException("長すぎる"));
 
-    assertThatThrownBy(() -> controller.upload(5L, file, "store-logo", "public"))
+    assertThatThrownBy(() -> controller.upload(5L, file, "store-logo", "public", ACTOR))
         .isInstanceOf(ServiceException.class);
 
     verifyNoInteractions(storedFileAudit);

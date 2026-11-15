@@ -19,8 +19,10 @@ import com.kizuna.review.domain.ReviewValues.PermissionStatus;
 import com.kizuna.review.domain.ReviewValues.Status;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.shared.web.Replays;
 import jakarta.annotation.security.PermitAll;
+import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -28,7 +30,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -50,58 +51,58 @@ public class ReviewController {
       "hasAuthority('PERM_REVIEW_VIEW') and hasAuthority('PERM_REVIEW_MANAGE')"
           + " and (#request.originOrderId() == null or hasAuthority('PERM_ORDER_MANAGE'))")
   public ResponseEntity<ReviewWriteResponse> create(
-      @CurrentStore Long storeId, Authentication auth, @RequestBody ReviewCreateRequest request) {
-    return write(storeId, auth, request.receipt(), true);
+      @CurrentStore Long storeId, Principal principal, @RequestBody ReviewCreateRequest request) {
+    return write(storeId, principal, request.receipt(), true);
   }
 
   @PostMapping("/{id}/decisions")
   @PreAuthorize("hasAuthority('PERM_REVIEW_VIEW') and hasAuthority('PERM_REVIEW_MODERATE')")
   public ResponseEntity<ReviewWriteResponse> decide(
       @CurrentStore Long storeId,
-      Authentication auth,
+      Principal principal,
       @PathVariable String id,
       @RequestBody ReviewDecisionRequest request) {
-    return write(storeId, auth, request.decide(id), false);
+    return write(storeId, principal, request.decide(id), false);
   }
 
   @PostMapping("/{id}/withdrawals")
   @PreAuthorize("hasAuthority('PERM_REVIEW_VIEW') and hasAuthority('PERM_REVIEW_MANAGE')")
   public ResponseEntity<ReviewWriteResponse> withdraw(
       @CurrentStore Long storeId,
-      Authentication auth,
+      Principal principal,
       @PathVariable String id,
       @RequestBody ReviewActionRequest request) {
-    return write(storeId, auth, request.withdrawal(id), false);
+    return write(storeId, principal, request.withdrawal(id), false);
   }
 
   @PostMapping("/{id}/permissions")
   @PreAuthorize("hasAuthority('PERM_REVIEW_VIEW') and hasAuthority('PERM_REVIEW_MANAGE')")
   public ResponseEntity<ReviewWriteResponse> grant(
       @CurrentStore Long storeId,
-      Authentication auth,
+      Principal principal,
       @PathVariable String id,
       @RequestBody ReviewPermissionRequest request) {
-    return write(storeId, auth, request.grant(id), true);
+    return write(storeId, principal, request.grant(id), true);
   }
 
   @PostMapping("/{id}/permission-revocations")
   @PreAuthorize("hasAuthority('PERM_REVIEW_VIEW') and hasAuthority('PERM_REVIEW_MANAGE')")
   public ResponseEntity<ReviewWriteResponse> revoke(
       @CurrentStore Long storeId,
-      Authentication auth,
+      Principal principal,
       @PathVariable String id,
       @RequestBody ReviewPermissionRevocationRequest request) {
-    return write(storeId, auth, request.revoke(id), false);
+    return write(storeId, principal, request.revoke(id), false);
   }
 
   @PutMapping("/{id}/publication")
   @PreAuthorize("hasAuthority('PERM_REVIEW_VIEW') and hasAuthority('PERM_REVIEW_MODERATE')")
   public ResponseEntity<ReviewWriteResponse> publish(
       @CurrentStore Long storeId,
-      Authentication auth,
+      Principal principal,
       @PathVariable String id,
       @RequestBody ReviewPublicationRequest request) {
-    return write(storeId, auth, request.publish(id), false);
+    return write(storeId, principal, request.publish(id), false);
   }
 
   @PostMapping("/{id}/corrections")
@@ -110,10 +111,10 @@ public class ReviewController {
           + " and (#request.originOrderId() == null or hasAuthority('PERM_ORDER_MANAGE'))")
   public ResponseEntity<ReviewWriteResponse> correct(
       @CurrentStore Long storeId,
-      Authentication auth,
+      Principal principal,
       @PathVariable String id,
       @RequestBody ReviewCorrectionRequest request) {
-    return write(storeId, auth, request.correction(id), true);
+    return write(storeId, principal, request.correction(id), true);
   }
 
   @GetMapping
@@ -161,13 +162,14 @@ public class ReviewController {
   }
 
   private ResponseEntity<ReviewWriteResponse> write(
-      Long storeId, Authentication auth, ReviewCommand command, boolean create) {
+      Long storeId, Principal principal, ReviewCommand command, boolean create) {
+    long actorId = JwtClaims.userIdOf(principal);
     var result =
         ReviewWriteResponse.of(
             Replays.write(
                 DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-                () -> reviews.write(storeId, auth.getName(), command),
-                () -> reviews.replayOnly(storeId, auth.getName(), command)));
+                () -> reviews.write(storeId, actorId, command),
+                () -> reviews.replayOnly(storeId, actorId, command)));
     return ResponseEntity.status(create && !result.operation().replayed() ? 201 : 200).body(result);
   }
 }

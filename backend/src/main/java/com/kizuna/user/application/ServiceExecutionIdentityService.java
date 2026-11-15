@@ -67,11 +67,6 @@ public class ServiceExecutionIdentityService {
         users.findById(id).orElseThrow(ServiceExecutionIdentityService::denied), permission);
   }
 
-  public AuditActor requireOperator(String email, PermissionCode permission) {
-    var user = users.findByEmail(email).orElseThrow(ServiceExecutionIdentityService::denied);
-    return requireOperator(user, permission);
-  }
-
   private AuditActor requireOperator(User user, PermissionCode permission) {
     if (user.getUserType() != UserType.STAFF
         || !Boolean.TRUE.equals(user.getEnabled())

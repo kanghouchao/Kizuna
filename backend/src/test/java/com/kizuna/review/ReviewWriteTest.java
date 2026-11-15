@@ -80,7 +80,7 @@ class ReviewWriteTest {
 
   @BeforeEach
   void setup() {
-    when(identities.requireActor(anyString())).thenReturn(new AuditActor(1L, "STAFF", "担当者"));
+    when(identities.requireActor(1L)).thenReturn(new AuditActor(1L, "STAFF", "担当者"));
     row = ReviewRecord.receive(STORE_ID, input(null), 1L, "担当者", null, null);
     row.setId("00000000-0000-7000-8000-000000000010");
     row.setCreatedAt(AT);
@@ -137,7 +137,7 @@ class ReviewWriteTest {
 
   @Test
   void firstWriteRecordsHistoryAuditAndTheReceiptOfTheCommittedVersion() {
-    var result = ReviewWriteResponse.of(service.write(STORE_ID, "actor", approve("approve")));
+    var result = ReviewWriteResponse.of(service.write(STORE_ID, 1L, approve("approve")));
 
     verify(operations)
         .once(
@@ -145,11 +145,11 @@ class ReviewWriteTest {
             eq(approve("approve").fingerprint()),
             any(),
             any());
-    verify(identities).requireActor("actor");
+    verify(identities).requireActor(1L);
     verify(history).save(any());
     verify(audit)
-        .record(
-            "actor",
+        .recordById(
+            1L,
             STORE_ID,
             "REVIEW_APPROVED",
             "REVIEW",
@@ -171,7 +171,7 @@ class ReviewWriteTest {
         new ReviewCommand.Decide(
             "00000000-0000-7000-8000-000000000010", 1L, Operation.APPROVED, "確認", "approve");
 
-    assertThatThrownBy(() -> service.write(STORE_ID, "actor", stale))
+    assertThatThrownBy(() -> service.write(STORE_ID, 1L, stale))
         .isInstanceOf(ConflictException.class);
     verifyNoInteractions(history, audit);
   }
@@ -182,8 +182,8 @@ class ReviewWriteTest {
         new ReviewCommand.Receive(input("00000000-0000-7000-8000-000000000090"), "intake");
     doReturn(null).when(operations).once(any(), anyString(), any(), any());
 
-    service.write(STORE_ID, "actor", approve("approve"));
-    service.write(STORE_ID, "actor", receipt);
+    service.write(STORE_ID, 1L, approve("approve"));
+    service.write(STORE_ID, 1L, receipt);
 
     verify(reviews, never()).findByIdAndStoreIdForUpdate(anyString(), anyLong());
     verifyNoInteractions(origins, history, audit);

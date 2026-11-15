@@ -296,10 +296,10 @@ class AuthServiceTest {
 
   @Test
   void me_staff_returnsPermissions() {
-    when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(hqAdmin()));
+    when(userRepository.findById(1L)).thenReturn(Optional.of(hqAdmin()));
     stubHqRole();
 
-    Optional<MeView> res = authService.me("admin@kizuna.test");
+    Optional<MeView> res = authService.me(1L);
 
     assertThat(res).isPresent();
     assertThat(res.get().userType()).isEqualTo("STAFF");
@@ -318,9 +318,9 @@ class AuthServiceTest {
             .userType(UserType.CAST)
             .storeIds(Set.of(1L))
             .build();
-    when(userRepository.findByEmail("cast@kizuna.test")).thenReturn(Optional.of(cast));
+    when(userRepository.findById(5L)).thenReturn(Optional.of(cast));
 
-    Optional<MeView> res = authService.me("cast@kizuna.test");
+    Optional<MeView> res = authService.me(5L);
 
     assertThat(res).isPresent();
     assertThat(res.get().userType()).isEqualTo("CAST");
@@ -340,29 +340,26 @@ class AuthServiceTest {
             .storeIds(Set.of())
             .build();
     ReflectionTestUtils.setField(member, "emailVerifiedAt", OffsetDateTime.now());
-    when(userRepository.findByEmail("member@kizuna.test")).thenReturn(Optional.of(member));
+    when(userRepository.findById(6L)).thenReturn(Optional.of(member));
 
-    assertThat(authService.me("member@kizuna.test"))
-        .get()
-        .extracting(MeView::emailVerified)
-        .isEqualTo(true);
+    assertThat(authService.me(6L)).get().extracting(MeView::emailVerified).isEqualTo(true);
   }
 
   @Test
   void updateMe_emailNotFound_throwsStaleSession() {
-    when(userRepository.findByEmail("missing@kizuna.test")).thenReturn(Optional.empty());
+    when(userRepository.findById(99L)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> authService.updateMe("missing@kizuna.test", "新表示名"))
+    assertThatThrownBy(() -> authService.updateMe(99L, "新表示名"))
         .isInstanceOf(StaleSessionException.class);
   }
 
   @Test
   void updateMe_success_updatesDisplayNameAndReturnsResponse() {
     User user = hqAdmin();
-    when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(user));
+    when(userRepository.findById(1L)).thenReturn(Optional.of(user));
     stubHqRole();
 
-    MeView res = authService.updateMe("admin@kizuna.test", "新しい表示名");
+    MeView res = authService.updateMe(1L, "新しい表示名");
 
     assertThat(user.getDisplayName()).isEqualTo("新しい表示名");
     assertThat(res.displayName()).isEqualTo("新しい表示名");
@@ -373,11 +370,10 @@ class AuthServiceTest {
   @Test
   void changePassword_wrongCurrentPassword_throwsServiceExceptionAndKeepsSession() {
     User user = hqAdmin();
-    when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(user));
+    when(userRepository.findById(1L)).thenReturn(Optional.of(user));
     when(passwordEncoder.matches("wrong", "stored-hash")).thenReturn(false);
 
-    assertThatThrownBy(
-            () -> authService.changePassword("admin@kizuna.test", "wrong", "new-password-123"))
+    assertThatThrownBy(() -> authService.changePassword(1L, "wrong", "new-password-123"))
         .isInstanceOf(ServiceException.class);
 
     verify(userRepository, never()).save(any());
@@ -387,11 +383,11 @@ class AuthServiceTest {
   @Test
   void changePassword_success_encodesSavesAndPublishesBumpedCredentialVersion() {
     User user = hqAdmin();
-    when(userRepository.findByEmail("admin@kizuna.test")).thenReturn(Optional.of(user));
+    when(userRepository.findById(1L)).thenReturn(Optional.of(user));
     when(passwordEncoder.matches("current-pass", "stored-hash")).thenReturn(true);
     when(passwordEncoder.encode("new-password-123")).thenReturn("new-encoded-hash");
 
-    authService.changePassword("admin@kizuna.test", "current-pass", "new-password-123");
+    authService.changePassword(1L, "current-pass", "new-password-123");
 
     assertThat(user.getPassword()).isEqualTo("new-encoded-hash");
     verify(userRepository).save(user);

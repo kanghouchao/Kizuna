@@ -32,8 +32,8 @@ public class NotificationService {
   public record Created(DeliveryView delivery, boolean created) {}
 
   @Transactional
-  public Created create(Long storeId, String email, DeliveryContent content) {
-    var actor = identities.requireActor(email);
+  public Created create(Long storeId, long actorId, DeliveryContent content) {
+    var actor = identities.requireActor(actorId);
     var existing = byKey(storeId, content.dedupeKey());
     if (existing.isPresent()) {
       existing.get().requireSame(content);
@@ -69,8 +69,8 @@ public class NotificationService {
 
   @Transactional
   public DeliveryView queue(
-      Long storeId, String email, String id, Long version, String reason, boolean retry) {
-    var actor = identities.requireActor(email);
+      Long storeId, long actorId, String id, Long version, String reason, boolean retry) {
+    var actor = identities.requireActor(actorId);
     var row = lock(storeId, id);
     contacts.resolve(storeId, row.content());
     row.queue(version, reason, retry);
@@ -82,12 +82,12 @@ public class NotificationService {
   @Transactional
   public DeliveryView resolve(
       Long storeId,
-      String email,
+      long actorId,
       String id,
       Long version,
       DeliveryResolution outcome,
       String reason) {
-    var actor = identities.requireActor(email);
+    var actor = identities.requireActor(actorId);
     var row = lock(storeId, id);
     row.resolve(version, outcome, reason);
     deliveries.flush();

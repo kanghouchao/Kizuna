@@ -100,7 +100,7 @@ class RoleRowLockPremiseIntegrationTest {
               () ->
                   context
                       .getBean(RoleService.class)
-                      .update(role, command(role, PermissionCode.CUSTOMER_MANAGE)));
+                      .update(1L, role, command(role, PermissionCode.CUSTOMER_MANAGE)));
       assertThat(paused.await(10, TimeUnit.SECONDS)).isTrue();
       try {
         assertThat(probe(role)).isEqualTo("55P03");

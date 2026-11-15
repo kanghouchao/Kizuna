@@ -50,7 +50,7 @@ class StoreActivationServiceTest {
     when(storeRepository.findById(STORE_ID)).thenReturn(Optional.of(store));
     when(cacheManager.getCache(StoreRegistryService.DOMAIN_CACHE)).thenReturn(cache);
 
-    storeActivationService.activate(STORE_ID);
+    storeActivationService.activate(STORE_ID, 9L);
 
     assertThat(store.getStatus()).isEqualTo(StoreStatus.ACTIVE);
     verify(storeRepository).saveAndFlush(store);
@@ -64,7 +64,7 @@ class StoreActivationServiceTest {
     store.activate();
     when(storeRepository.findById(STORE_ID)).thenReturn(Optional.of(store));
 
-    assertThatThrownBy(() -> storeActivationService.activate(STORE_ID))
+    assertThatThrownBy(() -> storeActivationService.activate(STORE_ID, 9L))
         .isInstanceOf(ServiceException.class);
 
     verify(storeRepository, never()).saveAndFlush(any());
@@ -75,7 +75,7 @@ class StoreActivationServiceTest {
   void activate_missingStore_isNotFound() {
     when(storeRepository.findById(STORE_ID)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> storeActivationService.activate(STORE_ID))
+    assertThatThrownBy(() -> storeActivationService.activate(STORE_ID, 9L))
         .isInstanceOf(NotFoundException.class);
   }
 }
