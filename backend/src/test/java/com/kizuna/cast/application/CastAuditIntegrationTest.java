@@ -36,9 +36,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -61,10 +59,6 @@ import org.springframework.orm.jpa.SharedEntityManagerCreator;
 import org.springframework.orm.jpa.hibernate.SpringBeanContainer;
 import org.springframework.orm.jpa.vendor.HibernateJpaDialect;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -159,17 +153,6 @@ class CastAuditIntegrationTest {
                 .getId());
   }
 
-  @BeforeEach
-  void authenticate() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken(ORDINARY, null, List.of()));
-  }
-
-  @AfterEach
-  void clear() {
-    SecurityContextHolder.clearContext();
-  }
-
   @AfterAll
   void close() {
     if (context != null) context.close();
@@ -181,20 +164,20 @@ class CastAuditIntegrationTest {
     String profile = profileId(id);
     assertVersions(id, 0, 0);
     var request = command(null, Map.of("private-key", "秘密の内部値"));
-    casts.update(storeId, id, request, ORDINARY);
+    casts.update(storeId, id, request, ordinaryId);
     assertVersions(id, 1, 0);
-    casts.update(storeId, id, request, ORDINARY);
-    casts.update(storeId, id, command(null, null), ORDINARY);
+    casts.update(storeId, id, request, ordinaryId);
+    casts.update(storeId, id, command(null, null), ordinaryId);
     assertVersions(id, 1, 0);
     assertThat(auditCount(id, profile)).isEqualTo(2);
     casts.update(
         storeId,
         id,
         command("秘密の変更名", Map.of("private-key", "秘密の内部値", "public-key", "秘密の公開値")),
-        ORDINARY);
+        ordinaryId);
     assertVersions(id, 1, 1);
-    casts.changePublication(storeId, id, CastPublicationStatus.PUBLISHED);
-    casts.changePublication(storeId, id, CastPublicationStatus.PUBLISHED);
+    casts.changePublication(storeId, id, CastPublicationStatus.PUBLISHED, ordinaryId);
+    casts.changePublication(storeId, id, CastPublicationStatus.PUBLISHED, ordinaryId);
     assertVersions(id, 1, 2);
     var events =
         jdbc.queryForList(
@@ -252,7 +235,7 @@ class CastAuditIntegrationTest {
                 null,
                 null,
                 null),
-            ORDINARY)
+            ordinaryId)
         .enrollment()
         .getId();
   }
@@ -277,7 +260,7 @@ class CastAuditIntegrationTest {
     var request = command("秘密の更新名", Map.of("private-key", "内部更新値", "public-key", "公開更新値"));
     rejectAudit("CAST_ENROLLMENT_UPDATED");
     try {
-      assertThatThrownBy(() -> casts.update(storeId, id, request, ORDINARY))
+      assertThatThrownBy(() -> casts.update(storeId, id, request, ordinaryId))
           .isInstanceOf(DataIntegrityViolationException.class);
       assertThat(storedState(id)).isEqualTo(before);
       assertThat(tableCounts()).isEqualTo(counts);
@@ -295,7 +278,8 @@ class CastAuditIntegrationTest {
     rejectAudit("CAST_PROFILE_PUBLICATION_CHANGED");
     try {
       assertThatThrownBy(
-              () -> casts.changePublication(storeId, id, CastPublicationStatus.PUBLISHED))
+              () ->
+                  casts.changePublication(storeId, id, CastPublicationStatus.PUBLISHED, ordinaryId))
           .isInstanceOf(DataIntegrityViolationException.class);
       assertThat(storedState(id)).isEqualTo(before);
       assertThat(tableCounts()).isEqualTo(counts);
@@ -308,12 +292,12 @@ class CastAuditIntegrationTest {
   @ValueSource(strings = {"SUSPENDED", "RESUMED", "WITHDRAWN"})
   void lifecycleAuditFailureRestoresEnrollmentAndHistory(String action) {
     String id = create();
-    if (action.equals("RESUMED")) lifecycle.suspend(storeId, id, ORDINARY);
+    if (action.equals("RESUMED")) lifecycle.suspend(storeId, id, ordinaryId);
     var before = storedState(id);
     var counts = tableCounts();
     rejectAudit("CAST_ENROLLMENT_" + action);
     try {
-      assertThatThrownBy(() -> transition(id, action, ORDINARY))
+      assertThatThrownBy(() -> transition(id, action, ordinaryId))
           .isInstanceOf(DataIntegrityViolationException.class);
       assertThat(storedState(id)).isEqualTo(before);
       assertThat(tableCounts()).isEqualTo(counts);
@@ -331,16 +315,16 @@ class CastAuditIntegrationTest {
         status -> {
           var request =
               command("外側rollbackの秘密", Map.of("private-key", "戻す内部値", "public-key", "戻す公開値"));
-          casts.update(storeId, id, request, ORDINARY);
-          casts.changePublication(storeId, id, CastPublicationStatus.PUBLISHED);
-          lifecycle.suspend(storeId, id, ORDINARY);
+          casts.update(storeId, id, request, ordinaryId);
+          casts.changePublication(storeId, id, CastPublicationStatus.PUBLISHED, ordinaryId);
+          lifecycle.suspend(storeId, id, ordinaryId);
           status.setRollbackOnly();
         });
     assertThat(storedState(id)).isEqualTo(before);
     assertThat(tableCounts()).isEqualTo(counts);
   }
 
-  private void transition(String id, String action, String actor) {
+  private void transition(String id, String action, long actor) {
     switch (action) {
       case "SUSPENDED" -> lifecycle.suspend(storeId, id, actor);
       case "RESUMED" -> lifecycle.resume(storeId, id, actor);
@@ -353,19 +337,12 @@ class CastAuditIntegrationTest {
   void secondActorChangesKeepActualActorsVersionsAndHistorySources() {
     String id = create();
     String profile = profileId(id);
-    var jwt =
-        Jwt.withTokenValue(UUID.randomUUID().toString())
-            .header("alg", "HS256")
-            .subject(SECOND)
-            .build();
-    SecurityContextHolder.getContext()
-        .setAuthentication(new JwtAuthenticationToken(jwt, List.of()));
     var request = command("別担当で変更する秘密名", null);
-    casts.update(storeId, id, request, SECOND);
-    casts.changePublication(storeId, id, CastPublicationStatus.PUBLISHED);
-    lifecycle.suspend(storeId, id, SECOND);
-    lifecycle.resume(storeId, id, SECOND);
-    lifecycle.withdraw(storeId, id, SECOND);
+    casts.update(storeId, id, request, secondId);
+    casts.changePublication(storeId, id, CastPublicationStatus.PUBLISHED, secondId);
+    lifecycle.suspend(storeId, id, secondId);
+    lifecycle.resume(storeId, id, secondId);
+    lifecycle.withdraw(storeId, id, secondId);
     assertVersions(id, 3, 2);
     var actors =
         jdbc.queryForList(
@@ -398,11 +375,11 @@ class CastAuditIntegrationTest {
         .containsExactly("SUSPENDED", "ENROLLED", "WITHDRAWN");
     assertThat(history.getLast().get("ended")).isNotNull().isNotEqualTo("");
     assertThat(lifecycle.history(storeId, id, PageRequest.of(0, 20)).getContent()).hasSize(4);
-    assertThatThrownBy(() -> lifecycle.suspend(storeId, id, SECOND))
+    assertThatThrownBy(() -> lifecycle.suspend(storeId, id, secondId))
         .isInstanceOf(ServiceException.class);
-    assertThatThrownBy(() -> lifecycle.resume(storeId, id, SECOND))
+    assertThatThrownBy(() -> lifecycle.resume(storeId, id, secondId))
         .isInstanceOf(ServiceException.class);
-    assertThatThrownBy(() -> lifecycle.withdraw(storeId, id, SECOND))
+    assertThatThrownBy(() -> lifecycle.withdraw(storeId, id, secondId))
         .isInstanceOf(ServiceException.class);
     assertThat(auditCount(id, profile)).isEqualTo(6);
   }
@@ -432,20 +409,14 @@ class CastAuditIntegrationTest {
 
   private boolean concurrentSuspend(String id, CountDownLatch ready, CountDownLatch start)
       throws InterruptedException {
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken(ORDINARY, null, List.of()));
+    ready.countDown();
+    if (!start.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("同時操作が開始されませんでした");
     try {
-      ready.countDown();
-      if (!start.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("同時操作が開始されませんでした");
-      try {
-        lifecycle.suspend(storeId, id, ORDINARY);
-        return true;
-      } catch (ServiceException conflict) {
-        assertThat(conflict).hasMessage("在籍中のキャストのみ停止できます");
-        return false;
-      }
-    } finally {
-      SecurityContextHolder.clearContext();
+      lifecycle.suspend(storeId, id, ordinaryId);
+      return true;
+    } catch (ServiceException conflict) {
+      assertThat(conflict).hasMessage("在籍中のキャストのみ停止できます");
+      return false;
     }
   }
 

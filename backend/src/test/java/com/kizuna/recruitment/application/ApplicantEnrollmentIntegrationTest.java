@@ -200,7 +200,7 @@ class ApplicantEnrollmentIntegrationTest {
     String enrollment =
         context
             .getBean(CastService.class)
-            .create(otherStoreId, request(0L).cast(), ACTOR)
+            .create(otherStoreId, request(0L).cast(), actorId)
             .enrollment()
             .getId();
     String local = hiredApplicant(storeId);
@@ -241,7 +241,8 @@ class ApplicantEnrollmentIntegrationTest {
     String applicant = hiredApplicant(storeId);
     String enrollment = applicants.enroll(storeId, applicant, request(0L), ACTOR).enrollmentId();
     assertThat(context.getBean(CastService.class).get(storeId, enrollment).deletable()).isFalse();
-    assertThatThrownBy(() -> context.getBean(CastService.class).delete(storeId, enrollment, ACTOR))
+    assertThatThrownBy(
+            () -> context.getBean(CastService.class).delete(storeId, enrollment, actorId))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("応募者から在籍登録された");
     assertThat(count("t_cast_enrollments where id=?", enrollment)).isEqualTo(1);

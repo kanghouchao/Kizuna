@@ -1,6 +1,7 @@
 package com.kizuna.shift.api;
 
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.shift.api.dto.ShiftApprovalRequest;
 import com.kizuna.shift.api.dto.ShiftRequestMapper;
 import com.kizuna.shift.api.dto.StoreShiftRequestResponse;
@@ -48,7 +49,7 @@ public class ShiftRequestController {
     Boolean published = request == null ? null : request.getPublished();
     return ResponseEntity.ok(
         shiftRequestMapper.toStoreResponse(
-            shiftRequestService.approve(storeId, id, published, principal.getName())));
+            shiftRequestService.approve(storeId, id, published, JwtClaims.userIdOf(principal))));
   }
 
   @PostMapping("/{id}/rejection")
@@ -57,6 +58,6 @@ public class ShiftRequestController {
       @CurrentStore Long storeId, @PathVariable String id, Principal principal) {
     return ResponseEntity.ok(
         shiftRequestMapper.toStoreResponse(
-            shiftRequestService.decline(storeId, id, principal.getName())));
+            shiftRequestService.decline(storeId, id, JwtClaims.userIdOf(principal))));
   }
 }

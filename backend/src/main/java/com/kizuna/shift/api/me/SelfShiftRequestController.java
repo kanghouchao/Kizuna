@@ -1,5 +1,6 @@
 package com.kizuna.shift.api.me;
 
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.shift.api.dto.CastShiftRequestResponse;
 import com.kizuna.shift.api.dto.ShiftChangeRequestCreateRequest;
 import com.kizuna.shift.api.dto.ShiftRequestCreateRequest;
@@ -38,7 +39,7 @@ public class SelfShiftRequestController {
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(
             shiftRequestMapper.toResponse(
-                castShiftRequestService.submit(principal.getName(), request.command())));
+                castShiftRequestService.submit(JwtClaims.userIdOf(principal), request.command())));
   }
 
   /** 確定シフトへの変更申請を提出する（type=CHANGE の出勤希望として同一正本に載る）。 */
@@ -49,7 +50,8 @@ public class SelfShiftRequestController {
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(
             shiftRequestMapper.toResponse(
-                castShiftRequestService.submitChange(principal.getName(), request.command())));
+                castShiftRequestService.submitChange(
+                    JwtClaims.userIdOf(principal), request.command())));
   }
 
   @GetMapping
@@ -63,7 +65,7 @@ public class SelfShiftRequestController {
           Pageable pageable) {
     return ResponseEntity.ok(
         castShiftRequestService
-            .history(principal.getName(), pageable)
+            .history(JwtClaims.userIdOf(principal), pageable)
             .map(shiftRequestMapper::toHistoryResponse));
   }
 }

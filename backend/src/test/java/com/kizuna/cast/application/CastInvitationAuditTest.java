@@ -124,7 +124,7 @@ class CastInvitationAuditTest {
             .roleIds(Set.of(1L))
             .build();
     staff.setId(9L);
-    when(users.findByEmail("staff@example.test")).thenReturn(Optional.of(staff));
+    when(users.findById(9L)).thenReturn(Optional.of(staff));
   }
 
   @Test
@@ -138,7 +138,7 @@ class CastInvitationAuditTest {
               return saved;
             });
 
-    var response = issuing.issue(STORE_ID, "enrollment-1", "staff@example.test");
+    var response = issuing.issue(STORE_ID, "enrollment-1", 9L);
 
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
@@ -157,7 +157,7 @@ class CastInvitationAuditTest {
   void rejectedIssueRecordsNothing() {
     staffActs();
     enrollment.linkCast(5L);
-    assertThatThrownBy(() -> issuing.issue(STORE_ID, "enrollment-1", "staff@example.test"))
+    assertThatThrownBy(() -> issuing.issue(STORE_ID, "enrollment-1", 9L))
         .isInstanceOf(CastInvitationStateException.class);
     assertThat(recorded).isEmpty();
   }

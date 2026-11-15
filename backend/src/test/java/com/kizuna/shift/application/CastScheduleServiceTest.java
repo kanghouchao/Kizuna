@@ -12,14 +12,10 @@ import static org.mockito.Mockito.when;
 
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shift.domain.CastScheduleView;
 import com.kizuna.shift.domain.ShiftRepository;
-import com.kizuna.user.domain.User;
-import com.kizuna.user.domain.UserRepository;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -29,40 +25,22 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class CastScheduleServiceTest {
 
-  @Mock private UserRepository userRepository;
   @Mock private CastEnrollmentRepository castRepository;
   @Mock private ShiftRepository shiftRepository;
 
   @InjectMocks private CastScheduleService service;
 
-  private static final String EMAIL = "cast@kizuna.test";
+  private static final long USER_ID = 42L;
   private static final LocalDate FROM = LocalDate.of(2026, 7, 19);
   private static final LocalDate TO = LocalDate.of(2026, 7, 25);
 
-  private User userWithId(long id) {
-    User user = mock(User.class);
-    when(user.getId()).thenReturn(id);
-    return user;
-  }
-
-  @Test
-  void myWeek_throwsWhenEmailUnknown() {
-    when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
-
-    assertThatThrownBy(() -> service.myWeek(EMAIL, FROM, TO))
-        .isInstanceOf(StaleSessionException.class)
-        .hasMessageContaining("認証セッションの主体が存在しません");
-
-    verifyNoInteractions(castRepository, shiftRepository);
-  }
-
   @Test
   void myWeek_throwsWhenToIsBeforeFrom() {
-    assertThatThrownBy(() -> service.myWeek(EMAIL, TO, FROM))
+    assertThatThrownBy(() -> service.myWeek(USER_ID, TO, FROM))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("取得範囲が不正です");
 
-    verifyNoInteractions(userRepository, castRepository, shiftRepository);
+    verifyNoInteractions(castRepository, shiftRepository);
   }
 
   @Test
@@ -70,20 +48,18 @@ class CastScheduleServiceTest {
     LocalDate from = LocalDate.of(2026, 7, 1);
     LocalDate to = from.plusDays(32);
 
-    assertThatThrownBy(() -> service.myWeek(EMAIL, from, to))
+    assertThatThrownBy(() -> service.myWeek(USER_ID, from, to))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("取得範囲が不正です");
 
-    verifyNoInteractions(userRepository, castRepository, shiftRepository);
+    verifyNoInteractions(castRepository, shiftRepository);
   }
 
   @Test
   void myWeek_returnsEmptyWhenNoCastLinked() {
-    User user = userWithId(42L);
-    when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByUserId(42L)).thenReturn(List.of());
 
-    List<CastScheduleView> result = service.myWeek(EMAIL, FROM, TO);
+    List<CastScheduleView> result = service.myWeek(USER_ID, FROM, TO);
 
     assertThat(result).isEmpty();
     verifyNoInteractions(shiftRepository);
@@ -91,14 +67,12 @@ class CastScheduleServiceTest {
 
   @Test
   void myWeek_mapsConfirmedSchedulesAcrossCastIds() {
-    User user = userWithId(42L);
-    when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     List<String> castIds = List.of("cast-store-a", "cast-store-b");
     when(castRepository.findIdsByUserId(42L)).thenReturn(castIds);
 
     CastScheduleView view = mock(CastScheduleView.class);
     when(shiftRepository.findConfirmedSchedule(castIds, FROM, TO)).thenReturn(List.of(view));
-    List<CastScheduleView> result = service.myWeek(EMAIL, FROM, TO);
+    List<CastScheduleView> result = service.myWeek(USER_ID, FROM, TO);
 
     assertThat(result).containsExactly(view);
     verify(shiftRepository).findConfirmedSchedule(eq(castIds), eq(FROM), eq(TO));

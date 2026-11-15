@@ -2,8 +2,6 @@ package com.kizuna.cast.application;
 
 import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.cast.domain.CastStoreView;
-import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.user.domain.UserRepository;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,16 +17,10 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CastSelfService {
 
-  private final UserRepository userRepository;
   private final CastEnrollmentRepository castRepository;
 
   @Transactional(readOnly = true)
-  public List<CastStoreView> myStores(String email) {
-    Long userId =
-        userRepository
-            .findByEmail(email)
-            .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
-            .getId();
+  public List<CastStoreView> myStores(long userId) {
     return castRepository.findStoresByUserId(userId);
   }
 }

@@ -85,7 +85,7 @@ class CastInvitationServiceTest {
     when(castInvitationRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
     OffsetDateTime before = OffsetDateTime.now();
-    CastInvitation response = castInvitationService.issue(STORE_ID, "c1", "op@example.test");
+    CastInvitation response = castInvitationService.issue(STORE_ID, "c1", 9L);
 
     assertThat(response.getToken()).isNotBlank();
     assertThat(response.getExpiresAt())
@@ -102,7 +102,7 @@ class CastInvitationServiceTest {
     when(castRepository.findByIdAndStoreIdForUpdate("missing", STORE_ID))
         .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "missing", "op@example.test"))
+    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "missing", 9L))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("キャストが見つかりません");
     verify(castInvitationRepository, never()).saveAndFlush(any());
@@ -113,7 +113,7 @@ class CastInvitationServiceTest {
     when(castRepository.findByIdAndStoreIdForUpdate("c1", STORE_ID))
         .thenReturn(Optional.of(cast("c1", 99L)));
 
-    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1", "op@example.test"))
+    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1", 9L))
         .isInstanceOf(CastInvitationStateException.class);
     verify(castInvitationRepository, never()).saveAndFlush(any());
   }
@@ -125,7 +125,7 @@ class CastInvitationServiceTest {
     when(castRepository.findByIdAndStoreIdForUpdate("c1", STORE_ID))
         .thenReturn(Optional.of(enrollment));
 
-    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1", "op@example.test"))
+    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1", 9L))
         .isInstanceOf(CastInvitationStateException.class);
     verify(castInvitationRepository, never()).saveAndFlush(any());
   }
@@ -138,7 +138,7 @@ class CastInvitationServiceTest {
         .thenReturn(Optional.of(cast("c1", null)));
     when(castInvitationRepository.saveAndFlush(any())).thenAnswer(inv -> inv.getArgument(0));
 
-    castInvitationService.issue(STORE_ID, "c1", "op@example.test");
+    castInvitationService.issue(STORE_ID, "c1", 9L);
 
     InOrder inOrder = inOrder(castInvitationRepository);
     inOrder
@@ -164,15 +164,14 @@ class CastInvitationServiceTest {
                 "uq_t_cast_invitations_pending_cast"));
     when(castInvitationRepository.saveAndFlush(any())).thenThrow(violation);
 
-    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1", "op@example.test"))
-        .isSameAs(violation);
+    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1", 9L)).isSameAs(violation);
   }
 
   @Test
   void issue_castFkViolation_convertsToNotFound() {
     // 招待行の INSERT が t_cast_invitations の cast FK に当たったときの分類を固定する。
-    // 冒頭で档案行を押さえる（ADR 0016）ので並行削除の割り込みでは当たらなくなったが、
-    // 当たった場合の出口は冒頭の档案不在と同じ分類（NotFoundException → 404）である。
+    // 冒頭で在籍行を押さえる（ADR 0016）ので並行削除の割り込みでは当たらなくなったが、
+    // 当たった場合の出口は冒頭の在籍不在と同じ分類（NotFoundException → 404）である。
     when(castRepository.findByIdAndStoreIdForUpdate("c1", STORE_ID))
         .thenReturn(Optional.of(cast("c1", null)));
     when(castInvitationRepository.saveAndFlush(any()))
@@ -184,20 +183,20 @@ class CastInvitationServiceTest {
                     new SQLException("insert or update violates foreign key constraint"),
                     "fk_t_cast_invitations_cast")));
 
-    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1", "op@example.test"))
+    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1", 9L))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("キャストが見つかりません");
   }
 
   @Test
   void issue_abortsWhenCastGetsLinkedConcurrentlyBeforeReissuing() {
-    // 初回の連携チェック通過後、旧 PENDING 失効までの間に並行受諾が档案を紐づけた状況を模す。
-    // 失効後に档案の紐づけを DB 再読込で再確認し、紐づき済みなら新規発行を中止する。
+    // 初回の連携チェック通過後、旧 PENDING 失効までの間に並行受諾が在籍を紐づけた状況を模す。
+    // 失効後に在籍の紐づけを DB 再読込で再確認し、紐づき済みなら新規発行を中止する。
     when(castRepository.findByIdAndStoreIdForUpdate("c1", STORE_ID))
         .thenReturn(Optional.of(cast("c1", null)));
     when(castRepository.findCastIdByIdAndStoreId("c1", STORE_ID)).thenReturn(Optional.of(77L));
 
-    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1", "op@example.test"))
+    assertThatThrownBy(() -> castInvitationService.issue(STORE_ID, "c1", 9L))
         .isInstanceOf(CastInvitationStateException.class);
     verify(castInvitationRepository, never()).saveAndFlush(any());
   }

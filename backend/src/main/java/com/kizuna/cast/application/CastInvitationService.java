@@ -55,7 +55,7 @@ public class CastInvitationService {
    * 再読込で再確認し、 並行受諾が在籍を紐づけていれば新規発行を中止する（連携済み在籍に有効トークンが残る矛盾を塞ぐ）。
    */
   @Transactional
-  public CastInvitation issue(Long storeId, String castId, String actorEmail) {
+  public CastInvitation issue(Long storeId, String castId, long actorId) {
     // 招待行を書く前に店舗行・在籍行を押さえる（ADR 0016）。招待を先に押さえると、同じ在籍を
     // 「店舗 → 在籍 → 招待」の順で辿る受諾と逆順になって環になる。
     storeRepository.lockAgainstDeletion(storeId);
@@ -97,8 +97,8 @@ public class CastInvitationService {
             Map.of(
                 DbConstraint.FK_T_CAST_INVITATIONS_CAST,
                 () -> new NotFoundException("キャストが見つかりません: " + castId)));
-    audit.record(
-        actorEmail,
+    audit.recordById(
+        actorId,
         saved.getStoreId(),
         "CAST_INVITATION_ISSUED",
         "CAST_INVITATION",

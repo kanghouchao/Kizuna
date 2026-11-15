@@ -5,7 +5,6 @@ import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.shift.application.ShiftViews.InboxRequest;
 import com.kizuna.shift.domain.AttendanceRepository;
@@ -19,7 +18,6 @@ import com.kizuna.shift.domain.ShiftRequestType;
 import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.UserRepository;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -40,7 +38,6 @@ public class ShiftRequestService {
   private final CastEnrollmentRepository enrollments;
   private final ShiftRepository shiftRepository;
   private final AttendanceRepository attendanceRepository;
-  private final UserRepository userRepository;
   private final BusinessDateService businessDateService;
   private final StoreRepository storeRepository;
   private final BusinessAudit audit;
@@ -153,7 +150,7 @@ public class ShiftRequestService {
    *     公開状態で生まれてから隠すまでの露出窓を作らない（ADR 0015）
    */
   @Transactional
-  public ShiftRequest approve(Long storeId, String id, Boolean published, String actorEmail) {
+  public ShiftRequest approve(Long storeId, String id, Boolean published, long actorId) {
     ShiftRequest request = findOwnRequest(storeId, id);
     var before = ShiftAuditSnapshot.of(request);
     storeRepository.lockAgainstDeletion(storeId);
@@ -161,7 +158,6 @@ public class ShiftRequestService {
         .findByIdAndStoreIdForUpdate(request.getCastId(), storeId)
         .filter(CastEnrollment::isMembershipActive)
         .orElseThrow(() -> new ServiceException("退店済みの在籍の出勤希望は承認できません"));
-    Long actorId = resolveActorId(actorEmail);
     request.approve(actorId, Timestamps.now());
 
     // 目標営業日が終了した希望は承認できない。期限切れ NEW の承認は「過去の確定シフト＝即座の導出欠勤」を
@@ -262,10 +258,10 @@ public class ShiftRequestService {
   }
 
   @Transactional
-  public ShiftRequest decline(Long storeId, String id, String actorEmail) {
+  public ShiftRequest decline(Long storeId, String id, long actorId) {
     ShiftRequest request = findOwnRequest(storeId, id);
     var before = ShiftAuditSnapshot.of(request);
-    request.decline(resolveActorId(actorEmail), Timestamps.now());
+    request.decline(actorId, Timestamps.now());
     shiftRequestRepository.save(request);
     shiftRequestRepository.flush();
     audit.recordById(
@@ -285,13 +281,6 @@ public class ShiftRequestService {
     return shiftRequestRepository
         .findByIdAndStoreId(id, storeId)
         .orElseThrow(() -> new NotFoundException("出勤希望が見つかりません: " + id));
-  }
-
-  private Long resolveActorId(String actorEmail) {
-    return userRepository
-        .findByEmail(actorEmail)
-        .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
-        .getId();
   }
 
   private ShiftRequestStatus parseStatus(String status) {

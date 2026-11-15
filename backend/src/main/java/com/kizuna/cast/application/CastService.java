@@ -34,7 +34,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -152,7 +151,7 @@ public class CastService {
   }
 
   @Transactional
-  public CastDetail create(Long storeId, CastCreateCommand command, String actorEmail) {
+  public CastDetail create(Long storeId, CastCreateCommand command, long actorId) {
     storeRepository.lockCastFields(storeId);
     CastEnrollment newEnrollment =
         CastEnrollment.builder()
@@ -161,13 +160,13 @@ public class CastService {
             .build();
     newEnrollment.setStoreId(storeId);
     CastEnrollment enrollment = castRepository.save(newEnrollment);
-    enrollmentService.recordCreation(enrollment, actorEmail);
+    enrollmentService.recordCreation(enrollment, actorId);
     CastProfile newProfile = command.profile(enrollment.getId());
     newProfile.setStoreId(storeId);
     CastProfile profile = profileRepository.save(newProfile);
     profileRepository.flush();
-    audit.record(
-        actorEmail,
+    audit.recordById(
+        actorId,
         enrollment.getStoreId(),
         "CAST_ENROLLMENT_CREATED",
         "CAST_ENROLLMENT",
@@ -193,7 +192,7 @@ public class CastService {
   }
 
   @Transactional
-  public CastDetail update(Long storeId, String id, CastUpdateCommand command, String actorEmail) {
+  public CastDetail update(Long storeId, String id, CastUpdateCommand command, long actorId) {
     storeRepository.lockCastFields(storeId);
     CastEnrollment enrollment =
         castRepository
@@ -216,7 +215,7 @@ public class CastService {
               .put(definition.getKey(), customFields.get(definition.getKey()));
         }
       }
-      enrollmentService.replaceInternalFields(enrollment, internal, actorEmail);
+      enrollmentService.replaceInternalFields(enrollment, internal, actorId);
       profile.replaceCustomFields(external);
     }
     profile.apply(command.profile());
@@ -232,8 +231,8 @@ public class CastService {
       var after = new HashMap<>(snapshot(enrollment, profile));
       if (!changedFields.isEmpty())
         after.put("redacted_fields_changed", String.join(",", changedFields));
-      audit.record(
-          actorEmail,
+      audit.recordById(
+          actorId,
           enrollment.getStoreId(),
           "CAST_ENROLLMENT_UPDATED",
           "CAST_ENROLLMENT",
@@ -265,7 +264,7 @@ public class CastService {
 
   @Transactional
   public CastPublicationStatus changePublication(
-      Long storeId, String id, CastPublicationStatus status) {
+      Long storeId, String id, CastPublicationStatus status, long actorId) {
     requireEnrollment(storeId, id);
     CastProfile profile = requireProfile(storeId, id);
     var before = profileSnapshot(profile);
@@ -273,8 +272,8 @@ public class CastService {
     boolean changed = !before.equals(profileSnapshot(profile));
     profileRepository.flush();
     if (changed) {
-      audit.record(
-          SecurityContextHolder.getContext().getAuthentication().getName(),
+      audit.recordById(
+          actorId,
           profile.getStoreId(),
           "CAST_PROFILE_PUBLICATION_CHANGED",
           "CAST_PROFILE",
@@ -314,7 +313,7 @@ public class CastService {
 
   /** 本人未紐づけの草稿のみ削除できる。受注・実績の参照は履歴の根拠なので維持する。 */
   @Transactional
-  public void delete(Long storeId, String id, String actorEmail) {
+  public void delete(Long storeId, String id, long actorId) {
     CastEnrollment enrollment =
         castRepository
             .findByIdAndStoreIdForUpdate(id, storeId)
@@ -349,8 +348,8 @@ public class CastService {
               () -> new ConflictException("応募者から在籍登録されたキャストは削除できません。退店操作を利用してください")));
     }
     // 件数は行ロック下で数えた連鎖先。公開プロフィールは在籍と 1 対 1（一意制約）なので常に 1 件。
-    audit.record(
-        actorEmail,
+    audit.recordById(
+        actorId,
         enrollment.getStoreId(),
         "CAST_ENROLLMENT_DELETED",
         "CAST_ENROLLMENT",

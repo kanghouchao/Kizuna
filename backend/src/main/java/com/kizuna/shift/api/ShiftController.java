@@ -1,6 +1,7 @@
 package com.kizuna.shift.api;
 
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.shift.api.dto.PublicShiftResponse;
 import com.kizuna.shift.api.dto.ShiftCreateRequest;
 import com.kizuna.shift.api.dto.ShiftDetailResponse;
@@ -91,7 +92,7 @@ public class ShiftController {
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(
             shiftMapper.toResponse(
-                shiftService.create(storeId, request.command(), principal.getName())));
+                shiftService.create(storeId, request.command(), JwtClaims.userIdOf(principal))));
   }
 
   @PutMapping("/{id}")
@@ -103,7 +104,7 @@ public class ShiftController {
       Principal principal) {
     return ResponseEntity.ok(
         shiftMapper.toResponse(
-            shiftService.update(storeId, id, request.command(), principal.getName())));
+            shiftService.update(storeId, id, request.command(), JwtClaims.userIdOf(principal))));
   }
 
   @PutMapping("/{id}/publication")
@@ -116,13 +117,14 @@ public class ShiftController {
     return ResponseEntity.ok(
         shiftMapper.toResponse(
             shiftService.changePublication(
-                storeId, id, request.getPublished(), principal.getName())));
+                storeId, id, request.getPublished(), JwtClaims.userIdOf(principal))));
   }
 
   @DeleteMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_SHIFT_MANAGE')")
-  public ResponseEntity<Void> delete(@CurrentStore Long storeId, @PathVariable String id) {
-    shiftService.delete(storeId, id);
+  public ResponseEntity<Void> delete(
+      @CurrentStore Long storeId, @PathVariable String id, Principal principal) {
+    shiftService.delete(storeId, id, JwtClaims.userIdOf(principal));
     return ResponseEntity.noContent().build();
   }
 

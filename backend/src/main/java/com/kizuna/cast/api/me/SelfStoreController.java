@@ -2,6 +2,7 @@ package com.kizuna.cast.api.me;
 
 import com.kizuna.cast.api.dto.CastStoreResponse;
 import com.kizuna.cast.application.CastSelfService;
+import com.kizuna.shared.web.JwtClaims;
 import java.security.Principal;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,8 @@ public class SelfStoreController {
   @PreAuthorize("hasRole('CAST')")
   public ResponseEntity<List<CastStoreResponse>> myStores(Principal principal) {
     return ResponseEntity.ok(
-        castSelfService.myStores(principal.getName()).stream().map(CastStoreResponse::of).toList());
+        castSelfService.myStores(JwtClaims.userIdOf(principal)).stream()
+            .map(CastStoreResponse::of)
+            .toList());
   }
 }

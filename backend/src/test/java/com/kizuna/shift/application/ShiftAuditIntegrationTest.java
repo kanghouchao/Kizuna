@@ -3,7 +3,6 @@ package com.kizuna.shift.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -50,9 +49,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
@@ -69,8 +66,6 @@ import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.SharedEntityManagerCreator;
 import org.springframework.orm.jpa.hibernate.SpringBeanContainer;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -105,18 +100,6 @@ class ShiftAuditIntegrationTest {
         "create unique index uq_t_attendances_active_shift on t_attendances (shift_id) where cancelled_at is null and shift_id is not null");
   }
 
-  @BeforeEach
-  void authenticate() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken("operator@example.test", null, List.of()));
-  }
-
-  @AfterEach
-  void clear() {
-    SecurityContextHolder.clearContext();
-  }
-
   @AfterAll
   void close() {
     if (context != null) context.close();
@@ -138,7 +121,7 @@ class ShiftAuditIntegrationTest {
     r.setStartTime(LocalTime.of(10, 0));
     r.setEndTime(LocalTime.of(18, 0));
     r.setNote("秘密希望");
-    return own.submit("cast@example.test", r.command()).getId();
+    return own.submit(10L, r.command()).getId();
   }
 
   private AttendanceCreateRequest attendance(String shiftId) {
@@ -167,14 +150,14 @@ class ShiftAuditIntegrationTest {
 
   @Test
   void realVersionsAndNoOpsSurvivePhysicalDeletion() {
-    var id = shifts.create(1L, shiftRequest().command(), "operator@example.test").shift().getId();
+    var id = shifts.create(1L, shiftRequest().command(), 9L).shift().getId();
     var patch = new ShiftUpdateRequest();
     patch.setStartTime(LocalTime.of(11, 0));
-    shifts.update(1L, id, patch.command(), "operator@example.test");
-    shifts.update(1L, id, patch.command(), "operator@example.test");
-    shifts.changePublication(1L, id, false, "operator@example.test");
-    shifts.changePublication(1L, id, false, "operator@example.test");
-    shifts.delete(1L, id);
+    shifts.update(1L, id, patch.command(), 9L);
+    shifts.update(1L, id, patch.command(), 9L);
+    shifts.changePublication(1L, id, false, 9L);
+    shifts.changePublication(1L, id, false, 9L);
+    shifts.delete(1L, id, 9L);
     var rows =
         jdbc.queryForList(
             "select action, before_values ->> 'version' as old_version, after_values ->> 'version' as new_version from t_audit_events where target_type='SHIFT' and target_id=? order by id",
@@ -194,7 +177,7 @@ class ShiftAuditIntegrationTest {
     long shiftsBefore = count("t_shifts"), audits = count("t_audit_events");
     reject("SHIFT_REQUEST_APPROVED");
     try {
-      assertThatThrownBy(() -> decisions.approve(1L, id, false, "operator@example.test"))
+      assertThatThrownBy(() -> decisions.approve(1L, id, false, 9L))
           .isInstanceOf(RuntimeException.class);
       assertThat(
               jdbc.queryForMap(
@@ -212,9 +195,9 @@ class ShiftAuditIntegrationTest {
   @Test
   void deletionUnlinksRequestWithoutInventingVersionAndKeepsSafeSnapshots() {
     var id = submit();
-    var approved = decisions.approve(1L, id, false, "operator@example.test");
+    var approved = decisions.approve(1L, id, false, 9L);
     var shiftId = approved.getShiftId();
-    shifts.delete(1L, shiftId);
+    shifts.delete(1L, shiftId, 9L);
     assertThat(jdbc.queryForMap("select shift_id, version from t_shift_requests where id=?", id))
         .containsEntry("shift_id", null)
         .containsEntry("version", 1L);
@@ -239,11 +222,11 @@ class ShiftAuditIntegrationTest {
   @Test
   void rejectedDeletionRestoresShiftLinkAndBothAudits() {
     var id = submit();
-    var shiftId = decisions.approve(1L, id, false, "operator@example.test").getShiftId();
+    var shiftId = decisions.approve(1L, id, false, 9L).getShiftId();
     long audits = count("t_audit_events");
     reject("SHIFT_DELETED");
     try {
-      assertThatThrownBy(() -> shifts.delete(1L, shiftId)).isInstanceOf(RuntimeException.class);
+      assertThatThrownBy(() -> shifts.delete(1L, shiftId, 9L)).isInstanceOf(RuntimeException.class);
       assertThat(
               jdbc.queryForObject(
                   "select shift_id from t_shift_requests where id=?", String.class, id))
@@ -259,22 +242,22 @@ class ShiftAuditIntegrationTest {
 
   @Test
   void auditFailureRollsBackEachAttendanceWriteAndItsCorrectionHistory() {
-    var id = shifts.create(1L, shiftRequest().command(), "operator@example.test").shift().getId();
+    var id = shifts.create(1L, shiftRequest().command(), 9L).shift().getId();
     var patch = new ShiftUpdateRequest();
     patch.setStatus(ShiftStatus.CONFIRMED);
-    shifts.update(1L, id, patch.command(), "operator@example.test");
+    shifts.update(1L, id, patch.command(), 9L);
     var r = attendance(id);
     long audits = count("t_audit_events"), records = count("t_attendances");
     reject("ATTENDANCE_RECORDED");
     try {
-      assertThatThrownBy(() -> actuals.record(1L, r.command(), "operator@example.test"))
+      assertThatThrownBy(() -> actuals.record(1L, r.command(), 9L))
           .isInstanceOf(RuntimeException.class);
       assertThat(count("t_attendances")).isEqualTo(records);
       assertThat(count("t_audit_events")).isEqualTo(audits);
     } finally {
       allow();
     }
-    var attendanceId = actuals.record(1L, r.command(), "operator@example.test").getId();
+    var attendanceId = actuals.record(1L, r.command(), 9L).getId();
     var correction = new AttendanceCorrectionRequest();
     correction.setBusinessDate(date);
     correction.setActualStartAt(date.atTime(11, 0));
@@ -283,9 +266,7 @@ class ShiftAuditIntegrationTest {
     audits = count("t_audit_events");
     reject("ATTENDANCE_CORRECTED");
     try {
-      assertThatThrownBy(
-              () ->
-                  actuals.correct(1L, attendanceId, correction.command(), "operator@example.test"))
+      assertThatThrownBy(() -> actuals.correct(1L, attendanceId, correction.command(), 9L))
           .isInstanceOf(RuntimeException.class);
       assertThat(count("t_attendance_corrections")).isEqualTo(histories);
       assertThat(count("t_audit_events")).isEqualTo(audits);
@@ -296,7 +277,7 @@ class ShiftAuditIntegrationTest {
     } finally {
       allow();
     }
-    actuals.correct(1L, attendanceId, correction.command(), "operator@example.test");
+    actuals.correct(1L, attendanceId, correction.command(), 9L);
     var source =
         jdbc.queryForObject(
             "select source_id from t_audit_events where action='ATTENDANCE_CORRECTED' and target_id=?",
@@ -313,8 +294,7 @@ class ShiftAuditIntegrationTest {
     audits = count("t_audit_events");
     reject("ATTENDANCE_CANCELLED");
     try {
-      assertThatThrownBy(
-              () -> actuals.cancel(1L, attendanceId, cancel.getReason(), "operator@example.test"))
+      assertThatThrownBy(() -> actuals.cancel(1L, attendanceId, cancel.getReason(), 9L))
           .isInstanceOf(RuntimeException.class);
       assertThat(
               jdbc.queryForObject(
@@ -326,9 +306,9 @@ class ShiftAuditIntegrationTest {
     } finally {
       allow();
     }
-    actuals.cancel(1L, attendanceId, cancel.getReason(), "operator@example.test");
+    actuals.cancel(1L, attendanceId, cancel.getReason(), 9L);
     audits = count("t_audit_events");
-    assertThatThrownBy(() -> shifts.delete(1L, id)).isInstanceOf(RuntimeException.class);
+    assertThatThrownBy(() -> shifts.delete(1L, id, 9L)).isInstanceOf(RuntimeException.class);
     assertThat(count("t_audit_events")).isEqualTo(audits);
     assertThat(
             jdbc.queryForList(
@@ -345,13 +325,13 @@ class ShiftAuditIntegrationTest {
             () ->
                 transactions.executeWithoutResult(
                     status -> {
-                      shifts.create(1L, shiftRequest().command(), "operator@example.test");
+                      shifts.create(1L, shiftRequest().command(), 9L);
                       throw new IllegalStateException("後続失敗");
                     }))
         .isInstanceOf(IllegalStateException.class);
     assertThat(count("t_shifts")).isEqualTo(rows);
     assertThat(count("t_audit_events")).isEqualTo(audits);
-    var id = shifts.create(1L, shiftRequest().command(), "operator@example.test").shift().getId();
+    var id = shifts.create(1L, shiftRequest().command(), 9L).shift().getId();
     audits = count("t_audit_events");
     assertThatThrownBy(
             () ->
@@ -360,7 +340,7 @@ class ShiftAuditIntegrationTest {
                       var em = context.getBean(EntityManager.class);
                       em.find(Shift.class, id);
                       jdbc.update("update t_shifts set version=version+1 where id=?", id);
-                      shifts.changePublication(1L, id, false, "operator@example.test");
+                      shifts.changePublication(1L, id, false, 9L);
                     }))
         .isInstanceOf(RuntimeException.class);
     assertThat(count("t_audit_events")).isEqualTo(audits);
@@ -378,7 +358,6 @@ class ShiftAuditIntegrationTest {
     try (var pool = Executors.newFixedThreadPool(2)) {
       Callable<Boolean> approve =
           () -> {
-            authenticate();
             try {
               transactions.executeWithoutResult(
                   status -> {
@@ -391,13 +370,11 @@ class ShiftAuditIntegrationTest {
                       Thread.currentThread().interrupt();
                       throw new IllegalStateException(ex);
                     }
-                    decisions.approve(1L, id, false, "operator@example.test");
+                    decisions.approve(1L, id, false, 9L);
                   });
               return true;
             } catch (ObjectOptimisticLockingFailureException ex) {
               return false;
-            } finally {
-              clear();
             }
           };
       var first = pool.submit(approve);
@@ -420,13 +397,13 @@ class ShiftAuditIntegrationTest {
   @Test
   void deletionWinsAgainstAnAlreadyReadChangeApprovalWithoutGhostSuccess() throws Exception {
     var newId = submit();
-    var shiftId = decisions.approve(1L, newId, false, "operator@example.test").getShiftId();
+    var shiftId = decisions.approve(1L, newId, false, 9L).getShiftId();
     var change = new ShiftChangeRequestCreateRequest();
     change.setShiftId(shiftId);
     change.setWorkDate(date);
     change.setStartTime(LocalTime.of(11, 0));
     change.setEndTime(LocalTime.of(18, 0));
-    var changeId = own.submitChange("cast@example.test", change.command()).getId();
+    var changeId = own.submitChange(10L, change.command()).getId();
     long audits = count("t_audit_events");
     var locked = new CountDownLatch(1);
     var read = new CountDownLatch(1);
@@ -434,32 +411,26 @@ class ShiftAuditIntegrationTest {
       var deletion =
           pool.submit(
               () -> {
-                authenticate();
-                try {
-                  transactions.executeWithoutResult(
-                      status -> {
-                        context
-                            .getBean(ShiftRepository.class)
-                            .findByIdAndStoreIdForUpdate(shiftId, 1L)
-                            .orElseThrow();
-                        locked.countDown();
-                        try {
-                          if (!read.await(10, TimeUnit.SECONDS))
-                            throw new IllegalStateException("申請読取が終了しません");
-                        } catch (InterruptedException ex) {
-                          Thread.currentThread().interrupt();
-                          throw new IllegalStateException(ex);
-                        }
-                        shifts.delete(1L, shiftId);
-                      });
-                } finally {
-                  clear();
-                }
+                transactions.executeWithoutResult(
+                    status -> {
+                      context
+                          .getBean(ShiftRepository.class)
+                          .findByIdAndStoreIdForUpdate(shiftId, 1L)
+                          .orElseThrow();
+                      locked.countDown();
+                      try {
+                        if (!read.await(10, TimeUnit.SECONDS))
+                          throw new IllegalStateException("申請読取が終了しません");
+                      } catch (InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                        throw new IllegalStateException(ex);
+                      }
+                      shifts.delete(1L, shiftId, 9L);
+                    });
               });
       var approval =
           pool.submit(
               () -> {
-                authenticate();
                 try {
                   assertThat(locked.await(10, TimeUnit.SECONDS)).isTrue();
                   assertThatThrownBy(
@@ -470,12 +441,11 @@ class ShiftAuditIntegrationTest {
                                         .getBean(EntityManager.class)
                                         .find(ShiftRequest.class, changeId);
                                     read.countDown();
-                                    decisions.approve(1L, changeId, null, "operator@example.test");
+                                    decisions.approve(1L, changeId, null, 9L);
                                   }))
                       .isInstanceOf(NotFoundException.class);
                 } finally {
                   read.countDown();
-                  clear();
                 }
                 return true;
               });
@@ -617,9 +587,6 @@ class ShiftAuditIntegrationTest {
               .userType(UserType.CAST)
               .build();
       cast.setId(10L);
-      when(r.findByEmail(anyString()))
-          .thenAnswer(
-              call -> Optional.of("cast@example.test".equals(call.getArgument(0)) ? cast : staff));
       when(r.findById(anyLong()))
           .thenAnswer(
               call -> Optional.of(Long.valueOf(10).equals(call.getArgument(0)) ? cast : staff));

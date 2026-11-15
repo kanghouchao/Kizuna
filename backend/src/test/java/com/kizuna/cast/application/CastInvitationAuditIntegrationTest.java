@@ -67,6 +67,7 @@ class CastInvitationAuditIntegrationTest {
   private CastInvitationAcceptanceService accepting;
   private TransactionTemplate transactions;
   private Long storeId;
+  private Long staffId;
 
   @BeforeAll
   void connect() {
@@ -84,19 +85,21 @@ class CastInvitationAuditIntegrationTest {
                         new Store(
                             "検証店", StoreShortNames.next(), UUID.randomUUID() + ".example.test"))
                     .getId());
-    transactions.executeWithoutResult(
-        status ->
-            context
-                .getBean(UserRepository.class)
-                .saveAndFlush(
-                    User.builder()
-                        .email(STAFF)
-                        .password(UUID.randomUUID().toString())
-                        .displayName("担当")
-                        .userType(UserType.STAFF)
-                        .enabled(true)
-                        .roleIds(Set.of(1L))
-                        .build()));
+    staffId =
+        transactions.execute(
+            status ->
+                context
+                    .getBean(UserRepository.class)
+                    .saveAndFlush(
+                        User.builder()
+                            .email(STAFF)
+                            .password(UUID.randomUUID().toString())
+                            .displayName("担当")
+                            .userType(UserType.STAFF)
+                            .enabled(true)
+                            .roleIds(Set.of(1L))
+                            .build())
+                    .getId());
   }
 
   @AfterAll
@@ -114,7 +117,7 @@ class CastInvitationAuditIntegrationTest {
   }
 
   private String issue(String enrollmentId) {
-    return issuing.issue(storeId, enrollmentId, STAFF).getToken();
+    return issuing.issue(storeId, enrollmentId, staffId).getToken();
   }
 
   private CastNewUserAcceptCommand request(String email) {
@@ -238,7 +241,7 @@ class CastInvitationAuditIntegrationTest {
                   .saveAndFlush(enrollment)
                   .getId();
             });
-    String token = issuing.issue(otherStoreId, enrollmentId, STAFF).getToken();
+    String token = issuing.issue(otherStoreId, enrollmentId, staffId).getToken();
     long acceptedAudits = audits("CAST_INVITATION_ACCEPTED");
 
     rejectAudit("CAST_INVITATION_ACCEPTED");

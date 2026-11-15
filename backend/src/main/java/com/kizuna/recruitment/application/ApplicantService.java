@@ -168,8 +168,7 @@ public class ApplicantService {
     applicant.requireEnrollable();
     Long actorId = actorId(actorEmail);
     var before = enrollmentAuditValues(applicant);
-    applicant.recordEnrollment(
-        casts.create(storeId, command.cast(), actorEmail).enrollment().getId());
+    applicant.recordEnrollment(casts.create(storeId, command.cast(), actorId).enrollment().getId());
     applicant.recordEditor(actorId);
     applicants.flush();
     audit.recordCurrent(

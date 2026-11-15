@@ -333,7 +333,7 @@ class ApplicantServiceTest {
     var command = ArgumentCaptor.forClass(CastCreateCommand.class);
     var enrollment = CastEnrollment.builder().build();
     enrollment.setId("e1");
-    when(casts.create(eq(STORE_ID), command.capture(), eq("actor")))
+    when(casts.create(eq(STORE_ID), command.capture(), eq(9L)))
         .thenReturn(new CastDetail(enrollment, new CastProfile(), null, true));
     var response = service.enroll(STORE_ID, "a", enrollment(0L), "actor");
     assertThat(response.enrollmentId()).isEqualTo("e1");

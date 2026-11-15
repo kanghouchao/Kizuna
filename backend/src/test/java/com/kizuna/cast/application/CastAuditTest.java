@@ -3,7 +3,6 @@ package com.kizuna.cast.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -42,14 +41,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class CastAuditTest {
@@ -75,10 +69,7 @@ class CastAuditTest {
 
   @BeforeEach
   void setup() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken("operator@example.test", null, List.of()));
-    lifecycle = new CastEnrollmentService(enrollments, histories, snapshots, users, stores, audit);
+    lifecycle = new CastEnrollmentService(enrollments, histories, snapshots, stores, audit);
     service =
         new CastService(
             enrollments,
@@ -105,7 +96,7 @@ class CastAuditTest {
             .roleIds(Set.of(1L))
             .build();
     actor.setId(9L);
-    when(users.findByEmail(anyString())).thenReturn(Optional.of(actor));
+    when(users.findById(9L)).thenReturn(Optional.of(actor));
     when(events.saveAndFlush(any()))
         .thenAnswer(
             call -> {
@@ -142,8 +133,7 @@ class CastAuditTest {
             null,
             null,
             null);
-    assertThat(service.create(STORE_ID, command, "operator@example.test").enrollment().getId())
-        .isEqualTo("enrollment");
+    assertThat(service.create(STORE_ID, command, 9L).enrollment().getId()).isEqualTo("enrollment");
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("CAST_ENROLLMENT_CREATED");
@@ -163,19 +153,19 @@ class CastAuditTest {
   @Test
   void privateOnlyEditIsAuditedButRepeatedAndEmptyInputsAreNot() {
     existing();
-    service.update(STORE_ID, "enrollment", customFields(null), "operator@example.test");
+    service.update(STORE_ID, "enrollment", customFields(null), 9L);
     assertThat(recorded).isEmpty();
     var request =
         new CastUpdateCommand(
             new CastProfilePatch("変更後の非公開名", null, null, null, null, null, null, null, null), null);
-    service.update(STORE_ID, "enrollment", request, "operator@example.test");
+    service.update(STORE_ID, "enrollment", request, 9L);
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("CAST_ENROLLMENT_UPDATED");
     assertThat(event.getAfterValues()).containsEntry("redacted_fields_changed", "name");
     assertThat(event.getBeforeValues().toString() + event.getAfterValues())
         .doesNotContain("非公開", "変更後");
-    service.update(STORE_ID, "enrollment", request, "operator@example.test");
+    service.update(STORE_ID, "enrollment", request, 9L);
     assertThat(recorded).hasSize(1);
   }
 
@@ -184,17 +174,12 @@ class CastAuditTest {
         new CastProfilePatch(null, null, null, null, null, null, null, null, null), values);
   }
 
-  @AfterEach
-  void clearAuthentication() {
-    SecurityContextHolder.clearContext();
-  }
-
   @Test
   void publicationChangeOnlyAuditsTheProfileAndSameValueIsSilent() {
     existing();
-    service.changePublication(STORE_ID, "enrollment", CastPublicationStatus.UNPUBLISHED);
+    service.changePublication(STORE_ID, "enrollment", CastPublicationStatus.UNPUBLISHED, 9L);
     assertThat(recorded).isEmpty();
-    service.changePublication(STORE_ID, "enrollment", CastPublicationStatus.PUBLISHED);
+    service.changePublication(STORE_ID, "enrollment", CastPublicationStatus.PUBLISHED, 9L);
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("CAST_PROFILE_PUBLICATION_CHANGED");
@@ -206,16 +191,16 @@ class CastAuditTest {
     assertThat(event.getAfterValues())
         .containsEntry("publication_status", "PUBLISHED")
         .containsOnlyKeys("enrollment_id", "version", "publication_status");
-    service.changePublication(STORE_ID, "enrollment", CastPublicationStatus.PUBLISHED);
+    service.changePublication(STORE_ID, "enrollment", CastPublicationStatus.PUBLISHED, 9L);
     assertThat(recorded).hasSize(1);
   }
 
   @Test
   void lifecycleAuditsOnlyEnrollmentAndReferencesEachExistingHistory() {
     existing();
-    lifecycle.suspend(STORE_ID, "enrollment", "operator@example.test");
-    lifecycle.resume(STORE_ID, "enrollment", "operator@example.test");
-    lifecycle.withdraw(STORE_ID, "enrollment", "operator@example.test");
+    lifecycle.suspend(STORE_ID, "enrollment", 9L);
+    lifecycle.resume(STORE_ID, "enrollment", 9L);
+    lifecycle.withdraw(STORE_ID, "enrollment", 9L);
     assertThat(recorded)
         .extracting(AuditEvent::getAction)
         .containsExactly(
@@ -235,7 +220,7 @@ class CastAuditTest {
     assertThat(recorded.get(1).getAfterValues()).containsEntry("status", "ENROLLED");
     assertThat(recorded.get(2).getAfterValues()).containsEntry("status", "WITHDRAWN");
     assertThat(recorded.get(2).getAfterValues().get("ended_at")).isNotBlank();
-    assertThatThrownBy(() -> lifecycle.withdraw(STORE_ID, "enrollment", "operator@example.test"))
+    assertThatThrownBy(() -> lifecycle.withdraw(STORE_ID, "enrollment", 9L))
         .isInstanceOf(ServiceException.class);
     assertThat(recorded).hasSize(3);
     assertThat(
@@ -255,7 +240,7 @@ class CastAuditTest {
                 CastFieldDefinition.builder().key("private-key").isPublic(false).build(),
                 CastFieldDefinition.builder().key("public-key").isPublic(true).build()));
     var request = customFields(Map.of("private-key", "秘密の内部値", "public-key", "秘密の公開値"));
-    service.update(STORE_ID, "enrollment", request, "operator@example.test");
+    service.update(STORE_ID, "enrollment", request, 9L);
     assertThat(recorded).hasSize(1);
     assertThat(recorded.getFirst().getAfterValues())
         .containsEntry("redacted_fields_changed", "internal_custom_fields,public_custom_fields");
@@ -272,9 +257,9 @@ class CastAuditTest {
             "redacted_fields_changed");
     assertThat(recorded.getFirst().getAfterValues().toString())
         .doesNotContain("private-key", "public-key", "秘密");
-    service.update(STORE_ID, "enrollment", request, "operator@example.test");
+    service.update(STORE_ID, "enrollment", request, 9L);
     assertThat(recorded).hasSize(1);
-    service.update(STORE_ID, "enrollment", customFields(Map.of()), "operator@example.test");
+    service.update(STORE_ID, "enrollment", customFields(Map.of()), 9L);
     assertThat(recorded).hasSize(2);
     assertThat(recorded.getLast().getAfterValues())
         .containsEntry("redacted_fields_changed", "internal_custom_fields,public_custom_fields");
@@ -293,24 +278,16 @@ class CastAuditTest {
   }
 
   @Test
-  void sinkMetadataComesFromContextAndRefusedTransitionAddsNothing() {
+  void sinkMetadataComesFromArgumentsAndRefusedTransitionAddsNothing() {
     existing();
-    var jwt =
-        Jwt.withTokenValue(UUID.randomUUID().toString())
-            .header("alg", "HS256")
-            .subject("operator@example.test")
-            .build();
-    SecurityContextHolder.getContext()
-        .setAuthentication(new JwtAuthenticationToken(jwt, List.of()));
-    lifecycle.suspend(STORE_ID, "enrollment", "operator@example.test");
+    lifecycle.suspend(STORE_ID, "enrollment", 9L);
     assertThat(recorded).hasSize(1);
     assertThat(recorded.getFirst().getActorId()).isEqualTo(9L);
     assertThat(recorded.getFirst().getOriginatingStoreId()).isEqualTo(1L);
-    assertThatThrownBy(() -> lifecycle.suspend(STORE_ID, "enrollment", "operator@example.test"))
+    assertThatThrownBy(() -> lifecycle.suspend(STORE_ID, "enrollment", 9L))
         .isInstanceOf(ServiceException.class);
     var request = customFields(Map.of("unknown-private-key", "秘密"));
-    assertThatThrownBy(
-            () -> service.update(STORE_ID, "enrollment", request, "operator@example.test"))
+    assertThatThrownBy(() -> service.update(STORE_ID, "enrollment", request, 9L))
         .isInstanceOf(ServiceException.class);
     assertThat(recorded).hasSize(1);
   }
@@ -320,7 +297,7 @@ class CastAuditTest {
     existing();
     when(enrollments.countCascade("enrollment", STORE_ID))
         .thenReturn(new CastCascadeCounts(3, 2, 1));
-    service.delete(STORE_ID, "enrollment", "operator@example.test");
+    service.delete(STORE_ID, "enrollment", 9L);
     verify(enrollments).delete(any());
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
@@ -354,13 +331,13 @@ class CastAuditTest {
     when(enrollments.countCascade("enrollment", STORE_ID))
         .thenReturn(new CastCascadeCounts(0, 0, 0));
     doThrow(new DataIntegrityViolationException("fk")).when(enrollments).flush();
-    assertThatThrownBy(() -> service.delete(STORE_ID, "enrollment", "operator@example.test"))
+    assertThatThrownBy(() -> service.delete(STORE_ID, "enrollment", 9L))
         .isInstanceOf(RuntimeException.class);
     assertThat(recorded).isEmpty();
     var linked = persisted(CastEnrollment.builder().castId(5L).build(), "linked");
     when(enrollments.findByIdAndStoreIdForUpdate("linked", STORE_ID))
         .thenReturn(Optional.of(linked));
-    assertThatThrownBy(() -> service.delete(STORE_ID, "linked", "operator@example.test"))
+    assertThatThrownBy(() -> service.delete(STORE_ID, "linked", 9L))
         .isInstanceOf(ConflictException.class);
     assertThat(recorded).isEmpty();
   }

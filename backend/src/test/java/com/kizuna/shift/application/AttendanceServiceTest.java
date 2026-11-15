@@ -23,15 +23,11 @@ import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.User;
-import com.kizuna.user.domain.UserRepository;
-import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -46,8 +42,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 @ExtendWith(MockitoExtension.class)
 class AttendanceServiceTest {
 
-  private static final String ACTOR_EMAIL = "manager@kizuna.test";
-  private static final Long ACTOR_ID = 42L;
+  private static final long ACTOR_ID = 42L;
   private static final String CAST_ID = "cast-1";
   private static final Long STORE_ID = 1L;
   private static final String SHIFT_ID = "shift-1";
@@ -62,7 +57,6 @@ class AttendanceServiceTest {
   @Mock private AttendanceCorrectionRepository correctionRepository;
   @Mock private ShiftRepository shiftRepository;
   @Mock private CastService castService;
-  @Mock private UserRepository userRepository;
   @Mock private BusinessDateService businessDateService;
 
   @Mock private BusinessAudit audit;
@@ -75,21 +69,6 @@ class AttendanceServiceTest {
   }
 
   @InjectMocks private AttendanceService attendanceService;
-
-  private void givenActor() {
-    User actor =
-        User.builder()
-            .email(ACTOR_EMAIL)
-            .password("encoded")
-            .displayName("店長")
-            .enabled(true)
-            .userType(UserType.STAFF)
-            .storeIds(Set.of(1L))
-            .roleIds(Set.of(1L))
-            .build();
-    actor.setId(ACTOR_ID);
-    when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
-  }
 
   private Shift shift(String castId) {
     return shift(castId, ShiftStatus.CONFIRMED);
@@ -123,13 +102,12 @@ class AttendanceServiceTest {
   @Test
   @DisplayName("シフト紐づきの実績が営業日をシフトの勤務日から継承すること")
   void shiftLinkedAttendanceInheritsWorkDate() {
-    givenActor();
     when(castService.existsInStoreForUpdate(STORE_ID, CAST_ID)).thenReturn(true);
     when(shiftRepository.findByIdAndStoreIdForUpdate(SHIFT_ID, STORE_ID))
         .thenReturn(Optional.of(shift(CAST_ID)));
     when(attendanceRepository.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
 
-    attendanceService.record(STORE_ID, createRequest(SHIFT_ID), ACTOR_EMAIL);
+    attendanceService.record(STORE_ID, createRequest(SHIFT_ID), ACTOR_ID);
 
     // 実開始 01:30 は暦日でも判定でも 8/19 側だが、シフトの勤務日 8/18 が勝つ。
     Attendance attendance = saved();
@@ -141,12 +119,11 @@ class AttendanceServiceTest {
   @Test
   @DisplayName("飛び込み（シフトなし）の営業日が実開始時刻から自動判定されること")
   void walkInAttendanceDerivesBusinessDateFromActualStart() {
-    givenActor();
     when(castService.existsInStoreForUpdate(STORE_ID, CAST_ID)).thenReturn(true);
     when(businessDateService.businessDateOf(START)).thenReturn(DERIVED_BUSINESS_DATE);
     when(attendanceRepository.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
 
-    attendanceService.record(STORE_ID, createRequest(null), ACTOR_EMAIL);
+    attendanceService.record(STORE_ID, createRequest(null), ACTOR_ID);
 
     Attendance attendance = saved();
     assertThat(attendance.getBusinessDate()).isEqualTo(DERIVED_BUSINESS_DATE);
@@ -157,13 +134,11 @@ class AttendanceServiceTest {
   @Test
   @DisplayName("他人のシフトへ紐づけた記録を拒否すること")
   void rejectsAttendanceLinkedToAnotherCastsShift() {
-    givenActor();
     when(castService.existsInStoreForUpdate(STORE_ID, CAST_ID)).thenReturn(true);
     when(shiftRepository.findByIdAndStoreIdForUpdate(SHIFT_ID, STORE_ID))
         .thenReturn(Optional.of(shift("cast-2")));
 
-    assertThatThrownBy(
-            () -> attendanceService.record(STORE_ID, createRequest(SHIFT_ID), ACTOR_EMAIL))
+    assertThatThrownBy(() -> attendanceService.record(STORE_ID, createRequest(SHIFT_ID), ACTOR_ID))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("キャスト");
   }
@@ -171,13 +146,11 @@ class AttendanceServiceTest {
   @Test
   @DisplayName("下書き（TENTATIVE）のシフトへ紐づけた記録を拒否すること")
   void rejectsAttendanceLinkedToATentativeShift() {
-    givenActor();
     when(castService.existsInStoreForUpdate(STORE_ID, CAST_ID)).thenReturn(true);
     when(shiftRepository.findByIdAndStoreIdForUpdate(SHIFT_ID, STORE_ID))
         .thenReturn(Optional.of(shift(CAST_ID, ShiftStatus.TENTATIVE)));
 
-    assertThatThrownBy(
-            () -> attendanceService.record(STORE_ID, createRequest(SHIFT_ID), ACTOR_EMAIL))
+    assertThatThrownBy(() -> attendanceService.record(STORE_ID, createRequest(SHIFT_ID), ACTOR_ID))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("確定");
   }
@@ -185,27 +158,25 @@ class AttendanceServiceTest {
   @Test
   @DisplayName("現店舗に居ないキャストの記録が 404 になること")
   void rejectsAttendanceForUnknownCast() {
-    givenActor();
     when(castService.existsInStoreForUpdate(STORE_ID, CAST_ID)).thenReturn(false);
 
-    assertThatThrownBy(() -> attendanceService.record(STORE_ID, createRequest(null), ACTOR_EMAIL))
+    assertThatThrownBy(() -> attendanceService.record(STORE_ID, createRequest(null), ACTOR_ID))
         .isInstanceOf(NotFoundException.class);
   }
 
   @Test
   @DisplayName("未取消の一意性違反が 409 へ写り、当たった索引で文言が分かれること")
   void translatesActiveUniquenessViolations() {
-    givenActor();
     when(castService.existsInStoreForUpdate(STORE_ID, CAST_ID)).thenReturn(true);
     when(businessDateService.businessDateOf(START)).thenReturn(DERIVED_BUSINESS_DATE);
     when(attendanceRepository.saveAndFlush(any()))
         .thenThrow(uniqueViolation("uq_t_attendances_active_cast_business_date"))
         .thenThrow(uniqueViolation("uq_t_attendances_active_shift"));
 
-    assertThatThrownBy(() -> attendanceService.record(STORE_ID, createRequest(null), ACTOR_EMAIL))
+    assertThatThrownBy(() -> attendanceService.record(STORE_ID, createRequest(null), ACTOR_ID))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("営業日");
-    assertThatThrownBy(() -> attendanceService.record(STORE_ID, createRequest(null), ACTOR_EMAIL))
+    assertThatThrownBy(() -> attendanceService.record(STORE_ID, createRequest(null), ACTOR_ID))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("シフト");
   }
@@ -213,7 +184,6 @@ class AttendanceServiceTest {
   @Test
   @DisplayName("訂正が編集前のスナップショットを残してから就地更新すること")
   void correctionPersistsThePreEditSnapshot() {
-    givenActor();
     Attendance attendance =
         Attendance.record(
             STORE_ID, CAST_ID, null, DERIVED_BUSINESS_DATE, START, null, "1番待機室", ACTOR_ID);
@@ -221,7 +191,7 @@ class AttendanceServiceTest {
         .thenReturn(Optional.of(attendance));
     when(attendanceRepository.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
 
-    attendanceService.correct(STORE_ID, "att-1", correctionRequest(SHIFT_WORK_DATE), ACTOR_EMAIL);
+    attendanceService.correct(STORE_ID, "att-1", correctionRequest(SHIFT_WORK_DATE), ACTOR_ID);
 
     ArgumentCaptor<AttendanceCorrection> captor =
         ArgumentCaptor.forClass(AttendanceCorrection.class);
@@ -241,7 +211,6 @@ class AttendanceServiceTest {
   @Test
   @DisplayName("シフト紐づきの実績の営業日をシフトの勤務日からずらす訂正を拒否すること")
   void correctionCannotDetachBusinessDateFromTheShift() {
-    givenActor();
     Attendance attendance =
         Attendance.record(
             STORE_ID, CAST_ID, SHIFT_ID, SHIFT_WORK_DATE, START, null, null, ACTOR_ID);
@@ -253,10 +222,7 @@ class AttendanceServiceTest {
     assertThatThrownBy(
             () ->
                 attendanceService.correct(
-                    STORE_ID,
-                    "att-1",
-                    correctionRequest(SHIFT_WORK_DATE.minusDays(1)),
-                    ACTOR_EMAIL))
+                    STORE_ID, "att-1", correctionRequest(SHIFT_WORK_DATE.minusDays(1)), ACTOR_ID))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("営業日");
     verify(correctionRepository, never()).save(any());
@@ -265,14 +231,13 @@ class AttendanceServiceTest {
   @Test
   @DisplayName("取消が標記だけを付け、行を消さないこと")
   void cancellationMarksTheRow() {
-    givenActor();
     Attendance attendance =
         Attendance.record(
             STORE_ID, CAST_ID, null, DERIVED_BUSINESS_DATE, START, null, null, ACTOR_ID);
     when(attendanceRepository.findByIdAndStoreId("att-1", STORE_ID))
         .thenReturn(Optional.of(attendance));
 
-    attendanceService.cancel(STORE_ID, "att-1", "誤って記録したため", ACTOR_EMAIL);
+    attendanceService.cancel(STORE_ID, "att-1", "誤って記録したため", ACTOR_ID);
 
     assertThat(attendance.isCancelled()).isTrue();
     assertThat(attendance.getCancelledBy()).isEqualTo(ACTOR_ID);
