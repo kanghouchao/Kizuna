@@ -1,8 +1,7 @@
 import type { Page } from '@/shared/api';
+import { pageHref } from '../../lib/paging';
 import { PublicReview } from '../../model/types';
-import { StorefrontNotice, StorefrontPager, pageHref } from './StorefrontPaging';
-
-export const REVIEWS_PER_PAGE = 10;
+import { StorefrontNotice, StorefrontPager } from './StorefrontPaging';
 
 const BASE_PATH = '/reviews';
 

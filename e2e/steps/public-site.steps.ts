@@ -1,7 +1,9 @@
 import { expect } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
+import { seededCastName } from './cast-detail-404.steps';
+import { gotoTopWithTemplate } from './template-switch.steps';
 
-const { Given, Then } = createBdd();
+const { Given, When, Then } = createBdd();
 
 Given('店舗 {string} の公開サイトで年齢確認を通過する', async ({ page }, _store: string) => {
   await page.goto('/');
@@ -25,3 +27,36 @@ Then(
     await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
   }
 );
+
+When(
+  '公開サイトのトップを {word} テンプレートで開いて年齢確認を通過する',
+  async ({ page, $testInfo }, templateKey: string) => {
+    await gotoTopWithTemplate(page, $testInfo, templateKey);
+    await page.getByRole('button', { name: 'はい' }).click();
+    await expect(page.getByRole('button', { name: 'はい' })).toBeHidden();
+  }
+);
+
+Then(
+  'トップに店名 {string} と作成したキャストが表示される',
+  async ({ page, $testInfo }, storeName: string) => {
+    await expect(page.getByRole('heading', { name: storeName, exact: true }).first()).toBeVisible();
+    // キャスト一覧は frontend が 60 秒キャッシュするので、作成した直後は出ない。有界リトライで吸収する。
+    $testInfo.setTimeout($testInfo.timeout + 100000);
+    await expect(async () => {
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await expect(page.getByRole('heading', { name: seededCastName() }).first()).toBeVisible({
+        timeout: 2000,
+      });
+    }).toPass({ timeout: 90000, intervals: [2000, 5000, 10000] });
+  }
+);
+
+Then('ナビゲーションからゲスト予約のページへ進める', async ({ page }) => {
+  await page.getByRole('link', { name: 'ご予約', exact: true }).first().click();
+  await expect(page).toHaveURL(/\/reservation$/);
+  await expect(page.getByRole('heading', { name: 'ご予約', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'この内容で予約を希望する', exact: true })
+  ).toBeVisible();
+});

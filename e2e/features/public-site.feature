@@ -9,3 +9,18 @@
     かつ ページ "/reviews" に見出し "口コミ" が表示される
     かつ ページ "/menu" に見出し "料金" が表示される
     かつ ページ "/about" に見出し "店舗情報・アクセス" が表示される
+
+  @cast-detail-404 @template-switch
+  シナリオアウトライン: どのテンプレートでもトップに店名とキャストが出て、予約へ進める
+    前提 店舗 "store1" にキャスト "E2E中核" を作成する
+    かつ 店舗 "store1" の template_key が "<template>" である
+    もし 公開サイトのトップを <template> テンプレートで開いて年齢確認を通過する
+    ならば トップに店名 "Sample" と作成したキャストが表示される
+    かつ ナビゲーションからゲスト予約のページへ進める
+    # 事後: after-hook が作成したキャストを削除し、template_key を "default" へ復元する
+
+    例:
+      | template |
+      | modern   |
+      | classic  |
+      | default  |

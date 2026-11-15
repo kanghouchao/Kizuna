@@ -4,6 +4,8 @@ import reactPlugin from 'eslint-plugin-react';
 import hooksPlugin from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
 import globals from 'globals';
+import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
 
 // 通知は語義層を通す。toast マネージャへ直接届くと、呼び出し側が段・色・duration を自分で
 // 書けてしまい、段の体系を黙って抜けられる。塞ぐのは `toast` サブパスだけ——`@base-ui/react`
@@ -20,6 +22,33 @@ const DIALOG_CONTENT_PATTERN = {
   importNames: ['DialogContent'],
   message:
     'ダイアログの外枠は @/shared/ui の DialogFrame を使う。幅の段の選び方は DESIGN.md の「モーダル」。',
+};
+
+// 公開サイトのテンプレートは外観をすべて自分で持ち、互いを参照しない（ADR 0043）。テンプレートは
+// templates/ 直下のディレクトリから数えるので、足したテンプレートにも同じ制限が掛かる。
+// _ で始まるディレクトリは作り直しが済むまで残す旧い共有の部品で、テンプレートからの参照だけを許す。
+const STORE_SITE = 'src/_pages/store-site';
+const STORE_SITE_TEMPLATE_KEYS = readdirSync(join(import.meta.dirname, STORE_SITE, 'templates'), {
+  withFileTypes: true,
+})
+  .filter(entry => entry.isDirectory() && !entry.name.startsWith('_'))
+  .map(entry => entry.name);
+
+// 規則が見るのは import に書かれた文字列なので、相対パスと @/ 別名の両方の書き方を塞ぐ。
+const templateImportPattern = keys => ({
+  regex: `(^(\\.\\./)+|/templates/)(${keys.join('|')})(/|$)`,
+  message:
+    '公開サイトのテンプレートの外観は、そのテンプレートだけが参照する。共有するのは外観を持たないロジックだけ（ADR 0043）。',
+});
+const STORE_SITE_FETCH_PATTERN = {
+  regex: '(^(\\.\\./)+|/store-site/)api(/|$)',
+  message:
+    '公開サイトのテンプレートはデータを取りに行かない。殻（ui/StoreSitePage）が取得して props で渡す（ADR 0043）。',
+};
+const STORE_SITE_APPEARANCE_PATTERN = {
+  regex: '(^|/)templates/(?!loadTemplate$)',
+  message:
+    '公開サイトの共有のロジックは、テンプレートの外観を参照しない。読み込みは templates/loadTemplate だけを通す（ADR 0043）。',
 };
 
 export default [
@@ -131,6 +160,48 @@ export default [
     files: ['src/shared/ui/toast.tsx'],
     rules: {
       'no-restricted-imports': 'off',
+    },
+  },
+  // 上と同じく、後の設定が選択肢を置き換えるので toast と外枠の制限を渡し直す。
+  ...STORE_SITE_TEMPLATE_KEYS.map(key => ({
+    files: [`${STORE_SITE}/templates/${key}/**`],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            TOAST_PATTERN,
+            DIALOG_CONTENT_PATTERN,
+            templateImportPattern(STORE_SITE_TEMPLATE_KEYS.filter(other => other !== key)),
+            STORE_SITE_FETCH_PATTERN,
+          ],
+        },
+      ],
+    },
+  })),
+  {
+    files: [`${STORE_SITE}/templates/_*/**`],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            TOAST_PATTERN,
+            DIALOG_CONTENT_PATTERN,
+            templateImportPattern(STORE_SITE_TEMPLATE_KEYS),
+            STORE_SITE_FETCH_PATTERN,
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: [`${STORE_SITE}/{api,lib,model,ui}/**`],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        { patterns: [TOAST_PATTERN, DIALOG_CONTENT_PATTERN, STORE_SITE_APPEARANCE_PATTERN] },
+      ],
     },
   },
 ];

@@ -147,22 +147,6 @@ describe('storefrontService', () => {
     });
   });
 
-  describe('getPageData', () => {
-    it('データを集約して返すこと', async () => {
-      const mockCasts = [{ id: '1', name: 'Cast 1' }];
-      const mockConfig = { mv_type: 'image' };
-
-      (serverClient.get as jest.Mock)
-        .mockResolvedValueOnce(mockCasts) // 1回目の呼び出し: キャスト
-        .mockResolvedValueOnce(mockConfig); // 2回目の呼び出し: 設定
-
-      const result = await storefrontService.getPageData('7');
-
-      expect(result.casts).toEqual(mockCasts);
-      expect(result.siteConfig).toEqual(mockConfig);
-    });
-  });
-
   describe('fetchArticle', () => {
     it('掲出中の記事を店舗を名乗って取得すること', async () => {
       const article = { id: '12', title: '告知', body: '本文' };

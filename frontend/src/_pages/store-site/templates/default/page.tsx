@@ -1,4 +1,3 @@
-import { storefrontService } from '../../api/storefront';
 import type { StoreSitePageProps } from '../../model/types';
 import AgeGate from '../_sections/AgeVerification';
 import Advertisement from '../_sections/Advertisement';
@@ -9,18 +8,15 @@ import Header from '../_sections/Header';
 import MVSection from '../_sections/MVSection';
 import './theme.css';
 
-/** 既定模版の店舗トップページ（Server Component）。 */
-export default async function DefaultTemplate({ store }: StoreSitePageProps) {
+/** 店舗トップページ（default テンプレート）。 */
+export default function DefaultTemplate({ store, siteConfig, casts }: StoreSitePageProps<'page'>) {
   const storeName = store.name;
-
-  const { casts, siteConfig } = await storefrontService.getPageData(store.id);
 
   return (
     <div
       className="storefront-default min-h-screen flex flex-col"
       style={{ background: 'var(--storefront-bg)' }}
     >
-      {/* 年齢確認ゲート（クライアントサイドのフルスクリーンオーバーレイ） */}
       <AgeGate storeName={storeName} />
 
       <Header storeName={storeName} logoUrl={siteConfig.logo_url} />

@@ -1,10 +1,7 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import type { Page } from '@/shared/api';
-
-/** 0 起点のページ番号を、1 起点の page を付けた一覧の URL にする。先頭ページは page を付けない。 */
-export const pageHref = (basePath: string, index: number) =>
-  index === 0 ? basePath : `${basePath}?page=${index + 1}`;
+import { pageHref, pagerRange } from '../../lib/paging';
 
 /** 一覧の代わりに出す一文と、あれば回復の導線。 */
 export function StorefrontNotice({
@@ -83,17 +80,7 @@ function PagerLink({
  * Pager は管理画面の色とクリック処理で組まれているため、公開サイトでは --storefront-* とリンクで組み直す。
  */
 export function StorefrontPager({ basePath, result }: { basePath: string; result: Page<unknown> }) {
-  const page = result.number;
-  const pageCount = result.total_pages;
-  const from = page * result.size + 1;
-  const to = from + result.content.length - 1;
-  const windowSize = Math.min(5, pageCount);
-  const windowStart = Math.max(
-    0,
-    Math.min(page - Math.floor(windowSize / 2), pageCount - windowSize)
-  );
-  const hasPrev = page > 0;
-  const hasNext = page < pageCount - 1;
+  const { page, from, to, pages, hasPrev, hasNext } = pagerRange(result);
 
   return (
     <div className="mt-10 flex items-center justify-between gap-4 text-[color-mix(in_srgb,var(--storefront-fg)_70%,transparent)]">
@@ -112,8 +99,7 @@ export function StorefrontPager({ basePath, result }: { basePath: string; result
         <PagerLink basePath={basePath} index={page - 1} enabled={hasPrev} label="前へ">
           ‹
         </PagerLink>
-        {Array.from({ length: windowSize }, (_, i) => {
-          const index = windowStart + i;
+        {pages.map(index => {
           const current = index === page;
           return (
             <Link

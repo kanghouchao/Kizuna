@@ -7,5 +7,5 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function NewsDetailRoute({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return <StoreSitePage page="news-detail" pageProps={{ articleId: id }} />;
+  return <StoreSitePage page="news-detail" articleId={id} />;
 }

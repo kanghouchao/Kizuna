@@ -1,99 +1,11 @@
 'use client';
 
-import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { guestOrderApplicationApi } from '@/entities/order';
-import {
-  getApiErrorMessage,
-  useResource,
-  isConflict,
-  integerRule,
-  EMAIL_PATTERN,
-  EMAIL_PATTERN_MESSAGE,
-} from '@/shared/lib';
+import { useGuestReservationForm } from '../../model/useGuestReservationForm';
 
-interface GuestReservationFormValues {
-  business_date: string;
-  arrival_scheduled_start_time: string;
-  pax: number;
-  contact_name: string;
-  contact_phone_number: string;
-  contact_email: string;
-  contact_line_id: string;
-  remarks: string;
-  business_allowed: boolean;
-  marketing_allowed: boolean;
-}
-
-/**
- * 公開店面のゲスト予約申請フォーム。未ログインの来訪者が連絡先と希望内容を送る唯一の入口で、
- * 送信先は匿名の端点で、店舗はサーバが訪問されたドメインから解決した id を受け取って名乗る。
- *
- * 申請は予約の成立ではない。店舗が折返し連絡で内容を詰めてから確定するため、送信後は
- * 折返しを待つことだけを伝える（申請を読み返す口は匿名の来訪者には無い）。
- */
+/** ゲスト予約申請フォームの画面。検証と送信は useGuestReservationForm が持つ。 */
 export default function GuestReservationSection({ storeId }: { storeId: string }) {
-  const consent = useResource(guestOrderApplicationApi.consent);
-  const [acceptedId, setAcceptedId] = useState<string | null>(null);
-  const [failure, setFailure] = useState<string | null>(null);
-  const {
-    register,
-    setValue,
-    getValues,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<GuestReservationFormValues>({
-    defaultValues: {
-      business_date: '',
-      arrival_scheduled_start_time: '',
-      pax: 1,
-      contact_name: '',
-      contact_phone_number: '',
-      contact_email: '',
-      contact_line_id: '',
-      remarks: '',
-      business_allowed: false,
-      marketing_allowed: false,
-    },
-  });
-
-  const submit = async (values: GuestReservationFormValues) => {
-    setFailure(null);
-    if (!consent.data || consent.failure || consent.isLoading) {
-      setFailure('同意文面を取得してから送信してください');
-      return;
-    }
-    try {
-      const accepted = await guestOrderApplicationApi.request(storeId, {
-        contact_consent: {
-          version: consent.data.version,
-          business_allowed: values.business_allowed,
-          marketing_allowed: values.marketing_allowed,
-        },
-        business_date: values.business_date,
-        arrival_scheduled_start_time: values.arrival_scheduled_start_time || undefined,
-        pax: Number(values.pax),
-        contact_snapshot: {
-          name: values.contact_name,
-          phone_number: values.contact_phone_number,
-          email: values.contact_email,
-          line_id: values.contact_line_id,
-        },
-        remarks: values.remarks || undefined,
-      });
-      setAcceptedId(accepted.id);
-    } catch (error) {
-      if (isConflict(error)) {
-        setValue('business_allowed', false);
-        setValue('marketing_allowed', false);
-        await consent.reload();
-      }
-      // 流量制限・希望日の範囲外など、サーバは対処の分かる文言を返す。汎用文言に潰さない
-      setFailure(
-        getApiErrorMessage(error, 'ご予約の送信に失敗しました。時間をおいてお試しください')
-      );
-    }
-  };
+  const { field, errors, isSubmitting, onSubmit, consent, failure, acceptedId } =
+    useGuestReservationForm(storeId);
 
   const fieldClass =
     'w-full bg-transparent border px-4 py-3 text-sm text-[var(--storefront-fg)] outline-none';
@@ -102,7 +14,7 @@ export default function GuestReservationSection({ storeId }: { storeId: string }
   };
   const labelClass =
     'block text-[11px] tracking-[0.2em] mb-2 text-[color-mix(in_srgb,var(--storefront-fg)_55%,transparent)]';
-  // 失敗の色も模版のトークンから採る（生の色相を持ち込むと模版ごとの配色から外れる）
+  // 失敗の色もテンプレートのトークンから採る（生の色相を持ち込むとテンプレートごとの配色から外れる）
   const errorClass =
     'mt-2 text-xs text-[color-mix(in_srgb,var(--storefront-danger)_60%,var(--storefront-fg))]';
 
@@ -141,9 +53,9 @@ export default function GuestReservationSection({ storeId }: { storeId: string }
         <p className="mb-8 text-sm leading-7 text-[color-mix(in_srgb,var(--storefront-fg)_60%,transparent)]">
           ご希望の内容とご連絡先をお送りください。店舗よりご連絡のうえ、内容を確認して予約を確定いたします。
         </p>
-        {/* noValidate: 未達の原生制約が生きている限りブラウザが submit の手前で止め、
-            我々の文言は永久に描かれない。人数の下限は下の min 規則が引き継ぐ */}
-        <form onSubmit={handleSubmit(submit)} className="space-y-6" noValidate>
+        {/* noValidate: ブラウザ既定の制約が生きている限りブラウザが submit の手前で止め、
+            検証の文言が描かれない。人数の下限は検証の min 規則が引き継ぐ */}
+        <form onSubmit={onSubmit} className="space-y-6" noValidate>
           <div>
             <label className={labelClass} htmlFor="guest-contact-name">
               お名前
@@ -155,10 +67,7 @@ export default function GuestReservationSection({ storeId }: { storeId: string }
               type="text"
               className={fieldClass}
               style={fieldStyle}
-              {...register('contact_name', {
-                required: 'お名前をご入力ください',
-                maxLength: { value: 255, message: 'お名前は 255 文字以内です' },
-              })}
+              {...field('contact_name')}
             />
             {errors.contact_name && (
               <p id="guest-name-error" className={errorClass}>
@@ -177,13 +86,7 @@ export default function GuestReservationSection({ storeId }: { storeId: string }
               type="tel"
               className={fieldClass}
               style={fieldStyle}
-              {...register('contact_phone_number', {
-                maxLength: { value: 50, message: '電話番号は 50 文字以内です' },
-                validate: value =>
-                  [value, getValues('contact_email'), getValues('contact_line_id')].some(v =>
-                    v.trim()
-                  ) || '電話・メール・LINEのいずれかをご入力ください',
-              })}
+              {...field('contact_phone_number')}
             />
             {errors.contact_phone_number && (
               <p id="guest-phone-error" className={errorClass}>
@@ -196,10 +99,10 @@ export default function GuestReservationSection({ storeId }: { storeId: string }
           </p>
           {(
             [
-              ['contact_email', 'メール', 'email', 254],
-              ['contact_line_id', 'LINE ID', 'text', 255],
+              ['contact_email', 'メール', 'email'],
+              ['contact_line_id', 'LINE ID', 'text'],
             ] as const
-          ).map(([key, label, type, maxLength]) => (
+          ).map(([key, label, type]) => (
             <div key={key}>
               <label className={labelClass} htmlFor={key}>
                 {label}
@@ -211,14 +114,7 @@ export default function GuestReservationSection({ storeId }: { storeId: string }
                 aria-describedby={errors[key] ? `${key}-error` : undefined}
                 className={fieldClass}
                 style={fieldStyle}
-                {...register(key, {
-                  maxLength: { value: maxLength, message: `${label}は${maxLength}文字以内です` },
-                  validate: value =>
-                    key !== 'contact_email' ||
-                    !value.trim() ||
-                    EMAIL_PATTERN.test(value.trim()) ||
-                    EMAIL_PATTERN_MESSAGE,
-                })}
+                {...field(key)}
               />
               {errors[key] && (
                 <p id={`${key}-error`} className={errorClass}>
@@ -237,7 +133,7 @@ export default function GuestReservationSection({ storeId }: { storeId: string }
                 type="date"
                 className={fieldClass}
                 style={fieldStyle}
-                {...register('business_date', { required: 'ご希望日を選択してください' })}
+                {...field('business_date')}
               />
               {errors.business_date && <p className={errorClass}>{errors.business_date.message}</p>}
             </div>
@@ -250,7 +146,7 @@ export default function GuestReservationSection({ storeId }: { storeId: string }
                 type="time"
                 className={fieldClass}
                 style={fieldStyle}
-                {...register('arrival_scheduled_start_time')}
+                {...field('arrival_scheduled_start_time')}
               />
             </div>
           </div>
@@ -264,12 +160,7 @@ export default function GuestReservationSection({ storeId }: { storeId: string }
               min={1}
               className={fieldClass}
               style={fieldStyle}
-              {...register('pax', {
-                required: 'ご人数をご入力ください',
-                min: { value: 1, message: 'ご人数は 1 名以上です' },
-                // noValidate は type="number" の暗黙の step=1 も止める。これが無いと 1.5 が届く
-                validate: integerRule('ご人数'),
-              })}
+              {...field('pax')}
             />
             {errors.pax && <p className={errorClass}>{errors.pax.message}</p>}
           </div>
@@ -282,9 +173,7 @@ export default function GuestReservationSection({ storeId }: { storeId: string }
               rows={4}
               className={fieldClass}
               style={fieldStyle}
-              {...register('remarks', {
-                maxLength: { value: 500, message: 'ご要望は 500 文字以内です' },
-              })}
+              {...field('remarks')}
             />
             {errors.remarks && <p className={errorClass}>{errors.remarks.message}</p>}
           </div>
@@ -308,9 +197,7 @@ export default function GuestReservationSection({ storeId }: { storeId: string }
                     className="mt-1 shrink-0"
                     aria-invalid={!!errors.business_allowed}
                     aria-describedby={errors.business_allowed ? 'guest-consent-error' : undefined}
-                    {...register('business_allowed', {
-                      validate: value => value || '今回の予約に関する業務連絡への同意が必要です',
-                    })}
+                    {...field('business_allowed')}
                   />
                   <span>{consent.data.business_text}（必須）</span>
                 </label>
@@ -323,7 +210,7 @@ export default function GuestReservationSection({ storeId }: { storeId: string }
                   <input
                     type="checkbox"
                     className="mt-1 shrink-0"
-                    {...register('marketing_allowed')}
+                    {...field('marketing_allowed')}
                   />
                   <span>{consent.data.marketing_text}</span>
                 </label>

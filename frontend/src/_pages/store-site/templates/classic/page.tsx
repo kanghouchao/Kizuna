@@ -1,4 +1,3 @@
-import { storefrontService } from '../../api/storefront';
 import type { StoreSitePageProps } from '../../model/types';
 import AgeGate from '../_sections/AgeVerification';
 import Advertisement from '../_sections/Advertisement';
@@ -9,21 +8,15 @@ import Header from '../_sections/Header';
 import MVSection from '../_sections/MVSection';
 import './theme.css';
 
-/**
- * classic 模版の店舗トップページ（Server Component）。
- * 既定模版との排布差: キャッチコピー帯を Banner の直上に置き、明るい第一印象を作る。
- */
-export default async function ClassicTemplate({ store }: StoreSitePageProps) {
+/** 店舗トップページ（classic テンプレート）。キャッチコピー帯を Banner の直上に置く。 */
+export default function ClassicTemplate({ store, siteConfig, casts }: StoreSitePageProps<'page'>) {
   const storeName = store.name;
-
-  const { casts, siteConfig } = await storefrontService.getPageData(store.id);
 
   return (
     <div
       className="storefront-classic min-h-screen flex flex-col"
       style={{ background: 'var(--storefront-bg)' }}
     >
-      {/* 年齢確認ゲート（クライアントサイドのフルスクリーンオーバーレイ） */}
       <AgeGate storeName={storeName} />
 
       <Header storeName={storeName} logoUrl={siteConfig.logo_url} />
