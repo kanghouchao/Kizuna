@@ -1,17 +1,7 @@
 import type { ComponentType } from 'react';
+import type { StoreSitePageName } from '../model/types';
 
-/** 公開サイトの固定ページ名（templates/<key>/<page>.tsx 契約）。 */
-export type StoreSitePageName =
-  | 'page'
-  | 'casts'
-  | 'cast-detail'
-  | 'schedule'
-  | 'menu'
-  | 'about'
-  | 'reservation'
-  | 'reviews'
-  | 'news'
-  | 'news-detail';
+type TemplatePage = ComponentType<Record<string, unknown>>;
 
 // Turbopack は動的セグメントを 2 つ含む import 式をチャンク化できず
 // 本番ビルドが panic するため、page 側は静的に分岐し、
@@ -19,7 +9,7 @@ export type StoreSitePageName =
 function importPage(
   templateKey: string,
   page: StoreSitePageName
-): Promise<{ default: ComponentType<Record<string, unknown>> }> {
+): Promise<{ default: TemplatePage }> {
   switch (page) {
     case 'casts':
       return import(`./${templateKey}/casts`);
@@ -44,25 +34,25 @@ function importPage(
   }
 }
 
+const FALLBACK_TEMPLATE_KEY = 'default';
+
 /**
- * templateKey とページ名に対応する模版ページを動的に読み込む共有 helper。
- *
- * 未実装の templateKey（例: 過去に保存された modern / classic）でも公開サイトを
- * 404 にせず default 模版の同名ページへフォールバックする。
+ * templateKey とページ名に対応するテンプレートのページを読み込み、実際に描くテンプレートの標識と返す。
+ * 未知の templateKey でも公開サイトを 404 にせず、default の同名ページへ落とす。
  */
 export async function loadTemplatePage(
   templateKey: string,
   page: StoreSitePageName = 'page'
-): Promise<ComponentType<Record<string, unknown>>> {
+): Promise<{ templateKey: string; Page: TemplatePage }> {
   try {
-    const { default: TemplateComponent } = await importPage(templateKey, page);
-    return TemplateComponent;
+    const { default: Page } = await importPage(templateKey, page);
+    return { templateKey, Page };
   } catch (e) {
     console.error(
-      `模版「${templateKey}」のページ「${page}」読み込みに失敗したため default を表示します:`,
+      `テンプレート「${templateKey}」のページ「${page}」の読み込みに失敗したため default を表示します:`,
       e
     );
-    const { default: DefaultPage } = await importPage('default', page);
-    return DefaultPage;
+    const { default: Page } = await importPage(FALLBACK_TEMPLATE_KEY, page);
+    return { templateKey: FALLBACK_TEMPLATE_KEY, Page };
   }
 }

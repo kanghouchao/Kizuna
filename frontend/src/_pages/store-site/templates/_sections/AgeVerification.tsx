@@ -1,40 +1,35 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useAgeCheck } from '../../model/useAgeCheck';
 
-const STORAGE_KEY = 'kizuna_age_verified';
+const FADE_MS = 700;
 
 interface AgeGateProps {
   storeName: string;
 }
 
 export default function AgeGate({ storeName }: AgeGateProps) {
-  const [phase, setPhase] = useState<'loading' | 'gate' | 'declined' | 'done'>('loading');
+  const { phase, accept, decline, leave } = useAgeCheck();
   const [mounted, setMounted] = useState(false);
-  const [exiting, setExiting] = useState(false);
+  // 同意の後、消える演出の間だけ画面を残す。同意の記録は演出を待たずに済んでいる
+  const [exit, setExit] = useState<'none' | 'fading' | 'gone'>('none');
 
   useEffect(() => {
-    const verified = localStorage.getItem(STORAGE_KEY) === 'true';
-    setPhase(verified ? 'done' : 'gate');
-    // フェードイン用のマウントフラグ
     const t = setTimeout(() => setMounted(true), 50);
     return () => clearTimeout(t);
   }, []);
 
   const handleAccept = () => {
-    setExiting(true);
-    localStorage.setItem(STORAGE_KEY, 'true');
-    setTimeout(() => setPhase('done'), 700);
+    setExit('fading');
+    accept();
+    setTimeout(() => setExit('gone'), FADE_MS);
   };
 
-  const handleDecline = () => {
-    setPhase('declined');
-  };
+  const exiting = exit === 'fading';
 
-  // 検証済みの場合は何も表示しない
-  if (phase === 'done') return null;
+  if (exit === 'gone' || (phase === 'verified' && !exiting)) return null;
 
-  // ローディング中は黒い画面を表示
   if (phase === 'loading') {
     return <div className="fixed inset-0 bg-[var(--storefront-bg)] z-[9999]" />;
   }
@@ -71,7 +66,7 @@ export default function AgeGate({ storeName }: AgeGateProps) {
           transition: 'transform 0.7s ease',
         }}
       >
-        {phase === 'gate' ? (
+        {phase !== 'declined' ? (
           <>
             {/* 英語サブタイトル */}
             <p
@@ -130,7 +125,7 @@ export default function AgeGate({ storeName }: AgeGateProps) {
                 はい &nbsp; YES
               </button>
               <button
-                onClick={handleDecline}
+                onClick={decline}
                 className="py-3.5 border border-[var(--storefront-line)] text-[var(--storefront-neutral)] text-[10px] tracking-[0.35em] uppercase transition-all duration-300 hover:border-[var(--storefront-neutral)] hover:text-[var(--storefront-muted)] font-medium"
               >
                 いいえ &nbsp; NO
@@ -171,7 +166,7 @@ export default function AgeGate({ storeName }: AgeGateProps) {
               You must be 18 years or older to access this site
             </p>
             <button
-              onClick={() => window.close()}
+              onClick={leave}
               className="py-2.5 px-8 border border-[var(--storefront-subtle)] text-[var(--storefront-neutral)] text-[9px] tracking-[0.3em] uppercase transition-all duration-300 hover:border-[var(--storefront-neutral)] hover:text-[var(--storefront-muted)]"
             >
               ウィンドウを閉じる

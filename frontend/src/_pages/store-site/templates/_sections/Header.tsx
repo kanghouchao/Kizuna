@@ -2,38 +2,18 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { appOrigin, useAppDomain } from '@/shared/lib';
+import { useState } from 'react';
+import { STORE_SITE_NAV_PAGES } from '../../model/navigation';
+import { useMemberReservationUrl } from '../../model/useMemberReservationUrl';
 
 interface HeaderProps {
   storeName: string;
   logoUrl?: string;
 }
 
-const navLinks = [
-  { href: '/', label: 'TOP' },
-  { href: '/casts', label: 'キャスト' },
-  { href: '/schedule', label: '出勤表' },
-  { href: '/news', label: 'お知らせ' },
-  { href: '/reviews', label: '口コミ' },
-  { href: '/menu', label: '料金' },
-  { href: '/about', label: '店舗情報' },
-  // 未ログインの来訪者の申請入口。会員は右の WEB予約（会員ポータル）から入る
-  { href: '/reservation', label: 'ご予約' },
-];
-
 export default function Header({ storeName, logoUrl }: HeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const appDomain = useAppDomain();
-  // 会員ポータルはアプリドメイン側にあるため、自サイトのドメインを引き継いで店舗を伝える。
-  // ポータル側はこのドメインを公開照会に突き合わせて店舗を解決するので、店舗 ID は URL に載せない。
-  const [reservationHref, setReservationHref] = useState<string | null>(null);
-
-  useEffect(() => {
-    setReservationHref(
-      `${appOrigin(appDomain)}/member/reservations/new?store=${encodeURIComponent(window.location.hostname)}`
-    );
-  }, [appDomain]);
+  const reservationHref = useMemberReservationUrl();
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -71,7 +51,7 @@ export default function Header({ storeName, logoUrl }: HeaderProps) {
 
             {/* デスクトップナビ */}
             <nav className="hidden lg:flex items-center gap-6 xl:gap-10">
-              {navLinks.map(({ href, label }) => (
+              {STORE_SITE_NAV_PAGES.map(({ href, label }) => (
                 <Link
                   key={href}
                   href={href}
@@ -152,7 +132,7 @@ export default function Header({ storeName, logoUrl }: HeaderProps) {
       >
         {/* ナビリンク */}
         <nav className="flex flex-col items-center justify-center flex-1 gap-10">
-          {navLinks.map(({ href, label }, i) => (
+          {STORE_SITE_NAV_PAGES.map(({ href, label }, i) => (
             <Link
               key={href}
               href={href}

@@ -5,7 +5,6 @@ import {
   PublicReview,
   PublicShift,
   SiteConfig,
-  StorefrontData,
 } from '../model/types';
 import type { Page } from '@/shared/api';
 import { ServerApiError, serverClient } from '@/shared/api/index.server';
@@ -16,18 +15,6 @@ function storeHeaders(storeId: string): HeadersInit {
 
 /** 公開店舗サイトのデータ取得。匿名の公開端点へ、呼び出し元が渡した店舗を X-Store-ID で名乗る。 */
 export const storefrontService = {
-  async getPageData(storeId: string): Promise<StorefrontData> {
-    const [casts, siteConfig] = await Promise.all([
-      this.fetchCasts(storeId),
-      this.fetchSiteConfig(storeId),
-    ]);
-
-    return {
-      casts,
-      siteConfig,
-    };
-  },
-
   async fetchCasts(storeId: string): Promise<Cast[]> {
     try {
       return await serverClient.get<Cast[]>('/casts/public', {

@@ -1,14 +1,57 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import GuestReservationSection from '../templates/_sections/GuestReservationSection';
+import { useGuestReservationForm } from '../model/useGuestReservationForm';
 import { guestOrderApplicationApi } from '@/entities/order';
 
 jest.mock('@/entities/order', () => ({
   guestOrderApplicationApi: { request: jest.fn(), consent: jest.fn() },
 }));
 
+const FIELDS = [
+  ['contact_name', 'お名前'],
+  ['contact_phone_number', 'お電話番号'],
+  ['contact_email', 'メール'],
+  ['contact_line_id', 'LINE ID'],
+  ['business_date', 'ご希望日'],
+  ['pax', 'ご人数'],
+] as const;
+
+/** 見た目を持たないフォーム。テンプレートの画面に依らず、検証と送信だけを確かめる。 */
+function ReservationForm({ storeId }: { storeId: string }) {
+  const { field, errors, onSubmit, consent, failure, acceptedId } =
+    useGuestReservationForm(storeId);
+  if (acceptedId !== null) return <p>受付番号: {acceptedId}</p>;
+  return (
+    <form onSubmit={onSubmit} noValidate>
+      {FIELDS.map(([name, label]) => (
+        <label key={name}>
+          {label}
+          <input {...field(name)} />
+        </label>
+      ))}
+      {consent.data && (
+        <>
+          <label>
+            <input type="checkbox" {...field('business_allowed')} />
+            {consent.data.business_text}
+          </label>
+          <label>
+            <input type="checkbox" {...field('marketing_allowed')} />
+            {consent.data.marketing_text}
+          </label>
+        </>
+      )}
+      {Object.values(errors).map(error => (
+        <p key={error.message}>{error.message}</p>
+      ))}
+      {failure && <p>{failure}</p>}
+      <button type="submit">送信</button>
+    </form>
+  );
+}
+
 const mockedRequest = guestOrderApplicationApi.request as jest.Mock;
 
-const submitButton = () => screen.getByRole('button', { name: 'この内容で予約を希望する' });
+const submitButton = () => screen.getByRole('button', { name: '送信' });
 
 const fillRequiredFields = () => {
   fireEvent.change(screen.getByLabelText('お名前'), { target: { value: 'ゲスト花子' } });
@@ -16,7 +59,7 @@ const fillRequiredFields = () => {
   fireEvent.change(screen.getByLabelText('ご希望日'), { target: { value: '2026-08-25' } });
 };
 
-describe('GuestReservationSection', () => {
+describe('useGuestReservationForm', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.mocked(guestOrderApplicationApi.consent).mockResolvedValue({
@@ -27,9 +70,9 @@ describe('GuestReservationSection', () => {
   });
 
   it('業務連絡の同意がなければ申請を送らない', async () => {
-    render(<GuestReservationSection storeId="7" />);
+    render(<ReservationForm storeId="7" />);
     fillRequiredFields();
-    await screen.findByLabelText('今回の業務連絡を許可します（必須）');
+    await screen.findByLabelText('今回の業務連絡を許可します');
     fireEvent.click(submitButton());
     expect(
       await screen.findByText('今回の予約に関する業務連絡への同意が必要です')
@@ -39,9 +82,9 @@ describe('GuestReservationSection', () => {
 
   it('販促は独立した任意選択として送る', async () => {
     mockedRequest.mockResolvedValue({ id: 'marketing' });
-    render(<GuestReservationSection storeId="7" />);
+    render(<ReservationForm storeId="7" />);
     fillRequiredFields();
-    const business = await screen.findByLabelText('今回の業務連絡を許可します（必須）');
+    const business = await screen.findByLabelText('今回の業務連絡を許可します');
     expect(screen.getByLabelText('販促を許可します（任意）')).not.toBeChecked();
     fireEvent.click(business);
     fireEvent.click(screen.getByLabelText('販促を許可します（任意）'));
@@ -60,9 +103,9 @@ describe('GuestReservationSection', () => {
     mockedRequest.mockRejectedValue({
       response: { status: 409, data: { error: '同意文面が更新されました' } },
     });
-    render(<GuestReservationSection storeId="7" />);
+    render(<ReservationForm storeId="7" />);
     fillRequiredFields();
-    fireEvent.click(await screen.findByLabelText('今回の業務連絡を許可します（必須）'));
+    fireEvent.click(await screen.findByLabelText('今回の業務連絡を許可します'));
     fireEvent.click(screen.getByLabelText('販促を許可します（任意）'));
     jest.mocked(guestOrderApplicationApi.consent).mockResolvedValue({
       version: '2',
@@ -71,7 +114,7 @@ describe('GuestReservationSection', () => {
     });
     fireEvent.click(submitButton());
     expect(await screen.findByText('同意文面が更新されました')).toBeInTheDocument();
-    expect(screen.getByLabelText('更新後の業務連絡（必須）')).not.toBeChecked();
+    expect(screen.getByLabelText('更新後の業務連絡')).not.toBeChecked();
     expect(screen.getByLabelText('更新後の販促（任意）')).not.toBeChecked();
     expect(screen.getByLabelText('お名前')).toHaveValue('ゲスト花子');
   });
@@ -79,9 +122,9 @@ describe('GuestReservationSection', () => {
   it('連絡先と希望内容を匿名の申請端点へ送る', async () => {
     mockedRequest.mockResolvedValue({ id: 'app-1' });
 
-    render(<GuestReservationSection storeId="7" />);
+    render(<ReservationForm storeId="7" />);
     fillRequiredFields();
-    fireEvent.click(await screen.findByLabelText('今回の業務連絡を許可します（必須）'));
+    fireEvent.click(await screen.findByLabelText('今回の業務連絡を許可します'));
     fireEvent.change(screen.getByLabelText('ご人数'), { target: { value: '3' } });
     fireEvent.click(submitButton());
 
@@ -102,28 +145,25 @@ describe('GuestReservationSection', () => {
     );
   });
 
-  it('送信後は「まだ確定していない」ことと折返し連絡を伝える', async () => {
+  it('受け付けられた申請の受付番号を返す', async () => {
     mockedRequest.mockResolvedValue({ id: 'app-1' });
 
-    render(<GuestReservationSection storeId="7" />);
+    render(<ReservationForm storeId="7" />);
     fillRequiredFields();
-    fireEvent.click(await screen.findByLabelText('今回の業務連絡を許可します（必須）'));
+    fireEvent.click(await screen.findByLabelText('今回の業務連絡を許可します'));
     fireEvent.click(submitButton());
 
-    // 申請は予約の成立ではない。確定は店舗の折返し連絡を経る（ADR 0017）
-    expect(await screen.findByText('ご予約の希望を承りました')).toBeInTheDocument();
-    expect(screen.getByText(/まだ予約は確定しておりません/)).toBeInTheDocument();
-    expect(screen.queryByLabelText('お名前')).not.toBeInTheDocument();
+    expect(await screen.findByText('受付番号: app-1')).toBeInTheDocument();
   });
 
   it('電話なしでメールだけの申請を送信できる', async () => {
     jest.mocked(guestOrderApplicationApi.request).mockResolvedValue({ id: 'email-only' });
-    render(<GuestReservationSection storeId="7" />);
+    render(<ReservationForm storeId="7" />);
     fireEvent.change(screen.getByLabelText('お名前'), { target: { value: 'メールの来客' } });
     fireEvent.change(screen.getByLabelText('ご希望日'), { target: { value: '2026-10-01' } });
     fireEvent.change(screen.getByLabelText('メール'), { target: { value: 'guest@example.com' } });
-    fireEvent.click(await screen.findByLabelText('今回の業務連絡を許可します（必須）'));
-    fireEvent.click(screen.getByRole('button', { name: 'この内容で予約を希望する' }));
+    fireEvent.click(await screen.findByLabelText('今回の業務連絡を許可します'));
+    fireEvent.click(screen.getByRole('button', { name: '送信' }));
     await waitFor(() =>
       expect(guestOrderApplicationApi.request).toHaveBeenCalledWith(
         '7',
@@ -138,7 +178,7 @@ describe('GuestReservationSection', () => {
   });
 
   it('連絡先が欠けたままでは送らず、欄の傍で理由を述べる', async () => {
-    render(<GuestReservationSection storeId="7" />);
+    render(<ReservationForm storeId="7" />);
     fireEvent.change(screen.getByLabelText('ご希望日'), { target: { value: '2026-08-25' } });
     fireEvent.click(submitButton());
 
@@ -153,9 +193,9 @@ describe('GuestReservationSection', () => {
       response: { data: { error: '送信が続いたため受け付けられませんでした' } },
     });
 
-    render(<GuestReservationSection storeId="7" />);
+    render(<ReservationForm storeId="7" />);
     fillRequiredFields();
-    fireEvent.click(await screen.findByLabelText('今回の業務連絡を許可します（必須）'));
+    fireEvent.click(await screen.findByLabelText('今回の業務連絡を許可します'));
     fireEvent.click(submitButton());
 
     expect(await screen.findByText('送信が続いたため受け付けられませんでした')).toBeInTheDocument();

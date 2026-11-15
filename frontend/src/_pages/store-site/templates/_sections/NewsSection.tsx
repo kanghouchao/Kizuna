@@ -1,11 +1,10 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import type { Page } from '@/shared/api';
+import { pageHref } from '../../lib/paging';
 import { PublicArticleSummary } from '../../model/types';
 import PublishedOn from './PublishedOn';
-import { StorefrontNotice, StorefrontPager, pageHref } from './StorefrontPaging';
-
-export const ARTICLES_PER_PAGE = 10;
+import { StorefrontNotice, StorefrontPager } from './StorefrontPaging';
 
 const BASE_PATH = '/news';
 

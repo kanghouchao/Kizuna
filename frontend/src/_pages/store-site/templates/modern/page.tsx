@@ -1,4 +1,3 @@
-import { storefrontService } from '../../api/storefront';
 import type { StoreSitePageProps } from '../../model/types';
 import AgeGate from '../_sections/AgeVerification';
 import Advertisement from '../_sections/Advertisement';
@@ -9,29 +8,15 @@ import Header from '../_sections/Header';
 import MVSection from '../_sections/MVSection';
 import './theme.css';
 
-/**
- * modern 模版のテナントページ (Server Component)
- *
- * 構成（排布差: CastSection を MVSection より先に置きキャストを前面に）:
- * 1. AgeGate    - 年齢確認オーバーレイ（Client Component / localStorage）
- * 2. Header     - スティッキーヘッダー
- * 3. Banner     - フルスクリーンヒーローセクション
- * 4. CastSection - キャスト紹介カルーセル
- * 5. MVSection  - メインビジュアル
- * 6. Advertisement - キャンペーン情報
- * 7. Footer     - フッター
- */
-export default async function ModernTemplate({ store }: StoreSitePageProps) {
+/** 店舗トップページ（modern テンプレート）。キャストを MV より先に置く。 */
+export default function ModernTemplate({ store, siteConfig, casts }: StoreSitePageProps<'page'>) {
   const storeName = store.name;
-
-  const { casts, siteConfig } = await storefrontService.getPageData(store.id);
 
   return (
     <div
       className="storefront-modern min-h-screen flex flex-col"
       style={{ background: 'var(--storefront-bg)' }}
     >
-      {/* 年齢確認ゲート（クライアントサイドのフルスクリーンオーバーレイ） */}
       <AgeGate storeName={storeName} />
 
       <Header storeName={storeName} logoUrl={siteConfig.logo_url} />

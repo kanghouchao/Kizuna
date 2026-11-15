@@ -1,15 +1,39 @@
-import { expect } from '@playwright/test';
+import { expect, type Page, type TestInfo } from '@playwright/test';
 import { createBdd } from 'playwright-bdd';
 import { getPublicTemplateKey, loginAsStoreAdmin, setTemplateKey } from './store-api';
 import { BASE_URL } from '../base-url';
 
 const { Given, When, Then, After } = createBdd();
 
-Given('店舗 {string} の template_key が {string} である', async ({ request }, _store: string, templateKey: string) => {
-  // 前回失敗の残留に依存しないよう前提を明示的に確定させる。
+/**
+ * 公開サイトのトップを開き、殻が最も外側に出す標識が指定のテンプレートになるまで待つ。
+ * サイト設定は frontend が 60 秒キャッシュするので、切り替えた直後は古いテンプレートで描かれる。
+ * 固定 sleep は使わず、キャッシュの寿命を越える有界リトライで吸収する。
+ */
+export async function gotoTopWithTemplate(
+  page: Page,
+  testInfo: TestInfo,
+  templateKey: string,
+): Promise<void> {
+  // toPass の 90 秒は既定のテストタイムアウトを超えるため、既定値への加算で延ばす。
+  testInfo.setTimeout(testInfo.timeout + 100000);
+  await expect(async () => {
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('[data-storefront-template]').first()).toHaveAttribute(
+      'data-storefront-template',
+      templateKey,
+      { timeout: 2000 },
+    );
+  }).toPass({ timeout: 90000, intervals: [2000, 5000, 10000] });
+}
+
+Given('店舗 {string} の template_key が {string} である', async ({ page, request, $testInfo }, _store: string, templateKey: string) => {
   const token = await loginAsStoreAdmin(request);
   await setTemplateKey(request, token, templateKey);
   expect(await getPublicTemplateKey(request)).toBe(templateKey);
+  // 設定値だけでなく、公開サイトがそのテンプレートで描かれるところまで前提にする。直前のシナリオが
+  // 残したキャッシュのまま進むと、後続の切替の検証が切替を経ずに通ってしまう。
+  await gotoTopWithTemplate(page, $testInfo, templateKey);
 });
 
 When('template_key を {string} に変更する', async ({ request }, templateKey: string) => {
@@ -17,18 +41,11 @@ When('template_key を {string} に変更する', async ({ request }, templateKe
   await setTemplateKey(request, token, templateKey);
 });
 
-Then('新しいブラウザコンテキストで公開サイトが {word} 模版で描画される', async ({ browser }, templateKey: string) => {
-  // cookie 無しの新規コンテキスト → middleware が no-store で最新 template_key を取得し
-  // 新模版を即描画する（Q3-A）。伝播の一過性は有界リトライで吸収し、固定 sleep は使わない。
+Then('新しいブラウザコンテキストで公開サイトが {word} テンプレートで描画される', async ({ browser, $testInfo }, templateKey: string) => {
+  // cookie も localStorage も持たない来訪者として開く。
   const context = await browser.newContext({ baseURL: BASE_URL });
   try {
-    const page = await context.newPage();
-    await expect(async () => {
-      await page.goto('/', { waitUntil: 'domcontentloaded' });
-      await expect(page.locator(`.storefront-${templateKey}`)).toBeVisible();
-    }).toPass({ timeout: 30000, intervals: [1000, 2000, 3000, 5000] });
-    // default 模版へ落ちていない（＝切替が実際に反映されている）ことを確認。
-    await expect(page.locator('.storefront-default')).toHaveCount(0);
+    await gotoTopWithTemplate(await context.newPage(), $testInfo, templateKey);
   } finally {
     await context.close();
   }

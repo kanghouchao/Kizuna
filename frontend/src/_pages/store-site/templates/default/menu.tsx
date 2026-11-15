@@ -1,4 +1,3 @@
-import { storefrontService } from '../../api/storefront';
 import type { StoreSitePageProps } from '../../model/types';
 import AgeGate from '../_sections/AgeVerification';
 import Footer from '../_sections/Footer';
@@ -7,24 +6,21 @@ import PageHero from '../_sections/PageHero';
 import PricingSection from '../_sections/PricingSection';
 import './theme.css';
 
-/** 料金ページ（default 模版）。 */
-export default async function DefaultMenuPage({ store }: StoreSitePageProps) {
-  const storeName = store.name;
-  const siteConfig = await storefrontService.fetchSiteConfig(store.id);
-
+/** 料金ページ（default テンプレート）。 */
+export default function DefaultMenuPage({ store, siteConfig }: StoreSitePageProps<'menu'>) {
   return (
     <div
       className="storefront-default min-h-screen flex flex-col"
       style={{ background: 'var(--storefront-bg)' }}
     >
-      <AgeGate storeName={storeName} />
-      <Header storeName={storeName} logoUrl={siteConfig.logo_url} />
+      <AgeGate storeName={store.name} />
+      <Header storeName={store.name} logoUrl={siteConfig.logo_url} />
       <main className="grow">
         <PageHero title="料金" />
         <PricingSection pricingDescription={siteConfig.pricing_description} />
       </main>
       <Footer
-        storeName={storeName}
+        storeName={store.name}
         snsLinks={siteConfig.sns_links}
         partnerLinks={siteConfig.partner_links}
       />

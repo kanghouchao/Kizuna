@@ -1,5 +1,6 @@
 import { CastCustomFieldView } from '@/entities/cast';
 import { PartnerLink, SnsLink } from '@/entities/store-profile';
+import type { Page } from '@/shared/api';
 import type { PublicStore } from '@/shared/api/index.server';
 
 /**
@@ -39,14 +40,6 @@ export interface SiteConfig {
 }
 
 /**
- * ストアフロント用データの集約型
- */
-export interface StorefrontData {
-  casts: Cast[];
-  siteConfig: SiteConfig;
-}
-
-/**
  * 公開出勤表のシフト情報
  */
 export interface PublicShift {
@@ -81,7 +74,45 @@ export interface PublicArticle extends PublicArticleSummary {
   body: string;
 }
 
-/** 模版ページが受け取る店舗。サーバがリクエストの Host から解決した値。 */
-export interface StoreSitePageProps {
-  store: PublicStore;
+/** 公開サイトの固定ページ名（templates/<key>/<page>.tsx 契約）。 */
+export type StoreSitePageName =
+  | 'page'
+  | 'casts'
+  | 'cast-detail'
+  | 'schedule'
+  | 'menu'
+  | 'about'
+  | 'reservation'
+  | 'reviews'
+  | 'news'
+  | 'news-detail';
+
+/** 公開ルートが殻へ渡す、開くページとその引数。pageIndex は 0 起点。 */
+export type StoreSiteRoute =
+  | { page: 'page' | 'casts' | 'schedule' | 'menu' | 'about' | 'reservation' }
+  | { page: 'cast-detail'; castId: string }
+  | { page: 'news-detail'; articleId: string }
+  | { page: 'reviews' | 'news'; pageIndex: number };
+
+/** ページごとに殻が取得するデータ。一覧の null は取得の失敗で、0 件と区別する。 */
+export interface StoreSitePageData {
+  page: { casts: Cast[] };
+  casts: { casts: Cast[] };
+  'cast-detail': { cast: Cast };
+  schedule: { shifts: PublicShift[] };
+  menu: object;
+  about: object;
+  reservation: object;
+  reviews: { reviews: Page<PublicReview> | null; page: number };
+  news: { articles: Page<PublicArticleSummary> | null; page: number };
+  'news-detail': { article: PublicArticle };
 }
+
+/**
+ * テンプレートのページが受け取る props。店舗はサーバがリクエストの Host から解決した値で、
+ * データはすべて殻が取得済み。テンプレートのページは自分では取りに行かない。
+ */
+export type StoreSitePageProps<P extends StoreSitePageName> = StoreSitePageData[P] & {
+  store: PublicStore;
+  siteConfig: SiteConfig;
+};
