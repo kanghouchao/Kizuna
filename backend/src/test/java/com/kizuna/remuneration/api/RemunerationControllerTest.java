@@ -1,5 +1,6 @@
 package com.kizuna.remuneration.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -31,6 +32,7 @@ import com.kizuna.remuneration.application.StatementContents;
 import com.kizuna.remuneration.domain.BonusAward;
 import com.kizuna.remuneration.domain.GuaranteeState;
 import com.kizuna.remuneration.domain.GuaranteeTerm;
+import com.kizuna.remuneration.domain.GuaranteeTimeline;
 import com.kizuna.remuneration.domain.RemunerationChange;
 import com.kizuna.remuneration.domain.RemunerationChangeRepository;
 import com.kizuna.remuneration.domain.StatementAcceptance;
@@ -41,15 +43,16 @@ import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.persistence.StoreScopedEntity;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shift.remuneration.AttendanceFacts;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -67,11 +70,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.PlatformTransactionManager;
 
 @WebMvcTest({
@@ -89,17 +92,20 @@ import org.springframework.transaction.PlatformTransactionManager;
   StatementAcceptanceService.class,
   StoreScopeHolder.class
 })
-@WithMockUser(
-    username = "person@example.test",
-    authorities = {
-      "PERM_ORDER_MANAGE",
-      "PERM_REMUNERATION_VIEW",
-      "PERM_GUARANTEE_MANAGE",
-      "PERM_BONUS_AWARD",
-      "PERM_REMUNERATION_CORRECT",
-      "ROLE_CAST"
-    })
 class RemunerationControllerTest {
+  private static final long USER_ID = 12L;
+
+  private static RequestPostProcessor person() {
+    return jwtUser(
+        USER_ID,
+        "PERM_ORDER_MANAGE",
+        "PERM_REMUNERATION_VIEW",
+        "PERM_GUARANTEE_MANAGE",
+        "PERM_BONUS_AWARD",
+        "PERM_REMUNERATION_CORRECT",
+        "ROLE_CAST");
+  }
+
   @TestConfiguration
   @EnableMethodSecurity
   static class Security {}
@@ -111,7 +117,6 @@ class RemunerationControllerTest {
   @MockitoBean RemunerationPersonLookup people;
   @MockitoBean OrderRemunerationFacts orders;
   @MockitoBean AttendanceFacts attendances;
-  @MockitoBean ActorIdentityService actors;
   @MockitoBean BusinessDateService dates;
   @MockitoBean BusinessAudit audit;
   @MockitoBean SystemConfigService settings;
@@ -124,10 +129,10 @@ class RemunerationControllerTest {
   @BeforeEach
   void setup() {
     when(stores.exists(anyLong())).thenReturn(true);
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(1L, 7L)));
     when(people.require(1L, 34L))
         .thenReturn(new RemunerationPersonLookup.Person(34L, "本人", "過去在籍店舗"));
     when(people.require(1L, 999L)).thenThrow(new NotFoundException("見つかりません"));
-    when(actors.requireUserId("person@example.test")).thenReturn(12L);
     when(people.self(12L)).thenReturn(34L);
     when(orders.basis(eq(1L), eq(34L), any(), any()))
         .thenReturn(List.of(new OrderRemunerationFacts.Basis(DAY, "o1", 7000, false)));
@@ -165,7 +170,7 @@ class RemunerationControllerTest {
   void safeStatementUsesDailyTopUpAndAuthenticatedPerson(String path) throws Exception {
     mvc.perform(
             get(path)
-                .principal(() -> "person@example.test")
+                .with(person())
                 .header("X-Store-ID", "1")
                 .param("store_id", "1")
                 .param("person_id", "34")
@@ -183,7 +188,11 @@ class RemunerationControllerTest {
     when(people.require(7L, 34L)).thenReturn(new RemunerationPersonLookup.Person(34L, "本人", "七号店"));
     when(records.timeline(7L, 34L)).thenReturn(Optional.empty());
     when(records.terms(eq(7L), eq(34L), any())).thenReturn(new PageImpl<>(List.of()));
-    mvc.perform(get("/remuneration-guarantees").header("X-Store-ID", "7").param("person_id", "34"))
+    mvc.perform(
+            get("/remuneration-guarantees")
+                .with(person())
+                .header("X-Store-ID", "7")
+                .param("person_id", "34"))
         .andExpect(status().isOk());
     verify(people).require(7L, 34L);
     verify(records).terms(eq(7L), eq(34L), any());
@@ -205,7 +214,7 @@ class RemunerationControllerTest {
         .persist(any());
     mvc.perform(
             post("/bonus-awards")
-                .principal(() -> "person@example.test")
+                .with(person())
                 .header("X-Store-ID", "7")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
@@ -228,13 +237,60 @@ class RemunerationControllerTest {
         .allSatisfy(row -> assertThat(((StoreScopedEntity) row).getStoreId()).isEqualTo(7L));
   }
 
+  private static final String PAST_GUARANTEE =
+      "{\"person_id\":34,\"effective_from\":\"2026-09-30\",\"state\":\"ACTIVE\",\"daily_amount\":10000,\"reason\":\"日額\",\"expected_version\":0,\"request_id\":\"37caf776-d07e-418d-ad80-75c88de60480\"}";
+
+  @Test
+  void pastDatedGuaranteeIsRefusedWithoutCorrectionPermission() throws Exception {
+    when(dates.currentBusinessDate()).thenReturn(DAY.plusDays(1));
+    mvc.perform(
+            post("/remuneration-guarantees")
+                .with(
+                    jwtUser(
+                        USER_ID,
+                        "PERM_ORDER_MANAGE",
+                        "PERM_REMUNERATION_VIEW",
+                        "PERM_GUARANTEE_MANAGE"))
+                .header("X-Store-ID", "1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(PAST_GUARANTEE))
+        .andExpect(status().isForbidden());
+    verify(records, times(0)).persist(any());
+  }
+
+  @Test
+  void pastDatedGuaranteeIsRegisteredWithCorrectionPermission() throws Exception {
+    when(dates.currentBusinessDate()).thenReturn(DAY.plusDays(1));
+    when(records.lockedTimeline(1L, 34L)).thenReturn(new GuaranteeTimeline(34L));
+    when(records.activeTerms(1L, 34L)).thenReturn(List.of());
+    doAnswer(
+            invocation -> {
+              Object row = invocation.getArgument(0);
+              ReflectionTestUtils.setField(row, "id", "new");
+              ReflectionTestUtils.setField(row, "version", 0L);
+              if (row instanceof GuaranteeTerm term)
+                when(records.findTerm(1L, "new")).thenReturn(Optional.of(term));
+              return null;
+            })
+        .when(records)
+        .persist(any());
+    mvc.perform(
+            post("/remuneration-guarantees")
+                .with(person())
+                .header("X-Store-ID", "1")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(PAST_GUARANTEE))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.guarantee.id").value("new"));
+  }
+
   private String acceptableDigest() throws Exception {
     when(dates.currentBusinessDate()).thenReturn(DAY.plusDays(1));
     when(dates.hasEnded(DAY)).thenReturn(true);
     var body =
         mvc.perform(
                 get("/me/remuneration-statements")
-                    .principal(() -> "person@example.test")
+                    .with(person())
                     .param("store_id", "1")
                     .param("month", "2026-09"))
             .andExpect(status().isOk())
@@ -252,9 +308,13 @@ class RemunerationControllerTest {
   }
 
   private ResultActions accept(String digest) throws Exception {
+    return accept(digest, person());
+  }
+
+  private ResultActions accept(String digest, RequestPostProcessor user) throws Exception {
     return mvc.perform(
         post("/me/statement-acceptances")
-            .principal(() -> "person@example.test")
+            .with(user)
             .contentType(MediaType.APPLICATION_JSON)
             .content(
                 "{\"store_id\":1,\"business_date\":\"2026-09-30\",\"content_digest\":\""
@@ -286,8 +346,8 @@ class RemunerationControllerTest {
     accept(digest).andExpect(status().isOk()).andExpect(jsonPath("$.id").value("acc"));
     verify(acceptances, times(1)).saveAndFlush(any());
     verify(audit, times(1))
-        .record(
-            eq("person@example.test"),
+        .recordById(
+            eq(USER_ID),
             eq(1L),
             eq("STATEMENT_ACCEPTED"),
             eq("STATEMENT_ACCEPTANCE"),
@@ -322,18 +382,22 @@ class RemunerationControllerTest {
   void malformedAcceptanceIsRejected(String body) throws Exception {
     mvc.perform(
             post("/me/statement-acceptances")
-                .principal(() -> "person@example.test")
+                .with(person())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body.formatted("a".repeat(64))))
         .andExpect(status().isBadRequest());
   }
 
   @Test
-  @WithMockUser(
-      username = "person@example.test",
-      authorities = {"PERM_ORDER_MANAGE", "PERM_REMUNERATION_VIEW", "PERM_REMUNERATION_CORRECT"})
   void staffCannotAcceptOnBehalfOfThePerson() throws Exception {
-    accept("a".repeat(64)).andExpect(status().isForbidden());
+    accept(
+            "a".repeat(64),
+            jwtUser(
+                USER_ID,
+                "PERM_ORDER_MANAGE",
+                "PERM_REMUNERATION_VIEW",
+                "PERM_REMUNERATION_CORRECT"))
+        .andExpect(status().isForbidden());
     verify(acceptances, times(0)).saveAndFlush(any());
   }
 
@@ -341,7 +405,7 @@ class RemunerationControllerTest {
   void selfCannotSelectAnotherPerson() throws Exception {
     mvc.perform(
             get("/me/remuneration-statements")
-                .principal(() -> "person@example.test")
+                .with(person())
                 .param("store_id", "1")
                 .param("person_id", "999")
                 .param("month", "2026-09"))
@@ -354,7 +418,7 @@ class RemunerationControllerTest {
   void allPersonReadsCheckHistoricalStoreRelation(String path) throws Exception {
     mvc.perform(
             get(path)
-                .principal(() -> "person@example.test")
+                .with(person())
                 .header("X-Store-ID", "1")
                 .param("person_id", "999")
                 .param("month", "2026-09"))
@@ -368,7 +432,7 @@ class RemunerationControllerTest {
     when(records.bonus(1L, "b")).thenReturn(bonus);
     when(records.term(1L, "g")).thenReturn(term);
     for (String base : List.of("/bonus-awards/b", "/remuneration-guarantees/g")) {
-      mvc.perform(get(base + "/changes").header("X-Store-ID", "1"))
+      mvc.perform(get(base + "/changes").with(person()).header("X-Store-ID", "1"))
           .andExpect(status().isNotFound());
       String correction =
           base.contains("bonus-awards")
@@ -376,7 +440,7 @@ class RemunerationControllerTest {
               : "\"effective_from\":\"2026-09-30\",\"state\":\"ACTIVE\",\"daily_amount\":10000";
       mvc.perform(
               post(base + "/corrections")
-                  .principal(() -> "person@example.test")
+                  .with(person())
                   .header("X-Store-ID", "1")
                   .contentType(MediaType.APPLICATION_JSON)
                   .content(
@@ -386,7 +450,7 @@ class RemunerationControllerTest {
           .andExpect(status().isNotFound());
       mvc.perform(
               post(base + "/cancellation")
-                  .principal(() -> "person@example.test")
+                  .with(person())
                   .header("X-Store-ID", "1")
                   .contentType(MediaType.APPLICATION_JSON)
                   .content(
@@ -396,10 +460,10 @@ class RemunerationControllerTest {
   }
 
   @Test
-  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void orderPermissionDoesNotGrantNewMoneyReads() throws Exception {
     mvc.perform(
             get("/remuneration-statements")
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE"))
                 .header("X-Store-ID", "1")
                 .param("person_id", "34")
                 .param("month", "2026-09"))
@@ -407,10 +471,10 @@ class RemunerationControllerTest {
   }
 
   @Test
-  @WithMockUser(authorities = {"PERM_ORDER_MANAGE", "PERM_REMUNERATION_VIEW"})
   void readingDoesNotGrantBonusWrite() throws Exception {
     mvc.perform(
             post("/bonus-awards")
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE", "PERM_REMUNERATION_VIEW"))
                 .header("X-Store-ID", "1")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
@@ -420,10 +484,13 @@ class RemunerationControllerTest {
 
   @ParameterizedTest
   @ValueSource(strings = {"/remuneration-statements", "/remuneration-guarantees", "/bonus-awards"})
-  @WithMockUser(authorities = {"PERM_ORDER_SET_VIEW", "PERM_REMUNERATION_VIEW"})
   void crossStoreViewerDoesNotReachStoreOnlyReads(String path) throws Exception {
     mvc.perform(
-            get(path).header("X-Store-ID", "1").param("person_id", "34").param("month", "2026-09"))
+            get(path)
+                .with(jwtUser(USER_ID, "PERM_ORDER_SET_VIEW", "PERM_REMUNERATION_VIEW"))
+                .header("X-Store-ID", "1")
+                .param("person_id", "34")
+                .param("month", "2026-09"))
         .andExpect(status().isForbidden());
   }
 
@@ -437,6 +504,7 @@ class RemunerationControllerTest {
         .thenReturn(new PageImpl<>(List.of()));
     mvc.perform(
             get("/remuneration-statements")
+                .with(person())
                 .header("X-Store-ID", "1")
                 .param("person_id", "34")
                 .param("month", "2026-09")
@@ -452,6 +520,7 @@ class RemunerationControllerTest {
 
     mvc.perform(
             get("/remuneration-statements")
+                .with(person())
                 .header("X-Store-ID", "1")
                 .param("person_id", "34")
                 .param("month", "2026-09")
@@ -467,6 +536,7 @@ class RemunerationControllerTest {
         .thenReturn(new PageImpl<>(List.of()));
     mvc.perform(
             get("/bonus-awards")
+                .with(person())
                 .header("X-Store-ID", "1")
                 .param("person_id", "34")
                 .param("month", "2026-09"))
@@ -486,7 +556,7 @@ class RemunerationControllerTest {
             eq(1L), any(), any(), pageable.capture()))
         .thenReturn(new PageImpl<>(List.of()));
     for (String base : List.of("/bonus-awards/b", "/remuneration-guarantees/g"))
-      mvc.perform(get(base + "/changes").header("X-Store-ID", "1"))
+      mvc.perform(get(base + "/changes").with(person()).header("X-Store-ID", "1"))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.total_elements").value(0));
     verify(changes).findByStoreIdAndResourceTypeAndResourceId(eq(1L), eq("BONUS"), eq("b"), any());

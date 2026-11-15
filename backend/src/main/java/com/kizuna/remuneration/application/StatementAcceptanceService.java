@@ -9,7 +9,6 @@ import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.Timestamps;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +23,6 @@ public class StatementAcceptanceService {
   private final StatementContents contents;
   private final StatementAcceptanceRepository acceptances;
   private final RemunerationPersonLookup people;
-  private final ActorIdentityService actors;
   private final BusinessDateService businessDates;
   private final BusinessAudit audit;
 
@@ -34,8 +32,8 @@ public class StatementAcceptanceService {
 
   /** 承諾不可を要約の照合より先に判定する — 内容が定まらない日に写しを比べない。 */
   @Transactional(isolation = Isolation.REPEATABLE_READ)
-  public Acceptance accept(String actor, AcceptanceCommand command) {
-    Long store = command.storeId(), person = self(actor, store);
+  public Acceptance accept(long actorId, AcceptanceCommand command) {
+    Long store = command.storeId(), person = self(actorId, store);
     var day = command.businessDate();
     var content = contents.between(store, person, day, day).getFirst().content();
     var reason = content.notAcceptableReason(businessDates.hasEnded(day));
@@ -48,8 +46,8 @@ public class StatementAcceptanceService {
     if (existing.isPresent()) return new Acceptance(AcceptanceSummary.of(existing.get()), false);
     var row = StatementAcceptance.accept(store, person, day, content, Timestamps.now());
     acceptances.saveAndFlush(row);
-    audit.record(
-        actor,
+    audit.recordById(
+        actorId,
         store,
         "STATEMENT_ACCEPTED",
         "STATEMENT_ACCEPTANCE",
@@ -67,8 +65,8 @@ public class StatementAcceptanceService {
 
   /** 同じ内容の並行承諾で一意制約に敗れた要求へ、先に確定した行を返す。 */
   @Transactional(readOnly = true)
-  public Acceptance existing(String actor, AcceptanceCommand command) {
-    Long store = command.storeId(), person = self(actor, store);
+  public Acceptance existing(long actorId, AcceptanceCommand command) {
+    Long store = command.storeId(), person = self(actorId, store);
     return acceptances
         .findByStoreIdAndPersonIdAndBusinessDateAndContentDigest(
             store, person, command.businessDate(), command.contentDigest())
@@ -76,9 +74,9 @@ public class StatementAcceptanceService {
         .orElseThrow(() -> new ConflictException(CHANGED));
   }
 
-  private Long self(String actor, Long store) {
+  private Long self(long actorId, Long store) {
     RemunerationInput.store(store);
-    var person = people.self(actors.requireUserId(actor));
+    var person = people.self(actorId);
     people.require(store, person);
     return person;
   }

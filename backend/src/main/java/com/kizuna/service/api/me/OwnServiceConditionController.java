@@ -4,6 +4,7 @@ import com.kizuna.service.api.dto.OwnConsentRequest;
 import com.kizuna.service.api.dto.OwnServiceConditionSummary;
 import com.kizuna.service.application.OwnServiceConditionService;
 import com.kizuna.service.domain.ServiceKind;
+import com.kizuna.shared.web.JwtClaims;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
@@ -37,7 +38,7 @@ public class OwnServiceConditionController {
           Pageable pageable,
       Principal principal) {
     return service
-        .list(storeId, principal.getName(), kind, pageable)
+        .list(storeId, JwtClaims.userIdOf(principal), kind, pageable)
         .map(OwnServiceConditionSummary::of);
   }
 
@@ -49,6 +50,6 @@ public class OwnServiceConditionController {
       @Valid @RequestBody OwnConsentRequest request,
       Principal principal) {
     return OwnServiceConditionSummary.of(
-        service.decide(storeId, principal.getName(), id, request.command()));
+        service.decide(storeId, JwtClaims.userIdOf(principal), id, request.command()));
   }
 }

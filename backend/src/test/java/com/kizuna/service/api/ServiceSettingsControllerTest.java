@@ -1,5 +1,6 @@
 package com.kizuna.service.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -17,9 +18,11 @@ import com.kizuna.service.application.ServiceSettingsService;
 import com.kizuna.service.domain.ServiceItem;
 import com.kizuna.service.domain.ServiceRevision;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -33,7 +36,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -52,6 +54,7 @@ class ServiceSettingsControllerTest {
   static class MethodSecurityConfig {}
 
   private static final Long STORE_ID = 7L;
+  private static final long OPERATOR_ID = 42L;
 
   @Autowired private MockMvc mockMvc;
 
@@ -64,13 +67,16 @@ class ServiceSettingsControllerTest {
 
   @Test
   @DisplayName("一覧は名乗られた店舗の id で service を呼ぶこと")
-  @WithMockUser(authorities = "PERM_SERVICE_MANAGE")
   void listPassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(STORE_ID)));
     when(service.list(any(), any(), anyBoolean(), any())).thenReturn(Page.empty());
 
     mockMvc
-        .perform(get("/services").header("X-Store-ID", STORE_ID.toString()))
+        .perform(
+            get("/services")
+                .header("X-Store-ID", STORE_ID.toString())
+                .with(jwtUser(OPERATOR_ID, "PERM_SERVICE_MANAGE")))
         .andExpect(status().isOk());
 
     verify(service)
@@ -86,32 +92,35 @@ class ServiceSettingsControllerTest {
 
   @Test
   @DisplayName("削除は名乗られた店舗の id で service を呼ぶこと")
-  @WithMockUser(authorities = "PERM_SERVICE_MANAGE")
   void deletePassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(STORE_ID)));
 
     mockMvc
         .perform(
             delete("/services/s1")
                 .param("expected_version", "2")
-                .principal(() -> "operator@example.test")
-                .header("X-Store-ID", STORE_ID.toString()))
+                .header("X-Store-ID", STORE_ID.toString())
+                .with(jwtUser(OPERATOR_ID, "PERM_SERVICE_MANAGE")))
         .andExpect(status().isNoContent());
 
-    verify(service).delete(STORE_ID, "s1", 2L, "operator@example.test");
+    verify(service).delete(STORE_ID, "s1", 2L, OPERATOR_ID);
   }
 
   @Test
   @DisplayName("改訂履歴は改訂番号の新しい順の Page で返すこと")
-  @WithMockUser(authorities = "PERM_SERVICE_MANAGE")
   void revisionsAreAPageNewestFirst() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(STORE_ID)));
     ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
     when(service.history(eq(STORE_ID), eq("s1"), pageable.capture()))
         .thenReturn(new PageImpl<>(List.of()));
 
     mockMvc
-        .perform(get("/services/s1/revisions").header("X-Store-ID", STORE_ID.toString()))
+        .perform(
+            get("/services/s1/revisions")
+                .header("X-Store-ID", STORE_ID.toString())
+                .with(jwtUser(OPERATOR_ID, "PERM_SERVICE_MANAGE")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 

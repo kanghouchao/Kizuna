@@ -9,6 +9,7 @@ import com.kizuna.remuneration.api.dto.RemunerationRequests.GuaranteeCreateReque
 import com.kizuna.remuneration.application.RemunerationManagementService;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.shared.web.Replays;
 import jakarta.validation.Valid;
 import java.security.Principal;
@@ -19,6 +20,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -53,13 +55,18 @@ public class GuaranteeController {
   public GuaranteeMutationResponse create(
       @CurrentStore Long storeId,
       @Valid @RequestBody GuaranteeCreateRequest request,
-      Principal principal) {
+      Authentication authentication) {
     var command = request.command();
     return GuaranteeMutationResponse.of(
         Replays.write(
             DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-            () -> service.createGuarantee(storeId, command, principal.getName()),
-            () -> service.replayGuarantee(storeId, command, principal.getName())));
+            () ->
+                service.createGuarantee(
+                    storeId,
+                    command,
+                    JwtClaims.userIdOf(authentication),
+                    RemunerationCorrectionAuthority.held(authentication)),
+            () -> service.replayGuarantee(storeId, command, JwtClaims.userIdOf(authentication))));
   }
 
   @PostMapping("/{id}/corrections")
@@ -75,8 +82,8 @@ public class GuaranteeController {
     return GuaranteeMutationResponse.of(
         Replays.write(
             DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-            () -> service.correctGuarantee(storeId, command, principal.getName()),
-            () -> service.replayGuarantee(storeId, command, principal.getName())));
+            () -> service.correctGuarantee(storeId, command, JwtClaims.userIdOf(principal)),
+            () -> service.replayGuarantee(storeId, command, JwtClaims.userIdOf(principal))));
   }
 
   @PostMapping("/{id}/cancellation")
@@ -91,8 +98,8 @@ public class GuaranteeController {
     return GuaranteeMutationResponse.of(
         Replays.write(
             DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-            () -> service.cancelGuarantee(storeId, command, principal.getName()),
-            () -> service.replayGuarantee(storeId, command, principal.getName())));
+            () -> service.cancelGuarantee(storeId, command, JwtClaims.userIdOf(principal)),
+            () -> service.replayGuarantee(storeId, command, JwtClaims.userIdOf(principal))));
   }
 
   @GetMapping("/{id}/changes")

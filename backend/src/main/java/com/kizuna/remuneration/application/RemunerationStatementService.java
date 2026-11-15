@@ -13,7 +13,6 @@ import com.kizuna.remuneration.domain.StatementAcceptanceRepository;
 import com.kizuna.remuneration.infrastructure.RemunerationRecords;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.persistence.Timestamps;
-import com.kizuna.user.application.ActorIdentityService;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -33,7 +32,6 @@ public class RemunerationStatementService {
   private final OrderRemunerationFacts orders;
   private final StatementContents contents;
   private final BusinessDateService businessDates;
-  private final ActorIdentityService actors;
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public RemunerationStatement store(
@@ -44,9 +42,8 @@ public class RemunerationStatementService {
   /** 本人の明細。認証主体の本人と店舗の在籍の歴史を照合し（無ければ 404）、全照会を明示した本人・店舗に限る。 */
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public RemunerationStatement self(
-      String actor, Long store, String month, Pageable orderPageable, Pageable bonusPageable) {
-    return read(
-        store, people.self(actors.requireUserId(actor)), month, orderPageable, bonusPageable);
+      long actorId, Long store, String month, Pageable orderPageable, Pageable bonusPageable) {
+    return read(store, people.self(actorId), month, orderPageable, bonusPageable);
   }
 
   private RemunerationStatement read(

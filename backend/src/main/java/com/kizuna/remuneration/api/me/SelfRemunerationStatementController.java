@@ -2,6 +2,7 @@ package com.kizuna.remuneration.api.me;
 
 import com.kizuna.remuneration.api.dto.RemunerationStatementResponse;
 import com.kizuna.remuneration.application.RemunerationStatementService;
+import com.kizuna.shared.web.JwtClaims;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -36,6 +37,6 @@ public class SelfRemunerationStatementController {
               sort = {})
           Pageable bonusPageable) {
     return RemunerationStatementResponse.of(
-        service.self(principal.getName(), storeId, month, orderPageable, bonusPageable));
+        service.self(JwtClaims.userIdOf(principal), storeId, month, orderPageable, bonusPageable));
   }
 }

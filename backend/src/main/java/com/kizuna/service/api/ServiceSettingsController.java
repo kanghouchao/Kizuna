@@ -10,6 +10,7 @@ import com.kizuna.service.api.dto.ServiceUpdateRequest;
 import com.kizuna.service.application.ServiceSettingsService;
 import com.kizuna.service.domain.ServiceKind;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
@@ -61,7 +62,7 @@ public class ServiceSettingsController {
     return ResponseEntity.status(201)
         .body(
             new ServiceCreatedResponse(
-                service.create(storeId, request.command(), principal.getName())));
+                service.create(storeId, request.command(), JwtClaims.userIdOf(principal))));
   }
 
   @GetMapping("/{id}")
@@ -77,7 +78,8 @@ public class ServiceSettingsController {
       @PathVariable String id,
       @Valid @RequestBody ServiceUpdateRequest request,
       Principal principal) {
-    return mapper.response(service.update(storeId, id, request.command(), principal.getName()));
+    return mapper.response(
+        service.update(storeId, id, request.command(), JwtClaims.userIdOf(principal)));
   }
 
   @DeleteMapping("/{id}")
@@ -87,7 +89,7 @@ public class ServiceSettingsController {
       @PathVariable String id,
       @RequestParam(name = "expected_version") long expectedVersion,
       Principal principal) {
-    service.delete(storeId, id, expectedVersion, principal.getName());
+    service.delete(storeId, id, expectedVersion, JwtClaims.userIdOf(principal));
     return ResponseEntity.noContent().build();
   }
 

@@ -1,5 +1,6 @@
 package com.kizuna.service.api.me;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -30,14 +31,12 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 /** 本人のサービス条件は store_id で指名した店舗を service へ渡すこと。 */
 @WebMvcTest(OwnServiceConditionController.class)
 @Import({OwnServiceConditionControllerTest.MethodSecurityConfig.class, StoreScopeHolder.class})
-@WithMockUser(username = "cast@example.test", roles = "CAST")
 class OwnServiceConditionControllerTest {
 
   @TestConfiguration
@@ -45,6 +44,7 @@ class OwnServiceConditionControllerTest {
   static class MethodSecurityConfig {}
 
   private static final Long STORE_ID = 7L;
+  private static final long CAST_USER_ID = 12L;
 
   @Autowired private MockMvc mockMvc;
 
@@ -56,28 +56,23 @@ class OwnServiceConditionControllerTest {
   @Test
   @DisplayName("一覧は store_id の店舗で service を呼ぶこと")
   void listPassesTheNamedStore() throws Exception {
-    when(service.list(eq(STORE_ID), eq("cast@example.test"), any(), any()))
-        .thenReturn(Page.empty());
+    when(service.list(eq(STORE_ID), eq(CAST_USER_ID), any(), any())).thenReturn(Page.empty());
 
     mockMvc
         .perform(
             get("/me/service-conditions")
                 .param("store_id", STORE_ID.toString())
-                .principal(() -> "cast@example.test"))
+                .with(jwtUser(CAST_USER_ID, "ROLE_CAST")))
         .andExpect(status().isOk());
 
     verify(service)
-        .list(
-            STORE_ID,
-            "cast@example.test",
-            null,
-            PageRequest.of(0, 20, Sort.by(ServiceItem::getId)));
+        .list(STORE_ID, CAST_USER_ID, null, PageRequest.of(0, 20, Sort.by(ServiceItem::getId)));
   }
 
   @Test
   @DisplayName("受諾の決定は store_id の店舗で service を呼ぶこと")
   void decidePassesTheNamedStore() throws Exception {
-    when(service.decide(eq(STORE_ID), eq("cast@example.test"), eq("s1"), any()))
+    when(service.decide(eq(STORE_ID), eq(CAST_USER_ID), eq("s1"), any()))
         .thenReturn(
             new OwnServiceCondition(
                 "s1",
@@ -95,7 +90,7 @@ class OwnServiceConditionControllerTest {
         .perform(
             put("/me/service-conditions/s1/consent")
                 .param("store_id", STORE_ID.toString())
-                .principal(() -> "cast@example.test")
+                .with(jwtUser(CAST_USER_ID, "ROLE_CAST"))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     """
@@ -105,9 +100,6 @@ class OwnServiceConditionControllerTest {
 
     verify(service)
         .decide(
-            STORE_ID,
-            "cast@example.test",
-            "s1",
-            new OwnConsentCommand(1L, 0L, ConsentDecision.ACCEPTED));
+            STORE_ID, CAST_USER_ID, "s1", new OwnConsentCommand(1L, 0L, ConsentDecision.ACCEPTED));
   }
 }

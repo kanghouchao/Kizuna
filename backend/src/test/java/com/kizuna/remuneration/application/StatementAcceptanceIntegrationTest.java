@@ -37,11 +37,11 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.shift.domain.Attendance;
 import com.kizuna.shift.remuneration.AttendanceFacts;
 import com.kizuna.store.StoreShortNames;
 import com.kizuna.store.domain.Store;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -79,6 +79,8 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -96,7 +98,7 @@ class StatementAcceptanceIntegrationTest {
   private StatementAcceptanceService acceptances;
   private SelfStatementAcceptanceController controller;
   private Long storeId, personId, actorId;
-  private String email, enrollmentId;
+  private String enrollmentId;
 
   @BeforeAll
   void connect() {
@@ -137,10 +139,10 @@ class StatementAcceptanceIntegrationTest {
               new Store("承諾検証店", StoreShortNames.next(), UUID.randomUUID() + ".example.test");
           em.persist(store);
           storeId = store.getId();
-          email = UUID.randomUUID() + "@example.test";
+          String address = UUID.randomUUID() + "@example.test";
           var actor =
               User.builder()
-                  .email(email)
+                  .email(address)
                   .password(UUID.randomUUID().toString())
                   .displayName("本人")
                   .userType(UserType.CAST)
@@ -194,8 +196,15 @@ class StatementAcceptanceIntegrationTest {
                 result.getBody().id()))
         .isEqualTo(
             "{\"total\": \"10000\", \"bonus_amount\": \"0\", \"order_amount\": \"7000\", \"guarantee_amount\": \"3000\"}");
+    assertThat(
+            jdbc.queryForMap(
+                "select actor_id, actor_type, actor_name from t_audit_events where action='STATEMENT_ACCEPTED' and target_id=?",
+                result.getBody().id()))
+        .containsEntry("actor_id", actorId)
+        .containsEntry("actor_type", "CAST")
+        .containsEntry("actor_name", "本人");
     var self =
-        statements.self(email, storeId, "2026-09", PageRequest.of(0, 20), PageRequest.of(0, 20));
+        statements.self(actorId, storeId, "2026-09", PageRequest.of(0, 20), PageRequest.of(0, 20));
     var store =
         statements.store(
             storeId, personId, "2026-09", PageRequest.of(0, 20), PageRequest.of(0, 20));
@@ -234,7 +243,7 @@ class StatementAcceptanceIntegrationTest {
     assertThat(changed.latestAcceptance().id()).isEqualTo(first.getBody().id());
     assertThat(changed.bonusAmount()).isEqualTo(500);
     // 古い要約での承諾要求は差し戻す。
-    assertThatThrownBy(() -> acceptances.accept(email, command(DAY, a)))
+    assertThatThrownBy(() -> acceptances.accept(actorId, command(DAY, a)))
         .isInstanceOf(ConflictException.class);
 
     var second = accept(DAY, changed.contentDigest());
@@ -258,7 +267,7 @@ class StatementAcceptanceIntegrationTest {
     attendance(TODAY, 5);
     var open = attendanceOpen(DAY.minusDays(1));
     var september =
-        statements.self(email, storeId, "2026-09", PageRequest.of(0, 20), PageRequest.of(0, 20));
+        statements.self(actorId, storeId, "2026-09", PageRequest.of(0, 20), PageRequest.of(0, 20));
     var pending =
         september.days().stream()
             .filter(d -> d.businessDate().equals(DAY.minusDays(1)))
@@ -270,7 +279,7 @@ class StatementAcceptanceIntegrationTest {
     var zero = september.days().getFirst();
     assertThat(zero.notAcceptableReason()).isEqualTo(NotAcceptableReason.ALL_ZERO);
     var october =
-        statements.self(email, storeId, "2026-10", PageRequest.of(0, 20), PageRequest.of(0, 20));
+        statements.self(actorId, storeId, "2026-10", PageRequest.of(0, 20), PageRequest.of(0, 20));
     var today =
         october.days().stream()
             .filter(d -> d.businessDate().equals(TODAY))
@@ -279,7 +288,7 @@ class StatementAcceptanceIntegrationTest {
     assertThat(today.notAcceptableReason()).isEqualTo(NotAcceptableReason.BUSINESS_DAY_NOT_ENDED);
 
     for (var date : List.of(TODAY, DAY.minusDays(1), september.days().getFirst().businessDate()))
-      assertThatThrownBy(() -> acceptances.accept(email, command(date, "0".repeat(64))))
+      assertThatThrownBy(() -> acceptances.accept(actorId, command(date, "0".repeat(64))))
           .isInstanceOf(ServiceException.class)
           .isNotInstanceOf(ConflictException.class);
     assertThat(open).isNotNull();
@@ -295,7 +304,7 @@ class StatementAcceptanceIntegrationTest {
             StoreShortNames.next(),
             UUID.randomUUID() + ".example.test");
     assertThatThrownBy(
-            () -> acceptances.accept(email, new AcceptanceCommand(other, DAY, "0".repeat(64))))
+            () -> acceptances.accept(actorId, new AcceptanceCommand(other, DAY, "0".repeat(64))))
         .isInstanceOf(NotFoundException.class);
   }
 
@@ -353,7 +362,12 @@ class StatementAcceptanceIntegrationTest {
   }
 
   private ResponseEntity<StatementAcceptanceResponse> accept(LocalDate date, String digest) {
-    Principal principal = () -> email;
+    Principal principal =
+        new JwtAuthenticationToken(
+            Jwt.withTokenValue("token")
+                .header("alg", "HS256")
+                .claim(JwtClaims.USER_ID, actorId)
+                .build());
     return controller.accept(principal, new StatementAcceptanceRequest(storeId, date, digest));
   }
 
@@ -364,7 +378,7 @@ class StatementAcceptanceIntegrationTest {
   private Day day(LocalDate date) {
     return statements
         .self(
-            email,
+            actorId,
             storeId,
             date.toString().substring(0, 7),
             PageRequest.of(0, 20),
@@ -500,7 +514,6 @@ class StatementAcceptanceIntegrationTest {
     RemunerationQuery.class,
     AttendanceFacts.class,
     BusinessDateService.class,
-    ActorIdentityService.class,
     BusinessAudit.class,
     AuditWriter.class
   })

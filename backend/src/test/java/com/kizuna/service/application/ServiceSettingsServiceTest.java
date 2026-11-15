@@ -10,7 +10,6 @@ import com.kizuna.service.domain.ServiceItem;
 import com.kizuna.service.domain.ServiceItemRepository;
 import com.kizuna.service.domain.ServiceRevisionRepository;
 import com.kizuna.store.domain.StoreRepository;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -27,7 +26,6 @@ class ServiceSettingsServiceTest {
       new ServiceSettingsService(
           items,
           mock(ServiceRevisionRepository.class),
-          mock(ActorIdentityService.class),
           mock(StoreRepository.class),
           mock(BusinessAudit.class));
 

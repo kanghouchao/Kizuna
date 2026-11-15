@@ -37,7 +37,6 @@ import com.kizuna.receipt.once.ReceiptKey;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.StoreScopedEntity;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -67,7 +66,6 @@ class AdvertisingServiceTest {
 
   AdvertisingRecords records = mock(AdvertisingRecords.class);
   MediumLookup media = mock(MediumLookup.class);
-  ActorIdentityService actors = mock(ActorIdentityService.class);
   BusinessAudit audit = mock(BusinessAudit.class);
   OperationReceipts operations = mock(OperationReceipts.class);
   AdvertisingService service =
@@ -76,7 +74,6 @@ class AdvertisingServiceTest {
           media,
           mock(AdvertisingChangeRepository.class),
           operations,
-          actors,
           audit,
           JsonMapper.builder().build(),
           Clock.systemUTC(),
@@ -84,7 +81,6 @@ class AdvertisingServiceTest {
 
   @BeforeEach
   void setup() {
-    when(actors.requireUserId("actor")).thenReturn(42L);
     doAnswer(
             invocation -> {
               Object row = invocation.getArgument(0);
@@ -137,7 +133,7 @@ class AdvertisingServiceTest {
     known(new MediumReference("m1", "媒体", true));
     var key = UUID.randomUUID();
 
-    var created = service.create(STORE_ID, create("m1", key).command(), "actor");
+    var created = service.create(STORE_ID, create("m1", key).command(), 42L);
 
     assertThat(created.storeId()).isEqualTo(STORE_ID);
     assertThat(created.medium().name()).isEqualTo("媒体");
@@ -157,8 +153,8 @@ class AdvertisingServiceTest {
     assertThat(persisted.getAllValues())
         .allSatisfy(row -> assertThat(((StoreScopedEntity) row).getStoreId()).isEqualTo(STORE_ID));
     verify(audit)
-        .record(
-            eq("actor"),
+        .recordById(
+            eq(42L),
             eq(STORE_ID),
             eq("ADVERTISING_COST_CREATED"),
             any(),
@@ -174,7 +170,7 @@ class AdvertisingServiceTest {
     known();
 
     assertThatThrownBy(
-            () -> service.create(STORE_ID, create("foreign", UUID.randomUUID()).command(), "actor"))
+            () -> service.create(STORE_ID, create("foreign", UUID.randomUUID()).command(), 42L))
         .isInstanceOf(ServiceException.class)
         .hasMessage("媒体が見つかりません。一覧から選択してください");
     verify(records, never()).persist(any());
@@ -185,7 +181,7 @@ class AdvertisingServiceTest {
     known(new MediumReference("m1", "停止中", false));
 
     assertThatThrownBy(
-            () -> service.create(STORE_ID, create("m1", UUID.randomUUID()).command(), "actor"))
+            () -> service.create(STORE_ID, create("m1", UUID.randomUUID()).command(), 42L))
         .isInstanceOf(ServiceException.class)
         .hasMessage("停止中の媒体は選択できません");
     verify(records, never()).persist(any());
@@ -202,7 +198,7 @@ class AdvertisingServiceTest {
         .flush();
 
     assertThatThrownBy(
-            () -> service.create(STORE_ID, create("m1", UUID.randomUUID()).command(), "actor"))
+            () -> service.create(STORE_ID, create("m1", UUID.randomUUID()).command(), 42L))
         .isInstanceOf(ServiceException.class)
         .hasMessage("媒体が見つかりません。一覧から選択してください");
   }
@@ -212,10 +208,10 @@ class AdvertisingServiceTest {
     known(new MediumReference("m1", "現在", true), new MediumReference("m2", "停止中", false));
     lockedCost("m1");
 
-    assertThatThrownBy(() -> service.replace(STORE_ID, replace("m2").command("c"), "actor"))
+    assertThatThrownBy(() -> service.replace(STORE_ID, replace("m2").command("c"), 42L))
         .isInstanceOf(ServiceException.class)
         .hasMessage("停止中の媒体は選択できません");
-    assertThatThrownBy(() -> service.replace(STORE_ID, replace("foreign").command("c"), "actor"))
+    assertThatThrownBy(() -> service.replace(STORE_ID, replace("foreign").command("c"), 42L))
         .isInstanceOf(ServiceException.class)
         .hasMessage("媒体が見つかりません。一覧から選択してください");
     verify(records, never()).persist(any());
@@ -226,7 +222,7 @@ class AdvertisingServiceTest {
     known(new MediumReference("m1", "停止中", false), new MediumReference("m2", "新媒体", true));
     lockedCost("m1");
 
-    var kept = service.replace(STORE_ID, replace("m1").command("c"), "actor");
+    var kept = service.replace(STORE_ID, replace("m1").command("c"), 42L);
 
     assertThat(kept.medium().id()).isEqualTo("m1");
     assertThat(kept.medium().name()).isEqualTo("停止中");
@@ -247,9 +243,7 @@ class AdvertisingServiceTest {
 
     var copied =
         service.copy(
-            STORE_ID,
-            new CopyRequest(0L, 0L, "引継ぎ", UUID.randomUUID()).command("2026-10"),
-            "actor");
+            STORE_ID, new CopyRequest(0L, 0L, "引継ぎ", UUID.randomUUID()).command("2026-10"), 42L);
 
     assertThat(copied.copiedCount()).isEqualTo(1);
     var persisted = ArgumentCaptor.forClass(Object.class);
@@ -265,7 +259,7 @@ class AdvertisingServiceTest {
     lockedCost("m1");
     replayed(new Receipt("r", "ADVERTISING_COST_UPDATED", "c", Map.of(), true));
 
-    var current = service.replace(STORE_ID, replace("m1").command("c"), "actor");
+    var current = service.replace(STORE_ID, replace("m1").command("c"), 42L);
 
     assertThat(current.medium().name()).isEqualTo("現在名");
     verify(records, never()).lockMonth(any(), any());
@@ -295,9 +289,7 @@ class AdvertisingServiceTest {
 
     var copied =
         service.copy(
-            STORE_ID,
-            new CopyRequest(3L, 0L, "引継ぎ", UUID.randomUUID()).command("2026-10"),
-            "actor");
+            STORE_ID, new CopyRequest(3L, 0L, "引継ぎ", UUID.randomUUID()).command("2026-10"), 42L);
 
     assertThat(copied)
         .isEqualTo(

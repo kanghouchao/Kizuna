@@ -20,7 +20,6 @@ import com.kizuna.remuneration.domain.RemunerationCommand;
 import com.kizuna.remuneration.infrastructure.RemunerationRecords;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ConflictException;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import java.util.Map;
 import java.util.UUID;
@@ -28,7 +27,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,7 +39,6 @@ public class RemunerationManagementService {
   private final RemunerationChangeRepository changes;
   private final RemunerationPersonLookup people;
   private final OperationReceipts receipts;
-  private final ActorIdentityService actors;
   private final BusinessDateService dates;
   private final BusinessAudit audit;
   private final ObjectMapper json;
@@ -65,13 +62,14 @@ public class RemunerationManagementService {
 
   @Transactional
   public GuaranteeMutation createGuarantee(
-      Long storeId, RemunerationCommand.CreateGuarantee command, String actor) {
+      Long storeId, RemunerationCommand.CreateGuarantee command, long actorId, boolean canCorrect) {
     return receipts.once(
-        key(storeId, actor, command.requestId()),
+        key(storeId, actorId, command.requestId()),
         command.fingerprint(),
         () -> {
           requirePerson(storeId, command.personId());
-          if (command.effectiveFrom().isBefore(dates.currentBusinessDate())) requireCorrection();
+          if (!canCorrect && command.effectiveFrom().isBefore(dates.currentBusinessDate()))
+            throw new AccessDeniedException("過去日の保証条件には訂正権限が必要です");
           var timeline = records.lockedTimeline(storeId, command.personId());
           timeline.advance(command.expectedVersion());
           var terms = records.activeTerms(storeId, command.personId());
@@ -92,7 +90,7 @@ public class RemunerationManagementService {
           var change =
               change(
                   storeId,
-                  actor,
+                  actorId,
                   command.personId(),
                   "GUARANTEE",
                   term.getId(),
@@ -107,10 +105,10 @@ public class RemunerationManagementService {
 
   @Transactional
   public GuaranteeMutation correctGuarantee(
-      Long storeId, RemunerationCommand.CorrectGuarantee command, String actor) {
+      Long storeId, RemunerationCommand.CorrectGuarantee command, long actorId) {
     var id = command.id();
     return receipts.once(
-        key(storeId, actor, command.requestId()),
+        key(storeId, actorId, command.requestId()),
         command.fingerprint(),
         () -> {
           var term = records.term(storeId, id);
@@ -132,7 +130,7 @@ public class RemunerationManagementService {
           var change =
               change(
                   storeId,
-                  actor,
+                  actorId,
                   term.getPersonId(),
                   "GUARANTEE",
                   id,
@@ -147,10 +145,10 @@ public class RemunerationManagementService {
 
   @Transactional
   public GuaranteeMutation cancelGuarantee(
-      Long storeId, RemunerationCommand.CancelGuarantee command, String actor) {
+      Long storeId, RemunerationCommand.CancelGuarantee command, long actorId) {
     var id = command.id();
     return receipts.once(
-        key(storeId, actor, command.requestId()),
+        key(storeId, actorId, command.requestId()),
         command.fingerprint(),
         () -> {
           var term = records.term(storeId, id);
@@ -164,7 +162,7 @@ public class RemunerationManagementService {
           var change =
               change(
                   storeId,
-                  actor,
+                  actorId,
                   term.getPersonId(),
                   "GUARANTEE",
                   id,
@@ -180,18 +178,18 @@ public class RemunerationManagementService {
   /** 保証条件の操作の要求キーの一意制約に敗れた要求を、成立済みの受領から解決する。 */
   @Transactional(readOnly = true)
   public GuaranteeMutation replayGuarantee(
-      Long storeId, RemunerationCommand command, String actor) {
+      Long storeId, RemunerationCommand command, long actorId) {
     return receipts.replayOnly(
-        key(storeId, actor, command.requestId()),
+        key(storeId, actorId, command.requestId()),
         command.fingerprint(),
         receipt -> guarantee(storeId, receipt));
   }
 
   @Transactional
   public BonusMutation createBonus(
-      Long storeId, RemunerationCommand.CreateBonus command, String actor) {
+      Long storeId, RemunerationCommand.CreateBonus command, long actorId) {
     return receipts.once(
-        key(storeId, actor, command.requestId()),
+        key(storeId, actorId, command.requestId()),
         command.fingerprint(),
         () -> {
           requirePerson(storeId, command.personId());
@@ -208,7 +206,7 @@ public class RemunerationManagementService {
           var change =
               change(
                   storeId,
-                  actor,
+                  actorId,
                   command.personId(),
                   "BONUS",
                   bonus.getId(),
@@ -223,10 +221,10 @@ public class RemunerationManagementService {
 
   @Transactional
   public BonusMutation correctBonus(
-      Long storeId, RemunerationCommand.CorrectBonus command, String actor) {
+      Long storeId, RemunerationCommand.CorrectBonus command, long actorId) {
     var id = command.id();
     return receipts.once(
-        key(storeId, actor, command.requestId()),
+        key(storeId, actorId, command.requestId()),
         command.fingerprint(),
         () -> {
           var bonus = records.bonus(storeId, id);
@@ -239,7 +237,7 @@ public class RemunerationManagementService {
           var change =
               change(
                   storeId,
-                  actor,
+                  actorId,
                   bonus.getPersonId(),
                   "BONUS",
                   id,
@@ -254,10 +252,10 @@ public class RemunerationManagementService {
 
   @Transactional
   public BonusMutation cancelBonus(
-      Long storeId, RemunerationCommand.CancelBonus command, String actor) {
+      Long storeId, RemunerationCommand.CancelBonus command, long actorId) {
     var id = command.id();
     return receipts.once(
-        key(storeId, actor, command.requestId()),
+        key(storeId, actorId, command.requestId()),
         command.fingerprint(),
         () -> {
           var bonus = records.bonus(storeId, id);
@@ -270,7 +268,7 @@ public class RemunerationManagementService {
           var change =
               change(
                   storeId,
-                  actor,
+                  actorId,
                   bonus.getPersonId(),
                   "BONUS",
                   id,
@@ -285,9 +283,9 @@ public class RemunerationManagementService {
 
   /** ボーナスの操作の要求キーの一意制約に敗れた要求を、成立済みの受領から解決する。 */
   @Transactional(readOnly = true)
-  public BonusMutation replayBonus(Long storeId, RemunerationCommand command, String actor) {
+  public BonusMutation replayBonus(Long storeId, RemunerationCommand command, long actorId) {
     return receipts.replayOnly(
-        key(storeId, actor, command.requestId()),
+        key(storeId, actorId, command.requestId()),
         command.fingerprint(),
         receipt -> bonus(storeId, receipt));
   }
@@ -319,8 +317,8 @@ public class RemunerationManagementService {
                     c.getCreatedAt()));
   }
 
-  private ReceiptKey key(Long storeId, String actor, UUID requestId) {
-    return new ReceiptKey(storeId, actors.requireUserId(actor), requestId.toString());
+  private ReceiptKey key(Long storeId, long actorId, UUID requestId) {
+    return new ReceiptKey(storeId, actorId, requestId.toString());
   }
 
   // 時間線の版と変更履歴の ID は成立時にしか分からないので受領の事実に持ち、条件の内容は現在の状態を読み直す。
@@ -360,7 +358,7 @@ public class RemunerationManagementService {
 
   private RemunerationChange change(
       Long storeId,
-      String actor,
+      long actorId,
       Long person,
       String type,
       String id,
@@ -371,7 +369,7 @@ public class RemunerationManagementService {
     var change =
         RemunerationChange.builder()
             .personId(person)
-            .actorId(actors.requireUserId(actor))
+            .actorId(actorId)
             .type(type)
             .id(id)
             .action(action)
@@ -382,8 +380,8 @@ public class RemunerationManagementService {
     change.setStoreId(storeId);
     records.persist(change);
     records.flush();
-    audit.record(
-        actor,
+    audit.recordById(
+        actorId,
         storeId,
         "REMUNERATION_" + type + "_" + action,
         type,
@@ -398,13 +396,5 @@ public class RemunerationManagementService {
   private void requirePerson(Long storeId, Long person) {
     RemunerationInput.person(person);
     people.require(storeId, person);
-  }
-
-  private void requireCorrection() {
-    var auth = SecurityContextHolder.getContext().getAuthentication();
-    if (auth == null
-        || auth.getAuthorities().stream()
-            .noneMatch(a -> a.getAuthority().equals("PERM_REMUNERATION_CORRECT")))
-      throw new AccessDeniedException("過去日の保証条件には訂正権限が必要です");
   }
 }

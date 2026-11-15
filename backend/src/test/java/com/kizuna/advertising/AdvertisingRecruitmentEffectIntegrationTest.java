@@ -3,9 +3,7 @@ package com.kizuna.advertising;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import com.kizuna.advertising.api.dto.AdvertisingRequests.CreateRequest;
 import com.kizuna.advertising.application.AdvertisingMediaComparison;
@@ -25,7 +23,6 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.store.StoreShortNames;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import java.time.Clock;
 import java.time.Instant;
@@ -94,7 +91,6 @@ class AdvertisingRecruitmentEffectIntegrationTest {
         jdbc.queryForObject(
             "insert into t_users(email,display_name,user_type) values ('effect@example.test','採用効果担当','STAFF') returning id",
             Long.class);
-    when(context.getBean(ActorIdentityService.class).requireUserId(any())).thenReturn(actorId);
   }
 
   @BeforeEach
@@ -200,7 +196,7 @@ class AdvertisingRecruitmentEffectIntegrationTest {
         store,
         new CreateRequest(month, category, mediumId, null, null, null, amount, UUID.randomUUID())
             .command(),
-        ("effect@example.test"));
+        actorId);
   }
 
   private void hire(
@@ -263,11 +259,6 @@ class AdvertisingRecruitmentEffectIntegrationTest {
     @Bean
     AppProperties appProperties() {
       return new AppProperties();
-    }
-
-    @Bean
-    ActorIdentityService actors() {
-      return mock(ActorIdentityService.class);
     }
 
     @Bean

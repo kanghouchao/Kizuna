@@ -9,7 +9,6 @@ import com.kizuna.service.domain.ServiceTerms;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.store.domain.StoreRepository;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -27,7 +26,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class ServiceSettingsService {
   private final ServiceItemRepository items;
   private final ServiceRevisionRepository revisions;
-  private final ActorIdentityService actors;
   private final StoreRepository stores;
   private final BusinessAudit audit;
 
@@ -48,9 +46,8 @@ public class ServiceSettingsService {
   }
 
   @Transactional
-  public String create(Long storeId, ServiceSettingsCommand.Create command, String actor) {
+  public String create(Long storeId, ServiceSettingsCommand.Create command, long actorId) {
     stores.lockCastFields(storeId);
-    var actorId = actors.requireUserId(actor);
     var item =
         ServiceItem.create(
             storeId,
@@ -78,9 +75,8 @@ public class ServiceSettingsService {
 
   @Transactional
   public ServiceItem update(
-      Long storeId, String id, ServiceSettingsCommand.Update command, String actor) {
+      Long storeId, String id, ServiceSettingsCommand.Update command, long actorId) {
     stores.lockCastFields(storeId);
-    var actorId = actors.requireUserId(actor);
     var item = lock(storeId, id);
     var before = item.getTerms();
     var beforeValues = auditValues(item);
@@ -112,10 +108,9 @@ public class ServiceSettingsService {
   }
 
   @Transactional
-  public void delete(Long storeId, String id, long expectedVersion, String actor) {
+  public void delete(Long storeId, String id, long expectedVersion, long actorId) {
     if (expectedVersion < 1) throw new ServiceException("版本は 1 以上で指定してください");
     stores.lockCastFields(storeId);
-    var actorId = actors.requireUserId(actor);
     var item = lock(storeId, id);
     var before = item.getTerms();
     var beforeValues = auditValues(item);
