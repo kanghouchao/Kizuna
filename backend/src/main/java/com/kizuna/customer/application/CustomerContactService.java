@@ -20,9 +20,7 @@ import com.kizuna.customer.domain.MergePreferences;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.UserRepository;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +31,6 @@ import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
@@ -44,7 +41,6 @@ public class CustomerContactService {
   private final CustomerRepository customers;
   private final CustomerContactRepository contacts;
   private final CustomerContactHistoryRepository histories;
-  private final UserRepository users;
   private final BusinessAudit businessAudit;
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
@@ -67,19 +63,20 @@ public class CustomerContactService {
   }
 
   @Transactional
-  public ContactView create(Long storeId, String customerId, ContactValue input) {
+  public ContactView create(Long storeId, String customerId, ContactValue input, long actorId) {
     lock(storeId, customerId);
     CustomerContact contact =
         contacts.saveAndFlush(
             CustomerContact.create(storeId, customerId, input.type(), input.value()));
     var history =
-        record(contact, ContactAction.CREATE, null, actorId(), UUID.randomUUID().toString());
+        record(contact, ContactAction.CREATE, null, actorId, UUID.randomUUID().toString());
     audit(contact, null, history);
     return view(storeId, contact);
   }
 
   @Transactional
-  public ContactView update(Long storeId, String customerId, String id, ContactValue input) {
+  public ContactView update(
+      Long storeId, String customerId, String id, ContactValue input, long actorId) {
     lock(storeId, customerId);
     var contact = active(storeId, customerId, id);
     var before = contact.state();
@@ -95,7 +92,6 @@ public class CustomerContactService {
     }
     contact.change(input.type(), input.value());
     String operationId = UUID.randomUUID().toString();
-    Long actorId = actorId();
     if (before.type() != contact.getType() || !before.value().equals(contact.getValue()))
       inheritBeforeRemoval(storeId, contact, before, operationId, actorId);
     var history = record(contact, ContactAction.UPDATE, before, actorId, operationId);
@@ -106,7 +102,12 @@ public class CustomerContactService {
 
   @Transactional
   public ContactView changePermission(
-      Long storeId, String customerId, String id, ContactPurpose purpose, PermissionChange input) {
+      Long storeId,
+      String customerId,
+      String id,
+      ContactPurpose purpose,
+      PermissionChange input,
+      long actorId) {
     lock(storeId, customerId);
     var contact = active(storeId, customerId, id);
     var before = contact.state();
@@ -116,7 +117,7 @@ public class CustomerContactService {
         histories.save(
             CustomerContactHistory.permission(
                 contact,
-                actorId(),
+                actorId,
                 before,
                 purpose,
                 input.source(),
@@ -128,13 +129,12 @@ public class CustomerContactService {
   }
 
   @Transactional
-  public void delete(Long storeId, String customerId, String id) {
+  public void delete(Long storeId, String customerId, String id, long actorId) {
     lock(storeId, customerId);
     var contact = active(storeId, customerId, id);
     var before = contact.state();
     var auditBefore = ContactAuditSnapshot.of(contact);
     String operationId = UUID.randomUUID().toString();
-    Long actorId = actorId();
     inheritBeforeRemoval(storeId, contact, before, operationId, actorId);
     contact.delete();
     var history = record(contact, ContactAction.DELETE, before, actorId, operationId);
@@ -142,13 +142,12 @@ public class CustomerContactService {
   }
 
   @Transactional
-  public void prefer(Long storeId, String customerId, ContactType type, String id) {
+  public void prefer(Long storeId, String customerId, ContactType type, String id, long actorId) {
     lock(storeId, customerId);
     CustomerContact chosen = id == null ? null : active(storeId, customerId, id);
     if (chosen != null && chosen.getType() != type) throw new ServiceException("連絡先の種類が一致しません");
     var previous = contacts.findPreferred(storeId, customerId, type).orElse(null);
     if (previous == chosen) return;
-    Long actorId = actorId();
     String operationId = UUID.randomUUID().toString();
     if (previous != null) {
       var before = previous.state();
@@ -321,13 +320,5 @@ public class CustomerContactService {
         .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
     if (customers.isMerged(storeId, customerId))
       throw new ConflictException("統合済みの顧客です。統合先の顧客を編集してください");
-  }
-
-  private Long actorId() {
-    String email = SecurityContextHolder.getContext().getAuthentication().getName();
-    return users
-        .findByEmail(email)
-        .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
-        .getId();
   }
 }

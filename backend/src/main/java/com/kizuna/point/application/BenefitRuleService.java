@@ -54,14 +54,15 @@ public class BenefitRuleService {
   }
 
   @Transactional
-  public BenefitRule create(BenefitRuleType type, BenefitRuleDefinition definition) {
+  public BenefitRule create(BenefitRuleType type, BenefitRuleDefinition definition, long actorId) {
     BenefitRule rule = persist(BenefitRule.define(type, definition));
-    audit("BENEFIT_RULE_CREATED", rule.getId(), Map.of("exists", "false"), snapshot(rule));
+    audit(actorId, "BENEFIT_RULE_CREATED", rule.getId(), Map.of("exists", "false"), snapshot(rule));
     return rule;
   }
 
   @Transactional
-  public BenefitRule update(Long id, Long expectedVersion, BenefitRuleDefinition definition) {
+  public BenefitRule update(
+      Long id, Long expectedVersion, BenefitRuleDefinition definition, long actorId) {
     BenefitRule rule = find(id);
     // 全量置換なので、開いたまま別の管理者が編集を済ませていると送らなかった項目まで開いた時点の値で
     // 押し戻す。陳腐化した編集フォームの提出は JPA の @Version では捕まらない（再読込後の正当な更新に
@@ -78,7 +79,7 @@ public class BenefitRuleService {
     }
     if (!changed.isEmpty()) {
       after.put("changed_fields", String.join(",", changed));
-      audit("BENEFIT_RULE_UPDATED", id, before, after);
+      audit(actorId, "BENEFIT_RULE_UPDATED", id, before, after);
     }
     return rule;
   }
@@ -87,19 +88,20 @@ public class BenefitRuleService {
    * 停用（退場）。再開の口が無い一方通行なので、更新と同じく確認した版を照合する — 承認の画面を開いている間に別の管理者が 内容を書き換えていれば、操作者が見ていない規則を消すことになる。
    */
   @Transactional
-  public void deactivate(Long id, Long expectedVersion) {
+  public void deactivate(Long id, Long expectedVersion, long actorId) {
     BenefitRule rule = find(id);
     requireExpectedVersion(rule, expectedVersion);
     var before = snapshot(rule);
     rule.deactivate();
     persist(rule);
-    audit("BENEFIT_RULE_DEACTIVATED", id, before, snapshot(rule));
+    audit(actorId, "BENEFIT_RULE_DEACTIVATED", id, before, snapshot(rule));
   }
 
   /** 特典規則はどの店舗にも属さないグループ共通の設定なので、監査の店舗は常に null。 */
   private void audit(
-      String action, Long id, Map<String, String> before, Map<String, String> after) {
-    businessAudit.recordCurrent(null, action, "BENEFIT_RULE", String.valueOf(id), before, after);
+      long actorId, String action, Long id, Map<String, String> before, Map<String, String> after) {
+    businessAudit.recordById(
+        actorId, null, action, "BENEFIT_RULE", String.valueOf(id), null, null, before, after);
   }
 
   /** 名前は自由文なので snapshot に載せず、更新では変更項目名（name）だけで表す。 */

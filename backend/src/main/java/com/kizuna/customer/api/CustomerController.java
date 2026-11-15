@@ -10,7 +10,9 @@ import com.kizuna.customer.api.dto.CustomerUpdateRequest;
 import com.kizuna.customer.application.CustomerService;
 import com.kizuna.customer.domain.ContactType;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import jakarta.validation.Valid;
+import java.security.Principal;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -107,9 +109,13 @@ public class CustomerController {
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<CustomerResponse> create(
-      @CurrentStore Long storeId, @Valid @RequestBody CustomerCreateRequest request) {
+      @CurrentStore Long storeId,
+      @Valid @RequestBody CustomerCreateRequest request,
+      Principal principal) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(customerMapper.toResponse(customerService.create(storeId, request.command())));
+        .body(
+            customerMapper.toResponse(
+                customerService.create(storeId, request.command(), JwtClaims.userIdOf(principal))));
   }
 
   @PutMapping("/{id}")
@@ -117,15 +123,18 @@ public class CustomerController {
   public ResponseEntity<CustomerResponse> update(
       @CurrentStore Long storeId,
       @PathVariable String id,
-      @Valid @RequestBody CustomerUpdateRequest request) {
+      @Valid @RequestBody CustomerUpdateRequest request,
+      Principal principal) {
     return ResponseEntity.ok(
-        customerMapper.toResponse(customerService.update(storeId, id, request.patch())));
+        customerMapper.toResponse(
+            customerService.update(storeId, id, request.patch(), JwtClaims.userIdOf(principal))));
   }
 
   @DeleteMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
-  public ResponseEntity<Void> delete(@CurrentStore Long storeId, @PathVariable String id) {
-    customerService.delete(storeId, id);
+  public ResponseEntity<Void> delete(
+      @CurrentStore Long storeId, @PathVariable String id, Principal principal) {
+    customerService.delete(storeId, id, JwtClaims.userIdOf(principal));
     return ResponseEntity.noContent().build();
   }
 }

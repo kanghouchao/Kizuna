@@ -17,10 +17,8 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
-import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.UserRepository;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -49,7 +47,6 @@ public class ApplicantAttachmentStore {
   private final ApplicantRepository applicants;
   private final AttachmentUploadRepository uploads;
   private final StoreRepository stores;
-  private final UserRepository users;
   private final BusinessAudit audit;
   private final AppProperties properties;
   private final PrivateAttachmentStorage storage;
@@ -62,7 +59,6 @@ public class ApplicantAttachmentStore {
       ApplicantRepository applicants,
       AttachmentUploadRepository uploads,
       StoreRepository stores,
-      UserRepository users,
       BusinessAudit audit,
       AppProperties properties,
       PrivateAttachmentStorage storage,
@@ -72,7 +68,6 @@ public class ApplicantAttachmentStore {
     this.applicants = applicants;
     this.uploads = uploads;
     this.stores = stores;
-    this.users = users;
     this.audit = audit;
     this.properties = properties;
     this.storage = storage;
@@ -103,7 +98,7 @@ public class ApplicantAttachmentStore {
       String uploadId,
       UUID key,
       AttachmentBodyReceiver.Received image,
-      String actorEmail) {
+      long actorId) {
     AttachmentUpload reserved =
         reading.execute(
             status -> {
@@ -117,7 +112,7 @@ public class ApplicantAttachmentStore {
       return new Receipt(false, AttachmentViews.Summary.of(reserved));
     try {
       if (reserved != null) {
-        Optional<Receipt> recovered = recover(storeId, applicantId, reserved, actorEmail);
+        Optional<Receipt> recovered = recover(storeId, applicantId, reserved, actorId);
         if (recovered.isPresent()) return recovered.get();
         if (!reserved.getNormalizerVersion().equals(RasterImageNormalizer.VERSION))
           throw new Failed(
@@ -128,8 +123,8 @@ public class ApplicantAttachmentStore {
         // 受信から正規化までの間の一時ファイルの破損で、保存先は関わらないため記録しない。
         if (!image.originalSha256().equals(content.originalSha256()))
           throw new ConflictException("受信画像の一致を確認できません。再選択してください");
-        if (reserved == null) reserved = reserve(storeId, applicantId, key, content, actorEmail);
-        return complete(storeId, applicantId, reserved, content, actorEmail);
+        if (reserved == null) reserved = reserve(storeId, applicantId, key, content, actorId);
+        return complete(storeId, applicantId, reserved, content, actorId);
       } catch (IOException cleanupFailure) {
         throw new Failed(AttachmentUpload.Failure.STORAGE_UNAVAILABLE, unavailable());
       }
@@ -165,7 +160,7 @@ public class ApplicantAttachmentStore {
 
   /** 既に正しい実体があれば、現在の変換方式に依らず完了させる。実体が無ければ空を返し、正規化からやり直させる。 */
   private Optional<Receipt> recover(
-      Long storeId, String applicantId, AttachmentUpload reserved, String actorEmail) {
+      Long storeId, String applicantId, AttachmentUpload reserved, long actorId) {
     return write(
         status -> {
           AttachmentUpload upload = lockUpload(storeId, applicantId, reserved.getId());
@@ -185,7 +180,7 @@ public class ApplicantAttachmentStore {
                 AttachmentUpload.Failure.STORAGE_UNAVAILABLE,
                 new ServiceUnavailableException("添付の一時領域を利用できません"));
           }
-          return Optional.of(finish(storeId, applicantId, upload, actorEmail));
+          return Optional.of(finish(storeId, applicantId, upload, actorId));
         });
   }
 
@@ -200,7 +195,7 @@ public class ApplicantAttachmentStore {
   }
 
   AttachmentUpload reserve(
-      Long storeId, String applicantId, UUID key, NormalizedImage content, String actorEmail) {
+      Long storeId, String applicantId, UUID key, NormalizedImage content, long actorId) {
     return write(
         status -> {
           lockStore(storeId);
@@ -228,7 +223,7 @@ public class ApplicantAttachmentStore {
                   content.canonicalSha256(),
                   content.sizeBytes(),
                   content.normalizerVersion(),
-                  actorId(actorEmail)));
+                  actorId));
         });
   }
 
@@ -237,7 +232,7 @@ public class ApplicantAttachmentStore {
       String applicantId,
       AttachmentUpload reserved,
       NormalizedImage content,
-      String actorEmail) {
+      long actorId) {
     return write(
         status -> {
           AttachmentUpload upload = lockUpload(storeId, applicantId, reserved.getId());
@@ -259,20 +254,22 @@ public class ApplicantAttachmentStore {
           } catch (ServiceUnavailableException unavailable) {
             throw new Failed(AttachmentUpload.Failure.STORAGE_UNAVAILABLE, unavailable);
           }
-          return finish(storeId, applicantId, upload, actorEmail);
+          return finish(storeId, applicantId, upload, actorId);
         });
   }
 
-  private Receipt finish(
-      Long storeId, String applicantId, AttachmentUpload upload, String actorEmail) {
+  private Receipt finish(Long storeId, String applicantId, AttachmentUpload upload, long actorId) {
     requireEditable(lockApplicant(storeId, applicantId).getStatus());
-    upload.complete(actorId(actorEmail), OffsetDateTime.now(clock));
+    upload.complete(actorId, OffsetDateTime.now(clock));
     uploads.flush();
-    audit.recordCurrent(
+    audit.recordById(
+        actorId,
         storeId,
         "APPLICANT_ATTACHMENT_STORED",
         "APPLICANT_ATTACHMENT",
         upload.getId(),
+        null,
+        null,
         Map.of(),
         Map.of("applicant_id", applicantId, "attachment_id", upload.getId()));
     return new Receipt(true, AttachmentViews.Summary.of(upload));
@@ -345,13 +342,6 @@ public class ApplicantAttachmentStore {
 
   private static void requireEditable(ApplicantStatus status) {
     if (status.isTerminal()) throw new ServiceException("選考が終了した応募者には画像を追加できません");
-  }
-
-  private Long actorId(String email) {
-    return users
-        .findByEmail(email)
-        .orElseThrow(() -> new StaleSessionException("操作主体を確認できません"))
-        .getId();
   }
 
   private static NotFoundException missing() {

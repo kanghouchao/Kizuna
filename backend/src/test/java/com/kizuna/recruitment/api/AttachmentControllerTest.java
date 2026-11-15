@@ -1,5 +1,6 @@
 package com.kizuna.recruitment.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -29,11 +30,13 @@ import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ResourceBusyException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,13 +50,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpMethod;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.test.context.TestSecurityContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 @WebMvcTest(AttachmentController.class)
 @Import({
@@ -75,10 +74,11 @@ class AttachmentControllerTest {
               get("/applicants/a/" + suffix)
                   .header("X-Store-ID", "1")
                   .with(
-                      actor(
-                          new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
-                          new SimpleGrantedAuthority("PERM_RECRUITMENT_ATTACHMENT_VIEW"),
-                          new SimpleGrantedAuthority("PERM_RECRUITMENT_ATTACHMENT_MANAGE"))))
+                      jwtUser(
+                          42L,
+                          "PERM_RECRUITMENT_VIEW",
+                          "PERM_RECRUITMENT_ATTACHMENT_VIEW",
+                          "PERM_RECRUITMENT_ATTACHMENT_MANAGE")))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.total_elements").value(0));
     }
@@ -100,10 +100,11 @@ class AttachmentControllerTest {
               get("/applicants/a/attachment-operations/" + key)
                   .header("X-Store-ID", "1")
                   .with(
-                      actor(
-                          new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
-                          new SimpleGrantedAuthority("PERM_RECRUITMENT_ATTACHMENT_VIEW"),
-                          new SimpleGrantedAuthority("PERM_RECRUITMENT_ATTACHMENT_MANAGE"))))
+                      jwtUser(
+                          42L,
+                          "PERM_RECRUITMENT_VIEW",
+                          "PERM_RECRUITMENT_ATTACHMENT_VIEW",
+                          "PERM_RECRUITMENT_ATTACHMENT_MANAGE")))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.id").value("u"))
           .andExpect(jsonPath("$.idempotency_key").value(key.toString()))
@@ -129,10 +130,11 @@ class AttachmentControllerTest {
                 .contentType("image/svg+xml")
                 .content("synthetic")
                 .with(
-                    actor(
-                        new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
-                        new SimpleGrantedAuthority("PERM_RECRUITMENT_ATTACHMENT_VIEW"),
-                        new SimpleGrantedAuthority("PERM_RECRUITMENT_ATTACHMENT_MANAGE"))))
+                    jwtUser(
+                        42L,
+                        "PERM_RECRUITMENT_VIEW",
+                        "PERM_RECRUITMENT_ATTACHMENT_VIEW",
+                        "PERM_RECRUITMENT_ATTACHMENT_MANAGE")))
         .andExpect(status().isBadRequest());
     verifyNoInteractions(receiver);
   }
@@ -146,7 +148,7 @@ class AttachmentControllerTest {
     when(receiver.admit(any())).thenReturn(admission);
     var image = new AttachmentBodyReceiver.Received(received, "hash", "image/png");
     when(admission.receive(any())).thenReturn(image);
-    when(service.receive(7L, "a", null, key, image, "actor"))
+    when(service.receive(7L, "a", null, key, image, 42L))
         .thenReturn(
             new ApplicantAttachmentStore.Receipt(
                 true, new AttachmentViews.Summary("image", "image/png", 3, OffsetDateTime.now())));
@@ -158,14 +160,15 @@ class AttachmentControllerTest {
                     .contentType("image/png")
                     .content(new byte[] {1})
                     .with(
-                        actor(
-                            new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
-                            new SimpleGrantedAuthority("PERM_RECRUITMENT_ATTACHMENT_VIEW"),
-                            new SimpleGrantedAuthority("PERM_RECRUITMENT_ATTACHMENT_MANAGE"))))
+                        jwtUser(
+                            42L,
+                            "PERM_RECRUITMENT_VIEW",
+                            "PERM_RECRUITMENT_ATTACHMENT_VIEW",
+                            "PERM_RECRUITMENT_ATTACHMENT_MANAGE")))
             .andExpect(request().asyncStarted())
             .andReturn();
     mvc.perform(asyncDispatch(started)).andExpect(status().isCreated());
-    verify(service).receive(7L, "a", null, key, image, "actor");
+    verify(service).receive(7L, "a", null, key, image, 42L);
   }
 
   @Test
@@ -174,10 +177,7 @@ class AttachmentControllerTest {
     mvc.perform(
             get("/applicants/attachment-policy")
                 .header("X-Store-ID", "1")
-                .with(
-                    actor(
-                        new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
-                        new SimpleGrantedAuthority("PERM_RECRUITMENT_ATTACHMENT_VIEW"))))
+                .with(jwtUser(42L, "PERM_RECRUITMENT_VIEW", "PERM_RECRUITMENT_ATTACHMENT_VIEW")))
         .andExpect(status().isServiceUnavailable())
         .andExpect(header().string("Retry-After", "1"))
         .andExpect(header().string("Cache-Control", "private, no-store"));
@@ -194,19 +194,10 @@ class AttachmentControllerTest {
   @MockitoBean StoreExistenceCheck stores;
   @MockitoBean StoreScopeResolver storeScopeResolver;
 
-  private static RequestPostProcessor actor(SimpleGrantedAuthority... authorities) {
-    var authentication =
-        new UsernamePasswordAuthenticationToken("actor", "unused", List.of(authorities));
-    TestSecurityContextHolder.setAuthentication(authentication);
-    return request -> {
-      request.setUserPrincipal(authentication);
-      return request;
-    };
-  }
-
   @BeforeEach
   void setup() {
     when(stores.exists(anyLong())).thenReturn(true);
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(1L, 7L)));
   }
 
   @Test
@@ -223,7 +214,7 @@ class AttachmentControllerTest {
           mvc.perform(
                   request(HttpMethod.valueOf(method), "/applicants/" + suffix)
                       .header("X-Store-ID", "1")
-                      .with(actor(new SimpleGrantedAuthority("PERM_" + permission))))
+                      .with(jwtUser(42L, "PERM_" + permission)))
               .andExpect(status().isForbidden());
         }
       }
@@ -243,8 +234,8 @@ class AttachmentControllerTest {
                   "RECRUITMENT_ATTACHMENT_MANAGE")
               .stream()
               .filter(value -> !value.equals(missing))
-              .map(value -> new SimpleGrantedAuthority("PERM_" + value))
-              .toArray(SimpleGrantedAuthority[]::new);
+              .map(value -> "PERM_" + value)
+              .toArray(String[]::new);
       for (var request :
           List.of(
               post("/applicants/a/attachments"),
@@ -254,14 +245,16 @@ class AttachmentControllerTest {
                     .header("X-Store-ID", "1")
                     .contentType("image/png")
                     .content(new byte[] {1})
-                    .with(actor(authorities)))
+                    .with(jwtUser(42L, authorities)))
             .andExpect(status().isForbidden());
       }
       for (String suffix :
           List.of(
               "attachment-uploads", "attachment-operations/6d5ff5a4-4817-4ac5-9e76-2756f086e02b")) {
         mvc.perform(
-                get("/applicants/a/" + suffix).header("X-Store-ID", "1").with(actor(authorities)))
+                get("/applicants/a/" + suffix)
+                    .header("X-Store-ID", "1")
+                    .with(jwtUser(42L, authorities)))
             .andExpect(status().isForbidden())
             .andExpect(header().string("Cache-Control", "private, no-store"));
       }
@@ -275,10 +268,7 @@ class AttachmentControllerTest {
         .thenReturn(
             new AttachmentViews.Policy(
                 false, List.of("image/jpeg", "image/png"), 10, 20, 30, 40, 20, 50));
-    var read =
-        actor(
-            new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
-            new SimpleGrantedAuthority("PERM_RECRUITMENT_ATTACHMENT_VIEW"));
+    var read = jwtUser(42L, "PERM_RECRUITMENT_VIEW", "PERM_RECRUITMENT_ATTACHMENT_VIEW");
     mvc.perform(get("/applicants/attachment-policy").header("X-Store-ID", "1").with(read))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.configured").value(false))

@@ -19,6 +19,7 @@ import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
 import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.shared.web.RequestCorrelationFilter;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
@@ -59,7 +60,7 @@ class AttachmentAsyncCorrelationTest {
               receivedId.set(ThreadContext.get("requestId"));
               return new AttachmentBodyReceiver.Received(Path.of("unused"), "hash", "image/png");
             });
-    when(service.receive(eq(1L), anyString(), nullable(String.class), any(), any(), any()))
+    when(service.receive(eq(1L), anyString(), nullable(String.class), any(), any(), eq(42L)))
         .thenAnswer(
             invocation -> {
               storedId.set(ThreadContext.get("requestId"));
@@ -67,10 +68,16 @@ class AttachmentAsyncCorrelationTest {
               return new ApplicantAttachmentStore.Receipt(
                   true, new AttachmentViews.Summary("image", "image/png", 3, OffsetDateTime.now()));
             });
-    var jwt = Jwt.withTokenValue("synthetic").header("alg", "none").subject("actor").build();
+    var jwt =
+        Jwt.withTokenValue("synthetic")
+            .header("alg", "none")
+            .subject("actor")
+            .claim(JwtClaims.USER_ID, 42L)
+            .build();
+    var authentication = new JwtAuthenticationToken(jwt);
     try (var worker = Executors.newSingleThreadExecutor()) {
       for (int attempt = 0; attempt < 2; attempt++) {
-        SecurityContextHolder.getContext().setAuthentication(new JwtAuthenticationToken(jwt));
+        SecurityContextHolder.getContext().setAuthentication(authentication);
         // 要求スレッドの作用域。要求後に filter が掃除し、作業スレッドへ漏れないことを確かめる。
         holder.install(() -> new StoreScope(Set.of(1L)));
         var task = new AtomicReference<WebAsyncTask<ResponseEntity<AttachmentSummaryResponse>>>();
@@ -83,8 +90,8 @@ class AttachmentAsyncCorrelationTest {
               ThreadContext.put(CurrentStoreArgumentResolver.MDC_STORE_ID, "1");
               task.set(
                   recovery
-                      ? controller.recover(1L, "a", "image", "key", request, () -> "actor")
-                      : controller.upload(1L, "a", "key", request, () -> "actor"));
+                      ? controller.recover(1L, "a", "image", "key", request, authentication)
+                      : controller.upload(1L, "a", "key", request, authentication));
             });
         SecurityContextHolder.clearContext();
         assertThat(ThreadContext.get("requestId")).isNull();

@@ -3,6 +3,7 @@ package com.kizuna.point.api.me;
 import com.kizuna.point.api.dto.MemberPointBalanceResponse;
 import com.kizuna.point.api.dto.MemberPointEntryResponse;
 import com.kizuna.point.application.MemberPointService;
+import com.kizuna.shared.web.JwtClaims;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -27,7 +28,7 @@ public class MemberPointController {
   @PreAuthorize("hasRole('MEMBER')")
   public ResponseEntity<MemberPointBalanceResponse> balance(Principal principal) {
     return ResponseEntity.ok(
-        new MemberPointBalanceResponse(memberPointService.balance(principal.getName())));
+        new MemberPointBalanceResponse(memberPointService.balance(JwtClaims.userIdOf(principal))));
   }
 
   @GetMapping("/entries")
@@ -41,7 +42,7 @@ public class MemberPointController {
           Pageable pageable) {
     return ResponseEntity.ok(
         memberPointService
-            .entries(principal.getName(), pageable)
+            .entries(JwtClaims.userIdOf(principal), pageable)
             .map(MemberPointEntryResponse::of));
   }
 }

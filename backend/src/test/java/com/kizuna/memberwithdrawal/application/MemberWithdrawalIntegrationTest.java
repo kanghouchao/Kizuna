@@ -294,7 +294,7 @@ class MemberWithdrawalIntegrationTest {
             () ->
                 context
                     .getBean(CustomerMemberLinkService.class)
-                    .link(store, customer, member.memberCode, null, null, staffEmail))
+                    .link(store, customer, member.memberCode, null, null, staff))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("退会済み");
     assertThat(

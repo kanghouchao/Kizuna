@@ -10,8 +10,6 @@ import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.user.domain.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,7 +31,6 @@ public class CustomerPointService {
   private final CustomerRepository customerRepository;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final PointLedgerService pointLedgerService;
-  private final UserRepository userRepository;
 
   @Transactional(readOnly = true)
   public PointBalance balance(Long storeId, String customerId) {
@@ -52,7 +49,7 @@ public class CustomerPointService {
    */
   @Transactional
   public PointBalance adjust(
-      Long storeId, String customerId, PointAdjustment command, String actorEmail) {
+      Long storeId, String customerId, PointAdjustment command, long actorId) {
     // 積み先を決める前に顧客行を押さえる。契約は CustomerRepository#findByIdAndStoreIdForUpdate に記す。
     customerRepository
         .findByIdAndStoreIdForUpdate(customerId, storeId)
@@ -67,7 +64,6 @@ public class CustomerPointService {
       throw new ServiceException("会員に紐づいていない顧客のポイントは調整できません");
     }
 
-    Long actorId = resolveActorId(actorEmail);
     pointLedgerService.adjust(
         memberId,
         storeId,
@@ -88,13 +84,12 @@ public class CustomerPointService {
    */
   @Transactional(readOnly = true)
   public PointBalance replayAdjust(
-      Long storeId, String customerId, PointAdjustment command, String actorEmail) {
+      Long storeId, String customerId, PointAdjustment command, long actorId) {
     requireCustomer(storeId, customerId);
     Long memberId = activeMemberId(storeId, customerId);
     if (memberId == null) {
       throw new ServiceException("会員に紐づいていない顧客のポイントは調整できません");
     }
-    Long actorId = resolveActorId(actorEmail);
     pointLedgerService.adjust(
         memberId,
         storeId,
@@ -114,19 +109,6 @@ public class CustomerPointService {
     if (!customerRepository.existsByIdAndStoreId(customerId, storeId)) {
       throw new NotFoundException("顧客が見つかりません: " + customerId);
     }
-  }
-
-  /**
-   * JWT は user-id claim を持たないため、実行者は認証主体の email から解決する。
-   *
-   * <p>解決できない認証主体は黙って null にせず失敗させる — 追記型の台帳では実行者 null が「機構が起こした仕訳」の形であり、
-   * 失効した認証セッションによる人手の操作がそれと区別できなくなる。
-   */
-  private Long resolveActorId(String actorEmail) {
-    return userRepository
-        .findByEmail(actorEmail)
-        .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
-        .getId();
   }
 
   /**

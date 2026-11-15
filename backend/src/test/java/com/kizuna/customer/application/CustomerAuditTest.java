@@ -32,14 +32,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 class CustomerAuditTest {
   private static final Long STORE_ID = 7L;
+  private static final long ACTOR_ID = 9L;
   private final CustomerRepository customers = mock(CustomerRepository.class);
   private final CustomerContactRepository contacts = mock(CustomerContactRepository.class);
   private final CustomerMergeRepository merges = mock(CustomerMergeRepository.class);
@@ -60,11 +58,8 @@ class CustomerAuditTest {
             .password(UUID.randomUUID().toString())
             .roleIds(Set.of(1L))
             .build();
-    actor.setId(9L);
-    when(users.findByEmail(anyString())).thenReturn(Optional.of(actor));
-    SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken(actor.getEmail(), null, List.of()));
+    actor.setId(ACTOR_ID);
+    when(users.findById(ACTOR_ID)).thenReturn(Optional.of(actor));
     when(events.saveAndFlush(any(AuditEvent.class)))
         .thenAnswer(
             call -> {
@@ -87,7 +82,7 @@ class CustomerAuditTest {
     var sink = new BusinessAudit(users, new AuditWriter(events, Clock.systemUTC()));
     var contactService =
         new CustomerContactService(
-            customers, contacts, mock(CustomerContactHistoryRepository.class), users, sink);
+            customers, contacts, mock(CustomerContactHistoryRepository.class), sink);
     service =
         new CustomerService(
             customers,
@@ -100,23 +95,18 @@ class CustomerAuditTest {
             sink);
   }
 
-  @AfterEach
-  void clear() {
-    SecurityContextHolder.clearContext();
-  }
-
   @Test
   void creationIsTraceableWithoutCopyingPrivateAttributes() {
     var request = new CustomerCreateRequest();
     request.setName("秘密の氏名");
     request.setAddress("秘密の住所");
-    var created = service.create(STORE_ID, request.command());
+    var created = service.create(STORE_ID, request.command(), ACTOR_ID);
     assertThat(audit).hasSize(1);
     var event = audit.getFirst();
     assertThat(event.getAction()).isEqualTo("CUSTOMER_CREATED");
     assertThat(event.getTargetId()).isEqualTo(created.customer().getId());
     assertThat(event.getTargetType()).isEqualTo("CUSTOMER");
-    assertThat(event.getActorId()).isEqualTo(9L);
+    assertThat(event.getActorId()).isEqualTo(ACTOR_ID);
     assertThat(event.getOriginatingStoreId()).isEqualTo(STORE_ID);
     assertThat(event.getSourceId()).isNull();
     assertThat(event.getSourceType()).isNull();
@@ -131,7 +121,7 @@ class CustomerAuditTest {
   void editingPrivateAttributesRecordsOnlyChangedNamesAndIgnoresNoOps() {
     var request = new CustomerCreateRequest();
     request.setName("元の秘密名");
-    service.create(STORE_ID, request.command());
+    service.create(STORE_ID, request.command(), ACTOR_ID);
     audit.clear();
     var patch = new CustomerUpdateRequest();
     patch.setName("新しい秘密名");
@@ -143,9 +133,9 @@ class CustomerAuditTest {
     patch.setUsageAreas("秘密地域");
     patch.setNgType("秘密区分");
     patch.setNgContent("秘密内容");
-    service.update(STORE_ID, "customer", patch.patch());
-    service.update(STORE_ID, "customer", patch.patch());
-    service.update(STORE_ID, "customer", new CustomerUpdateRequest().patch());
+    service.update(STORE_ID, "customer", patch.patch(), ACTOR_ID);
+    service.update(STORE_ID, "customer", patch.patch(), ACTOR_ID);
+    service.update(STORE_ID, "customer", new CustomerUpdateRequest().patch(), ACTOR_ID);
     assertThat(audit).hasSize(1);
     var event = audit.getFirst();
     assertThat(event.getAction()).isEqualTo("CUSTOMER_UPDATED");
@@ -162,9 +152,9 @@ class CustomerAuditTest {
   void physicalDeletionKeepsTheLastSafeSnapshot() {
     var request = new CustomerCreateRequest();
     request.setName("削除する秘密名");
-    service.create(STORE_ID, request.command());
+    service.create(STORE_ID, request.command(), ACTOR_ID);
     audit.clear();
-    service.delete(STORE_ID, "customer");
+    service.delete(STORE_ID, "customer", ACTOR_ID);
     assertThat(audit).hasSize(1);
     var event = audit.getFirst();
     assertThat(event.getAction()).isEqualTo("CUSTOMER_DELETED");
@@ -175,28 +165,30 @@ class CustomerAuditTest {
 
   @Test
   void missingMergedAndProtectedCustomersNeverProduceSuccessEvents() {
-    assertThatThrownBy(() -> service.delete(STORE_ID, "missing"))
+    assertThatThrownBy(() -> service.delete(STORE_ID, "missing", ACTOR_ID))
         .isInstanceOf(RuntimeException.class);
     assertThatThrownBy(
-            () -> service.update(STORE_ID, "missing", new CustomerUpdateRequest().patch()))
+            () ->
+                service.update(STORE_ID, "missing", new CustomerUpdateRequest().patch(), ACTOR_ID))
         .isInstanceOf(RuntimeException.class);
     var request = new CustomerCreateRequest();
     request.setName("拒否対象");
-    service.create(STORE_ID, request.command());
+    service.create(STORE_ID, request.command(), ACTOR_ID);
     audit.clear();
     when(customers.isMerged(STORE_ID, "customer")).thenReturn(true);
     assertThatThrownBy(
-            () -> service.update(STORE_ID, "customer", new CustomerUpdateRequest().patch()))
+            () ->
+                service.update(STORE_ID, "customer", new CustomerUpdateRequest().patch(), ACTOR_ID))
         .isInstanceOf(RuntimeException.class);
-    assertThatThrownBy(() -> service.delete(STORE_ID, "customer"))
+    assertThatThrownBy(() -> service.delete(STORE_ID, "customer", ACTOR_ID))
         .isInstanceOf(RuntimeException.class);
     when(customers.isMerged(STORE_ID, "customer")).thenReturn(false);
     when(contacts.existsReferencing(STORE_ID, "customer")).thenReturn(true);
-    assertThatThrownBy(() -> service.delete(STORE_ID, "customer"))
+    assertThatThrownBy(() -> service.delete(STORE_ID, "customer", ACTOR_ID))
         .isInstanceOf(RuntimeException.class);
     when(contacts.existsReferencing(STORE_ID, "customer")).thenReturn(false);
     when(merges.existsInvolving(STORE_ID, "customer")).thenReturn(true);
-    assertThatThrownBy(() -> service.delete(STORE_ID, "customer"))
+    assertThatThrownBy(() -> service.delete(STORE_ID, "customer", ACTOR_ID))
         .isInstanceOf(RuntimeException.class);
     assertThat(audit).isEmpty();
   }

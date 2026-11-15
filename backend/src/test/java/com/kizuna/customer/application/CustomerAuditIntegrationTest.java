@@ -14,16 +14,12 @@ import java.util.List;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -32,6 +28,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class CustomerAuditIntegrationTest {
   private static final Long STORE_ID = 1L;
+  private static final long ACTOR_ID = CustomerContactAuditIntegrationTest.ACTOR_ID;
   private AnnotationConfigApplicationContext context;
   private JdbcTemplate jdbc;
   private CustomerService customers;
@@ -45,18 +42,6 @@ class CustomerAuditIntegrationTest {
     transactions = new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
   }
 
-  @BeforeEach
-  void authenticate() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken("operator@example.test", null, List.of()));
-  }
-
-  @AfterEach
-  void clear() {
-    SecurityContextHolder.clearContext();
-  }
-
   @AfterAll
   void close() {
     if (context != null) context.close();
@@ -64,18 +49,20 @@ class CustomerAuditIntegrationTest {
 
   @Test
   void committedCrudVersionsSurvivePhysicalDeletionAndNoOpsAddNothing() {
-    var id = customers.create(STORE_ID, request(false).command()).customer().getId();
+    var id = customers.create(STORE_ID, request(false).command(), ACTOR_ID).customer().getId();
     var patch = new CustomerUpdateRequest();
     patch.setAddress("監査へ残さない住所");
-    customers.update(STORE_ID, id, patch.patch());
-    customers.update(STORE_ID, id, patch.patch());
-    customers.update(STORE_ID, id, new CustomerUpdateRequest().patch());
-    customers.delete(STORE_ID, id);
+    customers.update(STORE_ID, id, patch.patch(), ACTOR_ID);
+    customers.update(STORE_ID, id, patch.patch(), ACTOR_ID);
+    customers.update(STORE_ID, id, new CustomerUpdateRequest().patch(), ACTOR_ID);
+    customers.delete(STORE_ID, id, ACTOR_ID);
     assertThat(jdbc.queryForObject("select count(*) from t_customers where id = ?", Long.class, id))
         .isZero();
     var events =
         jdbc.queryForList(
-            "select action, before_values ->> 'version' as old_version, after_values ->> 'version' as new_version, after_values ->> 'exists' as present from t_audit_events where target_type = 'CUSTOMER' and target_id = ? order by id",
+            "select action, before_values ->> 'version' as old_version, after_values ->> 'version'"
+                + " as new_version, after_values ->> 'exists' as present from t_audit_events where"
+                + " target_type = 'CUSTOMER' and target_id = ? order by id",
             id);
     assertThat(events).hasSize(3);
     assertThat(events.get(0))
@@ -101,7 +88,7 @@ class CustomerAuditIntegrationTest {
     long audits = count("t_audit_events");
     reject("CUSTOMER_CREATED");
     try {
-      assertThatThrownBy(() -> customers.create(STORE_ID, request.command()))
+      assertThatThrownBy(() -> customers.create(STORE_ID, request.command(), ACTOR_ID))
           .isInstanceOf(RuntimeException.class);
       assertThat(
               jdbc.queryForObject(
@@ -129,7 +116,7 @@ class CustomerAuditIntegrationTest {
             () ->
                 transactions.executeWithoutResult(
                     status -> {
-                      customers.create(STORE_ID, request.command());
+                      customers.create(STORE_ID, request.command(), ACTOR_ID);
                       assertThat(count("t_audit_events")).isEqualTo(audits + 3);
                       throw new IllegalStateException("後続失敗");
                     }))
@@ -146,13 +133,13 @@ class CustomerAuditIntegrationTest {
   @Test
   void updateAuditRejectionRestoresAttributesAndVersion() {
     var request = request(false);
-    var id = customers.create(STORE_ID, request.command()).customer().getId();
+    var id = customers.create(STORE_ID, request.command(), ACTOR_ID).customer().getId();
     long audits = count("t_audit_events");
     var patch = new CustomerUpdateRequest();
     patch.setName("確定しない秘密名");
     reject("CUSTOMER_UPDATED");
     try {
-      assertThatThrownBy(() -> customers.update(STORE_ID, id, patch.patch()))
+      assertThatThrownBy(() -> customers.update(STORE_ID, id, patch.patch(), ACTOR_ID))
           .isInstanceOf(RuntimeException.class);
       assertThat(jdbc.queryForMap("select name, version from t_customers where id = ?", id))
           .containsEntry("name", request.getName())
@@ -165,11 +152,12 @@ class CustomerAuditIntegrationTest {
 
   @Test
   void deleteAuditRejectionRestoresThePhysicallyRemovedCustomer() {
-    var id = customers.create(STORE_ID, request(false).command()).customer().getId();
+    var id = customers.create(STORE_ID, request(false).command(), ACTOR_ID).customer().getId();
     long audits = count("t_audit_events");
     reject("CUSTOMER_DELETED");
     try {
-      assertThatThrownBy(() -> customers.delete(STORE_ID, id)).isInstanceOf(RuntimeException.class);
+      assertThatThrownBy(() -> customers.delete(STORE_ID, id, ACTOR_ID))
+          .isInstanceOf(RuntimeException.class);
       assertThat(
               jdbc.queryForObject("select version from t_customers where id = ?", Long.class, id))
           .isZero();
@@ -181,9 +169,10 @@ class CustomerAuditIntegrationTest {
 
   @Test
   void existingContactHistoryProtectsItsParentWithoutASuccessfulDeletionAudit() {
-    var id = customers.create(STORE_ID, request(true).command()).customer().getId();
+    var id = customers.create(STORE_ID, request(true).command(), ACTOR_ID).customer().getId();
     long audits = count("t_audit_events");
-    assertThatThrownBy(() -> customers.delete(STORE_ID, id)).isInstanceOf(ConflictException.class);
+    assertThatThrownBy(() -> customers.delete(STORE_ID, id, ACTOR_ID))
+        .isInstanceOf(ConflictException.class);
     assertThat(jdbc.queryForObject("select count(*) from t_customers where id = ?", Long.class, id))
         .isEqualTo(1);
     assertThat(count("t_audit_events")).isEqualTo(audits);
@@ -191,19 +180,21 @@ class CustomerAuditIntegrationTest {
 
   @Test
   void databaseReferenceRejectsPhysicalDeletionWithoutAddingAnAudit() {
-    var id = customers.create(STORE_ID, request(false).command()).customer().getId();
+    var id = customers.create(STORE_ID, request(false).command(), ACTOR_ID).customer().getId();
     long audits = count("t_audit_events");
     jdbc.execute(
-        "create table customer_audit_test_reference (customer_id varchar(64) references t_customers(id))");
+        "create table customer_audit_test_reference (customer_id varchar(64) references"
+            + " t_customers(id))");
     try {
       jdbc.update("insert into customer_audit_test_reference(customer_id) values (?)", id);
-      assertThatThrownBy(() -> customers.delete(STORE_ID, id)).isInstanceOf(RuntimeException.class);
+      assertThatThrownBy(() -> customers.delete(STORE_ID, id, ACTOR_ID))
+          .isInstanceOf(RuntimeException.class);
       assertThat(
               jdbc.queryForObject("select count(*) from t_customers where id = ?", Long.class, id))
           .isEqualTo(1);
       assertThat(count("t_audit_events")).isEqualTo(audits);
       jdbc.update("delete from customer_audit_test_reference where customer_id = ?", id);
-      customers.delete(STORE_ID, id);
+      customers.delete(STORE_ID, id, ACTOR_ID);
       assertThat(
               jdbc.queryForObject("select count(*) from t_customers where id = ?", Long.class, id))
           .isZero();

@@ -1,5 +1,6 @@
 package com.kizuna.customer.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -12,10 +13,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.kizuna.customer.application.CustomerPointService;
 import com.kizuna.customer.application.CustomerViews.PointBalance;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.sql.SQLException;
+import java.util.Set;
 import org.hibernate.exception.ConstraintViolationException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -26,7 +30,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -46,6 +49,8 @@ class CustomerPointControllerTest {
   static class MethodSecurityConfig {}
 
   private static final Long STORE_ID = 7L;
+  private static final long ACTOR_ID = 42L;
+  private static final String[] ADJUSTER = {"PERM_CUSTOMER_MANAGE", "PERM_POINT_ADJUST"};
 
   @Autowired private MockMvc mockMvc;
 
@@ -56,66 +61,70 @@ class CustomerPointControllerTest {
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
   @MockitoBean StoreScopeResolver storeScopeResolver;
 
+  /** 利用者の店舗集合に名乗る店舗が含まれている状態。 */
+  @BeforeEach
+  void storeIsInScope() {
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(STORE_ID)));
+  }
+
   @Test
   @DisplayName("残高照会は CUSTOMER_MANAGE で到達できること")
-  @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
   void balanceIsReachableWithCustomerManage() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(customerPointService.balance(eq(STORE_ID), anyString()))
         .thenReturn(new PointBalance(false, null));
 
-    mockMvc.perform(storeGet("/customers/c1/member-point-balance")).andExpect(status().isOk());
+    mockMvc
+        .perform(storeGet("/customers/c1/member-point-balance", "PERM_CUSTOMER_MANAGE"))
+        .andExpect(status().isOk());
   }
 
   @Test
   @DisplayName("残高照会は CUSTOMER_MANAGE を持たなければ拒否されること")
-  @WithMockUser(authorities = "PERM_POINT_ADJUST")
   void balanceIsRefusedWithoutCustomerManage() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
-        .perform(storeGet("/customers/c1/member-point-balance"))
+        .perform(storeGet("/customers/c1/member-point-balance", "PERM_POINT_ADJUST"))
         .andExpect(status().isForbidden());
   }
 
   @Test
   @DisplayName("手動調整は CUSTOMER_MANAGE だけでは拒否されること")
-  @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
   void adjustmentIsRefusedWithoutThePointPermission() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
-        .perform(storePost("/customers/c1/point-adjustments", adjustmentBody("訂正")))
+        .perform(
+            storePost(
+                "/customers/c1/point-adjustments", adjustmentBody("訂正"), "PERM_CUSTOMER_MANAGE"))
         .andExpect(status().isForbidden());
   }
 
   @Test
   @DisplayName("手動調整は POINT_ADJUST を持てば到達できること（403 が端点の不在でない証明）")
-  @WithMockUser(authorities = {"PERM_CUSTOMER_MANAGE", "PERM_POINT_ADJUST"})
   void adjustmentIsReachableWithThePointPermission() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(customerPointService.adjust(eq(STORE_ID), anyString(), any(), anyString()))
+    when(customerPointService.adjust(eq(STORE_ID), anyString(), any(), eq(ACTOR_ID)))
         .thenReturn(new PointBalance(true, 100L));
 
     mockMvc
-        .perform(storePost("/customers/c1/point-adjustments", adjustmentBody("訂正")))
+        .perform(storePost("/customers/c1/point-adjustments", adjustmentBody("訂正"), ADJUSTER))
         .andExpect(status().isOk());
   }
 
   @Test
   @DisplayName("理由が空白だけの調整は契約で撥ねられること")
-  @WithMockUser(authorities = {"PERM_CUSTOMER_MANAGE", "PERM_POINT_ADJUST"})
   void adjustmentRequiresANonBlankReason() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
-        .perform(storePost("/customers/c1/point-adjustments", adjustmentBody("   ")))
+        .perform(storePost("/customers/c1/point-adjustments", adjustmentBody("   "), ADJUSTER))
         .andExpect(status().isBadRequest());
   }
 
   @Test
   @DisplayName("増減の無い調整は契約で撥ねられること")
-  @WithMockUser(authorities = {"PERM_CUSTOMER_MANAGE", "PERM_POINT_ADJUST"})
   void adjustmentRequiresTheDelta() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
@@ -123,50 +132,51 @@ class CustomerPointControllerTest {
         .perform(
             storePost(
                 "/customers/c1/point-adjustments",
-                "{\"reason\": \"訂正\", \"idempotency_key\": \"op-key-1\"}"))
+                "{\"reason\": \"訂正\", \"idempotency_key\": \"op-key-1\"}",
+                ADJUSTER))
         .andExpect(status().isBadRequest());
   }
 
   @Test
   @DisplayName("冪等キーの無い調整は契約で撥ねられること")
-  @WithMockUser(authorities = {"PERM_CUSTOMER_MANAGE", "PERM_POINT_ADJUST"})
   void adjustmentRequiresTheIdempotencyKey() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
         .perform(
-            storePost("/customers/c1/point-adjustments", "{\"delta\": 100, \"reason\": \"訂正\"}"))
+            storePost(
+                "/customers/c1/point-adjustments",
+                "{\"delta\": 100, \"reason\": \"訂正\"}",
+                ADJUSTER))
         .andExpect(status().isBadRequest());
   }
 
   @Test
   @DisplayName("冪等キーの競合に敗れた要求は再送処理へ回り、成功応答になること")
-  @WithMockUser(authorities = {"PERM_CUSTOMER_MANAGE", "PERM_POINT_ADJUST"})
   void adjustmentLosingTheKeyRaceIsReplayed() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(customerPointService.adjust(eq(STORE_ID), anyString(), any(), anyString()))
+    when(customerPointService.adjust(eq(STORE_ID), anyString(), any(), eq(ACTOR_ID)))
         .thenThrow(integrityViolation("uq_t_point_entries_idempotency_key"));
-    when(customerPointService.replayAdjust(eq(STORE_ID), anyString(), any(), anyString()))
+    when(customerPointService.replayAdjust(eq(STORE_ID), anyString(), any(), eq(ACTOR_ID)))
         .thenReturn(new PointBalance(true, 800L));
 
     mockMvc
-        .perform(storePost("/customers/c1/point-adjustments", adjustmentBody("訂正")))
+        .perform(storePost("/customers/c1/point-adjustments", adjustmentBody("訂正"), ADJUSTER))
         .andExpect(status().isOk());
   }
 
   @Test
   @DisplayName("冪等キー以外の一意制約違反は再送処理へ回さないこと")
-  @WithMockUser(authorities = {"PERM_CUSTOMER_MANAGE", "PERM_POINT_ADJUST"})
   void otherIntegrityViolationsAreNotReplayed() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(customerPointService.adjust(eq(STORE_ID), anyString(), any(), anyString()))
+    when(customerPointService.adjust(eq(STORE_ID), anyString(), any(), eq(ACTOR_ID)))
         .thenThrow(integrityViolation("uq_t_users_email"));
 
     mockMvc
-        .perform(storePost("/customers/c1/point-adjustments", adjustmentBody("訂正")))
+        .perform(storePost("/customers/c1/point-adjustments", adjustmentBody("訂正"), ADJUSTER))
         .andExpect(status().isConflict());
     Mockito.verify(customerPointService, Mockito.never())
-        .replayAdjust(any(), anyString(), any(), anyString());
+        .replayAdjust(any(), anyString(), any(), anyLong());
   }
 
   /** 冪等キー付きの正常な調整ボディ。 */
@@ -184,16 +194,14 @@ class CustomerPointControllerTest {
             constraintName));
   }
 
-  private MockHttpServletRequestBuilder storeGet(String path) {
-    return get(path)
-        .header("X-Store-ID", STORE_ID.toString())
-        .principal(() -> "tanaka.hanako@kizuna.test");
+  private MockHttpServletRequestBuilder storeGet(String path, String... authorities) {
+    return get(path).header("X-Store-ID", STORE_ID.toString()).with(jwtUser(ACTOR_ID, authorities));
   }
 
-  private MockHttpServletRequestBuilder storePost(String path, String body) {
+  private MockHttpServletRequestBuilder storePost(String path, String body, String... authorities) {
     return post(path)
         .header("X-Store-ID", STORE_ID.toString())
-        .principal(() -> "tanaka.hanako@kizuna.test")
+        .with(jwtUser(ACTOR_ID, authorities))
         .contentType(MediaType.APPLICATION_JSON)
         .content(body);
   }

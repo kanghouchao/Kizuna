@@ -34,7 +34,6 @@ class ApplicantAttachmentStoreTest {
             null,
             null,
             null,
-            null,
             mock(PlatformTransactionManager.class));
     var applicant = mock(Applicant.class);
     when(applicants.findByIdAndStoreId("applicant", STORE_ID)).thenReturn(Optional.of(applicant));

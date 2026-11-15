@@ -19,14 +19,9 @@ import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.user.domain.User;
-import com.kizuna.user.domain.UserRepository;
-import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Optional;
-import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,7 +34,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class CustomerPointServiceTest {
 
   private static final String CUSTOMER_ID = "c1";
-  private static final String ACTOR_EMAIL = "tanaka@kizuna.test";
   private static final long ACTOR_ID = 42L;
   private static final long MEMBER_ID = 777L;
   private static final long STORE_ID = 3L;
@@ -48,7 +42,6 @@ class CustomerPointServiceTest {
   @Mock private CustomerRepository customerRepository;
   @Mock private CustomerMemberLinkRepository customerMemberLinkRepository;
   @Mock private PointLedgerService pointLedgerService;
-  @Mock private UserRepository userRepository;
 
   @InjectMocks private CustomerPointService service;
 
@@ -120,7 +113,7 @@ class CustomerPointServiceTest {
         .thenReturn(Optional.empty());
 
     assertThatThrownBy(
-            () -> service.adjust(STORE_ID, CUSTOMER_ID, request(100, "誤記帳の訂正", null), ACTOR_EMAIL))
+            () -> service.adjust(STORE_ID, CUSTOMER_ID, request(100, "誤記帳の訂正", null), ACTOR_ID))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("会員に紐づいていない顧客");
     Mockito.verify(pointLedgerService, Mockito.never())
@@ -132,33 +125,16 @@ class CustomerPointServiceTest {
   void adjustDelegatesToTheLedgerWithTheCurrentStore() {
     givenCustomerLocked();
     givenActiveLink(MEMBER_ID);
-    Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor()));
     Mockito.when(pointLedgerService.balance(MEMBER_ID)).thenReturn(300L);
     LocalDate expiresOn = LocalDate.of(2099, 12, 31);
 
     PointBalance response =
-        service.adjust(STORE_ID, CUSTOMER_ID, request(300, "来店記念の付与", expiresOn), ACTOR_EMAIL);
+        service.adjust(STORE_ID, CUSTOMER_ID, request(300, "来店記念の付与", expiresOn), ACTOR_ID);
 
     Mockito.verify(pointLedgerService)
         .adjust(MEMBER_ID, STORE_ID, 300, "来店記念の付与", expiresOn, ACTOR_ID, IDEMPOTENCY_KEY);
     assertThat(response.linked()).isTrue();
     assertThat(response.balance()).isEqualTo(300);
-  }
-
-  @Test
-  @DisplayName("認証主体のユーザーが存在しない場合は 401 系例外で、台帳へ何も積まれないこと")
-  void adjustFailsWhenActorMissing() {
-    // 追記型の台帳では実行者 null が「機構が起こした仕訳」の形。失効した認証セッションによる手動調整を
-    // その形で残さない
-    givenCustomerLocked();
-    givenActiveLink(MEMBER_ID);
-    Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.empty());
-
-    assertThatThrownBy(
-            () -> service.adjust(STORE_ID, CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_EMAIL))
-        .isInstanceOf(StaleSessionException.class);
-    Mockito.verify(pointLedgerService, Mockito.never())
-        .adjust(anyLong(), any(), anyInt(), anyString(), any(), any(), anyString());
   }
 
   @Test
@@ -168,9 +144,8 @@ class CustomerPointServiceTest {
     // 解除済みの会員へ調整だけが残る
     givenCustomerLocked();
     givenActiveLink(MEMBER_ID);
-    Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor()));
 
-    service.adjust(STORE_ID, CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_EMAIL);
+    service.adjust(STORE_ID, CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_ID);
 
     Mockito.verify(customerRepository).findByIdAndStoreIdForUpdate(CUSTOMER_ID, STORE_ID);
     Mockito.verify(customerRepository, Mockito.never()).existsByIdAndStoreId(anyString(), any());
@@ -185,7 +160,7 @@ class CustomerPointServiceTest {
     Mockito.when(customerRepository.isMerged(STORE_ID, CUSTOMER_ID)).thenReturn(true);
 
     assertThatThrownBy(
-            () -> service.adjust(STORE_ID, CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_EMAIL))
+            () -> service.adjust(STORE_ID, CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_ID))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("統合済みの顧客です。統合先の顧客を編集してください");
     Mockito.verify(customerMemberLinkRepository, Mockito.never())
@@ -200,11 +175,10 @@ class CustomerPointServiceTest {
     // 読み取り専用トランザクションでは行ロックが取れない。勝者は commit 済みで直列化する相手もいない
     givenCustomerExists();
     givenActiveLink(MEMBER_ID);
-    Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor()));
     Mockito.when(pointLedgerService.balance(MEMBER_ID)).thenReturn(800L);
 
     PointBalance response =
-        service.replayAdjust(STORE_ID, CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_EMAIL);
+        service.replayAdjust(STORE_ID, CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_ID);
 
     Mockito.verify(pointLedgerService)
         .adjust(MEMBER_ID, STORE_ID, 300, "来店記念の付与", null, ACTOR_ID, IDEMPOTENCY_KEY);
@@ -226,7 +200,7 @@ class CustomerPointServiceTest {
     assertThatThrownBy(
             () ->
                 service.replayAdjust(
-                    STORE_ID, CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_EMAIL))
+                    STORE_ID, CUSTOMER_ID, request(300, "来店記念の付与", null), ACTOR_ID))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("会員に紐づいていない顧客");
     Mockito.verify(pointLedgerService, Mockito.never())
@@ -278,21 +252,6 @@ class CustomerPointServiceTest {
             customerMemberLinkRepository.findByStoreIdAndCustomerIdAndStatus(
                 STORE_ID, CUSTOMER_ID, LinkStatus.ACTIVE))
         .thenReturn(Optional.of(link));
-  }
-
-  private static User actor() {
-    User user =
-        User.builder()
-            .email(ACTOR_EMAIL)
-            .password("encoded")
-            .displayName("田中花子")
-            .enabled(true)
-            .userType(UserType.STAFF)
-            .storeIds(Set.of(STORE_ID))
-            .roleIds(Set.of(1L))
-            .build();
-    user.setId(ACTOR_ID);
-    return user;
   }
 
   private static PointAdjustment request(int delta, String reason, LocalDate expiresOn) {

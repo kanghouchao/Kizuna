@@ -17,15 +17,10 @@ import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberLookupService.MemberLookup;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.User;
-import com.kizuna.user.domain.UserRepository;
-import com.kizuna.user.domain.UserType;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,7 +38,6 @@ import org.springframework.data.domain.PageRequest;
 @ExtendWith(MockitoExtension.class)
 class CustomerMemberLinkServiceTest {
 
-  private static final String ACTOR_EMAIL = "staff@kizuna.test";
   private static final String CUSTOMER_ID = "c1";
   private static final String MEMBER_CODE = "123456789012";
   private static final long ACTOR_ID = 42L;
@@ -53,24 +47,8 @@ class CustomerMemberLinkServiceTest {
   @Mock private CustomerRepository customerRepository;
   @Mock private CustomerMemberLinkRepository customerMemberLinkRepository;
   @Mock private MemberLookupService memberLookupService;
-  @Mock private UserRepository userRepository;
 
   @InjectMocks private CustomerMemberLinkService service;
-
-  private void givenActor() {
-    User actor =
-        User.builder()
-            .email(ACTOR_EMAIL)
-            .password("encoded")
-            .displayName("山田次郎")
-            .enabled(true)
-            .userType(UserType.STAFF)
-            .storeIds(Set.of(1L))
-            .roleIds(Set.of(1L))
-            .build();
-    actor.setId(ACTOR_ID);
-    Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
-  }
 
   private void givenCustomerExists() {
     Mockito.when(customerRepository.existsByIdAndStoreId(CUSTOMER_ID, STORE_ID)).thenReturn(true);
@@ -106,7 +84,6 @@ class CustomerMemberLinkServiceTest {
   @Test
   @DisplayName("未紐づけの顧客に会員コードを紐づけると ACTIVE の区間が 1 件作られ、成立根拠が MEMBER_CODE で記録されること")
   void linkCreatesActiveLink() {
-    givenActor();
     givenCustomerLocked();
     givenMember(MEMBER_CODE, 7L);
     Mockito.when(
@@ -121,7 +98,7 @@ class CustomerMemberLinkServiceTest {
 
     CustomerMemberLinkResponse response =
         CustomerMemberLinkResponse.of(
-            service.link(STORE_ID, CUSTOMER_ID, MEMBER_CODE, null, "本人確認", ACTOR_EMAIL));
+            service.link(STORE_ID, CUSTOMER_ID, MEMBER_CODE, null, "本人確認", ACTOR_ID));
 
     assertThat(response.linked()).isTrue();
     assertThat(response.memberCode()).isEqualTo(MEMBER_CODE);
@@ -137,7 +114,6 @@ class CustomerMemberLinkServiceTest {
   @Test
   @DisplayName("退会済みの会員コードへの紐づけは会員行を押さえた上で 409 とし、区間を作らないこと")
   void linkRejectsWithdrawnMember() {
-    givenActor();
     givenCustomerLocked();
     givenMember(MEMBER_CODE, 7L);
     Mockito.when(
@@ -147,7 +123,7 @@ class CustomerMemberLinkServiceTest {
     Mockito.when(memberLookupService.isWithdrawn(7L)).thenReturn(true);
 
     assertThatThrownBy(
-            () -> service.link(STORE_ID, CUSTOMER_ID, MEMBER_CODE, null, "本人確認", ACTOR_EMAIL))
+            () -> service.link(STORE_ID, CUSTOMER_ID, MEMBER_CODE, null, "本人確認", ACTOR_ID))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("退会済み");
 
@@ -160,10 +136,9 @@ class CustomerMemberLinkServiceTest {
   @Test
   @DisplayName("解決できない顧客への紐づけは 404 で、区間を作らないこと（他店舗の顧客も同じ経路で 404 になる）")
   void linkFailsWhenCustomerMissing() {
-    givenActor();
 
     assertThatThrownBy(
-            () -> service.link(STORE_ID, CUSTOMER_ID, MEMBER_CODE, null, "本人確認", ACTOR_EMAIL))
+            () -> service.link(STORE_ID, CUSTOMER_ID, MEMBER_CODE, null, "本人確認", ACTOR_ID))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("顧客が見つかりません");
     Mockito.verify(customerMemberLinkRepository, Mockito.never()).saveAndFlush(any());
@@ -172,12 +147,11 @@ class CustomerMemberLinkServiceTest {
   @Test
   @DisplayName("存在しない会員コードでの紐づけは 404")
   void linkFailsWhenMemberCodeUnknown() {
-    givenActor();
     givenCustomerLocked();
     Mockito.when(memberLookupService.findByMemberCode(MEMBER_CODE)).thenReturn(Optional.empty());
 
     assertThatThrownBy(
-            () -> service.link(STORE_ID, CUSTOMER_ID, MEMBER_CODE, null, "本人確認", ACTOR_EMAIL))
+            () -> service.link(STORE_ID, CUSTOMER_ID, MEMBER_CODE, null, "本人確認", ACTOR_ID))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("会員コード");
   }
@@ -185,7 +159,6 @@ class CustomerMemberLinkServiceTest {
   @Test
   @DisplayName("会員コードが解決できなくても古い区間からの変更は競合として拒否すること")
   void staleIntervalTakesPrecedenceOverUnknownMemberCode() {
-    givenActor();
     givenCustomerLocked();
     CustomerMemberLink current = activeLink(7L, MEMBER_CODE);
     current.setId("current-interval");
@@ -197,7 +170,7 @@ class CustomerMemberLinkServiceTest {
     assertThatThrownBy(
             () ->
                 service.link(
-                    STORE_ID, CUSTOMER_ID, "000000000000", "old-interval", "本人確認", ACTOR_EMAIL))
+                    STORE_ID, CUSTOMER_ID, "000000000000", "old-interval", "本人確認", ACTOR_ID))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("関連状態が変わりました");
   }
@@ -205,7 +178,6 @@ class CustomerMemberLinkServiceTest {
   @Test
   @DisplayName("既に紐づいている会員をもう一度紐づけると 409")
   void linkFailsWhenSameMemberAlreadyLinked() {
-    givenActor();
     givenCustomerLocked();
     givenMember(MEMBER_CODE, 7L);
     Mockito.when(
@@ -214,7 +186,7 @@ class CustomerMemberLinkServiceTest {
         .thenReturn(Optional.of(activeLink(7L, MEMBER_CODE)));
 
     assertThatThrownBy(
-            () -> service.link(STORE_ID, CUSTOMER_ID, MEMBER_CODE, null, "本人確認", ACTOR_EMAIL))
+            () -> service.link(STORE_ID, CUSTOMER_ID, MEMBER_CODE, null, "本人確認", ACTOR_ID))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("既にこの会員と紐づいています");
     Mockito.verify(customerMemberLinkRepository, Mockito.never()).saveAndFlush(any());
@@ -223,7 +195,6 @@ class CustomerMemberLinkServiceTest {
   @Test
   @DisplayName("別会員への変更は旧区間を RELEASED にしてから新区間を ACTIVE で作ること（中間状態を作らない）")
   void linkSwitchesAtomically() {
-    givenActor();
     givenCustomerLocked();
     givenMember("999999999999", 8L);
     CustomerMemberLink previous = activeLink(7L, MEMBER_CODE);
@@ -239,7 +210,7 @@ class CustomerMemberLinkServiceTest {
 
     CustomerMemberLinkResponse response =
         CustomerMemberLinkResponse.of(
-            service.link(STORE_ID, CUSTOMER_ID, "999999999999", null, "本人確認", ACTOR_EMAIL));
+            service.link(STORE_ID, CUSTOMER_ID, "999999999999", null, "本人確認", ACTOR_ID));
 
     assertThat(response.memberCode()).isEqualTo("999999999999");
     ArgumentCaptor<CustomerMemberLink> saved = ArgumentCaptor.forClass(CustomerMemberLink.class);
@@ -255,7 +226,6 @@ class CustomerMemberLinkServiceTest {
   @Test
   @DisplayName("同一店舗で他の顧客に紐づいている会員は紐づけられないこと（409）")
   void linkFailsWhenMemberTakenByAnotherCustomer() {
-    givenActor();
     givenCustomerLocked();
     givenMember(MEMBER_CODE, 7L);
     Mockito.when(
@@ -268,7 +238,7 @@ class CustomerMemberLinkServiceTest {
         .thenReturn(true);
 
     assertThatThrownBy(
-            () -> service.link(STORE_ID, CUSTOMER_ID, MEMBER_CODE, null, "本人確認", ACTOR_EMAIL))
+            () -> service.link(STORE_ID, CUSTOMER_ID, MEMBER_CODE, null, "本人確認", ACTOR_ID))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("既に他の顧客と紐づいています");
     Mockito.verify(customerMemberLinkRepository, Mockito.never()).saveAndFlush(any());
@@ -277,7 +247,6 @@ class CustomerMemberLinkServiceTest {
   @Test
   @DisplayName("事前チェックをすり抜けた整合性違反はサービスで握りつぶさず、そのまま伝播すること")
   void linkPropagatesDataIntegrityViolation() {
-    givenActor();
     givenCustomerLocked();
     givenMember(MEMBER_CODE, 7L);
     Mockito.when(
@@ -295,25 +264,13 @@ class CustomerMemberLinkServiceTest {
     // 一意違反→409 / それ以外→500 の分類は CommonExceptionHandler が SQLSTATE で行うため、
     // サービス層で 409 に変換すると FK 等の実装欠陥まで「やり直せば直る」に化けてしまう
     assertThatThrownBy(
-            () -> service.link(STORE_ID, CUSTOMER_ID, MEMBER_CODE, null, "本人確認", ACTOR_EMAIL))
+            () -> service.link(STORE_ID, CUSTOMER_ID, MEMBER_CODE, null, "本人確認", ACTOR_ID))
         .isSameAs(violation);
-  }
-
-  @Test
-  @DisplayName("認証主体のユーザーが存在しない場合は 401 系例外で、副作用が無いこと")
-  void linkFailsWhenActorMissing() {
-    Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.empty());
-
-    assertThatThrownBy(
-            () -> service.link(STORE_ID, CUSTOMER_ID, MEMBER_CODE, null, "本人確認", ACTOR_EMAIL))
-        .isInstanceOf(StaleSessionException.class);
-    Mockito.verify(customerMemberLinkRepository, Mockito.never()).saveAndFlush(any());
   }
 
   @Test
   @DisplayName("解除は行を消さず RELEASED にし、解除の実行者を記録すること")
   void unlinkReleasesActiveLink() {
-    givenActor();
     givenCustomerLocked();
     CustomerMemberLink current = activeLink(7L, MEMBER_CODE);
     Mockito.when(
@@ -321,7 +278,7 @@ class CustomerMemberLinkServiceTest {
                 STORE_ID, CUSTOMER_ID, LinkStatus.ACTIVE))
         .thenReturn(Optional.of(current));
 
-    service.unlink(STORE_ID, CUSTOMER_ID, null, "本人依頼", ACTOR_EMAIL);
+    service.unlink(STORE_ID, CUSTOMER_ID, null, "本人依頼", ACTOR_ID);
 
     assertThat(current.getStatus()).isEqualTo(LinkStatus.RELEASED);
     assertThat(current.getReleasedBy()).isEqualTo(ACTOR_ID);
@@ -332,14 +289,13 @@ class CustomerMemberLinkServiceTest {
   @Test
   @DisplayName("紐づけが無い顧客の解除は 409")
   void unlinkFailsWhenNoActiveLink() {
-    givenActor();
     givenCustomerLocked();
     Mockito.when(
             customerMemberLinkRepository.findByStoreIdAndCustomerIdAndStatus(
                 STORE_ID, CUSTOMER_ID, LinkStatus.ACTIVE))
         .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.unlink(STORE_ID, CUSTOMER_ID, null, "本人依頼", ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.unlink(STORE_ID, CUSTOMER_ID, null, "本人依頼", ACTOR_ID))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("関連状態が変わりました");
   }
@@ -349,11 +305,10 @@ class CustomerMemberLinkServiceTest {
   void unlinkRejectsTombstonesBeforeReadingTheLink() {
     // 解除は名指された行そのものを対象にするので統合先へ向け直さない。統合で関連は存続行へ
     // 移っているため、後ろに置くと「紐づけられている会員がいません」に落ちて理由が伝わらない
-    givenActor();
     givenCustomerLocked();
     Mockito.when(customerRepository.isMerged(STORE_ID, CUSTOMER_ID)).thenReturn(true);
 
-    assertThatThrownBy(() -> service.unlink(STORE_ID, CUSTOMER_ID, null, "本人依頼", ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.unlink(STORE_ID, CUSTOMER_ID, null, "本人依頼", ACTOR_ID))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("統合済みの顧客です。統合先の顧客を編集してください");
     Mockito.verify(customerMemberLinkRepository, Mockito.never())
@@ -365,7 +320,6 @@ class CustomerMemberLinkServiceTest {
   @DisplayName("紐づけは成立先を解決（＝顧客行を排他ロック）してから現在の紐づけを読むこと")
   void linkTakesTheCustomerRowLockBeforeResolving() {
     // 記帳（受注完了・手動調整）と同じ行を直列化点にすることで、置換の途中の紐づけを記帳側に見せない
-    givenActor();
     givenCustomerLocked();
     givenMember(MEMBER_CODE, 7L);
     Mockito.when(
@@ -378,7 +332,7 @@ class CustomerMemberLinkServiceTest {
         .thenReturn(false);
     givenSaveReturnsArgument();
 
-    service.link(STORE_ID, CUSTOMER_ID, MEMBER_CODE, null, "本人確認", ACTOR_EMAIL);
+    service.link(STORE_ID, CUSTOMER_ID, MEMBER_CODE, null, "本人確認", ACTOR_ID);
 
     InOrder inOrder = Mockito.inOrder(customerRepository, customerMemberLinkRepository);
     inOrder.verify(customerRepository).findByIdAndStoreIdForUpdate(CUSTOMER_ID, STORE_ID);
@@ -392,14 +346,13 @@ class CustomerMemberLinkServiceTest {
   @Test
   @DisplayName("解除は顧客行を排他ロックしてから現在の紐づけを読むこと")
   void unlinkTakesTheCustomerRowLockBeforeResolving() {
-    givenActor();
     givenCustomerLocked();
     Mockito.when(
             customerMemberLinkRepository.findByStoreIdAndCustomerIdAndStatus(
                 STORE_ID, CUSTOMER_ID, LinkStatus.ACTIVE))
         .thenReturn(Optional.of(activeLink(7L, MEMBER_CODE)));
 
-    service.unlink(STORE_ID, CUSTOMER_ID, null, "本人依頼", ACTOR_EMAIL);
+    service.unlink(STORE_ID, CUSTOMER_ID, null, "本人依頼", ACTOR_ID);
 
     InOrder inOrder = Mockito.inOrder(customerRepository, customerMemberLinkRepository);
     inOrder.verify(customerRepository).findByIdAndStoreIdForUpdate(CUSTOMER_ID, STORE_ID);

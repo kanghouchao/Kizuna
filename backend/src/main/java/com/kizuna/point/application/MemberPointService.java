@@ -6,7 +6,6 @@ import com.kizuna.point.domain.MemberPointEntryView;
 import com.kizuna.point.domain.PointEntryRepository;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.user.domain.UserRepository;
 import java.time.ZoneId;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -25,7 +24,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MemberPointService {
 
-  private final UserRepository userRepository;
   private final MemberLookupService memberLookupService;
   private final PointEntryRepository pointEntryRepository;
   private final PointLedgerService pointLedgerService;
@@ -33,24 +31,19 @@ public class MemberPointService {
 
   /** 本人の現在残高。 */
   @Transactional(readOnly = true)
-  public long balance(String email) {
-    return pointLedgerService.balance(resolveMemberId(email));
+  public long balance(long userId) {
+    return pointLedgerService.balance(resolveMemberId(userId));
   }
 
   /** 本人のポイント明細（全種別・跨店集約）。 */
   @Transactional(readOnly = true)
-  public Page<MemberPointEntry> entries(String email, Pageable pageable) {
+  public Page<MemberPointEntry> entries(long userId, Pageable pageable) {
     return pointEntryRepository
-        .findMemberEntryViews(resolveMemberId(email), pageable)
+        .findMemberEntryViews(resolveMemberId(userId), pageable)
         .map(this::toEntry);
   }
 
-  private Long resolveMemberId(String email) {
-    Long userId =
-        userRepository
-            .findByEmail(email)
-            .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
-            .getId();
+  private Long resolveMemberId(long userId) {
     return memberLookupService
         .findByUserId(userId)
         .map(MemberLookup::memberId)

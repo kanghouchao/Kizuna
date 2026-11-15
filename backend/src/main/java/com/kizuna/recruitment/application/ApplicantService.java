@@ -14,10 +14,8 @@ import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.persistence.Paging;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.UserRepository;
 import jakarta.persistence.criteria.Predicate;
 import java.util.ArrayList;
 import java.util.Locale;
@@ -37,7 +35,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class ApplicantService {
   private final ApplicantRepository applicants;
   private final ApplicantStatusHistoryRepository histories;
-  private final UserRepository users;
   private final BusinessAudit audit;
   private final SystemConfigService systemConfigs;
   private final CastService casts;
@@ -92,90 +89,89 @@ public class ApplicantService {
   }
 
   @Transactional
-  public ApplicantViews.Detail create(Long storeId, ApplicantIntake intake, String actorEmail) {
-    Long actorId = actorId(actorEmail);
+  public ApplicantViews.Detail create(Long storeId, ApplicantIntake intake, long actorId) {
     requireSelectable(storeId, intake.mediumId(), null);
     Applicant applicant = Applicant.receive(storeId, intake);
     applicant.recordEditor(actorId);
     applicants.save(applicant);
     MediumLookup.flush(applicants::flush, DbConstraint.FK_T_APPLICANTS_MEDIUM);
     record(applicant, null, actorId, "応募受付");
-    recordAudit(applicant, "APPLICANT_RECEIVED", Map.of());
+    recordAudit(applicant, "APPLICANT_RECEIVED", Map.of(), actorId);
     return response(applicant);
   }
 
   @Transactional
   public ApplicantViews.Detail update(
-      Long storeId, String id, ApplicantCommands.IntakeUpdate command, String actorEmail) {
+      Long storeId, String id, ApplicantCommands.IntakeUpdate command, long actorId) {
     Applicant applicant = locked(storeId, id, command.version());
     var before = auditValues(applicant);
     var intake = command.intake();
     requireSelectable(storeId, intake.mediumId(), applicant.getMediumId());
     applicant.replaceIntake(intake);
-    applicant.recordEditor(actorId(actorEmail));
+    applicant.recordEditor(actorId);
     MediumLookup.flush(applicants::flush, DbConstraint.FK_T_APPLICANTS_MEDIUM);
-    recordAudit(applicant, "APPLICANT_INTAKE_UPDATED", before);
+    recordAudit(applicant, "APPLICANT_INTAKE_UPDATED", before, actorId);
     return response(applicant);
   }
 
   @Transactional
   public ApplicantViews.Detail interview(
-      Long storeId, String id, ApplicantCommands.InterviewRecord command, String actorEmail) {
+      Long storeId, String id, ApplicantCommands.InterviewRecord command, long actorId) {
     Applicant applicant = locked(storeId, id, command.version());
     var before = auditValues(applicant);
     applicant.recordInterview(command.interview());
-    applicant.recordEditor(actorId(actorEmail));
+    applicant.recordEditor(actorId);
     applicants.flush();
-    recordAudit(applicant, "APPLICANT_INTERVIEW_UPDATED", before);
+    recordAudit(applicant, "APPLICANT_INTERVIEW_UPDATED", before, actorId);
     return response(applicant);
   }
 
   @Transactional
   public ApplicantViews.Detail transition(
-      Long storeId, String id, ApplicantCommands.StatusChange command, String actorEmail) {
+      Long storeId, String id, ApplicantCommands.StatusChange command, long actorId) {
     Applicant applicant = locked(storeId, id, command.version());
     var before = auditValues(applicant);
     ApplicantStatus previous = applicant.getStatus();
     applicant.transition(command.status(), command.reason());
-    Long actorId = actorId(actorEmail);
     applicant.recordEditor(actorId);
     record(applicant, previous, actorId, command.reason().strip());
     applicants.flush();
-    recordAudit(applicant, "APPLICANT_STATUS_CHANGED", before);
+    recordAudit(applicant, "APPLICANT_STATUS_CHANGED", before, actorId);
     return response(applicant);
   }
 
   @Transactional
   public ApplicantViews.Detail decide(
-      Long storeId, String id, ApplicantCommands.StatusChange command, String actorEmail) {
+      Long storeId, String id, ApplicantCommands.StatusChange command, long actorId) {
     Applicant applicant = locked(storeId, id, command.version());
     var before = auditValues(applicant);
     ApplicantStatus previous = applicant.getStatus();
     applicant.decide(command.status(), command.reason());
-    Long actorId = actorId(actorEmail);
     applicant.recordEditor(actorId);
     record(applicant, previous, actorId, command.reason().strip());
     applicants.flush();
-    recordAudit(applicant, "APPLICANT_DECIDED", before);
+    recordAudit(applicant, "APPLICANT_DECIDED", before, actorId);
     return response(applicant);
   }
 
   /** 在籍の作成・応募者の更新・双方の監査を一つのトランザクションで確定する。招待は発行しない（在籍側で手動発行する）。 */
   @Transactional
   public ApplicantViews.Detail enroll(
-      Long storeId, String id, ApplicantCommands.Enrollment command, String actorEmail) {
+      Long storeId, String id, ApplicantCommands.Enrollment command, long actorId) {
     Applicant applicant = locked(storeId, id, command.version());
     applicant.requireEnrollable();
-    Long actorId = actorId(actorEmail);
     var before = enrollmentAuditValues(applicant);
     applicant.recordEnrollment(casts.create(storeId, command.cast(), actorId).enrollment().getId());
     applicant.recordEditor(actorId);
     applicants.flush();
-    audit.recordCurrent(
+    audit.recordById(
+        actorId,
         storeId,
         "APPLICANT_ENROLLED",
         "APPLICANT",
         applicant.getId(),
+        null,
+        null,
         before,
         enrollmentAuditValues(applicant));
     return response(applicant);
@@ -187,12 +183,16 @@ public class ApplicantService {
     return histories.findByStoreIdAndApplicantId(storeId, id, pageable);
   }
 
-  private void recordAudit(Applicant applicant, String action, Map<String, String> before) {
-    audit.recordCurrent(
+  private void recordAudit(
+      Applicant applicant, String action, Map<String, String> before, long actorId) {
+    audit.recordById(
+        actorId,
         applicant.getStoreId(),
         action,
         "APPLICANT",
         applicant.getId(),
+        null,
+        null,
         before,
         auditValues(applicant));
   }
@@ -237,13 +237,6 @@ public class ApplicantService {
             .orElseThrow(() -> new NotFoundException("応募者が見つかりません"));
     applicant.requireVersion(version);
     return applicant;
-  }
-
-  private Long actorId(String email) {
-    return users
-        .findByEmail(email)
-        .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
-        .getId();
   }
 
   private void record(Applicant applicant, ApplicantStatus previous, Long actorId, String reason) {

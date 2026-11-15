@@ -310,7 +310,7 @@ public class CustomerService {
   }
 
   @Transactional
-  public CustomerDetail create(Long storeId, NewCustomer command) {
+  public CustomerDetail create(Long storeId, NewCustomer command, long actorId) {
     Customer customer =
         Customer.builder()
             .name(command.name())
@@ -326,19 +326,22 @@ public class CustomerService {
     customer.setStoreId(storeId);
     customerRepository.saveAndFlush(customer);
     for (var contact : command.contacts())
-      customerContactService.create(storeId, customer.getId(), contact);
-    audit.recordCurrent(
+      customerContactService.create(storeId, customer.getId(), contact, actorId);
+    audit.recordById(
+        actorId,
         customer.getStoreId(),
         "CUSTOMER_CREATED",
         "CUSTOMER",
         customer.getId(),
+        null,
+        null,
         Map.of(),
         CustomerAuditSnapshot.of(customer).after(null));
     return new CustomerDetail(customer, List.of(), null, null);
   }
 
   @Transactional
-  public CustomerDetail update(Long storeId, String id, CustomerPatch patch) {
+  public CustomerDetail update(Long storeId, String id, CustomerPatch patch, long actorId) {
     Customer customer =
         customerRepository
             .findByIdAndStoreId(id, storeId)
@@ -353,11 +356,14 @@ public class CustomerService {
     customerRepository.flush();
     var after = CustomerAuditSnapshot.of(customer).after(before);
     if (after.containsKey("redacted_fields_changed"))
-      audit.recordCurrent(
+      audit.recordById(
+          actorId,
           customer.getStoreId(),
           "CUSTOMER_UPDATED",
           "CUSTOMER",
           customer.getId(),
+          null,
+          null,
           before.values(),
           after);
 
@@ -373,7 +379,7 @@ public class CustomerService {
    * 墓標が残っていて初めて届くため、誤削除で消えるほうが重い（ADR 0010）。
    */
   @Transactional
-  public void delete(Long storeId, String id) {
+  public void delete(Long storeId, String id, long actorId) {
     var customer =
         customerRepository
             .findByIdAndStoreIdForUpdate(id, storeId)
@@ -418,11 +424,14 @@ public class CustomerService {
               DbConstraint.FK_T_ORDERS_CUSTOMER_ALIVE,
                   () -> new ConflictException(ORDERED_CUSTOMER_UNDELETABLE)));
     }
-    audit.recordCurrent(
+    audit.recordById(
+        actorId,
         customer.getStoreId(),
         "CUSTOMER_DELETED",
         "CUSTOMER",
         customer.getId(),
+        null,
+        null,
         before.values(),
         Map.of("exists", "false"));
   }

@@ -6,6 +6,7 @@ import com.kizuna.customer.api.dto.CustomerMemberLinkRequest;
 import com.kizuna.customer.api.dto.CustomerMemberLinkResponse;
 import com.kizuna.customer.application.CustomerMemberLinkService;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
@@ -45,7 +46,7 @@ public class CustomerMemberLinkController {
                     request.getMemberCode(),
                     request.getExpectedLinkId(),
                     request.getOperationReason(),
-                    principal.getName())));
+                    JwtClaims.userIdOf(principal))));
   }
 
   @PostMapping("/releases")
@@ -60,7 +61,7 @@ public class CustomerMemberLinkController {
         customerId,
         request.expectedLinkId(),
         request.operationReason(),
-        principal.getName());
+        JwtClaims.userIdOf(principal));
     return ResponseEntity.noContent().build();
   }
 

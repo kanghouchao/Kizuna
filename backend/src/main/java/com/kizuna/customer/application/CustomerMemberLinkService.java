@@ -10,10 +10,8 @@ import com.kizuna.member.application.MemberLookupService;
 import com.kizuna.member.application.MemberLookupService.MemberLookup;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.UserRepository;
 import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.Objects;
@@ -39,7 +37,6 @@ public class CustomerMemberLinkService {
   private final CustomerRepository customerRepository;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final MemberLookupService memberLookupService;
-  private final UserRepository userRepository;
   private final BusinessAudit audit;
 
   @Transactional
@@ -49,8 +46,7 @@ public class CustomerMemberLinkService {
       String memberCode,
       String expectedLinkId,
       String operationReason,
-      String actorEmail) {
-    Long actorId = resolveActorId(actorEmail);
+      long actorId) {
     lockEditableCustomer(storeId, customerId);
     String targetId = customerId;
     CustomerMemberLink current =
@@ -133,8 +129,7 @@ public class CustomerMemberLinkService {
       String customerId,
       String expectedLinkId,
       String operationReason,
-      String actorEmail) {
-    Long actorId = resolveActorId(actorEmail);
+      long actorId) {
     lockEditableCustomer(storeId, customerId);
     CustomerMemberLink current =
         customerMemberLinkRepository
@@ -199,13 +194,5 @@ public class CustomerMemberLinkService {
     if (!Objects.equals(current == null ? null : current.getId(), expectedLinkId)) {
       throw new ConflictException("関連状態が変わりました。再取得して確認してください");
     }
-  }
-
-  /** JWT は user-id claim を持たないため、実行者は認証主体の email から解決する。 */
-  private Long resolveActorId(String actorEmail) {
-    return userRepository
-        .findByEmail(actorEmail)
-        .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
-        .getId();
   }
 }

@@ -1,8 +1,11 @@
 package com.kizuna.point.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -34,7 +37,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
@@ -61,6 +63,8 @@ class BenefitRuleControllerTest {
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
   @MockitoBean StoreScopeResolver storeScopeResolver;
 
+  private static final long ACTOR_ID = 42L;
+
   private static final String VISIT_RULE_BODY =
       """
       {"name":"来店ボーナス","type":"VISIT","store_scope_type":"ALL_STORES",
@@ -69,13 +73,12 @@ class BenefitRuleControllerTest {
 
   @Test
   @DisplayName("BENEFIT_MANAGE 権限があれば規則一覧を取得できること")
-  @WithMockUser(authorities = "PERM_BENEFIT_MANAGE")
   void listWithAuthority() throws Exception {
     when(benefitRuleService.list(any()))
         .thenReturn(new PageImpl<>(List.of(rule(1L, "来店ボーナス", true))));
 
     mockMvc
-        .perform(get("/benefit-rules"))
+        .perform(get("/benefit-rules").with(jwtUser(ACTOR_ID, "PERM_BENEFIT_MANAGE")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].name").value("来店ボーナス"))
         .andExpect(jsonPath("$.content[0].store_count").value(0));
@@ -83,38 +86,38 @@ class BenefitRuleControllerTest {
 
   @Test
   @DisplayName("停用済みの規則も一覧に並ぶこと（削除の口が無いため）")
-  @WithMockUser(authorities = "PERM_BENEFIT_MANAGE")
   void listIncludesDeactivatedRules() throws Exception {
     when(benefitRuleService.list(any()))
         .thenReturn(new PageImpl<>(List.of(rule(2L, "終了した施策", false))));
 
     mockMvc
-        .perform(get("/benefit-rules"))
+        .perform(get("/benefit-rules").with(jwtUser(ACTOR_ID, "PERM_BENEFIT_MANAGE")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].enabled").value(false));
   }
 
   @Test
   @DisplayName("規則の作成は 201 と生成された規則を返すこと")
-  @WithMockUser(authorities = "PERM_BENEFIT_MANAGE")
   void createReturnsCreated() throws Exception {
-    when(benefitRuleService.create(any(), any())).thenReturn(rule(9L, "来店ボーナス", true));
+    when(benefitRuleService.create(any(), any(), anyLong())).thenReturn(rule(9L, "来店ボーナス", true));
 
     mockMvc
         .perform(
-            post("/benefit-rules").contentType(MediaType.APPLICATION_JSON).content(VISIT_RULE_BODY))
+            post("/benefit-rules")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(VISIT_RULE_BODY)
+                .with(jwtUser(ACTOR_ID, "PERM_BENEFIT_MANAGE")))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.id").value(9));
 
     ArgumentCaptor<BenefitRuleDefinition> captor =
         ArgumentCaptor.forClass(BenefitRuleDefinition.class);
-    verify(benefitRuleService).create(eq(BenefitRuleType.VISIT), captor.capture());
+    verify(benefitRuleService).create(eq(BenefitRuleType.VISIT), captor.capture(), eq(ACTOR_ID));
     assertThat(captor.getValue().points()).isEqualTo(500);
   }
 
   @Test
   @DisplayName("目録に無い種別は束縛の段階で 400 になること")
-  @WithMockUser(authorities = "PERM_BENEFIT_MANAGE")
   void unknownTypeIsRejected() throws Exception {
     mockMvc
         .perform(
@@ -124,15 +127,15 @@ class BenefitRuleControllerTest {
                     """
                     {"name":"謎の特典","type":"BIRTHDAY","store_scope_type":"ALL_STORES",
                      "repeat_policy":"EVERY_TIME","points":500}
-                    """))
+                    """)
+                .with(jwtUser(ACTOR_ID, "PERM_BENEFIT_MANAGE")))
         .andExpect(status().isBadRequest());
 
-    verify(benefitRuleService, never()).create(any(), any());
+    verify(benefitRuleService, never()).create(any(), any(), anyLong());
   }
 
   @Test
   @DisplayName("更新の要求に種別を載せると 400 になること（種別は作成後に動かない）")
-  @WithMockUser(authorities = "PERM_BENEFIT_MANAGE")
   void updateRejectsTypeField() throws Exception {
     mockMvc
         .perform(
@@ -142,10 +145,11 @@ class BenefitRuleControllerTest {
                     """
                     {"name":"来店ボーナス","type":"LOGIN","store_scope_type":"ALL_STORES",
                      "repeat_policy":"EVERY_TIME","points":500,"version":0}
-                    """))
+                    """)
+                .with(jwtUser(ACTOR_ID, "PERM_BENEFIT_MANAGE")))
         .andExpect(status().isBadRequest());
 
-    verify(benefitRuleService, never()).update(any(), any(), any());
+    verify(benefitRuleService, never()).update(any(), any(), any(), anyLong());
   }
 
   @Test
@@ -162,14 +166,14 @@ class BenefitRuleControllerTest {
                     """))
         .andExpect(status().isBadRequest());
 
-    verify(benefitRuleService, never()).update(any(), any(), any());
+    verify(benefitRuleService, never()).update(any(), any(), any(), anyLong());
   }
 
   @Test
   @DisplayName("規則の更新は 200 と更新後の規則を返すこと")
-  @WithMockUser(authorities = "PERM_BENEFIT_MANAGE")
   void updateReturnsOk() throws Exception {
-    when(benefitRuleService.update(eq(1L), eq(0L), any())).thenReturn(rule(1L, "来店ボーナス", true));
+    when(benefitRuleService.update(eq(1L), eq(0L), any(), anyLong()))
+        .thenReturn(rule(1L, "来店ボーナス", true));
 
     mockMvc
         .perform(
@@ -179,36 +183,39 @@ class BenefitRuleControllerTest {
                     """
                     {"name":"来店ボーナス","store_scope_type":"ALL_STORES",
                      "repeat_policy":"EVERY_TIME","points":500,"version":0}
-                    """))
+                    """)
+                .with(jwtUser(ACTOR_ID, "PERM_BENEFIT_MANAGE")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(1));
 
     ArgumentCaptor<BenefitRuleDefinition> captor =
         ArgumentCaptor.forClass(BenefitRuleDefinition.class);
-    verify(benefitRuleService).update(eq(1L), eq(0L), captor.capture());
+    verify(benefitRuleService).update(eq(1L), eq(0L), captor.capture(), eq(ACTOR_ID));
     assertThat(captor.getValue().name()).isEqualTo("来店ボーナス");
   }
 
   @Test
   @DisplayName("停用は 204 を返し、二度目はドメイン例外で 400 になること")
-  @WithMockUser(authorities = "PERM_BENEFIT_MANAGE")
   void deactivationReturnsNoContentAndRejectsSecondTime() throws Exception {
     mockMvc
         .perform(
             post("/benefit-rules/1/deactivation")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"version\":0}"))
+                .content("{\"version\":0}")
+                .with(jwtUser(ACTOR_ID, "PERM_BENEFIT_MANAGE")))
         .andExpect(status().isNoContent());
+    verify(benefitRuleService).deactivate(1L, 0L, ACTOR_ID);
 
-    org.mockito.Mockito.doThrow(new InvalidBenefitRuleException("停用済みの規則です"))
+    doThrow(new InvalidBenefitRuleException("停用済みの規則です"))
         .when(benefitRuleService)
-        .deactivate(eq(1L), any());
+        .deactivate(eq(1L), any(), anyLong());
 
     mockMvc
         .perform(
             post("/benefit-rules/1/deactivation")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"version\":0}"))
+                .content("{\"version\":0}")
+                .with(jwtUser(ACTOR_ID, "PERM_BENEFIT_MANAGE")))
         .andExpect(status().isBadRequest());
   }
 
@@ -222,7 +229,7 @@ class BenefitRuleControllerTest {
                 .content("{}"))
         .andExpect(status().isBadRequest());
 
-    verify(benefitRuleService, never()).deactivate(any(), any());
+    verify(benefitRuleService, never()).deactivate(any(), any(), anyLong());
   }
 
   @Test
@@ -239,13 +246,19 @@ class BenefitRuleControllerTest {
 
   @Test
   @DisplayName("BENEFIT_MANAGE 権限が無ければ規則管理の全端点が 403 を返すこと")
-  @WithMockUser(authorities = "PERM_SYSTEM_CONFIG_MANAGE")
   void everyEndpointRejectsWithoutAuthority() throws Exception {
-    mockMvc.perform(get("/benefit-rules")).andExpect(status().isForbidden());
-    mockMvc.perform(get("/benefit-rules/1")).andExpect(status().isForbidden());
+    mockMvc
+        .perform(get("/benefit-rules").with(jwtUser(ACTOR_ID, "PERM_SYSTEM_CONFIG_MANAGE")))
+        .andExpect(status().isForbidden());
+    mockMvc
+        .perform(get("/benefit-rules/1").with(jwtUser(ACTOR_ID, "PERM_SYSTEM_CONFIG_MANAGE")))
+        .andExpect(status().isForbidden());
     mockMvc
         .perform(
-            post("/benefit-rules").contentType(MediaType.APPLICATION_JSON).content(VISIT_RULE_BODY))
+            post("/benefit-rules")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(VISIT_RULE_BODY)
+                .with(jwtUser(ACTOR_ID, "PERM_SYSTEM_CONFIG_MANAGE")))
         .andExpect(status().isForbidden());
     mockMvc
         .perform(
@@ -255,13 +268,15 @@ class BenefitRuleControllerTest {
                     """
                     {"name":"来店ボーナス","store_scope_type":"ALL_STORES",
                      "repeat_policy":"EVERY_TIME","points":500,"version":0}
-                    """))
+                    """)
+                .with(jwtUser(ACTOR_ID, "PERM_SYSTEM_CONFIG_MANAGE")))
         .andExpect(status().isForbidden());
     mockMvc
         .perform(
             post("/benefit-rules/1/deactivation")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"version\":0}"))
+                .content("{\"version\":0}")
+                .with(jwtUser(ACTOR_ID, "PERM_SYSTEM_CONFIG_MANAGE")))
         .andExpect(status().isForbidden());
   }
 

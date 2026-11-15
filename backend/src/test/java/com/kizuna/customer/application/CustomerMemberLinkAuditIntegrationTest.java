@@ -38,9 +38,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
@@ -62,10 +60,6 @@ import org.springframework.orm.jpa.SharedEntityManagerCreator;
 import org.springframework.orm.jpa.hibernate.SpringBeanContainer;
 import org.springframework.orm.jpa.vendor.HibernateJpaDialect;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -76,6 +70,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class CustomerMemberLinkAuditIntegrationTest {
   private static final AtomicLong MEMBERS = new AtomicLong(100);
   private static final Long STORE_ID = 1L;
+  private static final long ACTOR_ID = 9L;
   private static final PageRequest HISTORY_PAGE =
       PageRequest.of(
           0,
@@ -95,23 +90,14 @@ class CustomerMemberLinkAuditIntegrationTest {
     customers = context.getBean(CustomerRepository.class);
     transactions = new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
     jdbc.execute(
-        "create unique index uq_link_test_customer on t_customer_member_links(store_id,customer_id) where status='ACTIVE'");
+        "create unique index uq_link_test_customer on t_customer_member_links(store_id,customer_id)"
+            + " where status='ACTIVE'");
     jdbc.execute(
-        "create unique index uq_link_test_member on t_customer_member_links(store_id,member_id) where status='ACTIVE'");
+        "create unique index uq_link_test_member on t_customer_member_links(store_id,member_id)"
+            + " where status='ACTIVE'");
     jdbc.execute(
-        "alter table t_customer_member_links add constraint fk_link_test_customer foreign key(customer_id) references t_customers(id)");
-  }
-
-  @BeforeEach
-  void authenticate() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken("operator@example.test", null, List.of()));
-  }
-
-  @AfterEach
-  void clear() {
-    SecurityContextHolder.clearContext();
+        "alter table t_customer_member_links add constraint fk_link_test_customer foreign"
+            + " key(customer_id) references t_customers(id)");
   }
 
   @AfterAll
@@ -123,16 +109,15 @@ class CustomerMemberLinkAuditIntegrationTest {
   void successfulReplacementAndReleaseKeepRealVersionsAndSafeSnapshots() {
     String customer = customer();
     String code = memberCode();
-    String first =
-        links.link(STORE_ID, customer, code, null, "秘密の建立理由", "operator@example.test").getId();
+    String first = links.link(STORE_ID, customer, code, null, "秘密の建立理由", ACTOR_ID).getId();
     String second =
-        links
-            .link(STORE_ID, customer, memberCode(), first, "秘密の変更理由", "operator@example.test")
-            .getId();
-    links.unlink(STORE_ID, customer, second, "秘密の解除理由", "operator@example.test");
+        links.link(STORE_ID, customer, memberCode(), first, "秘密の変更理由", ACTOR_ID).getId();
+    links.unlink(STORE_ID, customer, second, "秘密の解除理由", ACTOR_ID);
     var events =
         jdbc.queryForList(
-            "select action,target_id,source_id,before_values ->> 'version' as old_version,after_values ->> 'version' as new_version from t_audit_events where source_id=? order by id",
+            "select action,target_id,source_id,before_values ->> 'version' as"
+                + " old_version,after_values ->> 'version' as new_version from t_audit_events where"
+                + " source_id=? order by id",
             customer);
     assertThat(events).hasSize(4);
     assertThat(events.get(0))
@@ -176,9 +161,7 @@ class CustomerMemberLinkAuditIntegrationTest {
     String customer = customer();
     reject("CUSTOMER_MEMBER_LINK_CREATED");
     try {
-      assertThatThrownBy(
-              () ->
-                  links.link(STORE_ID, customer, memberCode(), null, "秘密", "operator@example.test"))
+      assertThatThrownBy(() -> links.link(STORE_ID, customer, memberCode(), null, "秘密", ACTOR_ID))
           .isInstanceOf(DataIntegrityViolationException.class);
     } finally {
       allow();
@@ -191,14 +174,11 @@ class CustomerMemberLinkAuditIntegrationTest {
   void eitherReplacementAuditFailureRestoresOldActiveInterval() {
     for (String action : List.of("CUSTOMER_MEMBER_LINK_RELEASED", "CUSTOMER_MEMBER_LINK_CREATED")) {
       String customer = customer();
-      String first =
-          links.link(STORE_ID, customer, memberCode(), null, "秘密", "operator@example.test").getId();
+      String first = links.link(STORE_ID, customer, memberCode(), null, "秘密", ACTOR_ID).getId();
       reject(action);
       try {
         assertThatThrownBy(
-                () ->
-                    links.link(
-                        STORE_ID, customer, memberCode(), first, "秘密の変更", "operator@example.test"))
+                () -> links.link(STORE_ID, customer, memberCode(), first, "秘密の変更", ACTOR_ID))
             .isInstanceOf(DataIntegrityViolationException.class);
       } finally {
         allow();
@@ -210,12 +190,10 @@ class CustomerMemberLinkAuditIntegrationTest {
   @Test
   void auditFailureRollsBackExplicitRelease() {
     String customer = customer();
-    String first =
-        links.link(STORE_ID, customer, memberCode(), null, "秘密", "operator@example.test").getId();
+    String first = links.link(STORE_ID, customer, memberCode(), null, "秘密", ACTOR_ID).getId();
     reject("CUSTOMER_MEMBER_LINK_RELEASED");
     try {
-      assertThatThrownBy(
-              () -> links.unlink(STORE_ID, customer, first, "秘密の解除", "operator@example.test"))
+      assertThatThrownBy(() -> links.unlink(STORE_ID, customer, first, "秘密の解除", ACTOR_ID))
           .isInstanceOf(DataIntegrityViolationException.class);
     } finally {
       allow();
@@ -226,19 +204,12 @@ class CustomerMemberLinkAuditIntegrationTest {
   @Test
   void outerRollbackRestoresLinkAndBothReplacementEvents() {
     String customer = customer();
-    String first =
-        links.link(STORE_ID, customer, memberCode(), null, "秘密", "operator@example.test").getId();
+    String first = links.link(STORE_ID, customer, memberCode(), null, "秘密", ACTOR_ID).getId();
     assertThatThrownBy(
             () ->
                 transactions.executeWithoutResult(
                     status -> {
-                      links.link(
-                          STORE_ID,
-                          customer,
-                          memberCode(),
-                          first,
-                          "秘密の変更",
-                          "operator@example.test");
+                      links.link(STORE_ID, customer, memberCode(), first, "秘密の変更", ACTOR_ID);
                       throw new IllegalStateException("外側の取引を中止");
                     }))
         .isInstanceOf(IllegalStateException.class);
@@ -246,33 +217,27 @@ class CustomerMemberLinkAuditIntegrationTest {
   }
 
   @Test
-  void actorAndStoreComeFromContextForBothReplacementEvents() {
+  void actorAndStoreAreRecordedOnBothReplacementEvents() {
     String customer = customer();
-    String first =
-        links.link(STORE_ID, customer, memberCode(), null, "秘密", "operator@example.test").getId();
-    var jwt =
-        Jwt.withTokenValue(UUID.randomUUID().toString())
-            .header("alg", "HS256")
-            .subject("operator@example.test")
-            .build();
-    SecurityContextHolder.getContext()
-        .setAuthentication(new JwtAuthenticationToken(jwt, List.of()));
-    links.link(STORE_ID, customer, memberCode(), first, "秘密の変更", "operator@example.test");
+    String first = links.link(STORE_ID, customer, memberCode(), null, "秘密", ACTOR_ID).getId();
+    links.link(STORE_ID, customer, memberCode(), first, "秘密の変更", ACTOR_ID);
     var events =
         jdbc.queryForList(
-            "select actor_id,originating_store_id from t_audit_events where source_id=? order by id",
+            "select actor_id,originating_store_id from t_audit_events where source_id=? order by"
+                + " id",
             customer);
     assertThat(events).hasSize(3);
     for (var event : events.subList(1, 3)) {
-      assertThat(event).containsEntry("actor_id", 9L).containsEntry("originating_store_id", 1L);
+      assertThat(event)
+          .containsEntry("actor_id", ACTOR_ID)
+          .containsEntry("originating_store_id", 1L);
     }
   }
 
   @Test
   void concurrentReplacementOfOneCustomerRejectsStaleExpectedLink() throws Exception {
     String customer = customer();
-    String first =
-        links.link(STORE_ID, customer, memberCode(), null, "秘密", "operator@example.test").getId();
+    String first = links.link(STORE_ID, customer, memberCode(), null, "秘密", ACTOR_ID).getId();
     var start = new CountDownLatch(1);
     try (var workers = Executors.newFixedThreadPool(2)) {
       var one = workers.submit(() -> replaceAfter(start, customer, memberCode(), first));
@@ -291,22 +256,18 @@ class CustomerMemberLinkAuditIntegrationTest {
   @Test
   void uniqueMemberRaceRollsBackLosersReleaseAndAudit() throws Exception {
     String customerOne = customer(), customerTwo = customer();
-    String oldOne =
-        links
-            .link(STORE_ID, customerOne, memberCode(), null, "秘密", "operator@example.test")
-            .getId();
-    String oldTwo =
-        links
-            .link(STORE_ID, customerTwo, memberCode(), null, "秘密", "operator@example.test")
-            .getId();
+    String oldOne = links.link(STORE_ID, customerOne, memberCode(), null, "秘密", ACTOR_ID).getId();
+    String oldTwo = links.link(STORE_ID, customerTwo, memberCode(), null, "秘密", ACTOR_ID).getId();
     String targetCode = memberCode();
     long targetMember = Long.parseLong(targetCode.substring("private-code-".length()));
     jdbc.execute(
-        "create function link_test_gate() returns trigger language plpgsql as $$ begin if NEW.member_id = "
+        "create function link_test_gate() returns trigger language plpgsql as $$ begin if"
+            + " NEW.member_id = "
             + targetMember
             + " then perform pg_advisory_xact_lock(1009441); end if; return NEW; end $$");
     jdbc.execute(
-        "create trigger link_test_gate before insert on t_customer_member_links for each row execute function link_test_gate()");
+        "create trigger link_test_gate before insert on t_customer_member_links for each row"
+            + " execute function link_test_gate()");
     try (var blocker = context.getBean(DataSource.class).getConnection();
         var statement = blocker.createStatement();
         var workers = Executors.newFixedThreadPool(2)) {
@@ -318,7 +279,8 @@ class CustomerMemberLinkAuditIntegrationTest {
       try {
         long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         while (jdbc.queryForObject(
-                    "select count(*) from pg_locks where locktype='advisory' and objid=1009441 and not granted",
+                    "select count(*) from pg_locks where locktype='advisory' and objid=1009441 and"
+                        + " not granted",
                     Integer.class)
                 < 2
             && System.nanoTime() < until) {
@@ -326,7 +288,8 @@ class CustomerMemberLinkAuditIntegrationTest {
         }
         assertThat(
                 jdbc.queryForObject(
-                    "select count(*) from pg_locks where locktype='advisory' and objid=1009441 and not granted",
+                    "select count(*) from pg_locks where locktype='advisory' and objid=1009441 and"
+                        + " not granted",
                     Integer.class))
             .isEqualTo(2);
       } finally {
@@ -355,15 +318,12 @@ class CustomerMemberLinkAuditIntegrationTest {
 
   private Throwable replaceAfter(
       CountDownLatch start, String customer, String code, String expected) {
-    authenticate();
     try {
       if (!start.await(10, TimeUnit.SECONDS)) throw new IllegalStateException("開始待機が時間切れ");
-      links.link(STORE_ID, customer, code, expected, "秘密の並行変更", "operator@example.test");
+      links.link(STORE_ID, customer, code, expected, "秘密の並行変更", ACTOR_ID);
       return null;
     } catch (Throwable failure) {
       return failure;
-    } finally {
-      clear();
     }
   }
 
@@ -372,7 +332,8 @@ class CustomerMemberLinkAuditIntegrationTest {
     assertThat(links.history(STORE_ID, customer, HISTORY_PAGE).getContent()).hasSize(1);
     assertThat(
             jdbc.queryForMap(
-                "select status,version,released_at,released_by from t_customer_member_links where id=?",
+                "select status,version,released_at,released_by from t_customer_member_links where"
+                    + " id=?",
                 first))
         .containsEntry("status", "ACTIVE")
         .containsEntry("version", 0L)
@@ -518,9 +479,8 @@ class CustomerMemberLinkAuditIntegrationTest {
               .enabled(true)
               .roleIds(Set.of(1L))
               .build();
-      actor.setId(9L);
-      when(r.findByEmail(anyString())).thenReturn(Optional.of(actor));
-      when(r.findById(anyLong())).thenReturn(Optional.of(actor));
+      actor.setId(ACTOR_ID);
+      when(r.findById(ACTOR_ID)).thenReturn(Optional.of(actor));
       return r;
     }
   }

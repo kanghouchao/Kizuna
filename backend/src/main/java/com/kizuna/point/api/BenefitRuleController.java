@@ -7,7 +7,9 @@ import com.kizuna.point.api.dto.BenefitRuleResponse;
 import com.kizuna.point.api.dto.BenefitRuleSummaryResponse;
 import com.kizuna.point.api.dto.BenefitRuleUpdateRequest;
 import com.kizuna.point.application.BenefitRuleService;
+import com.kizuna.shared.web.JwtClaims;
 import jakarta.validation.Valid;
+import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -47,19 +49,27 @@ public class BenefitRuleController {
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_BENEFIT_MANAGE')")
   public ResponseEntity<BenefitRuleResponse> create(
-      @Valid @RequestBody BenefitRuleCreateRequest request) {
+      @Valid @RequestBody BenefitRuleCreateRequest request, Principal principal) {
     var rule =
-        benefitRuleService.create(request.getType(), benefitRuleMapper.toDefinition(request));
+        benefitRuleService.create(
+            request.getType(),
+            benefitRuleMapper.toDefinition(request),
+            JwtClaims.userIdOf(principal));
     return ResponseEntity.status(HttpStatus.CREATED).body(benefitRuleMapper.toResponse(rule));
   }
 
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_BENEFIT_MANAGE')")
   public ResponseEntity<BenefitRuleResponse> update(
-      @PathVariable Long id, @Valid @RequestBody BenefitRuleUpdateRequest request) {
+      @PathVariable Long id,
+      @Valid @RequestBody BenefitRuleUpdateRequest request,
+      Principal principal) {
     var rule =
         benefitRuleService.update(
-            id, request.getVersion(), benefitRuleMapper.toDefinition(request));
+            id,
+            request.getVersion(),
+            benefitRuleMapper.toDefinition(request),
+            JwtClaims.userIdOf(principal));
     return ResponseEntity.ok(benefitRuleMapper.toResponse(rule));
   }
 
@@ -67,8 +77,10 @@ public class BenefitRuleController {
   @PostMapping("/{id}/deactivation")
   @PreAuthorize("hasAuthority('PERM_BENEFIT_MANAGE')")
   public ResponseEntity<Void> deactivate(
-      @PathVariable Long id, @Valid @RequestBody BenefitRuleDeactivationRequest request) {
-    benefitRuleService.deactivate(id, request.getVersion());
+      @PathVariable Long id,
+      @Valid @RequestBody BenefitRuleDeactivationRequest request,
+      Principal principal) {
+    benefitRuleService.deactivate(id, request.getVersion(), JwtClaims.userIdOf(principal));
     return ResponseEntity.noContent().build();
   }
 }

@@ -33,14 +33,12 @@ import com.kizuna.user.domain.UserRepository;
 import java.sql.Date;
 import java.time.Clock;
 import java.time.LocalDate;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.boot.WebApplicationType;
@@ -55,8 +53,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.AopTestUtils;
 
 /** 実 PG（Liquibase の baseline）で、在籍登録の原子性と「一つの在籍を指す応募者は一つ」の部分唯一索引を確かめる。 */
@@ -102,15 +98,8 @@ class ApplicantEnrollmentIntegrationTest {
             ACTOR);
   }
 
-  @BeforeEach
-  void authenticate() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken(ACTOR, null, List.of()));
-  }
-
   @AfterEach
   void clear() {
-    SecurityContextHolder.clearContext();
     reset(audit);
   }
 
@@ -123,7 +112,7 @@ class ApplicantEnrollmentIntegrationTest {
   void enrollmentCreatesUnpublishedCastWithoutInvitationOrApplicantPii() {
     String applicant = hiredApplicant(storeId);
     long enrollments = count("t_cast_enrollments where store_id=?", storeId);
-    var response = applicants.enroll(storeId, applicant, request(0L), ACTOR);
+    var response = applicants.enroll(storeId, applicant, request(0L), actorId);
     String enrollment = response.enrollmentId();
     assertThat(enrollment).isNotNull();
     assertThat(response.version()).isEqualTo(1L);
@@ -157,7 +146,7 @@ class ApplicantEnrollmentIntegrationTest {
               assertThat(row.get("after").toString()).contains(enrollment, "\"version\": \"1\"");
               assertThat(row.values().toString()).doesNotContain("非公開", "090-0000-0000", "面接");
             });
-    assertThatThrownBy(() -> applicants.enroll(storeId, applicant, request(1L), ACTOR))
+    assertThatThrownBy(() -> applicants.enroll(storeId, applicant, request(1L), actorId))
         .isInstanceOf(ConflictException.class);
     assertThat(count("t_cast_enrollments where store_id=?", storeId)).isEqualTo(enrollments + 1);
   }
@@ -169,8 +158,17 @@ class ApplicantEnrollmentIntegrationTest {
     long audits = count("t_audit_events where originating_store_id=?", storeId);
     doThrow(new IllegalStateException("監査失敗"))
         .when(audit)
-        .recordCurrent(eq(storeId), eq("APPLICANT_ENROLLED"), anyString(), any(), anyMap(), any());
-    assertThatThrownBy(() -> applicants.enroll(storeId, applicant, request(0L), ACTOR))
+        .recordById(
+            eq(actorId),
+            eq(storeId),
+            eq("APPLICANT_ENROLLED"),
+            anyString(),
+            any(),
+            any(),
+            any(),
+            anyMap(),
+            any());
+    assertThatThrownBy(() -> applicants.enroll(storeId, applicant, request(0L), actorId))
         .isInstanceOf(IllegalStateException.class);
     assertThat(count("t_cast_enrollments where store_id=?", storeId)).isEqualTo(enrollments);
     assertThat(count("t_cast_profiles where store_id=?", storeId)).isEqualTo(enrollments);
@@ -185,7 +183,7 @@ class ApplicantEnrollmentIntegrationTest {
   @Test
   void oneEnrollmentCannotBeHeldByTwoApplicants() {
     String first = hiredApplicant(storeId);
-    String enrollment = applicants.enroll(storeId, first, request(0L), ACTOR).enrollmentId();
+    String enrollment = applicants.enroll(storeId, first, request(0L), actorId).enrollmentId();
     String second = hiredApplicant(storeId);
     assertThatThrownBy(
             () ->
@@ -239,7 +237,7 @@ class ApplicantEnrollmentIntegrationTest {
   @Test
   void deletingAnEnrollmentHeldByAnApplicantIsRefusedWithConflict() {
     String applicant = hiredApplicant(storeId);
-    String enrollment = applicants.enroll(storeId, applicant, request(0L), ACTOR).enrollmentId();
+    String enrollment = applicants.enroll(storeId, applicant, request(0L), actorId).enrollmentId();
     assertThat(context.getBean(CastService.class).get(storeId, enrollment).deletable()).isFalse();
     assertThatThrownBy(
             () -> context.getBean(CastService.class).delete(storeId, enrollment, actorId))

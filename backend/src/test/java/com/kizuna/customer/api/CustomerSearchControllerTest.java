@@ -1,5 +1,6 @@
 package com.kizuna.customer.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -24,11 +25,12 @@ import com.kizuna.customer.domain.CustomerMergeRepository;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.application.StoreScopeResolver;
-import com.kizuna.user.domain.UserRepository;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -43,9 +45,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.PlatformTransactionManager;
 
 /** 実際の controller・service・mapper を通じて候補の判断材料と HTTP 応答を検証する。 */
@@ -57,7 +59,6 @@ import org.springframework.transaction.PlatformTransactionManager;
   StoreScopeHolder.class,
   CustomerSearchControllerTest.Security.class
 })
-@WithMockUser(authorities = {"PERM_CUSTOMER_MANAGE", "PERM_CUSTOMER_MERGE"})
 class CustomerSearchControllerTest {
   @TestConfiguration
   @EnableMethodSecurity
@@ -72,13 +73,22 @@ class CustomerSearchControllerTest {
   @MockitoBean CustomerContactHistoryRepository histories;
   @MockitoBean CustomerMemberLinkRepository links;
   @MockitoBean CustomerMergeRepository merges;
-  @MockitoBean UserRepository users;
   @MockitoBean BusinessAudit businessAudit;
   @MockitoBean SystemConfigService config;
   @MockitoBean StoreExistenceCheck stores;
   @MockitoBean StoreScopeResolver storeScopeResolver;
 
+  /** 利用者の店舗集合に名乗る店舗が含まれている状態。 */
+  @BeforeEach
+  void storeIsInScope() {
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(STORE_ID)));
+  }
+
   private static final Long STORE_ID = 7L;
+
+  private static RequestPostProcessor operator() {
+    return jwtUser(42L, "PERM_CUSTOMER_MANAGE", "PERM_CUSTOMER_MERGE");
+  }
 
   @BeforeEach
   void storeExists() {
@@ -113,7 +123,8 @@ class CustomerSearchControllerTest {
             get("/customers/duplicates")
                 .param("page", "1")
                 .param("size", "1")
-                .header("X-Store-ID", STORE_ID.toString()))
+                .header("X-Store-ID", STORE_ID.toString())
+                .with(operator()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(1))
         .andExpect(jsonPath("$.content[0].matched_type").value("EMAIL"))
@@ -142,7 +153,8 @@ class CustomerSearchControllerTest {
                 .param("value", "090-1234-5678")
                 .param("page", "1")
                 .param("size", "1")
-                .header("X-Store-ID", STORE_ID.toString()))
+                .header("X-Store-ID", STORE_ID.toString())
+                .with(operator()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content.length()").value(1))
         .andExpect(jsonPath("$.content[0].id").value("2"))
@@ -165,7 +177,8 @@ class CustomerSearchControllerTest {
     mvc.perform(
             get("/customers")
                 .param("search", "Case@EXAMPLE.COM")
-                .header("X-Store-ID", STORE_ID.toString()))
+                .header("X-Store-ID", STORE_ID.toString())
+                .with(operator()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].preferred_contacts").isEmpty())
         .andExpect(jsonPath("$.content[0].matched_contacts[0].value").value("Case@example.com"));
@@ -180,7 +193,8 @@ class CustomerSearchControllerTest {
                   .param("value", "Case")
                   .param("page", "99999999")
                   .param("size", "100")
-                  .header("X-Store-ID", STORE_ID.toString()))
+                  .header("X-Store-ID", STORE_ID.toString())
+                  .with(operator()))
           .andExpect(status().isBadRequest());
     }
   }

@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -37,6 +36,7 @@ import org.junit.jupiter.api.Test;
 
 class CustomerMemberLinkAuditTest {
   private static final Long STORE_ID = 7L;
+  private static final long ACTOR_ID = 9L;
   private final CustomerRepository customers = mock(CustomerRepository.class);
   private final CustomerMemberLinkRepository links = mock(CustomerMemberLinkRepository.class);
   private final MemberRepository members = mock(MemberRepository.class);
@@ -56,9 +56,8 @@ class CustomerMemberLinkAuditTest {
             .enabled(true)
             .roleIds(Set.of(1L))
             .build();
-    actor.setId(9L);
-    when(users.findByEmail(anyString())).thenReturn(Optional.of(actor));
-    when(users.findById(9L)).thenReturn(Optional.of(actor));
+    actor.setId(ACTOR_ID);
+    when(users.findById(ACTOR_ID)).thenReturn(Optional.of(actor));
     when(customers.findByIdAndStoreIdForUpdate("customer", STORE_ID))
         .thenReturn(Optional.of(Customer.builder().build()));
     // 紐づけは会員行を押さえてから退会状態を見る。模擬の会員は常に実在し未退会。
@@ -95,7 +94,6 @@ class CustomerMemberLinkAuditTest {
             customers,
             links,
             new MemberLookupService(members),
-            users,
             new BusinessAudit(users, new AuditWriter(events, Clock.systemUTC())));
   }
 
@@ -104,7 +102,7 @@ class CustomerMemberLinkAuditTest {
     var old = activeLink();
     when(links.findByStoreIdAndCustomerIdAndStatus(STORE_ID, "customer", LinkStatus.ACTIVE))
         .thenReturn(Optional.of(old));
-    service.link(STORE_ID, "customer", "秘密の会員コード", old.getId(), "秘密の変更理由", "operator@example.test");
+    service.link(STORE_ID, "customer", "秘密の会員コード", old.getId(), "秘密の変更理由", ACTOR_ID);
     assertThat(audit)
         .extracting(AuditEvent::getAction)
         .containsExactly("CUSTOMER_MEMBER_LINK_RELEASED", "CUSTOMER_MEMBER_LINK_CREATED");
@@ -150,7 +148,7 @@ class CustomerMemberLinkAuditTest {
     var old = activeLink();
     when(links.findByStoreIdAndCustomerIdAndStatus(STORE_ID, "customer", LinkStatus.ACTIVE))
         .thenReturn(Optional.of(old));
-    service.unlink(STORE_ID, "customer", old.getId(), "秘密の解除理由", "operator@example.test");
+    service.unlink(STORE_ID, "customer", old.getId(), "秘密の解除理由", ACTOR_ID);
     assertThat(audit).hasSize(1);
     var event = audit.getFirst();
     assertThat(event.getTargetId()).isEqualTo(old.getId());
@@ -171,32 +169,25 @@ class CustomerMemberLinkAuditTest {
     var old = activeLink();
     when(links.findByStoreIdAndCustomerIdAndStatus(STORE_ID, "customer", LinkStatus.ACTIVE))
         .thenReturn(Optional.of(old));
-    assertThatThrownBy(
-            () -> service.unlink(STORE_ID, "customer", "stale", "理由", "operator@example.test"))
+    assertThatThrownBy(() -> service.unlink(STORE_ID, "customer", "stale", "理由", ACTOR_ID))
         .isInstanceOf(ConflictException.class);
     assertThatThrownBy(
-            () ->
-                service.link(
-                    STORE_ID, "customer", "秘密の会員コード", "stale", "理由", "operator@example.test"))
+            () -> service.link(STORE_ID, "customer", "秘密の会員コード", "stale", "理由", ACTOR_ID))
         .isInstanceOf(ConflictException.class);
     when(links.existsByStoreIdAndMemberIdAndStatus(STORE_ID, 7L, LinkStatus.ACTIVE))
         .thenReturn(true);
     assertThatThrownBy(
-            () ->
-                service.link(
-                    STORE_ID, "customer", "秘密の会員コード", old.getId(), "理由", "operator@example.test"))
+            () -> service.link(STORE_ID, "customer", "秘密の会員コード", old.getId(), "理由", ACTOR_ID))
         .isInstanceOf(ConflictException.class);
     when(customers.isMerged(STORE_ID, "customer")).thenReturn(true);
-    assertThatThrownBy(
-            () -> service.unlink(STORE_ID, "customer", old.getId(), "理由", "operator@example.test"))
+    assertThatThrownBy(() -> service.unlink(STORE_ID, "customer", old.getId(), "理由", ACTOR_ID))
         .isInstanceOf(ConflictException.class);
     assertThat(audit).isEmpty();
   }
 
   @Test
   void creationRecordsTheIntervalWithoutCopyingItsCodeOrReason() {
-    var result =
-        service.link(STORE_ID, "customer", "秘密の会員コード", null, "秘密の理由", "operator@example.test");
+    var result = service.link(STORE_ID, "customer", "秘密の会員コード", null, "秘密の理由", ACTOR_ID);
     assertThat(audit).hasSize(1);
     var event = audit.getFirst();
     assertThat(event.getAction()).isEqualTo("CUSTOMER_MEMBER_LINK_CREATED");
@@ -204,7 +195,7 @@ class CustomerMemberLinkAuditTest {
     assertThat(event.getTargetId()).isEqualTo(result.getId());
     assertThat(event.getSourceType()).isEqualTo("CUSTOMER");
     assertThat(event.getSourceId()).isEqualTo("customer");
-    assertThat(event.getActorId()).isEqualTo(9L);
+    assertThat(event.getActorId()).isEqualTo(ACTOR_ID);
     assertThat(event.getOriginatingStoreId()).isEqualTo(STORE_ID);
     assertThat(event.getBeforeValues()).isEmpty();
     assertThat(event.getAfterValues())

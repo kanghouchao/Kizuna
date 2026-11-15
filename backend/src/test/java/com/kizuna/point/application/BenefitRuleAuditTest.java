@@ -3,7 +3,6 @@ package com.kizuna.point.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -28,14 +27,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class BenefitRuleAuditTest {
+  private static final long ACTOR_ID = 9L;
   private final BenefitRuleRepository rules = mock(BenefitRuleRepository.class);
   private final UserRepository users = mock(UserRepository.class);
   private final AuditEventRepository events = mock(AuditEventRepository.class);
@@ -45,9 +42,6 @@ class BenefitRuleAuditTest {
 
   @BeforeEach
   void setup() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken("operator@example.test", null, List.of()));
     service =
         new BenefitRuleService(
             rules, new BusinessAudit(users, new AuditWriter(events, Clock.systemUTC())));
@@ -59,8 +53,8 @@ class BenefitRuleAuditTest {
             .userType(UserType.STAFF)
             .roleIds(Set.of(1L))
             .build();
-    actor.setId(9L);
-    when(users.findByEmail(anyString())).thenReturn(Optional.of(actor));
+    actor.setId(ACTOR_ID);
+    when(users.findById(ACTOR_ID)).thenReturn(Optional.of(actor));
     when(events.saveAndFlush(any()))
         .thenAnswer(
             call -> {
@@ -82,18 +76,14 @@ class BenefitRuleAuditTest {
     when(rules.findById(7L)).thenReturn(Optional.of(stored));
   }
 
-  @AfterEach
-  void clear() {
-    SecurityContextHolder.clearContext();
-  }
-
   @Test
   void creationAuditsGroupWideWithoutFreeText() {
-    service.create(BenefitRuleType.VISIT, definition("秘密の名前", 500));
+    service.create(BenefitRuleType.VISIT, definition("秘密の名前", 500), ACTOR_ID);
 
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("BENEFIT_RULE_CREATED");
+    assertThat(event.getActorId()).isEqualTo(ACTOR_ID);
     assertThat(event.getTargetType()).isEqualTo("BENEFIT_RULE");
     assertThat(event.getTargetId()).isEqualTo("7");
     assertThat(event.getOriginatingStoreId()).isNull();
@@ -110,11 +100,12 @@ class BenefitRuleAuditTest {
 
   @Test
   void updateAuditsChangedFieldNamesAndNeverTheName() {
-    service.update(7L, 0L, definition("別の名前", 800));
+    service.update(7L, 0L, definition("別の名前", 800), ACTOR_ID);
 
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("BENEFIT_RULE_UPDATED");
+    assertThat(event.getActorId()).isEqualTo(ACTOR_ID);
     assertThat(event.getOriginatingStoreId()).isNull();
     assertThat(event.getBeforeValues()).containsEntry("points", "500");
     assertThat(event.getAfterValues())
@@ -127,24 +118,25 @@ class BenefitRuleAuditTest {
 
   @Test
   void nameOnlyUpdateStillAudits() {
-    service.update(7L, 0L, definition("別の名前", 500));
+    service.update(7L, 0L, definition("別の名前", 500), ACTOR_ID);
     assertThat(recorded).hasSize(1);
     assertThat(recorded.getFirst().getAfterValues()).containsEntry("changed_fields", "name");
   }
 
   @Test
   void identicalUpdateLeavesNoAudit() {
-    service.update(7L, 0L, definition("来店ボーナス", 500));
+    service.update(7L, 0L, definition("来店ボーナス", 500), ACTOR_ID);
     assertThat(recorded).isEmpty();
   }
 
   @Test
   void deactivationAuditsStateFlip() {
-    service.deactivate(7L, 0L);
+    service.deactivate(7L, 0L, ACTOR_ID);
 
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("BENEFIT_RULE_DEACTIVATED");
+    assertThat(event.getActorId()).isEqualTo(ACTOR_ID);
     assertThat(event.getOriginatingStoreId()).isNull();
     assertThat(event.getBeforeValues()).containsEntry("active", "true");
     assertThat(event.getAfterValues()).containsEntry("active", "false");
@@ -152,12 +144,12 @@ class BenefitRuleAuditTest {
 
   @Test
   void rejectionsLeaveNoAudit() {
-    assertThatThrownBy(() -> service.update(7L, 5L, definition("x", 800)))
+    assertThatThrownBy(() -> service.update(7L, 5L, definition("x", 800), ACTOR_ID))
         .isInstanceOf(StaleBenefitRuleUpdateException.class);
     var invalid = definition("x", 0);
-    assertThatThrownBy(() -> service.update(7L, 0L, invalid))
+    assertThatThrownBy(() -> service.update(7L, 0L, invalid, ACTOR_ID))
         .isInstanceOf(InvalidBenefitRuleException.class);
-    assertThatThrownBy(() -> service.deactivate(7L, 9L))
+    assertThatThrownBy(() -> service.deactivate(7L, 9L, ACTOR_ID))
         .isInstanceOf(StaleBenefitRuleUpdateException.class);
     assertThat(recorded).isEmpty();
   }
