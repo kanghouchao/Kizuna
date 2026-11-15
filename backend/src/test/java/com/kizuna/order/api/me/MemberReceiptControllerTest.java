@@ -1,5 +1,7 @@
 package com.kizuna.order.api.me;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -20,7 +22,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithAnonymousUser;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -37,6 +38,8 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
   StoreScopeHolder.class
 })
 class MemberReceiptControllerTest {
+
+  private static final long USER_ID = 7L;
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
   @TestConfiguration
@@ -61,37 +64,36 @@ class MemberReceiptControllerTest {
 
   @Test
   @DisplayName("会員は伝票を申領でき、帰属記録の生成として 201 が返ること")
-  @WithMockUser(authorities = "ROLE_MEMBER")
   void memberCanClaimAReceipt() throws Exception {
-    when(memberReceiptClaimService.claim(anyString(), anyString()))
+    when(memberReceiptClaimService.claim(anyLong(), anyString()))
         .thenReturn(new MemberReceiptClaimResult(120));
 
-    mockMvc.perform(memberPost()).andExpect(status().isCreated());
+    mockMvc
+        .perform(memberPost().with(jwtUser(USER_ID, "ROLE_MEMBER")))
+        .andExpect(status().isCreated());
   }
 
   @Test
   @DisplayName("トークンの無い要求は要求誤りとして撥ねること")
-  @WithMockUser(authorities = "ROLE_MEMBER")
   void blankTokenIsRejected() throws Exception {
     mockMvc
         .perform(
             post(PATH)
-                .principal(() -> "member@kizuna.test")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"token\":\" \"}"))
+                .content("{\"token\":\" \"}")
+                .with(jwtUser(USER_ID, "ROLE_MEMBER")))
         .andExpect(status().isBadRequest());
   }
 
   @Test
   @DisplayName("受注管理権限を持つスタッフでも申領には到達できないこと")
-  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void staffIsRejected() throws Exception {
     mockMvc
         .perform(
             post(PATH)
-                .principal(() -> "staff@kizuna.test")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(BODY))
+                .content(BODY)
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isForbidden());
   }
 
@@ -104,11 +106,7 @@ class MemberReceiptControllerTest {
         .andExpect(status().isUnauthorized());
   }
 
-  // 本番では認証済み主体をサーブレットコンテナが載せるが、@WebMvcTest の最小チェーンでは載らないため明示する。
   private MockHttpServletRequestBuilder memberPost() {
-    return post(PATH)
-        .principal(() -> "member@kizuna.test")
-        .contentType(MediaType.APPLICATION_JSON)
-        .content(BODY);
+    return post(PATH).contentType(MediaType.APPLICATION_JSON).content(BODY);
   }
 }

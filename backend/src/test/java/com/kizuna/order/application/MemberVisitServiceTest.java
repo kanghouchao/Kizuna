@@ -10,16 +10,11 @@ import com.kizuna.order.domain.MemberVisitView;
 import com.kizuna.order.domain.OrderAttributionRepository;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.user.application.ActorIdentityService;
-import com.kizuna.user.domain.User;
-import com.kizuna.user.domain.UserRepository;
-import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,7 +24,6 @@ import org.mockito.Captor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -38,13 +32,8 @@ import org.springframework.data.domain.PageRequest;
 @ExtendWith(MockitoExtension.class)
 class MemberVisitServiceTest {
 
-  private static final String EMAIL = "member@example.com";
   private static final long USER_ID = 10L;
   private static final long MEMBER_ID = 7L;
-
-  private final UserRepository userRepository = Mockito.mock(UserRepository.class);
-
-  @Spy private ActorIdentityService actorIdentityService = new ActorIdentityService(userRepository);
 
   @Mock private MemberLookupService memberLookupService;
   @Mock private OrderAttributionRepository orderAttributionRepository;
@@ -114,17 +103,6 @@ class MemberVisitServiceTest {
 
   @BeforeEach
   void resolveAuthenticatedMember() {
-    User user =
-        User.builder()
-            .email(EMAIL)
-            .password("encoded")
-            .displayName("会員 花子")
-            .enabled(true)
-            .userType(UserType.MEMBER)
-            .storeIds(Set.of())
-            .build();
-    user.setId(USER_ID);
-    Mockito.lenient().when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     Mockito.lenient()
         .when(memberLookupService.findByUserId(USER_ID))
         .thenReturn(Optional.of(new MemberLookup(MEMBER_ID, "123456789012")));
@@ -156,7 +134,7 @@ class MemberVisitServiceTest {
     Mockito.when(pointLedgerService.grantedPointsByOrder(Mockito.eq(MEMBER_ID), Mockito.any()))
         .thenReturn(Map.of("order-b", 120L, "order-a", 80L));
 
-    Page<MemberVisitSummary> page = service.list(EMAIL, PageRequest.of(0, 20));
+    Page<MemberVisitSummary> page = service.list(USER_ID, PageRequest.of(0, 20));
 
     assertThat(page.getContent())
         .extracting(
@@ -180,7 +158,7 @@ class MemberVisitServiceTest {
     Mockito.when(pointLedgerService.grantedPointsByOrder(Mockito.eq(MEMBER_ID), Mockito.any()))
         .thenReturn(Map.of());
 
-    assertThat(service.list(EMAIL, PageRequest.of(0, 20)).getContent())
+    assertThat(service.list(USER_ID, PageRequest.of(0, 20)).getContent())
         .extracting(MemberVisitSummary::storeName, MemberVisitSummary::grantedPoints)
         .containsExactly(tuple("店舗A", 0L));
   }
@@ -197,7 +175,7 @@ class MemberVisitServiceTest {
     Mockito.when(pointLedgerService.grantedPointsByOrder(Mockito.eq(MEMBER_ID), Mockito.any()))
         .thenReturn(Map.of("order-1", beyondInt));
 
-    assertThat(service.list(EMAIL, PageRequest.of(0, 20)).getContent())
+    assertThat(service.list(USER_ID, PageRequest.of(0, 20)).getContent())
         .extracting(MemberVisitSummary::grantedPoints)
         .containsExactly(beyondInt);
   }
@@ -215,7 +193,7 @@ class MemberVisitServiceTest {
                 Mockito.eq(MEMBER_ID), orderIdsCaptor.capture()))
         .thenReturn(Map.of());
 
-    service.list(EMAIL, PageRequest.of(0, 2));
+    service.list(USER_ID, PageRequest.of(0, 2));
 
     Mockito.verify(pointLedgerService, Mockito.times(1))
         .grantedPointsByOrder(Mockito.eq(MEMBER_ID), Mockito.any());
@@ -231,7 +209,7 @@ class MemberVisitServiceTest {
     Mockito.when(pointLedgerService.grantedPointsByOrder(Mockito.eq(MEMBER_ID), Mockito.any()))
         .thenReturn(Map.of());
 
-    Page<MemberVisitSummary> page = service.list(EMAIL, pageable);
+    Page<MemberVisitSummary> page = service.list(USER_ID, pageable);
 
     assertThat(page.getContent()).hasSize(1);
     assertThat(page.getTotalElements()).isEqualTo(3);
@@ -242,16 +220,7 @@ class MemberVisitServiceTest {
   void refusesANonMemberPrincipal() {
     Mockito.when(memberLookupService.findByUserId(USER_ID)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.list(EMAIL, PageRequest.of(0, 20)))
-        .isInstanceOf(StaleSessionException.class);
-  }
-
-  @Test
-  @DisplayName("認証主体のユーザーが存在しない場合は 401 系例外")
-  void refusesAStalePrincipal() {
-    Mockito.when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
-
-    assertThatThrownBy(() -> service.list(EMAIL, PageRequest.of(0, 20)))
+    assertThatThrownBy(() -> service.list(USER_ID, PageRequest.of(0, 20)))
         .isInstanceOf(StaleSessionException.class);
   }
 

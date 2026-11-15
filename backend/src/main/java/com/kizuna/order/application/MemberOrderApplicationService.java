@@ -12,7 +12,6 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
-import com.kizuna.user.application.ActorIdentityService;
 import java.time.LocalDate;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -38,15 +37,14 @@ public class MemberOrderApplicationService {
 
   private final OrderApplicationRepository orderApplicationRepository;
   private final OrderApplicationIntake orderApplicationIntake;
-  private final ActorIdentityService actorIdentityService;
   private final MemberLookupService memberLookupService;
   private final StoreExistenceCheck storeExistenceCheck;
   private final BusinessDateService businessDateService;
 
   /** 予約を申請する。予約申請の PENDING 行だけが起き、受注（t_orders）には行が生まれない。 */
   @Transactional
-  public MemberOrderApplicationResult request(String email, MemberOrderApplicationCommand command) {
-    MemberLookup member = resolveMember(email);
+  public MemberOrderApplicationResult request(long userId, MemberOrderApplicationCommand command) {
+    MemberLookup member = resolveMemberByUserId(userId);
     // 退会と並行する申請が退会の commit 後に PENDING のまま成立しないよう、退会と同じ会員行を押さえてから退会状態を見る。
     memberLookupService.lockForBalanceConfirmation(member.memberId());
     if (memberLookupService.isWithdrawn(member.memberId())) {
@@ -79,8 +77,8 @@ public class MemberOrderApplicationService {
 
   /** 本人が申請した予約の一覧（跨店集約）。 */
   @Transactional(readOnly = true)
-  public Page<MemberOrderApplicationResult> list(String email, Pageable pageable) {
-    MemberLookup member = resolveMember(email);
+  public Page<MemberOrderApplicationResult> list(long userId, Pageable pageable) {
+    MemberLookup member = resolveMemberByUserId(userId);
     LocalDate today = businessDateService.currentBusinessDate();
     return orderApplicationRepository
         .findMemberViews(member.memberId(), pageable)
@@ -89,8 +87,7 @@ public class MemberOrderApplicationService {
 
   /** 本人が申請した未処理の予約を取り下げる。確定・謝絶の後は動かせない（終端）。 */
   @Transactional
-  public MemberOrderApplicationResult withdraw(String email, String applicationId) {
-    Long userId = actorIdentityService.requireUserId(email);
+  public MemberOrderApplicationResult withdraw(long userId, String applicationId) {
     MemberLookup member = resolveMemberByUserId(userId);
     OrderApplication application = ownedApplication(member.memberId(), applicationId);
     application.withdraw(userId, Timestamps.now());
@@ -103,10 +100,6 @@ public class MemberOrderApplicationService {
     return orderApplicationRepository
         .findByIdAndRequesterMemberId(applicationId, memberId)
         .orElseThrow(() -> new NotFoundException("予約申請が見つかりません: " + applicationId));
-  }
-
-  private MemberLookup resolveMember(String email) {
-    return resolveMemberByUserId(actorIdentityService.requireUserId(email));
   }
 
   private MemberLookup resolveMemberByUserId(Long userId) {

@@ -1,7 +1,9 @@
 package com.kizuna.order.api.me;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -30,7 +32,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithAnonymousUser;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -43,6 +44,8 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
   StoreScopeHolder.class
 })
 class MemberOrderApplicationControllerTest {
+
+  private static final long USER_ID = 7L;
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
   @TestConfiguration
@@ -69,47 +72,48 @@ class MemberOrderApplicationControllerTest {
 
   @Test
   @DisplayName("会員は予約の申請・一覧・取り下げができること")
-  @WithMockUser(authorities = "ROLE_MEMBER")
   void memberCanUseOwnApplicationRoutes() throws Exception {
-    when(memberOrderApplicationService.request(anyString(), any())).thenReturn(emptyResult());
+    when(memberOrderApplicationService.request(anyLong(), any())).thenReturn(emptyResult());
     ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
-    when(memberOrderApplicationService.list(anyString(), pageable.capture()))
+    when(memberOrderApplicationService.list(anyLong(), pageable.capture()))
         .thenReturn(new PageImpl<>(List.of()));
-    when(memberOrderApplicationService.withdraw(anyString(), anyString()))
-        .thenReturn(emptyResult());
+    when(memberOrderApplicationService.withdraw(anyLong(), anyString())).thenReturn(emptyResult());
 
     mockMvc
         .perform(
             memberPost("/me/order-applications")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(BODY))
+                .content(BODY)
+                .with(jwtUser(USER_ID, "ROLE_MEMBER")))
         .andExpect(status().isCreated());
     mockMvc
-        .perform(get("/me/order-applications").principal(() -> "member@kizuna.test"))
+        .perform(get("/me/order-applications").with(jwtUser(USER_ID, "ROLE_MEMBER")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
     assertThat(pageable.getValue().getSort())
         .isEqualTo(
             Sort.by(
                 Sort.Direction.DESC, OrderApplication::getBusinessDate, OrderApplication::getId));
-    mockMvc.perform(memberPost("/me/order-applications/a1/withdrawal")).andExpect(status().isOk());
+    mockMvc
+        .perform(
+            memberPost("/me/order-applications/a1/withdrawal")
+                .with(jwtUser(USER_ID, "ROLE_MEMBER")))
+        .andExpect(status().isOk());
   }
 
   @Test
   @DisplayName("キャストは会員の予約申請経路に到達できないこと")
-  @WithMockUser(authorities = "ROLE_CAST")
   void castIsRejected() throws Exception {
     mockMvc
-        .perform(get("/me/order-applications").principal(() -> "cast@kizuna.test"))
+        .perform(get("/me/order-applications").with(jwtUser(USER_ID, "ROLE_CAST")))
         .andExpect(status().isForbidden());
   }
 
   @Test
   @DisplayName("受注管理権限を持つスタッフでも会員の予約申請経路に到達できないこと")
-  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void staffIsRejected() throws Exception {
     mockMvc
-        .perform(get("/me/order-applications").principal(() -> "staff@kizuna.test"))
+        .perform(get("/me/order-applications").with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isForbidden());
   }
 
@@ -120,8 +124,7 @@ class MemberOrderApplicationControllerTest {
     mockMvc.perform(get("/me/order-applications")).andExpect(status().isUnauthorized());
   }
 
-  // 本番では認証済み主体をサーブレットコンテナが載せるが、@WebMvcTest の最小チェーンでは載らないため明示する。
   private MockHttpServletRequestBuilder memberPost(String path) {
-    return post(path).principal(() -> "member@kizuna.test");
+    return post(path);
   }
 }

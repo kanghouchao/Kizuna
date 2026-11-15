@@ -16,18 +16,11 @@ import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.User;
-import com.kizuna.user.domain.UserRepository;
-import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -37,7 +30,6 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Limit;
 
@@ -46,7 +38,6 @@ class OrderAttributionServiceTest {
 
   private static final String ORDER_ID = "o1";
   private static final long STORE_ID = 1L;
-  private static final String ACTOR_EMAIL = "staff@kizuna.test";
   private static final long ACTOR_ID = 42L;
   private static final long MEMBER_ID = 7L;
   private static final String MEMBER_CODE = "123456789012";
@@ -60,29 +51,10 @@ class OrderAttributionServiceTest {
   @Mock private OrderReceiptTokenRepository orderReceiptTokenRepository;
   @Mock private ReceiptTokenGenerator receiptTokenGenerator;
   @Mock private BusinessAudit businessAudit;
-  private final UserRepository userRepository = Mockito.mock(UserRepository.class);
-
-  @Spy private ActorIdentityService actorIdentityService = new ActorIdentityService(userRepository);
 
   @InjectMocks private OrderAttributionService service;
 
   @Captor private ArgumentCaptor<OrderReceiptToken> savedToken;
-
-  @BeforeEach
-  void resolveActor() {
-    User actor =
-        User.builder()
-            .email(ACTOR_EMAIL)
-            .password("encoded")
-            .displayName("店舗 太郎")
-            .enabled(true)
-            .userType(UserType.STAFF)
-            .storeIds(Set.of(1L))
-            .roleIds(Set.of(1L))
-            .build();
-    actor.setId(ACTOR_ID);
-    Mockito.lenient().when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
-  }
 
   // ==================== 現況の読み出し ====================
 
@@ -153,7 +125,7 @@ class OrderAttributionServiceTest {
     Mockito.when(orderAttributionRepository.saveAndFlush(attribution)).thenReturn(attribution);
 
     OrderAttributionState response =
-        service.invalidate(STORE_ID, ORDER_ID, ATTRIBUTION_ID, REASON, ACTOR_EMAIL);
+        service.invalidate(STORE_ID, ORDER_ID, ATTRIBUTION_ID, REASON, ACTOR_ID);
 
     assertThat(attribution.getStatus()).isEqualTo(OrderAttributionStatus.INVALIDATED);
     assertThat(attribution.getInvalidatedReason()).isEqualTo(REASON);
@@ -169,7 +141,7 @@ class OrderAttributionServiceTest {
     givenAttributions();
 
     assertThatThrownBy(
-            () -> service.invalidate(STORE_ID, ORDER_ID, ATTRIBUTION_ID, REASON, ACTOR_EMAIL))
+            () -> service.invalidate(STORE_ID, ORDER_ID, ATTRIBUTION_ID, REASON, ACTOR_ID))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("会員へ帰属していません");
   }
@@ -183,7 +155,7 @@ class OrderAttributionServiceTest {
     givenAttributions(invalidated);
 
     assertThatThrownBy(
-            () -> service.invalidate(STORE_ID, ORDER_ID, ATTRIBUTION_ID, REASON, ACTOR_EMAIL))
+            () -> service.invalidate(STORE_ID, ORDER_ID, ATTRIBUTION_ID, REASON, ACTOR_ID))
         .isInstanceOf(ServiceException.class);
     assertThat(invalidated.getInvalidatedReason()).isEqualTo("初回の理由");
   }
@@ -199,23 +171,11 @@ class OrderAttributionServiceTest {
     givenAttributions(current);
 
     assertThatThrownBy(
-            () -> service.invalidate(STORE_ID, ORDER_ID, ATTRIBUTION_ID, REASON, ACTOR_EMAIL))
+            () -> service.invalidate(STORE_ID, ORDER_ID, ATTRIBUTION_ID, REASON, ACTOR_ID))
         .isInstanceOf(ConflictException.class);
 
     assertThat(current.getStatus()).isEqualTo(OrderAttributionStatus.ACTIVE);
     Mockito.verify(orderAttributionRepository, Mockito.never()).saveAndFlush(Mockito.any());
-  }
-
-  @Test
-  @DisplayName("失効した認証セッションの無効化は実行者不明のまま通らないこと")
-  void invalidateRejectsAnUnresolvableActor() {
-    givenOrder(OrderStatus.COMPLETED);
-    givenAttributions(activeAttribution());
-    Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.empty());
-
-    assertThatThrownBy(
-            () -> service.invalidate(STORE_ID, ORDER_ID, ATTRIBUTION_ID, REASON, ACTOR_EMAIL))
-        .isInstanceOf(StaleSessionException.class);
   }
 
   @Test
@@ -225,7 +185,7 @@ class OrderAttributionServiceTest {
         .thenReturn(Optional.empty());
 
     assertThatThrownBy(
-            () -> service.invalidate(STORE_ID, ORDER_ID, ATTRIBUTION_ID, REASON, ACTOR_EMAIL))
+            () -> service.invalidate(STORE_ID, ORDER_ID, ATTRIBUTION_ID, REASON, ACTOR_ID))
         .isInstanceOf(NotFoundException.class);
     Mockito.verifyNoInteractions(orderAttributionRepository);
   }
@@ -241,7 +201,7 @@ class OrderAttributionServiceTest {
     Mockito.when(receiptTokenGenerator.generate())
         .thenReturn(new ReceiptTokenGenerator.GeneratedToken("raw", "digest"));
 
-    String raw = service.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_EMAIL);
+    String raw = service.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_ID);
 
     assertThat(raw).isEqualTo("raw");
     Mockito.verify(orderReceiptTokenRepository).save(savedToken.capture());
@@ -264,7 +224,7 @@ class OrderAttributionServiceTest {
     Mockito.when(receiptTokenGenerator.generate())
         .thenReturn(new ReceiptTokenGenerator.GeneratedToken("raw", "digest"));
 
-    service.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_EMAIL);
+    service.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_ID);
 
     Mockito.verify(orderReceiptTokenRepository).save(savedToken.capture());
     assertThat(savedToken.getValue().getPlannedPoints()).isEqualTo(COMPLETION_GRANT);
@@ -283,7 +243,7 @@ class OrderAttributionServiceTest {
     Mockito.when(receiptTokenGenerator.generate())
         .thenReturn(new ReceiptTokenGenerator.GeneratedToken("raw", "digest"));
 
-    service.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_EMAIL);
+    service.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_ID);
 
     Mockito.verify(orderReceiptTokenRepository).save(savedToken.capture());
     // 受注側の付与実績（非会員完了なので 0）を読むと、正しい本人が取り戻せるポイントが消える
@@ -296,7 +256,7 @@ class OrderAttributionServiceTest {
     givenOrder(OrderStatus.COMPLETED);
     givenAttributions(activeAttribution());
 
-    assertThatThrownBy(() -> service.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_ID))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("先に帰属を無効化");
     Mockito.verify(orderReceiptTokenRepository, Mockito.never()).save(Mockito.any());
@@ -308,7 +268,7 @@ class OrderAttributionServiceTest {
     givenOrder(OrderStatus.COMPLETED);
     givenAttributions();
 
-    assertThatThrownBy(() -> service.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_ID))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("帰属したことがありません");
     Mockito.verify(orderReceiptTokenRepository, Mockito.never()).save(Mockito.any());
@@ -321,7 +281,7 @@ class OrderAttributionServiceTest {
         .thenReturn(
             Optional.of(
                 Order.builder().status(OrderStatus.COMPLETED).completionInvalidated(true).build()));
-    assertThatThrownBy(() -> service.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_ID))
         .isInstanceOf(ServiceException.class)
         .hasMessage("無効化した受注に伝票は発行できません");
     Mockito.verifyNoInteractions(orderReceiptTokenRepository, receiptTokenGenerator);
@@ -332,7 +292,7 @@ class OrderAttributionServiceTest {
   void reissueRejectsAnIncompleteOrder() {
     givenOrder(OrderStatus.CONFIRMED);
 
-    assertThatThrownBy(() -> service.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_ID))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("完了していない");
   }
@@ -349,7 +309,7 @@ class OrderAttributionServiceTest {
     Mockito.when(receiptTokenGenerator.generate())
         .thenReturn(new ReceiptTokenGenerator.GeneratedToken("raw", "digest"));
 
-    service.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_EMAIL);
+    service.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_ID);
 
     assertThat(live.getStatus()).isEqualTo(OrderReceiptTokenStatus.REVOKED);
     // Hibernate は INSERT を UPDATE より先に流すため、まとめて save すると新しい行が「まだ倒れていない
@@ -376,7 +336,7 @@ class OrderAttributionServiceTest {
     Mockito.when(receiptTokenGenerator.generate())
         .thenReturn(new ReceiptTokenGenerator.GeneratedToken("raw", "digest"));
 
-    assertThat(service.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_EMAIL)).isEqualTo("raw");
+    assertThat(service.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_ID)).isEqualTo("raw");
 
     assertThat(expired.getStatus()).isEqualTo(OrderReceiptTokenStatus.REVOKED);
   }
@@ -395,7 +355,7 @@ class OrderAttributionServiceTest {
         .thenReturn(new ReceiptTokenGenerator.GeneratedToken("raw", "digest"));
 
     // 申領済みの行を見て何も発行しない実装も「触らない」を満たすため、発行まで断言する
-    assertThat(service.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_EMAIL)).isEqualTo("raw");
+    assertThat(service.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_ID)).isEqualTo("raw");
 
     assertThat(claimed.getStatus()).isEqualTo(OrderReceiptTokenStatus.CLAIMED);
     Mockito.verify(orderReceiptTokenRepository, Mockito.never()).saveAndFlush(Mockito.any());
@@ -410,7 +370,7 @@ class OrderAttributionServiceTest {
     Mockito.when(receiptTokenGenerator.generate())
         .thenReturn(new ReceiptTokenGenerator.GeneratedToken("raw", "digest"));
 
-    service.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_EMAIL);
+    service.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_ID);
 
     // 実際の待ち合わせは統合テストが踏む。ここが固定するのは配線と順序そのもので、素の読み口へ
     // 差し替わるか順序が入れ替わると、門が在途の申領を見ない check-then-act に戻る
@@ -429,7 +389,7 @@ class OrderAttributionServiceTest {
     Mockito.when(orderRepository.findByIdAndStoreIdForUpdate(ORDER_ID, STORE_ID))
         .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_ID))
         .isInstanceOf(NotFoundException.class);
     Mockito.verifyNoInteractions(orderAttributionRepository, orderReceiptTokenRepository);
   }

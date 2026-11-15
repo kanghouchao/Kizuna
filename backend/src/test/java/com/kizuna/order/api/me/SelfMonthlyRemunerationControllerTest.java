@@ -1,5 +1,6 @@
 package com.kizuna.order.api.me;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -17,7 +18,6 @@ import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.store.domain.Store;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.util.List;
 import java.util.Optional;
@@ -34,7 +34,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -47,15 +46,16 @@ import org.springframework.transaction.PlatformTransactionManager;
   OrderMapperImpl.class,
   StoreScopeHolder.class
 })
-@WithMockUser(username = "cast@example.test", roles = "CAST")
 class SelfMonthlyRemunerationControllerTest {
+
+  private static final long USER_ID = 12L;
+
   @TestConfiguration
   @EnableMethodSecurity
   static class MethodSecurityConfig {}
 
   private static final String BASE = "/me/monthly-remunerations";
   @Autowired private MockMvc mvc;
-  @MockitoBean private ActorIdentityService actors;
   @MockitoBean private CastRepository people;
   @MockitoBean private SelfMonthlyRemunerationQuery selfQuery;
   @MockitoBean private RemunerationQuery monthlyQuery;
@@ -65,30 +65,31 @@ class SelfMonthlyRemunerationControllerTest {
   @MockitoBean private PlatformTransactionManager transactionManager;
 
   private MockHttpServletRequestBuilder request(String path) {
-    return get(path).principal(() -> "cast@example.test");
+    return get(path);
   }
 
   @BeforeEach
   void identity() {
-    var person = Cast.builder().userId(12L).build();
+    var person = Cast.builder().userId(USER_ID).build();
     person.setId(34L);
-    when(actors.requireUserId("cast@example.test")).thenReturn(12L);
-    when(people.findByUserId(12L)).thenReturn(Optional.of(person));
+    when(people.findByUserId(USER_ID)).thenReturn(Optional.of(person));
   }
 
   @Test
-  @WithMockUser(authorities = {"PERM_ORDER_MANAGE", "PERM_ORDER_SET_VIEW"})
   @DisplayName("店舗・集合の受注権限は本人照会を許可しない")
   void staffCannotReadSelf() throws Exception {
-    mvc.perform(request(BASE + "/stores")).andExpect(status().isForbidden());
-    verifyNoInteractions(actors, selfQuery, monthlyQuery);
+    mvc.perform(
+            request(BASE + "/stores")
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE", "PERM_ORDER_SET_VIEW")))
+        .andExpect(status().isForbidden());
+    verifyNoInteractions(selfQuery, monthlyQuery);
   }
 
   @Test
   @DisplayName("本人未作成なら店舗候補は空になる")
   void unlinkedCast() throws Exception {
-    when(people.findByUserId(12L)).thenReturn(Optional.empty());
-    mvc.perform(request(BASE + "/stores"))
+    when(people.findByUserId(USER_ID)).thenReturn(Optional.empty());
+    mvc.perform(request(BASE + "/stores").with(jwtUser(USER_ID, "ROLE_CAST")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content").isEmpty());
     verifyNoInteractions(selfQuery, monthlyQuery);
@@ -97,9 +98,13 @@ class SelfMonthlyRemunerationControllerTest {
   @Test
   @DisplayName("月次の一覧の口は無く、本人でも404になる")
   void monthlyListIsNotRouted() throws Exception {
-    mvc.perform(request(BASE).param("store_id", "1").param("month", "2026-09"))
+    mvc.perform(
+            request(BASE)
+                .param("store_id", "1")
+                .param("month", "2026-09")
+                .with(jwtUser(USER_ID, "ROLE_CAST")))
         .andExpect(status().isNotFound());
-    verifyNoInteractions(actors, selfQuery, monthlyQuery);
+    verifyNoInteractions(selfQuery, monthlyQuery);
   }
 
   @ParameterizedTest
@@ -109,7 +114,10 @@ class SelfMonthlyRemunerationControllerTest {
     var page = PageRequest.of(0, effective, Sort.by(Store::getId));
     when(selfQuery.stores(34L, page))
         .thenReturn(new PageImpl<>(List.of(new RemunerationStoreRow(1L, "歴史店舗")), page, 1));
-    mvc.perform(request(BASE + "/stores").param("size", String.valueOf(size)))
+    mvc.perform(
+            request(BASE + "/stores")
+                .param("size", String.valueOf(size))
+                .with(jwtUser(USER_ID, "ROLE_CAST")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.size").value(effective))
         .andExpect(jsonPath("$.content[0].store_name").value("歴史店舗"));
@@ -120,9 +128,12 @@ class SelfMonthlyRemunerationControllerTest {
   void storePageBounds() throws Exception {
     var first = PageRequest.of(0, 20, Sort.by(Store::getId));
     when(selfQuery.stores(34L, first)).thenReturn(new PageImpl<>(List.of(), first, 0));
-    mvc.perform(request(BASE + "/stores").param("page", "2147483647"))
+    mvc.perform(
+            request(BASE + "/stores")
+                .param("page", "2147483647")
+                .with(jwtUser(USER_ID, "ROLE_CAST")))
         .andExpect(status().isBadRequest());
-    mvc.perform(request(BASE + "/stores").param("page", "-1"))
+    mvc.perform(request(BASE + "/stores").param("page", "-1").with(jwtUser(USER_ID, "ROLE_CAST")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.number").value(0));
   }

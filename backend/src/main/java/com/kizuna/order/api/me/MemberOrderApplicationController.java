@@ -4,6 +4,7 @@ import com.kizuna.order.api.dto.MemberOrderApplicationCreateRequest;
 import com.kizuna.order.api.dto.MemberOrderApplicationResponse;
 import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.application.MemberOrderApplicationService;
+import com.kizuna.shared.web.JwtClaims;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
@@ -38,7 +39,7 @@ public class MemberOrderApplicationController {
         .body(
             orderMapper.toResponse(
                 memberOrderApplicationService.request(
-                    principal.getName(), orderMapper.toCommand(request))));
+                    JwtClaims.userIdOf(principal), orderMapper.toCommand(request))));
   }
 
   /** 本人の予約申請一覧。新しい希望日から。 */
@@ -53,7 +54,7 @@ public class MemberOrderApplicationController {
           Pageable pageable) {
     return ResponseEntity.ok(
         memberOrderApplicationService
-            .list(principal.getName(), pageable)
+            .list(JwtClaims.userIdOf(principal), pageable)
             .map(orderMapper::toResponse));
   }
 
@@ -63,6 +64,7 @@ public class MemberOrderApplicationController {
   public ResponseEntity<MemberOrderApplicationResponse> withdraw(
       Principal principal, @PathVariable String id) {
     return ResponseEntity.ok(
-        orderMapper.toResponse(memberOrderApplicationService.withdraw(principal.getName(), id)));
+        orderMapper.toResponse(
+            memberOrderApplicationService.withdraw(JwtClaims.userIdOf(principal), id)));
   }
 }

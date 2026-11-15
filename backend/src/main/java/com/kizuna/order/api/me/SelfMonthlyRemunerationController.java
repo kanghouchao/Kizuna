@@ -3,6 +3,7 @@ package com.kizuna.order.api.me;
 import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.api.dto.SelfMonthlyRemunerationStoreSummary;
 import com.kizuna.order.application.SelfMonthlyRemunerationService;
+import com.kizuna.shared.web.JwtClaims;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -28,6 +29,6 @@ public class SelfMonthlyRemunerationController {
               size = 20,
               sort = {})
           Pageable pageable) {
-    return service.stores(principal.getName(), pageable).map(mapper::toStoreSummary);
+    return service.stores(JwtClaims.userIdOf(principal), pageable).map(mapper::toStoreSummary);
   }
 }

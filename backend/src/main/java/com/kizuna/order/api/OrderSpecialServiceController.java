@@ -10,6 +10,7 @@ import com.kizuna.order.application.OrderSpecialServices;
 import com.kizuna.service.application.OrderSpecialServiceCatalog;
 import com.kizuna.service.application.SpecialServiceTerms;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import java.time.OffsetDateTime;
@@ -87,7 +88,11 @@ public class OrderSpecialServiceController {
       Principal principal) {
     return orderMapper.toResponse(
         orders.start(
-            storeId, id, request.expectedVersion(), request.reason(), principal.getName()));
+            storeId,
+            id,
+            request.expectedVersion(),
+            request.reason(),
+            JwtClaims.userIdOf(principal)));
   }
 
   public record Candidate(

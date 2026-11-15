@@ -12,7 +12,6 @@ import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.persistence.Timestamps;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -46,7 +45,6 @@ public class MemberReceiptClaimService {
   private final OrderRepository orderRepository;
   private final ReceiptTokenGenerator receiptTokenGenerator;
   private final PointLedgerService pointLedgerService;
-  private final ActorIdentityService actorIdentityService;
   private final MemberLookupService memberLookupService;
   private final AttributionMaterializer materializer;
   private final BusinessAudit businessAudit;
@@ -54,8 +52,7 @@ public class MemberReceiptClaimService {
 
   /** 伝票トークンを申領し、その来店を本人の記録として確定する。 */
   @Transactional
-  public MemberReceiptClaimResult claim(String email, String rawToken) {
-    Long userId = actorIdentityService.requireUserId(email);
+  public MemberReceiptClaimResult claim(long userId, String rawToken) {
     MemberLookup member = resolveMember(userId);
 
     OrderReceiptToken token =

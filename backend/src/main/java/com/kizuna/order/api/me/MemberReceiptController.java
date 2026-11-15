@@ -4,6 +4,7 @@ import com.kizuna.order.api.dto.MemberReceiptClaimRequest;
 import com.kizuna.order.api.dto.MemberReceiptClaimResponse;
 import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.application.MemberReceiptClaimService;
+import com.kizuna.shared.web.JwtClaims;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +38,7 @@ public class MemberReceiptController {
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(
             orderMapper.toResponse(
-                memberReceiptClaimService.claim(principal.getName(), request.getToken())));
+                memberReceiptClaimService.claim(
+                    JwtClaims.userIdOf(principal), request.getToken())));
   }
 }

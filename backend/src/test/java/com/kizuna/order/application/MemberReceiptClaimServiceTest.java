@@ -21,7 +21,6 @@ import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.persistence.Timestamps;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -45,7 +44,6 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
@@ -69,8 +67,6 @@ class MemberReceiptClaimServiceTest {
   @Mock private PointLedgerService pointLedgerService;
   private final UserRepository userRepository = Mockito.mock(UserRepository.class);
 
-  @Spy private ActorIdentityService actorIdentityService = new ActorIdentityService(userRepository);
-
   @Mock private MemberLookupService memberLookupService;
   @Mock private AttributionMaterializer materializer;
 
@@ -84,7 +80,6 @@ class MemberReceiptClaimServiceTest {
         orderRepository,
         receiptTokenGenerator,
         pointLedgerService,
-        actorIdentityService,
         memberLookupService,
         materializer,
         audit,
@@ -103,7 +98,6 @@ class MemberReceiptClaimServiceTest {
             .storeIds(Set.of())
             .build();
     user.setId(USER_ID);
-    Mockito.lenient().when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     Mockito.lenient().when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));
     var auditRepository = Mockito.mock(AuditEventRepository.class);
     Mockito.lenient()
@@ -128,7 +122,7 @@ class MemberReceiptClaimServiceTest {
     OrderReceiptToken token = Mockito.spy(issuedToken(OffsetDateTime.now()));
     givenToken(token);
 
-    MemberReceiptClaimResult response = service.claim(EMAIL, RAW_TOKEN);
+    MemberReceiptClaimResult response = service.claim(USER_ID, RAW_TOKEN);
 
     assertThat(response.grantedPoints()).isEqualTo(PLANNED_POINTS);
     assertThat(token.getStatus()).isEqualTo(OrderReceiptTokenStatus.CLAIMED);
@@ -153,7 +147,7 @@ class MemberReceiptClaimServiceTest {
     Instant justBefore = token.getExpiresAt().toInstant().minus(1, ChronoUnit.MICROS);
 
     OffsetDateTime before = Timestamps.now();
-    serviceAt(Clock.fixed(justBefore, ZoneOffset.UTC)).claim(EMAIL, RAW_TOKEN);
+    serviceAt(Clock.fixed(justBefore, ZoneOffset.UTC)).claim(USER_ID, RAW_TOKEN);
     OffsetDateTime after = Timestamps.now();
 
     assertThat(token.getStatus()).isEqualTo(OrderReceiptTokenStatus.CLAIMED);
@@ -185,7 +179,7 @@ class MemberReceiptClaimServiceTest {
     Instant deadline = token.getExpiresAt().toInstant();
 
     assertThatThrownBy(
-            () -> serviceAt(Clock.fixed(deadline, ZoneOffset.UTC)).claim(EMAIL, RAW_TOKEN))
+            () -> serviceAt(Clock.fixed(deadline, ZoneOffset.UTC)).claim(USER_ID, RAW_TOKEN))
         .isInstanceOf(NotFoundException.class);
     assertThat(token.getStatus()).isEqualTo(OrderReceiptTokenStatus.ISSUED);
   }
@@ -206,7 +200,7 @@ class MemberReceiptClaimServiceTest {
             Mockito.any(),
             Mockito.any());
 
-    service.claim(EMAIL, RAW_TOKEN);
+    service.claim(USER_ID, RAW_TOKEN);
 
     assertThat(events).hasSize(1);
     AuditEvent event = events.get(0);
@@ -248,7 +242,7 @@ class MemberReceiptClaimServiceTest {
             Mockito.any(),
             Mockito.any());
 
-    assertThat(service.claim(EMAIL, RAW_TOKEN).grantedPoints()).isEqualTo(expectedTotal);
+    assertThat(service.claim(USER_ID, RAW_TOKEN).grantedPoints()).isEqualTo(expectedTotal);
   }
 
   @Test
@@ -256,7 +250,7 @@ class MemberReceiptClaimServiceTest {
   void claimOfAZeroPointReceiptStillRecordsTheVisit() {
     // 申領の効果は来店の可視化に閉じる。帰属は付与の有無と独立している
     givenToken(OrderReceiptToken.issueFor(ORDER_ID, DIGEST, 0, OffsetDateTime.now()));
-    assertThat(service.claim(EMAIL, RAW_TOKEN).grantedPoints()).isZero();
+    assertThat(service.claim(USER_ID, RAW_TOKEN).grantedPoints()).isZero();
     Mockito.verify(materializer)
         .materialize(
             Mockito.eq(MEMBER_ID),
@@ -275,18 +269,18 @@ class MemberReceiptClaimServiceTest {
     // 応答を撃ち分けると、受注の存在と完了状態を応答の違いから辿れてしまう
     Mockito.when(orderReceiptTokenRepository.findByTokenDigest(DIGEST))
         .thenReturn(Optional.empty());
-    Throwable missing = catchThrowable(() -> service.claim(EMAIL, RAW_TOKEN));
+    Throwable missing = catchThrowable(() -> service.claim(USER_ID, RAW_TOKEN));
 
     OrderReceiptToken expired = issuedToken(OffsetDateTime.now().minusDays(91));
     Mockito.when(orderReceiptTokenRepository.findByTokenDigest(DIGEST))
         .thenReturn(Optional.of(expired));
-    Throwable outOfDate = catchThrowable(() -> service.claim(EMAIL, RAW_TOKEN));
+    Throwable outOfDate = catchThrowable(() -> service.claim(USER_ID, RAW_TOKEN));
 
     OrderReceiptToken used = issuedToken(OffsetDateTime.now());
     used.claim(OffsetDateTime.now());
     Mockito.when(orderReceiptTokenRepository.findByTokenDigest(DIGEST))
         .thenReturn(Optional.of(used));
-    Throwable alreadyClaimed = catchThrowable(() -> service.claim(EMAIL, RAW_TOKEN));
+    Throwable alreadyClaimed = catchThrowable(() -> service.claim(USER_ID, RAW_TOKEN));
 
     assertThat(missing).isInstanceOf(NotFoundException.class);
     assertThat(outOfDate).isInstanceOf(NotFoundException.class).hasMessage(missing.getMessage());
@@ -312,11 +306,11 @@ class MemberReceiptClaimServiceTest {
         .thenReturn(Optional.of(token));
     Mockito.when(pointLedgerService.isRolledBack(ORDER_ID)).thenReturn(true);
 
-    Throwable rolledBack = catchThrowable(() -> service.claim(EMAIL, RAW_TOKEN));
+    Throwable rolledBack = catchThrowable(() -> service.claim(USER_ID, RAW_TOKEN));
 
     Mockito.when(orderReceiptTokenRepository.findByTokenDigest(DIGEST))
         .thenReturn(Optional.empty());
-    Throwable missing = catchThrowable(() -> service.claim(EMAIL, RAW_TOKEN));
+    Throwable missing = catchThrowable(() -> service.claim(USER_ID, RAW_TOKEN));
 
     assertThat(rolledBack).isInstanceOf(NotFoundException.class).hasMessage(missing.getMessage());
     assertThat(token.getStatus()).as("撥ねた伝票は未申領のまま残ること").isEqualTo(OrderReceiptTokenStatus.ISSUED);
@@ -332,10 +326,10 @@ class MemberReceiptClaimServiceTest {
     Mockito.when(orderRepository.findByReceiptTokenDigest(DIGEST))
         .thenReturn(Optional.of(Order.builder().completionInvalidated(true).build()));
 
-    Throwable invalidated = catchThrowable(() -> service.claim(EMAIL, RAW_TOKEN));
+    Throwable invalidated = catchThrowable(() -> service.claim(USER_ID, RAW_TOKEN));
     Mockito.when(orderReceiptTokenRepository.findByTokenDigest(DIGEST))
         .thenReturn(Optional.empty());
-    Throwable missing = catchThrowable(() -> service.claim(EMAIL, RAW_TOKEN));
+    Throwable missing = catchThrowable(() -> service.claim(USER_ID, RAW_TOKEN));
 
     assertThat(invalidated).isInstanceOf(NotFoundException.class).hasMessage(missing.getMessage());
     assertThat(token.getStatus()).isEqualTo(OrderReceiptTokenStatus.ISSUED);
@@ -348,17 +342,7 @@ class MemberReceiptClaimServiceTest {
   void refusesANonMemberPrincipal() {
     Mockito.when(memberLookupService.findByUserId(USER_ID)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.claim(EMAIL, RAW_TOKEN))
-        .isInstanceOf(StaleSessionException.class);
-    Mockito.verifyNoInteractions(materializer, pointLedgerService);
-  }
-
-  @Test
-  @DisplayName("認証主体のユーザーが存在しない場合は 401 系例外")
-  void refusesAStalePrincipal() {
-    Mockito.when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
-
-    assertThatThrownBy(() -> service.claim(EMAIL, RAW_TOKEN))
+    assertThatThrownBy(() -> service.claim(USER_ID, RAW_TOKEN))
         .isInstanceOf(StaleSessionException.class);
     Mockito.verifyNoInteractions(materializer, pointLedgerService);
   }

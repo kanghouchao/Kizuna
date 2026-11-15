@@ -26,7 +26,6 @@ import com.kizuna.point.application.BenefitGrantService;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -105,7 +104,7 @@ class MemberReceiptClaimAuditIntegrationTest {
   void claimCommitsAttributionLedgerRankAndAuditTogether() {
     var orderId = createOrder();
 
-    service.claim(EMAIL, RAW);
+    service.claim(USER_ID, RAW);
 
     assertThat(count("t_order_attributions", orderId)).isEqualTo(1);
     assertThat(effects(orderId)).isEqualTo(2);
@@ -131,7 +130,7 @@ class MemberReceiptClaimAuditIntegrationTest {
         "alter table t_audit_events add constraint ck_audit_test_reject"
             + " check (action <> 'RECEIPT_CLAIMED') not valid");
     try {
-      assertThatThrownBy(() -> service.claim(EMAIL, RAW)).isInstanceOf(RuntimeException.class);
+      assertThatThrownBy(() -> service.claim(USER_ID, RAW)).isInstanceOf(RuntimeException.class);
     } finally {
       jdbc.execute("alter table t_audit_events drop constraint ck_audit_test_reject");
     }
@@ -241,7 +240,6 @@ class MemberReceiptClaimAuditIntegrationTest {
               .storeIds(Set.of())
               .build();
       member.setId(USER_ID);
-      when(users.findByEmail(EMAIL)).thenReturn(Optional.of(member));
       when(users.findById(USER_ID)).thenReturn(Optional.of(member));
       return users;
     }
@@ -315,7 +313,6 @@ class MemberReceiptClaimAuditIntegrationTest {
           orders,
           generator,
           mock(PointLedgerService.class),
-          new ActorIdentityService(users()),
           members,
           materializer(em),
           audit,

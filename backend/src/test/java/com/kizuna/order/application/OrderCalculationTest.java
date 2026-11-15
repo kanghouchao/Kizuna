@@ -23,7 +23,7 @@ import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.json.JsonMapper;
 
 class OrderCalculationTest {
-  private static final String ACTOR = "staff@kizuna.test";
+  private static final long ACTOR = 42L;
   private static final Map<String, Object> INPUT = Map.of("course_id", "course");
   private static final SpecialServiceSnapshot SERVICE =
       new SpecialServiceSnapshot(

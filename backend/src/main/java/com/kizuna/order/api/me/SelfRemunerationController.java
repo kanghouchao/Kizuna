@@ -6,6 +6,7 @@ import com.kizuna.order.api.dto.SelfRemunerationEnrollmentSummary;
 import com.kizuna.order.api.dto.SelfRemunerationResponse;
 import com.kizuna.order.api.dto.SelfRemunerationSummary;
 import com.kizuna.order.application.SelfRemunerationService;
+import com.kizuna.shared.web.JwtClaims;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -35,7 +36,9 @@ public class SelfRemunerationController {
               sort = {"createdAt", "id"},
               direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return service.enrollments(principal.getName(), pageable).map(mapper::toEnrollmentSummary);
+    return service
+        .enrollments(JwtClaims.userIdOf(principal), pageable)
+        .map(mapper::toEnrollmentSummary);
   }
 
   @GetMapping("/remunerations")
@@ -49,14 +52,14 @@ public class SelfRemunerationController {
               direction = Sort.Direction.DESC)
           Pageable pageable) {
     return service
-        .list(principal.getName(), enrollmentId, pageable)
+        .list(JwtClaims.userIdOf(principal), enrollmentId, pageable)
         .map(mapper::toRemunerationSummary);
   }
 
   @GetMapping("/remunerations/{orderId}")
   @PreAuthorize("hasRole('CAST')")
   public SelfRemunerationResponse detail(Principal principal, @PathVariable String orderId) {
-    return mapper.toResponse(service.detail(principal.getName(), orderId));
+    return mapper.toResponse(service.detail(JwtClaims.userIdOf(principal), orderId));
   }
 
   @GetMapping("/remunerations/{orderId}/changes")
@@ -69,6 +72,8 @@ public class SelfRemunerationController {
               sort = {"afterVersion", "id"},
               direction = Sort.Direction.DESC)
           Pageable pageable) {
-    return service.changes(principal.getName(), orderId, pageable).map(mapper::toResponse);
+    return service
+        .changes(JwtClaims.userIdOf(principal), orderId, pageable)
+        .map(mapper::toResponse);
   }
 }

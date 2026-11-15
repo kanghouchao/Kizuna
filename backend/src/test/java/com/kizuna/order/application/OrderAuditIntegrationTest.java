@@ -17,7 +17,6 @@ import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -59,6 +58,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class OrderAuditIntegrationTest {
   private static final long STORE_ID = 1L;
+  private static final long ACTOR_ID = 9L;
   private AnnotationConfigApplicationContext context;
   private JdbcTemplate jdbc;
   private TransactionTemplate transactions;
@@ -82,7 +82,7 @@ class OrderAuditIntegrationTest {
   @Test
   void cancellationAndItsAuditCommitTogetherWithDatabaseVersions() {
     var id = createOrder();
-    service.cancel(STORE_ID, id, CANCELLATION_REASON, "operator@example.test");
+    service.cancel(STORE_ID, id, CANCELLATION_REASON, ACTOR_ID);
 
     assertThat(status(id)).isEqualTo("CANCELLED");
     assertThat(auditCount(id)).isEqualTo(1);
@@ -104,8 +104,7 @@ class OrderAuditIntegrationTest {
                 String.class,
                 id))
         .isEqualTo("1");
-    assertThatThrownBy(
-            () -> service.cancel(STORE_ID, id, CANCELLATION_REASON, "operator@example.test"))
+    assertThatThrownBy(() -> service.cancel(STORE_ID, id, CANCELLATION_REASON, ACTOR_ID))
         .isInstanceOf(RuntimeException.class);
     assertThat(auditCount(id)).isEqualTo(1);
   }
@@ -116,8 +115,7 @@ class OrderAuditIntegrationTest {
     jdbc.execute(
         "alter table t_audit_events add constraint ck_audit_test_reject check (action <> 'ORDER_CANCELLED') not valid");
     try {
-      assertThatThrownBy(
-              () -> service.cancel(STORE_ID, id, CANCELLATION_REASON, "operator@example.test"))
+      assertThatThrownBy(() -> service.cancel(STORE_ID, id, CANCELLATION_REASON, ACTOR_ID))
           .isInstanceOf(RuntimeException.class);
       assertThat(status(id)).isEqualTo("CONFIRMED");
       assertThat(auditCount(id)).isZero();
@@ -135,7 +133,7 @@ class OrderAuditIntegrationTest {
             () ->
                 transactions.executeWithoutResult(
                     transaction -> {
-                      service.cancel(STORE_ID, id, CANCELLATION_REASON, "operator@example.test");
+                      service.cancel(STORE_ID, id, CANCELLATION_REASON, ACTOR_ID);
                       assertThat(auditCount(id)).isEqualTo(1);
                       throw new IllegalStateException("同じ業務取引の後続失敗");
                     }))
@@ -225,8 +223,8 @@ class OrderAuditIntegrationTest {
               .userType(UserType.STAFF)
               .roleIds(Set.of(1L))
               .build();
-      actor.setId(9L);
-      when(users.findByEmail("operator@example.test")).thenReturn(Optional.of(actor));
+      actor.setId(ACTOR_ID);
+      when(users.findById(ACTOR_ID)).thenReturn(Optional.of(actor));
       return users;
     }
 
@@ -246,8 +244,6 @@ class OrderAuditIntegrationTest {
               })
           .when(repository)
           .flush();
-      var actors = mock(ActorIdentityService.class);
-      when(actors.requireUserId("operator@example.test")).thenReturn(9L);
       var constructor = OrderService.class.getConstructors()[0];
       var types = constructor.getParameterTypes();
       var arguments = new Object[types.length];
@@ -255,9 +251,7 @@ class OrderAuditIntegrationTest {
         arguments[i] =
             types[i] == OrderRepository.class
                 ? repository
-                : types[i] == BusinessAudit.class
-                    ? audit
-                    : types[i] == ActorIdentityService.class ? actors : mock(types[i]);
+                : types[i] == BusinessAudit.class ? audit : mock(types[i]);
       }
       return (OrderService) constructor.newInstance(arguments);
     }

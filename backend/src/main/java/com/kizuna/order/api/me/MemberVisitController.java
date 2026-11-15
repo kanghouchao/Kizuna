@@ -3,6 +3,7 @@ package com.kizuna.order.api.me;
 import com.kizuna.order.api.dto.MemberVisitResponse;
 import com.kizuna.order.api.dto.OrderMapper;
 import com.kizuna.order.application.MemberVisitService;
+import com.kizuna.shared.web.JwtClaims;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -39,6 +40,8 @@ public class MemberVisitController {
               direction = Sort.Direction.DESC)
           Pageable pageable) {
     return ResponseEntity.ok(
-        memberVisitService.list(principal.getName(), pageable).map(orderMapper::toResponse));
+        memberVisitService
+            .list(JwtClaims.userIdOf(principal), pageable)
+            .map(orderMapper::toResponse));
   }
 }

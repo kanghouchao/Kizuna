@@ -1,5 +1,6 @@
 package com.kizuna.order.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -20,9 +21,11 @@ import com.kizuna.service.application.OrderSpecialServiceCatalog;
 import com.kizuna.service.domain.ServiceRevision;
 import com.kizuna.service.domain.ServiceTerms;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -36,7 +39,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -50,8 +52,9 @@ import org.springframework.test.web.servlet.MockMvc;
   StoreScopeHolder.class,
   OrderMapperImpl.class
 })
-@WithMockUser(authorities = {"PERM_ORDER_MANAGE", "PERM_ORDER_CORRECT"})
 class OrderRevisionPageControllerTest {
+
+  private static final long USER_ID = 42L;
   private static final Sort NEWEST_FIRST =
       Sort.by(Sort.Direction.DESC, ServiceRevision::getOccurredAt, ServiceRevision::getId);
 
@@ -71,6 +74,7 @@ class OrderRevisionPageControllerTest {
   @BeforeEach
   void store() {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(1L)));
   }
 
   @Test
@@ -80,7 +84,11 @@ class OrderRevisionPageControllerTest {
         .thenReturn(new PageImpl<>(List.of()));
 
     for (String path : List.of("/orders/o1/course-revisions", "/orders/o1/surcharge-revisions")) {
-      mvc.perform(get(path).param("search", "基本").header("X-Store-ID", "1"))
+      mvc.perform(
+              get(path)
+                  .param("search", "基本")
+                  .header("X-Store-ID", "1")
+                  .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE", "PERM_ORDER_CORRECT")))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.total_elements").value(0));
       assertThat(pageable.getValue().getSort()).isEqualTo(NEWEST_FIRST);
@@ -96,10 +104,16 @@ class OrderRevisionPageControllerTest {
     when(specials.history(eq(1L), eq("o1"), events.capture()))
         .thenReturn(new PageImpl<>(List.of()));
 
-    mvc.perform(get("/orders/o1/special-service-revisions").header("X-Store-ID", "1"))
+    mvc.perform(
+            get("/orders/o1/special-service-revisions")
+                .header("X-Store-ID", "1")
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE", "PERM_ORDER_CORRECT")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
-    mvc.perform(get("/orders/o1/special-service-events").header("X-Store-ID", "1"))
+    mvc.perform(
+            get("/orders/o1/special-service-events")
+                .header("X-Store-ID", "1")
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE", "PERM_ORDER_CORRECT")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 
@@ -127,7 +141,11 @@ class OrderRevisionPageControllerTest {
         .thenReturn(new PageImpl<>(List.of()));
 
     for (String path : List.of("/orders/course-candidates", "/orders/surcharge-candidates")) {
-      mvc.perform(get(path).param("search", "基本").header("X-Store-ID", "1"))
+      mvc.perform(
+              get(path)
+                  .param("search", "基本")
+                  .header("X-Store-ID", "1")
+                  .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE", "PERM_ORDER_CORRECT")))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.total_elements").value(0));
       assertThat(selections.getValue()).isEqualTo(PageRequest.of(0, 20, byName));
@@ -136,7 +154,8 @@ class OrderRevisionPageControllerTest {
             get("/orders/special-service-candidates")
                 .param("cast_id", "c1")
                 .param("size", "101")
-                .header("X-Store-ID", "1"))
+                .header("X-Store-ID", "1")
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE", "PERM_ORDER_CORRECT")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
     assertThat(specialCandidates.getValue()).isEqualTo(PageRequest.of(0, 100, byName));
@@ -148,7 +167,8 @@ class OrderRevisionPageControllerTest {
             get("/orders/o1/special-service-events")
                 .param("page", "99999999")
                 .param("size", "100")
-                .header("X-Store-ID", "1"))
+                .header("X-Store-ID", "1")
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE", "PERM_ORDER_CORRECT")))
         .andExpect(status().isBadRequest());
   }
 }

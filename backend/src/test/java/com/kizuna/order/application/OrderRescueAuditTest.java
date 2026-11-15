@@ -26,7 +26,6 @@ import com.kizuna.point.application.PointLedgerService.PointRollbackPreview;
 import com.kizuna.point.application.PointLedgerService.PointRollbackResult;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -49,7 +48,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 class OrderRescueAuditTest {
   private static final String ORDER_ID = "o1";
   private static final long STORE_ID = 1L;
-  private static final String ACTOR_EMAIL = "manager@kizuna.test";
   private static final long ACTOR_ID = 42L;
   private static final long MEMBER_ID = 7L;
   private static final long ATTRIBUTION_ID = 501L;
@@ -73,7 +71,7 @@ class OrderRescueAuditTest {
   void prepare() {
     User actor =
         User.builder()
-            .email(ACTOR_EMAIL)
+            .email("manager@kizuna.test")
             .password("encoded")
             .displayName("店長 花子")
             .enabled(true)
@@ -82,7 +80,6 @@ class OrderRescueAuditTest {
             .roleIds(Set.of(1L))
             .build();
     actor.setId(ACTOR_ID);
-    when(users.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
     when(users.findById(ACTOR_ID)).thenReturn(Optional.of(actor));
     var repository = mock(AuditEventRepository.class);
     when(repository.saveAndFlush(any(AuditEvent.class)))
@@ -93,14 +90,12 @@ class OrderRescueAuditTest {
               return event;
             });
     var audit = new BusinessAudit(users, new AuditWriter(repository, Clock.systemUTC()));
-    var actors = new ActorIdentityService(users);
     attributionService =
-        new OrderAttributionService(orders, attributions, tokens, generator, actors, audit);
-    correctionService =
-        new OrderAttributionCorrectionService(orders, attributions, ledger, actors, audit);
+        new OrderAttributionService(orders, attributions, tokens, generator, audit);
+    correctionService = new OrderAttributionCorrectionService(orders, attributions, ledger, audit);
     rollbackService =
         new OrderPointRollbackService(
-            orders, attributionService, attributions, tokens, ledger, actors, audit);
+            orders, attributionService, attributions, tokens, ledger, audit);
 
     order =
         Order.builder()
@@ -127,7 +122,7 @@ class OrderRescueAuditTest {
               return active;
             });
 
-    attributionService.invalidate(STORE_ID, ORDER_ID, ATTRIBUTION_ID, REASON, ACTOR_EMAIL);
+    attributionService.invalidate(STORE_ID, ORDER_ID, ATTRIBUTION_ID, REASON, ACTOR_ID);
 
     AuditEvent event = onlyEvent();
     assertThat(event.getAction()).isEqualTo("ORDER_ATTRIBUTION_INVALIDATED");
@@ -152,7 +147,7 @@ class OrderRescueAuditTest {
     givenAttributions(attribution(false));
 
     assertThatThrownBy(
-            () -> attributionService.invalidate(STORE_ID, ORDER_ID, 999L, REASON, ACTOR_EMAIL))
+            () -> attributionService.invalidate(STORE_ID, ORDER_ID, 999L, REASON, ACTOR_ID))
         .isInstanceOf(ConflictException.class);
 
     assertThat(events).isEmpty();
@@ -174,7 +169,7 @@ class OrderRescueAuditTest {
               return saved;
             });
 
-    attributionService.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_EMAIL);
+    attributionService.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_ID);
 
     AuditEvent event = onlyEvent();
     assertThat(event.getAction()).isEqualTo("ORDER_RECEIPT_TOKEN_REISSUED");
@@ -196,9 +191,7 @@ class OrderRescueAuditTest {
     when(ledger.isRolledBack(ORDER_ID)).thenReturn(true);
 
     assertThatThrownBy(
-            () ->
-                rollbackService.reissueReceiptTokenUnlessRolledBack(
-                    STORE_ID, ORDER_ID, ACTOR_EMAIL))
+            () -> rollbackService.reissueReceiptTokenUnlessRolledBack(STORE_ID, ORDER_ID, ACTOR_ID))
         .isInstanceOf(ServiceException.class);
 
     assertThat(events).isEmpty();
@@ -213,7 +206,7 @@ class OrderRescueAuditTest {
             MEMBER_ID, STORE_ID, -30, REASON, ACTOR_ID, KEY, ATTRIBUTION_ID))
         .thenReturn(Optional.of(900L));
 
-    correctionService.correct(STORE_ID, ORDER_ID, command(30), ACTOR_EMAIL);
+    correctionService.correct(STORE_ID, ORDER_ID, command(30), ACTOR_ID);
 
     AuditEvent event = onlyEvent();
     assertThat(event.getAction()).isEqualTo("ORDER_ATTRIBUTION_CORRECTED");
@@ -237,8 +230,8 @@ class OrderRescueAuditTest {
             MEMBER_ID, STORE_ID, -30, REASON, ACTOR_ID, KEY, ATTRIBUTION_ID))
         .thenReturn(Optional.empty());
 
-    correctionService.correct(STORE_ID, ORDER_ID, command(30), ACTOR_EMAIL);
-    correctionService.replayCorrect(STORE_ID, ORDER_ID, command(30), ACTOR_EMAIL);
+    correctionService.correct(STORE_ID, ORDER_ID, command(30), ACTOR_ID);
+    correctionService.replayCorrect(STORE_ID, ORDER_ID, command(30), ACTOR_ID);
 
     assertThat(events).isEmpty();
   }
@@ -249,8 +242,7 @@ class OrderRescueAuditTest {
     givenAttributions(attribution(true));
     givenLedger(80L);
 
-    assertThatThrownBy(
-            () -> correctionService.correct(STORE_ID, ORDER_ID, command(30), ACTOR_EMAIL))
+    assertThatThrownBy(() -> correctionService.correct(STORE_ID, ORDER_ID, command(30), ACTOR_ID))
         .isInstanceOf(ServiceException.class);
 
     assertThat(events).isEmpty();
@@ -270,7 +262,7 @@ class OrderRescueAuditTest {
             Optional.of(new PointRollbackHistory("77", REASON, ACTOR_ID, NOW, 120, 0, 0, 0)));
 
     rollbackService.rollback(
-        STORE_ID, ORDER_ID, new OrderPointRollbackCommand(0, 0, REASON), ACTOR_EMAIL);
+        STORE_ID, ORDER_ID, new OrderPointRollbackCommand(0, 0, REASON), ACTOR_ID);
 
     AuditEvent event = onlyEvent();
     assertThat(event.getAction()).isEqualTo("ORDER_POINTS_ROLLED_BACK");
@@ -296,7 +288,7 @@ class OrderRescueAuditTest {
     assertThatThrownBy(
             () ->
                 rollbackService.rollback(
-                    STORE_ID, ORDER_ID, new OrderPointRollbackCommand(0, 0, REASON), ACTOR_EMAIL))
+                    STORE_ID, ORDER_ID, new OrderPointRollbackCommand(0, 0, REASON), ACTOR_ID))
         .isInstanceOf(ConflictException.class);
 
     assertThat(events).isEmpty();

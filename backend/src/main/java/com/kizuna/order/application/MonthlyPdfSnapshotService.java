@@ -5,7 +5,6 @@ import com.kizuna.order.domain.RemunerationOrderRow;
 import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.StoreNames;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.user.application.ActorIdentityService;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.time.YearMonth;
@@ -23,7 +22,6 @@ public class MonthlyPdfSnapshotService {
   private final SelfMonthlyRemunerationService self;
   private final RemunerationQuery query;
   private final StoreNames stores;
-  private final ActorIdentityService actors;
   private final CastRepository people;
   private final Clock clock;
 
@@ -49,13 +47,10 @@ public class MonthlyPdfSnapshotService {
       readOnly = true,
       isolation = Isolation.REPEATABLE_READ,
       timeoutString = "#{@appProperties.monthlyPdf.readTimeoutSeconds}")
-  public MonthlyPdfSnapshot self(
-      String actor, Long storeId, String month, MonthlyPdfBudget budget) {
-    var first = self.monthly(actor, storeId, month, PageRequest.of(0, 1));
+  public MonthlyPdfSnapshot self(long userId, Long storeId, String month, MonthlyPdfBudget budget) {
+    var first = self.monthly(userId, storeId, month, PageRequest.of(0, 1));
     var person =
-        people
-            .findByUserId(actors.requireUserId(actor))
-            .orElseThrow(() -> new NotFoundException("報酬明細の店舗が見つかりません"));
+        people.findByUserId(userId).orElseThrow(() -> new NotFoundException("報酬明細の店舗が見つかりません"));
     return collect(
         storeId,
         person.getId(),

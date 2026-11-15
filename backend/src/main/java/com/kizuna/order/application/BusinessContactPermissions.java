@@ -10,7 +10,6 @@ import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.user.application.ActorIdentityService;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -27,7 +26,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class BusinessContactPermissions {
-  private final ActorIdentityService actors;
   private final BusinessContactHistoryRepository histories;
   private final OrderRepository orders;
   private final BusinessContactPolicy policy;
@@ -71,7 +69,7 @@ public class BusinessContactPermissions {
       Order order,
       ContactSnapshot previous,
       List<BusinessContactPermissionInput> input,
-      String actorEmail,
+      long actorId,
       OffsetDateTime now) {
     var requests = requests(order.getContactSnapshot(), input);
     for (var type : ContactType.values()) {
@@ -97,7 +95,7 @@ public class BusinessContactPermissions {
               request == null ? "CONTACT_CHANGED" : "RECORDED",
               before,
               after,
-              actors.requireUserId(actorEmail),
+              actorId,
               now));
       // 許可だけの編集も受注の版を進め、古い画面からの上書きを拒否する。
       order.noteBusinessContactPermission();
