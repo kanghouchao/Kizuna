@@ -11,14 +11,10 @@ import com.kizuna.point.domain.PointEntryRepository;
 import com.kizuna.point.domain.PointEntryType;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.user.domain.User;
-import com.kizuna.user.domain.UserRepository;
-import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,11 +31,9 @@ import org.springframework.data.domain.Pageable;
 @ExtendWith(MockitoExtension.class)
 class MemberPointServiceTest {
 
-  private static final String EMAIL = "member@example.com";
   private static final long USER_ID = 10L;
   private static final long MEMBER_ID = 7L;
 
-  @Mock private UserRepository userRepository;
   @Mock private MemberLookupService memberLookupService;
   @Mock private PointEntryRepository pointEntryRepository;
   @Mock private PointLedgerService pointLedgerService;
@@ -97,17 +91,6 @@ class MemberPointServiceTest {
 
   @BeforeEach
   void resolveAuthenticatedMember() {
-    User user =
-        User.builder()
-            .email(EMAIL)
-            .password("encoded")
-            .displayName("会員 花子")
-            .enabled(true)
-            .userType(UserType.MEMBER)
-            .storeIds(Set.of())
-            .build();
-    user.setId(USER_ID);
-    Mockito.lenient().when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     Mockito.lenient()
         .when(memberLookupService.findByUserId(USER_ID))
         .thenReturn(Optional.of(new MemberLookup(MEMBER_ID, "123456789012")));
@@ -118,7 +101,7 @@ class MemberPointServiceTest {
   void balanceReturnsOwnLedgerTotal() {
     Mockito.when(pointLedgerService.balance(MEMBER_ID)).thenReturn(1200L);
 
-    assertThat(service.balance(EMAIL)).isEqualTo(1200L);
+    assertThat(service.balance(USER_ID)).isEqualTo(1200L);
   }
 
   @Test
@@ -144,7 +127,7 @@ class MemberPointServiceTest {
                         LocalDate.parse("2027-08-10"),
                         "店舗A"))));
 
-    Page<MemberPointEntry> page = service.entries(EMAIL, FIRST);
+    Page<MemberPointEntry> page = service.entries(USER_ID, FIRST);
 
     assertThat(page.getContent())
         .extracting(
@@ -171,7 +154,7 @@ class MemberPointServiceTest {
     Mockito.when(pointEntryRepository.findMemberEntryViews(Mockito.eq(MEMBER_ID), Mockito.any()))
         .thenReturn(new PageImpl<>(List.of(grant(1L, "2026-08-11T00:30:00+09:00"))));
 
-    assertThat(service.entries(EMAIL, FIRST).getContent())
+    assertThat(service.entries(USER_ID, FIRST).getContent())
         .extracting(MemberPointEntry::occurredOn)
         .containsExactly(LocalDate.parse("2026-08-11"));
   }
@@ -192,7 +175,7 @@ class MemberPointServiceTest {
                         null,
                         null))));
 
-    assertThat(service.entries(EMAIL, FIRST).getContent())
+    assertThat(service.entries(USER_ID, FIRST).getContent())
         .extracting(MemberPointEntry::entryType, MemberPointEntry::storeName)
         .containsExactly(tuple(PointEntryType.EXPIRE, null));
   }
@@ -205,7 +188,7 @@ class MemberPointServiceTest {
     Mockito.when(pointEntryRepository.findMemberEntryViews(MEMBER_ID, second))
         .thenReturn(new PageImpl<>(List.of(grant(1L, "2026-08-10T20:00:00+09:00")), second, 3));
 
-    Page<MemberPointEntry> page = service.entries(EMAIL, second);
+    Page<MemberPointEntry> page = service.entries(USER_ID, second);
 
     assertThat(page.getContent()).hasSize(1);
     assertThat(page.getTotalElements()).isEqualTo(3);
@@ -216,16 +199,8 @@ class MemberPointServiceTest {
   void refusesANonMemberPrincipal() {
     Mockito.when(memberLookupService.findByUserId(USER_ID)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.balance(EMAIL)).isInstanceOf(StaleSessionException.class);
-    assertThatThrownBy(() -> service.entries(EMAIL, FIRST))
+    assertThatThrownBy(() -> service.balance(USER_ID)).isInstanceOf(StaleSessionException.class);
+    assertThatThrownBy(() -> service.entries(USER_ID, FIRST))
         .isInstanceOf(StaleSessionException.class);
-  }
-
-  @Test
-  @DisplayName("認証主体のユーザーが存在しない場合は 401 系例外")
-  void refusesAStalePrincipal() {
-    Mockito.when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
-
-    assertThatThrownBy(() -> service.balance(EMAIL)).isInstanceOf(StaleSessionException.class);
   }
 }

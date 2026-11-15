@@ -32,6 +32,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 @ExtendWith(MockitoExtension.class)
 class BenefitRuleServiceTest {
 
+  private static final long ACTOR_ID = 9L;
+
   @Mock private BenefitRuleRepository benefitRuleRepository;
 
   @Mock private BusinessAudit businessAudit;
@@ -99,7 +101,7 @@ class BenefitRuleServiceTest {
     when(benefitRuleRepository.saveAndFlush(any()))
         .thenAnswer(invocation -> invocation.getArgument(0));
 
-    BenefitRule rule = benefitRuleService.create(BenefitRuleType.REFERRAL, definition);
+    BenefitRule rule = benefitRuleService.create(BenefitRuleType.REFERRAL, definition, ACTOR_ID);
 
     assertThat(rule.getType()).isEqualTo(BenefitRuleType.REFERRAL);
     assertThat(rule.getReferrerPoints()).isEqualTo(1000);
@@ -121,7 +123,7 @@ class BenefitRuleServiceTest {
     when(benefitRuleRepository.saveAndFlush(any()))
         .thenAnswer(invocation -> invocation.getArgument(0));
 
-    BenefitRule rule = benefitRuleService.update(1L, 0L, definition);
+    BenefitRule rule = benefitRuleService.update(1L, 0L, definition, ACTOR_ID);
 
     assertThat(rule.getType()).isEqualTo(BenefitRuleType.VISIT);
     assertThat(rule.getName()).isEqualTo("来店ボーナス（改）");
@@ -141,7 +143,7 @@ class BenefitRuleServiceTest {
             .build();
     when(benefitRuleRepository.findById(1L)).thenReturn(Optional.of(visitRule));
 
-    assertThatThrownBy(() -> benefitRuleService.update(1L, 1L, definition))
+    assertThatThrownBy(() -> benefitRuleService.update(1L, 1L, definition, ACTOR_ID))
         .isInstanceOf(StaleBenefitRuleUpdateException.class);
     assertThat(visitRule.getName()).isEqualTo("来店ボーナス");
   }
@@ -151,10 +153,10 @@ class BenefitRuleServiceTest {
   void deactivationIsOneWay() {
     when(benefitRuleRepository.findById(1L)).thenReturn(Optional.of(visitRule));
 
-    benefitRuleService.deactivate(1L, 0L);
+    benefitRuleService.deactivate(1L, 0L, ACTOR_ID);
 
     assertThat(visitRule.getEnabled()).isFalse();
-    assertThatThrownBy(() -> benefitRuleService.deactivate(1L, 0L))
+    assertThatThrownBy(() -> benefitRuleService.deactivate(1L, 0L, ACTOR_ID))
         .isInstanceOf(InvalidBenefitRuleException.class);
   }
 
@@ -163,7 +165,7 @@ class BenefitRuleServiceTest {
   void deactivationRefusesStaleVersion() {
     when(benefitRuleRepository.findById(1L)).thenReturn(Optional.of(visitRule));
 
-    assertThatThrownBy(() -> benefitRuleService.deactivate(1L, 1L))
+    assertThatThrownBy(() -> benefitRuleService.deactivate(1L, 1L, ACTOR_ID))
         .isInstanceOf(StaleBenefitRuleUpdateException.class);
     assertThat(visitRule.getEnabled()).isTrue();
   }

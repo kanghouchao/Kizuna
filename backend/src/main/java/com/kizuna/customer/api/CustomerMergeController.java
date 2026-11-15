@@ -6,6 +6,7 @@ import com.kizuna.customer.api.dto.CustomerMergeRequest;
 import com.kizuna.customer.api.dto.CustomerMergeResponse;
 import com.kizuna.customer.application.CustomerMergeService;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
@@ -53,7 +54,7 @@ public class CustomerMergeController {
     return ResponseEntity.ok(
         CustomerMergeResponse.of(
             customerMergeService.merge(
-                storeId, customerId, request.command(), principal.getName())));
+                storeId, customerId, request.command(), JwtClaims.userIdOf(principal))));
   }
 
   /**

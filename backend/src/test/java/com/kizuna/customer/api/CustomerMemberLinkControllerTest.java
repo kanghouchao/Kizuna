@@ -1,6 +1,8 @@
 package com.kizuna.customer.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -17,10 +19,13 @@ import com.kizuna.customer.domain.LinkReason;
 import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Set;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -33,7 +38,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -59,6 +63,7 @@ class CustomerMemberLinkControllerTest {
   @Autowired private MockMvc mockMvc;
 
   private static final Long STORE_ID = 7L;
+  private static final long ACTOR_ID = 42L;
 
   @MockitoBean private CustomerMemberLinkService customerMemberLinkService;
 
@@ -67,16 +72,21 @@ class CustomerMemberLinkControllerTest {
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
   @MockitoBean StoreScopeResolver storeScopeResolver;
 
+  /** 利用者の店舗集合に名乗る店舗が含まれている状態。 */
+  @BeforeEach
+  void storeIsInScope() {
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(STORE_ID)));
+  }
+
   @Test
   @DisplayName("現況の照会は紐づけ済みなら会員コードを返すこと")
-  @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
   void currentReturnsTheMemberCodeWhenLinked() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(customerMemberLinkService.current(eq(STORE_ID), anyString()))
         .thenReturn(link("l1", "123456789012", OffsetDateTime.parse("2026-08-01T10:00:00+09:00")));
 
     mockMvc
-        .perform(storeGet("/customers/c1/member-link"))
+        .perform(storeGet("/customers/c1/member-link", "PERM_CUSTOMER_MANAGE"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.member_code").value("123456789012"))
         .andExpect(jsonPath("$.linked").value(true));
@@ -84,7 +94,6 @@ class CustomerMemberLinkControllerTest {
 
   @Test
   @DisplayName("未紐づけの顧客の現況は 404 で返ること")
-  @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
   void currentIsNotFoundWhenTheCustomerHasNoLink() throws Exception {
     // 「紐づいていない」を 200 の本体で表すと、呼出側が本体を読んでからもう一度分岐することになる
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
@@ -92,23 +101,23 @@ class CustomerMemberLinkControllerTest {
         .thenThrow(new NotFoundException("紐づけられている会員がいません"));
 
     mockMvc
-        .perform(storeGet("/customers/c1/member-link"))
+        .perform(storeGet("/customers/c1/member-link", "PERM_CUSTOMER_MANAGE"))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.member_code").doesNotExist());
   }
 
   @Test
   @DisplayName("現況の照会は CUSTOMER_MANAGE を持たなければ拒否されること")
-  @WithMockUser(authorities = "PERM_POINT_ADJUST")
   void currentIsRefusedWithoutCustomerManage() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
-    mockMvc.perform(storeGet("/customers/c1/member-link")).andExpect(status().isForbidden());
+    mockMvc
+        .perform(storeGet("/customers/c1/member-link", "PERM_POINT_ADJUST"))
+        .andExpect(status().isForbidden());
   }
 
   @Test
   @DisplayName("履歴は新しい区間から並べたページで返ること")
-  @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
   void historyIsAPageNewestFirst() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     var pageable = ArgumentCaptor.forClass(Pageable.class);
@@ -116,7 +125,7 @@ class CustomerMemberLinkControllerTest {
         .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
     mockMvc
-        .perform(storeGet("/customers/c1/member-link/history"))
+        .perform(storeGet("/customers/c1/member-link/history", "PERM_CUSTOMER_MANAGE"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 
@@ -128,7 +137,6 @@ class CustomerMemberLinkControllerTest {
 
   @Test
   @DisplayName("解除は本体無しの 204 で返ること")
-  @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
   void unlinkRespondsWithNoContent() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
@@ -138,17 +146,14 @@ class CustomerMemberLinkControllerTest {
                 .contentType("application/json")
                 .content("{\"expected_link_id\":\"l1\",\"operation_reason\":\"本人依頼\"}")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(() -> "tanaka.hanako@kizuna.test"))
+                .with(jwtUser(ACTOR_ID, "PERM_CUSTOMER_MANAGE")))
         .andExpect(status().isNoContent());
 
-    verify(customerMemberLinkService)
-        .unlink(STORE_ID, "c1", "l1", "本人依頼", "tanaka.hanako@kizuna.test");
+    verify(customerMemberLinkService).unlink(STORE_ID, "c1", "l1", "本人依頼", ACTOR_ID);
   }
 
-  private MockHttpServletRequestBuilder storeGet(String path) {
-    return get(path)
-        .header("X-Store-ID", STORE_ID.toString())
-        .principal(() -> "tanaka.hanako@kizuna.test");
+  private MockHttpServletRequestBuilder storeGet(String path, String... authorities) {
+    return get(path).header("X-Store-ID", STORE_ID.toString()).with(jwtUser(ACTOR_ID, authorities));
   }
 
   private static CustomerMemberLink link(String id, String memberCode, OffsetDateTime linkedAt) {

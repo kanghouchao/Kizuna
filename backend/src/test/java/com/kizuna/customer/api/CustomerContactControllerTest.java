@@ -1,6 +1,8 @@
 package com.kizuna.customer.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -13,9 +15,11 @@ import com.kizuna.customer.domain.CustomerContact;
 import com.kizuna.customer.domain.CustomerContactHistory;
 import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -28,9 +32,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 @WebMvcTest(CustomerContactController.class)
 @Import({
@@ -38,7 +42,6 @@ import org.springframework.test.web.servlet.MockMvc;
   StoreScopeHolder.class,
   CommonExceptionHandler.class
 })
-@WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
 class CustomerContactControllerTest {
   @TestConfiguration
   @EnableMethodSecurity
@@ -50,6 +53,16 @@ class CustomerContactControllerTest {
   @MockitoBean private CustomerContactService service;
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
   @MockitoBean StoreScopeResolver storeScopeResolver;
+
+  /** 利用者の店舗集合に名乗る店舗が含まれている状態。 */
+  @BeforeEach
+  void storeIsInScope() {
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(STORE_ID)));
+  }
+
+  private static RequestPostProcessor manager() {
+    return jwtUser(42L, "PERM_CUSTOMER_MANAGE");
+  }
 
   @BeforeEach
   void storeExists() {
@@ -63,7 +76,8 @@ class CustomerContactControllerTest {
         .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
     mockMvc
-        .perform(get("/customers/c1/contacts").header("X-Store-ID", STORE_ID.toString()))
+        .perform(
+            get("/customers/c1/contacts").header("X-Store-ID", STORE_ID.toString()).with(manager()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
     assertThat(pageable.getValue().getSort())
@@ -77,7 +91,10 @@ class CustomerContactControllerTest {
         .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
     mockMvc
-        .perform(get("/customers/c1/contact-history").header("X-Store-ID", STORE_ID.toString()))
+        .perform(
+            get("/customers/c1/contact-history")
+                .header("X-Store-ID", STORE_ID.toString())
+                .with(manager()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
     assertThat(pageable.getValue().getSort())
@@ -92,7 +109,8 @@ class CustomerContactControllerTest {
             get("/customers/c1/contact-history")
                 .param("page", "99999999")
                 .param("size", "100")
-                .header("X-Store-ID", STORE_ID.toString()))
+                .header("X-Store-ID", STORE_ID.toString())
+                .with(manager()))
         .andExpect(status().isBadRequest());
   }
 }

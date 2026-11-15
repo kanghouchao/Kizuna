@@ -1,5 +1,6 @@
 package com.kizuna.point.api.me;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -25,8 +26,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -47,16 +46,13 @@ class MemberPointControllerTest {
 
   @Test
   @DisplayName("本人の明細は記帳の新しい順を既定の並びとして service を呼び、Page で返すこと")
-  @WithMockUser(username = "member@example.com", roles = "MEMBER")
   void entriesAreAPageNewestFirst() throws Exception {
     var pageable = ArgumentCaptor.forClass(Pageable.class);
-    when(memberPointService.entries(eq("member@example.com"), pageable.capture()))
+    when(memberPointService.entries(eq(42L), pageable.capture()))
         .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
     mockMvc
-        .perform(
-            get("/me/points/entries")
-                .principal(SecurityContextHolder.getContext().getAuthentication()))
+        .perform(get("/me/points/entries").with(jwtUser(42L, "ROLE_MEMBER")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 

@@ -81,8 +81,6 @@ import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.SharedEntityManagerCreator;
 import org.springframework.orm.jpa.hibernate.SpringBeanContainer;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -92,6 +90,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class AttachmentIntegrationTest {
   private static final Long STORE_ID = 1L;
   private static final Long OTHER_STORE_ID = 2L;
+  private static final long ACTOR_ID = 9L;
   private AnnotationConfigApplicationContext context;
   private JdbcTemplate jdbc;
   private TransactionTemplate transactions;
@@ -131,18 +130,11 @@ class AttachmentIntegrationTest {
   }
 
   @BeforeEach
-  void actor() {
+  void prepare() {
     reset(storage, normalizer);
     var limits = context.getBean(AppProperties.class).getPrivateAttachments();
     limits.setMaxApplicantFiles(20);
     limits.setMaxApplicantBytes(200L * 1024 * 1024);
-    authorize();
-  }
-
-  private void authorize() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken("operator@example.test", "unused", List.of()));
   }
 
   private String applicant() {
@@ -163,7 +155,7 @@ class AttachmentIntegrationTest {
                       null,
                       null,
                       null));
-          applicant.recordEditor(9L);
+          applicant.recordEditor(ACTOR_ID);
           em.persist(applicant);
           em.flush();
           return applicant.getId();
@@ -181,7 +173,7 @@ class AttachmentIntegrationTest {
 
   private ApplicantAttachmentStore.Receipt complete(
       String applicant, AttachmentUpload upload, NormalizedImage image) {
-    return store.complete(STORE_ID, applicant, upload, image, "operator@example.test");
+    return store.complete(STORE_ID, applicant, upload, image, ACTOR_ID);
   }
 
   private ApplicantAttachmentStore.Receipt receive(
@@ -193,7 +185,7 @@ class AttachmentIntegrationTest {
         upload.getIdempotencyKey(),
         new AttachmentBodyReceiver.Received(
             image.path(), image.originalSha256(), image.mediaType()),
-        "operator@example.test");
+        ACTOR_ID);
   }
 
   private String failure(String uploadId) {
@@ -240,8 +232,7 @@ class AttachmentIntegrationTest {
                 source.sizeBytes(),
                 failure.equals("version") ? "historical-version" : source.normalizerVersion());
         var upload =
-            store.reserve(
-                STORE_ID, applicant, UUID.randomUUID(), reservedContent, "operator@example.test");
+            store.reserve(STORE_ID, applicant, UUID.randomUUID(), reservedContent, ACTOR_ID);
         doThrow(new AttachmentStorageMissingException()).when(storage).readVerified(any());
         if (failure.equals("busy")) {
           when(normalizer.normalize(source.path(), source.mediaType()))
@@ -279,9 +270,9 @@ class AttachmentIntegrationTest {
     var applicant = applicant();
     var key = UUID.randomUUID();
     try (var image = content()) {
-      var upload = store.reserve(STORE_ID, applicant, key, image, "operator@example.test");
+      var upload = store.reserve(STORE_ID, applicant, key, image, ACTOR_ID);
       assertThat(status(upload.getId())).isEqualTo("PENDING");
-      assertThat(store.reserve(STORE_ID, applicant, key, image, "operator@example.test").getId())
+      assertThat(store.reserve(STORE_ID, applicant, key, image, ACTOR_ID).getId())
           .isEqualTo(upload.getId());
       assertThatThrownBy(() -> store.preflight(OTHER_STORE_ID, applicant, null, key))
           .isInstanceOf(NotFoundException.class);
@@ -308,8 +299,7 @@ class AttachmentIntegrationTest {
   void auditFailureRollsBackReadyButKeepsDurableOwnershipAndCanRecover() throws Exception {
     var applicant = applicant();
     try (var image = content()) {
-      var upload =
-          store.reserve(STORE_ID, applicant, UUID.randomUUID(), image, "operator@example.test");
+      var upload = store.reserve(STORE_ID, applicant, UUID.randomUUID(), image, ACTOR_ID);
       jdbc.execute(
           "alter table t_audit_events add constraint ck_attachment_test_fail check(action <> 'APPLICANT_ATTACHMENT_STORED') not valid");
       try {
@@ -329,8 +319,7 @@ class AttachmentIntegrationTest {
   void withdrawalDuringRemoteWriteIsObservedBeforeReadyCommit() throws Exception {
     var applicant = applicant();
     try (var image = content()) {
-      var upload =
-          store.reserve(STORE_ID, applicant, UUID.randomUUID(), image, "operator@example.test");
+      var upload = store.reserve(STORE_ID, applicant, UUID.randomUUID(), image, ACTOR_ID);
       doAnswer(
               call -> {
                 jdbc.update(
@@ -354,8 +343,7 @@ class AttachmentIntegrationTest {
     var release = new CountDownLatch(1);
     try (var image = content();
         var executor = Executors.newSingleThreadExecutor()) {
-      var upload =
-          store.reserve(STORE_ID, applicant, UUID.randomUUID(), image, "operator@example.test");
+      var upload = store.reserve(STORE_ID, applicant, UUID.randomUUID(), image, ACTOR_ID);
       doAnswer(
               call -> {
                 started.countDown();
@@ -365,16 +353,7 @@ class AttachmentIntegrationTest {
               })
           .when(storage)
           .ensureStored(any(), any());
-      var first =
-          executor.submit(
-              () -> {
-                authorize();
-                try {
-                  return complete(applicant, upload, image);
-                } finally {
-                  SecurityContextHolder.clearContext();
-                }
-              });
+      var first = executor.submit(() -> complete(applicant, upload, image));
       try {
         assertThat(started.await(5, TimeUnit.SECONDS)).isTrue();
         assertThatThrownBy(() -> complete(applicant, upload, image))
@@ -402,24 +381,21 @@ class AttachmentIntegrationTest {
         var executor = Executors.newFixedThreadPool(2);
         var first = new DatabaseTransaction();
         var second = new DatabaseTransaction()) {
-      var recovery =
-          store.reserve(STORE_ID, applicant, UUID.randomUUID(), image, "operator@example.test");
+      var recovery = store.reserve(STORE_ID, applicant, UUID.randomUUID(), image, ACTOR_ID);
       store.recordFailure(
           STORE_ID, applicant, recovery.getId(), AttachmentUpload.Failure.STORAGE_UNAVAILABLE);
       var winner =
           first.submit(
               executor,
               () -> {
-                var upload =
-                    store.reserve(STORE_ID, applicant, winningKey, image, "operator@example.test");
+                var upload = store.reserve(STORE_ID, applicant, winningKey, image, ACTOR_ID);
                 first.hold();
                 return upload;
               });
       first.awaitHeld();
       var loser =
           second.submit(
-              executor,
-              () -> store.reserve(STORE_ID, applicant, losingKey, image, "operator@example.test"));
+              executor, () -> store.reserve(STORE_ID, applicant, losingKey, image, ACTOR_ID));
       second.awaitBlockedBy(first);
       first.close();
       var committed = winner.get(5, TimeUnit.SECONDS);
@@ -455,16 +431,13 @@ class AttachmentIntegrationTest {
           first.submit(
               executor,
               () -> {
-                var upload =
-                    store.reserve(STORE_ID, applicant, key, image, "operator@example.test");
+                var upload = store.reserve(STORE_ID, applicant, key, image, ACTOR_ID);
                 first.hold();
                 return upload;
               });
       first.awaitHeld();
       var replay =
-          second.submit(
-              executor,
-              () -> store.reserve(STORE_ID, applicant, key, image, "operator@example.test"));
+          second.submit(executor, () -> store.reserve(STORE_ID, applicant, key, image, ACTOR_ID));
       second.awaitBlockedBy(first);
       first.close();
       var committed = original.get(5, TimeUnit.SECONDS);
@@ -495,9 +468,7 @@ class AttachmentIntegrationTest {
           first.submit(
               executor,
               () -> {
-                var upload =
-                    store.reserve(
-                        STORE_ID, applicant, UUID.randomUUID(), image, "operator@example.test");
+                var upload = store.reserve(STORE_ID, applicant, UUID.randomUUID(), image, ACTOR_ID);
                 first.hold();
                 return upload;
               });
@@ -505,9 +476,7 @@ class AttachmentIntegrationTest {
       var independent =
           second.submit(
               executor,
-              () ->
-                  store.reserve(
-                      STORE_ID, otherApplicant, UUID.randomUUID(), image, "operator@example.test"));
+              () -> store.reserve(STORE_ID, otherApplicant, UUID.randomUUID(), image, ACTOR_ID));
       assertThat(independent.get(5, TimeUnit.SECONDS).getStatus())
           .isEqualTo(AttachmentUpload.Status.PENDING);
       assertThat(second.connectionId.get()).isNotEqualTo(first.connectionId.get());
@@ -541,15 +510,14 @@ class AttachmentIntegrationTest {
           first.submit(
               executor,
               () -> {
-                store.reserve(STORE_ID, applicant, abortedKey, image, "operator@example.test");
+                store.reserve(STORE_ID, applicant, abortedKey, image, ACTOR_ID);
                 first.hold();
                 throw new IllegalStateException("合成トランザクションの失敗");
               });
       first.awaitHeld();
       var waiting =
           second.submit(
-              executor,
-              () -> store.reserve(STORE_ID, applicant, waitingKey, image, "operator@example.test"));
+              executor, () -> store.reserve(STORE_ID, applicant, waitingKey, image, ACTOR_ID));
       second.awaitBlockedBy(first);
       first.close();
       assertThatThrownBy(() -> aborted.get(5, TimeUnit.SECONDS))
@@ -582,8 +550,7 @@ class AttachmentIntegrationTest {
       String scenario, String site, String status, String recorded) throws Exception {
     var applicant = applicant();
     try (var image = content()) {
-      var upload =
-          store.reserve(STORE_ID, applicant, UUID.randomUUID(), image, "operator@example.test");
+      var upload = store.reserve(STORE_ID, applicant, UUID.randomUUID(), image, ACTOR_ID);
       doThrow(new AttachmentStorageMissingException()).when(storage).readVerified(any());
       when(normalizer.normalize(image.path(), image.mediaType())).thenReturn(image);
       Class<? extends RuntimeException> response =
@@ -651,8 +618,7 @@ class AttachmentIntegrationTest {
     try (var image = content();
         var executor = Executors.newSingleThreadExecutor();
         var holder = new DatabaseTransaction()) {
-      var upload =
-          store.reserve(STORE_ID, applicant, UUID.randomUUID(), image, "operator@example.test");
+      var upload = store.reserve(STORE_ID, applicant, UUID.randomUUID(), image, ACTOR_ID);
       var held =
           holder.submit(
               executor,
@@ -685,8 +651,7 @@ class AttachmentIntegrationTest {
     try (var image = content();
         var executor = Executors.newFixedThreadPool(2);
         var purge = new DatabaseTransaction()) {
-      var upload =
-          store.reserve(STORE_ID, applicant, UUID.randomUUID(), image, "operator@example.test");
+      var upload = store.reserve(STORE_ID, applicant, UUID.randomUUID(), image, ACTOR_ID);
       doThrow(new AttachmentStorageMissingException()).when(storage).readVerified(any());
       when(normalizer.normalize(image.path(), image.mediaType())).thenReturn(image);
       doAnswer(
@@ -698,16 +663,7 @@ class AttachmentIntegrationTest {
               })
           .when(storage)
           .ensureStored(any(), any());
-      var received =
-          executor.submit(
-              () -> {
-                authorize();
-                try {
-                  return receive(applicant, upload, image);
-                } finally {
-                  SecurityContextHolder.clearContext();
-                }
-              });
+      var received = executor.submit(() -> receive(applicant, upload, image));
       Future<Applicant> purged;
       try {
         assertThat(writing.await(5, TimeUnit.SECONDS)).isTrue();
@@ -764,10 +720,8 @@ class AttachmentIntegrationTest {
 
     <T> Future<T> submit(ExecutorService executor, Supplier<T> action) {
       return executor.submit(
-          () -> {
-            authorize();
-            try {
-              return transactions.execute(
+          () ->
+              transactions.execute(
                   tx -> {
                     em.createNativeQuery("set local statement_timeout='10s'").executeUpdate();
                     connectionId.complete(
@@ -776,11 +730,7 @@ class AttachmentIntegrationTest {
                                     .getSingleResult())
                             .intValue());
                     return action.get();
-                  });
-            } finally {
-              SecurityContextHolder.clearContext();
-            }
-          });
+                  }));
     }
 
     void hold() {
@@ -833,7 +783,7 @@ class AttachmentIntegrationTest {
   void ownedUploadsBlockPhysicalApplicantAndStoreDeletion() throws Exception {
     var applicant = applicant();
     try (var image = content()) {
-      store.reserve(STORE_ID, applicant, UUID.randomUUID(), image, "operator@example.test");
+      store.reserve(STORE_ID, applicant, UUID.randomUUID(), image, ACTOR_ID);
       assertThatThrownBy(() -> jdbc.update("delete from t_applicants where id=?", applicant))
           .isInstanceOf(DataIntegrityViolationException.class);
       assertThatThrownBy(() -> jdbc.update("delete from attachment_test_stores where id=1"))
@@ -896,8 +846,8 @@ class AttachmentIntegrationTest {
               .userType(UserType.STAFF)
               .roleIds(Set.of(1L))
               .build();
-      actor.setId(9L);
-      when(users.findByEmail("operator@example.test")).thenReturn(Optional.of(actor));
+      actor.setId(ACTOR_ID);
+      when(users.findById(ACTOR_ID)).thenReturn(Optional.of(actor));
       return users;
     }
 

@@ -30,8 +30,8 @@ import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
 import jakarta.persistence.EntityManager;
 import java.time.OffsetDateTime;
@@ -76,7 +76,7 @@ class CustomerMergePreviewTest {
             mock(CustomerContactService.class),
             links,
             merges,
-            users);
+            mock(ActorIdentityService.class));
     for (String id : List.of("a", "b")) {
       var customer = Customer.builder().name(id).build();
       customer.setId(id);
@@ -177,9 +177,6 @@ class CustomerMergePreviewTest {
   void rejectsAlteredConfirmationBeforeAnyWrites() {
     var preferences = new MergePreferences(null, "one", null);
     var preview = service.preview(STORE_ID, "a", new MergeSelection("b", null, preferences));
-    var actor = mock(User.class);
-    when(actor.getId()).thenReturn(3L);
-    when(users.findByEmail("actor")).thenReturn(Optional.of(actor));
     second.change(ContactType.EMAIL, "changed@example.com");
     assertThatThrownBy(
             () ->
@@ -189,7 +186,7 @@ class CustomerMergePreviewTest {
                     new CustomerMergeRequest(
                             "b", preview.previewToken(), null, preferences, true, "照合")
                         .command(),
-                    "actor"))
+                    3L))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("関連情報が変更");
     verify(merges, never()).save(any());

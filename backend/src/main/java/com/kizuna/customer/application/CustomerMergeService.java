@@ -17,10 +17,9 @@ import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.persistence.Timestamps;
+import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.UserRepository;
 import jakarta.persistence.EntityManager;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -50,17 +49,16 @@ public class CustomerMergeService {
   private final CustomerContactService customerContactService;
   private final CustomerMemberLinkRepository customerMemberLinkRepository;
   private final CustomerMergeRepository customerMergeRepository;
-  private final UserRepository userRepository;
+  private final ActorIdentityService actorIdentity;
 
   /** 墓標は別の顧客へ読み替えず拒否する。確認した二行と原資料の一致が不可逆な統合の前提になる。 */
   @Transactional
   public CustomerMerge merge(
-      Long storeId, String survivingCustomerId, MergeExecution command, String actorEmail) {
+      Long storeId, String survivingCustomerId, MergeExecution command, long actorId) {
     String mergedCustomerId = command.selection().mergedCustomerId();
     if (survivingCustomerId.equals(mergedCustomerId)) {
       throw new ServiceException("同じ顧客を統合することはできません");
     }
-    Long actorId = resolveActorId(actorEmail);
     Customer merged = lockBothInIdOrder(storeId, survivingCustomerId, mergedCustomerId);
 
     // 可否は実行の瞬間に判定し直す。確認画面を開いた時点の判定は、その後の統合で古くなりうる。
@@ -100,7 +98,7 @@ public class CustomerMergeService {
             preview.merged().contacts().stream().map(MergeSnapshot.Contact::id).toList(),
             preview.merged().memberLinks().stream().map(MergeSnapshot.Link::id).toList(),
             actorId,
-            userRepository.findById(actorId).map(user -> user.getDisplayName()).orElse(null));
+            actorIdentity.requireActor(actorId).name());
     var recorded =
         customerMergeRepository.save(
             CustomerMerge.record(
@@ -227,13 +225,5 @@ public class CustomerMergeService {
               DbConstraint.UQ_T_CUSTOMER_MEMBER_LINKS_ACTIVE_CUSTOMER,
               () -> new ConflictException(RELEASE_THE_LINK_FIRST)));
     }
-  }
-
-  /** JWT は user-id claim を持たないため、実行者は認証主体の email から解決する。 */
-  private Long resolveActorId(String actorEmail) {
-    return userRepository
-        .findByEmail(actorEmail)
-        .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
-        .getId();
   }
 }

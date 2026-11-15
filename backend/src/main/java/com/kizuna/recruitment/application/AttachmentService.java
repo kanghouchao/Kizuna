@@ -64,9 +64,9 @@ public class AttachmentService {
       String uploadId,
       UUID key,
       AttachmentBodyReceiver.Received image,
-      String actorEmail) {
+      long actorId) {
     storage.requireConfigured();
-    return store.receive(storeId, applicantId, uploadId, key, image, actorEmail);
+    return store.receive(storeId, applicantId, uploadId, key, image, actorId);
   }
 
   @PreAuthorize(WRITE)

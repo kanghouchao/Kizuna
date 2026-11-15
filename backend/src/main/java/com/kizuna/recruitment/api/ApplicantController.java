@@ -12,6 +12,7 @@ import com.kizuna.recruitment.api.dto.RecruitmentPolicyResponse;
 import com.kizuna.recruitment.application.ApplicantService;
 import com.kizuna.recruitment.domain.ApplicantStatus;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
@@ -68,7 +69,7 @@ public class ApplicantController {
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(
             ApplicantResponse.from(
-                applicants.create(storeId, request.toIntake(), principal.getName())));
+                applicants.create(storeId, request.toIntake(), JwtClaims.userIdOf(principal))));
   }
 
   @PutMapping("/{id}")
@@ -79,7 +80,7 @@ public class ApplicantController {
       @Valid @RequestBody ApplicantUpdateRequest request,
       Principal principal) {
     return ApplicantResponse.from(
-        applicants.update(storeId, id, request.command(), principal.getName()));
+        applicants.update(storeId, id, request.command(), JwtClaims.userIdOf(principal)));
   }
 
   @PutMapping("/{id}/interview")
@@ -90,7 +91,7 @@ public class ApplicantController {
       @Valid @RequestBody ApplicantInterviewRequest request,
       Principal principal) {
     return ApplicantResponse.from(
-        applicants.interview(storeId, id, request.command(), principal.getName()));
+        applicants.interview(storeId, id, request.command(), JwtClaims.userIdOf(principal)));
   }
 
   @PostMapping("/{id}/transitions")
@@ -101,7 +102,7 @@ public class ApplicantController {
       @Valid @RequestBody ApplicantTransitionRequest request,
       Principal principal) {
     return ApplicantResponse.from(
-        applicants.transition(storeId, id, request.command(), principal.getName()));
+        applicants.transition(storeId, id, request.command(), JwtClaims.userIdOf(principal)));
   }
 
   @PostMapping("/{id}/decision")
@@ -112,7 +113,7 @@ public class ApplicantController {
       @Valid @RequestBody ApplicantTransitionRequest request,
       Principal principal) {
     return ApplicantResponse.from(
-        applicants.decide(storeId, id, request.command(), principal.getName()));
+        applicants.decide(storeId, id, request.command(), JwtClaims.userIdOf(principal)));
   }
 
   @PostMapping("/{id}/enrollment")
@@ -125,7 +126,7 @@ public class ApplicantController {
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(
             ApplicantResponse.from(
-                applicants.enroll(storeId, id, request.command(), principal.getName())));
+                applicants.enroll(storeId, id, request.command(), JwtClaims.userIdOf(principal))));
   }
 
   @GetMapping("/{id}/history")

@@ -8,6 +8,7 @@ import com.kizuna.recruitment.infrastructure.AttachmentBodyReceiver;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ServiceUnavailableException;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.file.Files;
 import java.security.Principal;
@@ -94,7 +95,7 @@ public class AttachmentController {
       @RequestHeader(value = "Idempotency-Key", required = false) String key,
       HttpServletRequest request,
       Principal principal) {
-    return receive(storeId, id, null, key, request, principal.getName());
+    return receive(storeId, id, null, key, request, JwtClaims.userIdOf(principal));
   }
 
   @PutMapping("/{id}/attachment-uploads/{uploadId}/content")
@@ -106,7 +107,7 @@ public class AttachmentController {
       @RequestHeader(value = "Idempotency-Key", required = false) String key,
       HttpServletRequest request,
       Principal principal) {
-    return receive(storeId, id, uploadId, key, request, principal.getName());
+    return receive(storeId, id, uploadId, key, request, JwtClaims.userIdOf(principal));
   }
 
   private WebAsyncTask<ResponseEntity<AttachmentSummaryResponse>> receive(
@@ -115,7 +116,7 @@ public class AttachmentController {
       String uploadId,
       String rawKey,
       HttpServletRequest request,
-      String actorEmail) {
+      long actorId) {
     UUID key = attachments.preflight(storeId, id, uploadId, rawKey);
     var admission = receiver.admit(request);
     var loggingContext = ThreadContext.getImmutableContext();
@@ -126,7 +127,7 @@ public class AttachmentController {
                   admission) {
                 var receipt =
                     attachments.receive(
-                        storeId, id, uploadId, key, admission.receive(request), actorEmail);
+                        storeId, id, uploadId, key, admission.receive(request), actorId);
                 int status = uploadId == null && receipt.created() ? 201 : 200;
                 return ResponseEntity.status(status)
                     .body(AttachmentSummaryResponse.from(receipt.attachment()));

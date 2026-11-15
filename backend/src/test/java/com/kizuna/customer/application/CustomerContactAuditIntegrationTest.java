@@ -3,7 +3,6 @@ package com.kizuna.customer.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
@@ -46,9 +45,7 @@ import java.util.UUID;
 import java.util.stream.IntStream;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
@@ -67,8 +64,6 @@ import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.SharedEntityManagerCreator;
 import org.springframework.orm.jpa.hibernate.SpringBeanContainer;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -78,6 +73,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class CustomerContactAuditIntegrationTest {
   private static final Long STORE_ID = 1L;
+  static final long ACTOR_ID = 9L;
   private AnnotationConfigApplicationContext context;
   private JdbcTemplate jdbc;
   private TransactionTemplate transactions;
@@ -92,19 +88,8 @@ class CustomerContactAuditIntegrationTest {
     service = context.getBean(CustomerContactService.class);
     customers = context.getBean(CustomerService.class);
     jdbc.execute(
-        "create unique index uq_contact_test_preference on t_customer_contacts(customer_id, type) where preferred = true and deleted = false");
-  }
-
-  @BeforeEach
-  void authenticate() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken("operator@example.test", null, List.of()));
-  }
-
-  @AfterEach
-  void clear() {
-    SecurityContextHolder.clearContext();
+        "create unique index uq_contact_test_preference on t_customer_contacts(customer_id, type)"
+            + " where preferred = true and deleted = false");
   }
 
   @AfterAll
@@ -115,7 +100,7 @@ class CustomerContactAuditIntegrationTest {
   @Test
   void initialContactAndHistoryAndAuditCommitWithTheirParentCustomer() {
     var request = request();
-    var customer = customers.create(STORE_ID, request.command()).customer();
+    var customer = customers.create(STORE_ID, request.command(), ACTOR_ID).customer();
     String contactId =
         jdbc.queryForObject(
             "select id from t_customer_contacts where customer_id = ?",
@@ -139,7 +124,8 @@ class CustomerContactAuditIntegrationTest {
         .isEqualTo("0");
     assertThat(
             jdbc.queryForObject(
-                "select count(*) from t_audit_events a join t_customer_contact_history h on a.source_id = h.id where a.target_id = ?",
+                "select count(*) from t_audit_events a join t_customer_contact_history h on"
+                    + " a.source_id = h.id where a.target_id = ?",
                 Long.class,
                 contactId))
         .isEqualTo(1);
@@ -153,7 +139,7 @@ class CustomerContactAuditIntegrationTest {
     long auditsBefore = count("t_audit_events");
     reject("action <> 'CUSTOMER_CONTACT_CREATED'");
     try {
-      assertThatThrownBy(() -> customers.create(STORE_ID, request.command()).customer())
+      assertThatThrownBy(() -> customers.create(STORE_ID, request.command(), ACTOR_ID).customer())
           .isInstanceOf(RuntimeException.class);
       assertThat(
               jdbc.queryForObject(
@@ -177,7 +163,7 @@ class CustomerContactAuditIntegrationTest {
             () ->
                 transactions.executeWithoutResult(
                     transaction -> {
-                      customers.create(STORE_ID, request.command()).customer();
+                      customers.create(STORE_ID, request.command(), ACTOR_ID).customer();
                       assertThat(count("t_audit_events")).isEqualTo(auditsBefore + 2);
                       throw new IllegalStateException("親取引の後続失敗");
                     }))
@@ -193,15 +179,19 @@ class CustomerContactAuditIntegrationTest {
 
   @Test
   void preferenceSwitchKeepsTheUniqueIndexAndRecordsBothCommittedVersions() {
-    var customer = customers.create(STORE_ID, request().command()).customer();
+    var customer = customers.create(STORE_ID, request().command(), ACTOR_ID).customer();
     String first = firstContact(customer.getId());
     String second =
         service
-            .create(STORE_ID, customer.getId(), new ContactValue(ContactType.LINE, "other-private"))
+            .create(
+                STORE_ID,
+                customer.getId(),
+                new ContactValue(ContactType.LINE, "other-private"),
+                ACTOR_ID)
             .contact()
             .getId();
-    service.prefer(STORE_ID, customer.getId(), ContactType.LINE, first);
-    service.prefer(STORE_ID, customer.getId(), ContactType.LINE, second);
+    service.prefer(STORE_ID, customer.getId(), ContactType.LINE, first, ACTOR_ID);
+    service.prefer(STORE_ID, customer.getId(), ContactType.LINE, second, ACTOR_ID);
     assertThat(
             jdbc.queryForList(
                 "select id from t_customer_contacts where customer_id = ? and preferred",
@@ -210,7 +200,10 @@ class CustomerContactAuditIntegrationTest {
         .containsExactly(second);
     var events =
         jdbc.queryForList(
-            "select target_id, before_values ->> 'version' as old_version, after_values ->> 'version' as new_version, after_values ->> 'operation_id' as operation_id from t_audit_events where action = 'CUSTOMER_CONTACT_PREFERENCE_CHANGED' and target_id in (?,?) order by id desc limit 2",
+            "select target_id, before_values ->> 'version' as old_version, after_values ->>"
+                + " 'version' as new_version, after_values ->> 'operation_id' as operation_id from"
+                + " t_audit_events where action = 'CUSTOMER_CONTACT_PREFERENCE_CHANGED' and"
+                + " target_id in (?,?) order by id desc limit 2",
             second,
             first);
     assertThat(events).hasSize(2);
@@ -225,25 +218,30 @@ class CustomerContactAuditIntegrationTest {
     assertThat(events.getFirst().get("operation_id"))
         .isEqualTo(events.getLast().get("operation_id"));
     long auditCount = count("t_audit_events");
-    service.prefer(STORE_ID, customer.getId(), ContactType.LINE, second);
+    service.prefer(STORE_ID, customer.getId(), ContactType.LINE, second, ACTOR_ID);
     assertThat(count("t_audit_events")).isEqualTo(auditCount);
   }
 
   @Test
   void secondPreferenceAuditFailureRollsBackBothSidesAndTheFirstAudit() {
-    var customer = customers.create(STORE_ID, request().command()).customer();
+    var customer = customers.create(STORE_ID, request().command(), ACTOR_ID).customer();
     String first = firstContact(customer.getId());
     String second =
         service
-            .create(STORE_ID, customer.getId(), new ContactValue(ContactType.LINE, "other-private"))
+            .create(
+                STORE_ID,
+                customer.getId(),
+                new ContactValue(ContactType.LINE, "other-private"),
+                ACTOR_ID)
             .contact()
             .getId();
-    service.prefer(STORE_ID, customer.getId(), ContactType.LINE, first);
+    service.prefer(STORE_ID, customer.getId(), ContactType.LINE, first, ACTOR_ID);
     long auditsBefore = count("t_audit_events");
     long historiesBefore = count("t_customer_contact_history");
     reject("action <> 'CUSTOMER_CONTACT_PREFERENCE_CHANGED' or target_id <> '" + second + "'");
     try {
-      assertThatThrownBy(() -> service.prefer(STORE_ID, customer.getId(), ContactType.LINE, second))
+      assertThatThrownBy(
+              () -> service.prefer(STORE_ID, customer.getId(), ContactType.LINE, second, ACTOR_ID))
           .isInstanceOf(RuntimeException.class);
       assertThat(
               jdbc.queryForList(
@@ -269,11 +267,12 @@ class CustomerContactAuditIntegrationTest {
   @Test
   void deletionAuditFailureAlsoRollsBackInheritedRestrictionsAndTheirAudits() {
     var request = request();
-    var customer = customers.create(STORE_ID, request.command()).customer();
+    var customer = customers.create(STORE_ID, request.command(), ACTOR_ID).customer();
     String source = firstContact(customer.getId());
     String duplicate =
         service
-            .create(STORE_ID, customer.getId(), request.getContacts().getFirst().command())
+            .create(
+                STORE_ID, customer.getId(), request.getContacts().getFirst().command(), ACTOR_ID)
             .contact()
             .getId();
     service.changePermission(
@@ -281,12 +280,13 @@ class CustomerContactAuditIntegrationTest {
         customer.getId(),
         source,
         ContactPurpose.BUSINESS,
-        new PermissionChange(ContactPermissionStatus.DENIED, "private-source", "private-reason"));
+        new PermissionChange(ContactPermissionStatus.DENIED, "private-source", "private-reason"),
+        ACTOR_ID);
     long auditsBefore = count("t_audit_events");
     long historiesBefore = count("t_customer_contact_history");
     reject("action <> 'CUSTOMER_CONTACT_DELETED'");
     try {
-      assertThatThrownBy(() -> service.delete(STORE_ID, customer.getId(), source))
+      assertThatThrownBy(() -> service.delete(STORE_ID, customer.getId(), source, ACTOR_ID))
           .isInstanceOf(RuntimeException.class);
       assertThat(
               jdbc.queryForObject(
@@ -312,11 +312,12 @@ class CustomerContactAuditIntegrationTest {
   @Test
   void valueChangeWithInheritanceRecordsVersionsBeforeAndAfterQueryAutoFlush() {
     var request = request();
-    var customer = customers.create(STORE_ID, request.command()).customer();
+    var customer = customers.create(STORE_ID, request.command(), ACTOR_ID).customer();
     String source = firstContact(customer.getId());
     String duplicate =
         service
-            .create(STORE_ID, customer.getId(), request.getContacts().getFirst().command())
+            .create(
+                STORE_ID, customer.getId(), request.getContacts().getFirst().command(), ACTOR_ID)
             .contact()
             .getId();
     service.changePermission(
@@ -324,15 +325,19 @@ class CustomerContactAuditIntegrationTest {
         customer.getId(),
         source,
         ContactPurpose.BUSINESS,
-        new PermissionChange(ContactPermissionStatus.DENIED, "private-source", "private-reason"));
+        new PermissionChange(ContactPermissionStatus.DENIED, "private-source", "private-reason"),
+        ACTOR_ID);
     service.update(
         STORE_ID,
         customer.getId(),
         source,
-        new ContactValue(ContactType.EMAIL, "private@example.test"));
+        new ContactValue(ContactType.EMAIL, "private@example.test"),
+        ACTOR_ID);
     var sourceAudit =
         jdbc.queryForMap(
-            "select before_values ->> 'version' as old_version, after_values ->> 'version' as new_version, after_values ->> 'business_status' as status from t_audit_events where target_id = ? and action = 'CUSTOMER_CONTACT_UPDATED'",
+            "select before_values ->> 'version' as old_version, after_values ->> 'version' as"
+                + " new_version, after_values ->> 'business_status' as status from t_audit_events"
+                + " where target_id = ? and action = 'CUSTOMER_CONTACT_UPDATED'",
             source);
     assertThat(sourceAudit)
         .containsEntry("old_version", "1")
@@ -340,7 +345,9 @@ class CustomerContactAuditIntegrationTest {
         .containsEntry("status", "UNKNOWN");
     var inherited =
         jdbc.queryForMap(
-            "select before_values ->> 'version' as old_version, after_values ->> 'version' as new_version, after_values ->> 'business_status' as status from t_audit_events where target_id = ? and action = 'CUSTOMER_CONTACT_RESTRICTION_INHERITED'",
+            "select before_values ->> 'version' as old_version, after_values ->> 'version' as"
+                + " new_version, after_values ->> 'business_status' as status from t_audit_events"
+                + " where target_id = ? and action = 'CUSTOMER_CONTACT_RESTRICTION_INHERITED'",
             duplicate);
     assertThat(inherited)
         .containsEntry("old_version", "0")
@@ -383,7 +390,7 @@ class CustomerContactAuditIntegrationTest {
                       List.of(
                           new ContactRequest(ContactType.LINE, key + "-1"),
                           new ContactRequest(ContactType.LINE, key + "-2")));
-                  return customers.create(STORE_ID, request.command()).customer().getId();
+                  return customers.create(STORE_ID, request.command(), ACTOR_ID).customer().getId();
                 })
             .toList();
 
@@ -537,9 +544,8 @@ class CustomerContactAuditIntegrationTest {
               .userType(UserType.STAFF)
               .roleIds(Set.of(1L))
               .build();
-      actor.setId(9L);
-      when(users.findByEmail(anyString())).thenReturn(Optional.of(actor));
-      when(users.findById(anyLong())).thenReturn(Optional.of(actor));
+      actor.setId(ACTOR_ID);
+      when(users.findById(ACTOR_ID)).thenReturn(Optional.of(actor));
       return users;
     }
 

@@ -9,7 +9,9 @@ import com.kizuna.customer.application.CustomerContactService;
 import com.kizuna.customer.domain.ContactPurpose;
 import com.kizuna.customer.domain.ContactType;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import jakarta.validation.Valid;
+import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -47,9 +49,13 @@ public class CustomerContactController {
   public ResponseEntity<ContactResponse> create(
       @CurrentStore Long storeId,
       @PathVariable String customerId,
-      @Valid @RequestBody ContactRequest request) {
+      @Valid @RequestBody ContactRequest request,
+      Principal principal) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(ContactResponse.of(service.create(storeId, customerId, request.command())));
+        .body(
+            ContactResponse.of(
+                service.create(
+                    storeId, customerId, request.command(), JwtClaims.userIdOf(principal))));
   }
 
   @PutMapping("/contacts/{contactId}")
@@ -58,8 +64,11 @@ public class CustomerContactController {
       @CurrentStore Long storeId,
       @PathVariable String customerId,
       @PathVariable String contactId,
-      @Valid @RequestBody ContactRequest request) {
-    return ContactResponse.of(service.update(storeId, customerId, contactId, request.command()));
+      @Valid @RequestBody ContactRequest request,
+      Principal principal) {
+    return ContactResponse.of(
+        service.update(
+            storeId, customerId, contactId, request.command(), JwtClaims.userIdOf(principal)));
   }
 
   @PutMapping("/contacts/{contactId}/permissions/{purpose}")
@@ -69,16 +78,26 @@ public class CustomerContactController {
       @PathVariable String customerId,
       @PathVariable String contactId,
       @PathVariable ContactPurpose purpose,
-      @Valid @RequestBody ContactPermissionRequest request) {
+      @Valid @RequestBody ContactPermissionRequest request,
+      Principal principal) {
     return ContactResponse.of(
-        service.changePermission(storeId, customerId, contactId, purpose, request.command()));
+        service.changePermission(
+            storeId,
+            customerId,
+            contactId,
+            purpose,
+            request.command(),
+            JwtClaims.userIdOf(principal)));
   }
 
   @DeleteMapping("/contacts/{contactId}")
   @PreAuthorize("hasAuthority('PERM_CUSTOMER_MANAGE')")
   public ResponseEntity<Void> delete(
-      @CurrentStore Long storeId, @PathVariable String customerId, @PathVariable String contactId) {
-    service.delete(storeId, customerId, contactId);
+      @CurrentStore Long storeId,
+      @PathVariable String customerId,
+      @PathVariable String contactId,
+      Principal principal) {
+    service.delete(storeId, customerId, contactId, JwtClaims.userIdOf(principal));
     return ResponseEntity.noContent().build();
   }
 
@@ -88,8 +107,10 @@ public class CustomerContactController {
       @CurrentStore Long storeId,
       @PathVariable String customerId,
       @PathVariable ContactType type,
-      @Valid @RequestBody ContactPreferenceRequest request) {
-    service.prefer(storeId, customerId, type, request.getContactId());
+      @Valid @RequestBody ContactPreferenceRequest request,
+      Principal principal) {
+    service.prefer(
+        storeId, customerId, type, request.getContactId(), JwtClaims.userIdOf(principal));
     return ResponseEntity.noContent().build();
   }
 

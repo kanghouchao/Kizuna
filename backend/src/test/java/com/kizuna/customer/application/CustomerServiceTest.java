@@ -50,6 +50,7 @@ import org.springframework.data.jpa.domain.Specification;
 class CustomerServiceTest {
 
   private static final Long STORE_ID = 7L;
+  private static final long ACTOR_ID = 42L;
 
   @Mock private CustomerContactService customerContactService;
   @Mock private CustomerContactRepository customerContactRepository;
@@ -137,7 +138,7 @@ class CustomerServiceTest {
             });
 
     CustomerResponse res =
-        customerMapper.toResponse(customerService.create(STORE_ID, req.command()));
+        customerMapper.toResponse(customerService.create(STORE_ID, req.command(), ACTOR_ID));
     ArgumentCaptor<Customer> saved = ArgumentCaptor.forClass(Customer.class);
     verify(customerRepository).saveAndFlush(saved.capture());
     assertThat(saved.getValue().getStoreId()).isEqualTo(STORE_ID);
@@ -157,7 +158,7 @@ class CustomerServiceTest {
     req.setName("Updated");
 
     CustomerResponse res =
-        customerMapper.toResponse(customerService.update(STORE_ID, "c1", req.patch()));
+        customerMapper.toResponse(customerService.update(STORE_ID, "c1", req.patch(), ACTOR_ID));
     assertThat(c.getName()).isEqualTo("Updated");
     assertThat(res.getName()).isEqualTo("Updated");
   }
@@ -167,7 +168,9 @@ class CustomerServiceTest {
     when(customerRepository.findByIdAndStoreId("missing", STORE_ID)).thenReturn(Optional.empty());
 
     assertThatThrownBy(
-            () -> customerService.update(STORE_ID, "missing", new CustomerUpdateRequest().patch()))
+            () ->
+                customerService.update(
+                    STORE_ID, "missing", new CustomerUpdateRequest().patch(), ACTOR_ID))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("顧客が見つかりません");
   }
@@ -261,7 +264,9 @@ class CustomerServiceTest {
     when(customerRepository.isMerged(STORE_ID, "c1")).thenReturn(true);
 
     assertThatThrownBy(
-            () -> customerService.update(STORE_ID, "c1", new CustomerUpdateRequest().patch()))
+            () ->
+                customerService.update(
+                    STORE_ID, "c1", new CustomerUpdateRequest().patch(), ACTOR_ID))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("統合済みの顧客です。統合先の顧客を編集してください");
     verify(customerRepository, never()).save(any());
@@ -274,7 +279,7 @@ class CustomerServiceTest {
         .thenReturn(Optional.of(aliveCustomer("c1")));
     when(customerRepository.isMerged(STORE_ID, "c1")).thenReturn(true);
 
-    assertThatThrownBy(() -> customerService.delete(STORE_ID, "c1"))
+    assertThatThrownBy(() -> customerService.delete(STORE_ID, "c1", ACTOR_ID))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("統合済みの顧客です。統合先の顧客を編集してください");
     // 墓標は「統合に関与した行」でもあるので、後ろに置くと次の一手の違う案内に潰れる
@@ -298,7 +303,7 @@ class CustomerServiceTest {
     Customer row = aliveCustomer("c1");
     when(customerRepository.findByIdAndStoreIdForUpdate("c1", STORE_ID))
         .thenReturn(Optional.of(row));
-    customerService.delete(STORE_ID, "c1");
+    customerService.delete(STORE_ID, "c1", ACTOR_ID);
     verify(customerRepository).delete(row);
   }
 
@@ -309,7 +314,7 @@ class CustomerServiceTest {
         .thenReturn(Optional.of(aliveCustomer("c1")));
     when(customerMergeRepository.existsInvolving(STORE_ID, "c1")).thenReturn(true);
 
-    assertThatThrownBy(() -> customerService.delete(STORE_ID, "c1"))
+    assertThatThrownBy(() -> customerService.delete(STORE_ID, "c1", ACTOR_ID))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("統合");
     verify(customerRepository, never()).delete(any(Customer.class));
@@ -320,7 +325,7 @@ class CustomerServiceTest {
     when(customerRepository.findByIdAndStoreIdForUpdate("missing", STORE_ID))
         .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> customerService.delete(STORE_ID, "missing"))
+    assertThatThrownBy(() -> customerService.delete(STORE_ID, "missing", ACTOR_ID))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("顧客が見つかりません");
   }

@@ -23,15 +23,12 @@ import com.kizuna.user.domain.UserType;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Clock;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
@@ -53,8 +50,6 @@ import org.springframework.orm.jpa.SharedEntityManagerCreator;
 import org.springframework.orm.jpa.hibernate.SpringBeanContainer;
 import org.springframework.orm.jpa.vendor.HibernateJpaDialect;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -98,17 +93,6 @@ class BenefitConfigAuditIntegrationTest {
         "alter table t_audit_events add constraint fk_test_audit_actor foreign key(actor_id) references t_users(id)");
   }
 
-  @BeforeEach
-  void authenticate() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken(ORDINARY, null, List.of()));
-  }
-
-  @AfterEach
-  void clear() {
-    SecurityContextHolder.clearContext();
-  }
-
   @AfterAll
   void close() {
     if (context != null) context.close();
@@ -116,9 +100,9 @@ class BenefitConfigAuditIntegrationTest {
 
   @Test
   void ruleLifecycleCommitsGroupWideAuditWithRealVersions() {
-    Long id = rules.create(BenefitRuleType.VISIT, definition(500)).getId();
-    rules.update(id, 0L, definition(800));
-    rules.deactivate(id, 1L);
+    Long id = rules.create(BenefitRuleType.VISIT, definition(500), ordinaryId).getId();
+    rules.update(id, 0L, definition(800), ordinaryId);
+    rules.deactivate(id, 1L, ordinaryId);
 
     var rows =
         jdbc.queryForList(
@@ -132,11 +116,13 @@ class BenefitConfigAuditIntegrationTest {
     assertThat(rows.get(0).get("originating_store_id")).isNull();
     assertThat(rows.get(1))
         .containsEntry("action", "BENEFIT_RULE_UPDATED")
+        .containsEntry("actor_id", ordinaryId)
         .containsEntry("v", "1")
         .containsEntry("p", "800")
         .containsEntry("c", "points");
     assertThat(rows.get(2))
         .containsEntry("action", "BENEFIT_RULE_DEACTIVATED")
+        .containsEntry("actor_id", ordinaryId)
         .containsEntry("v", "2")
         .containsEntry("a", "false");
     assertThat(
@@ -149,13 +135,13 @@ class BenefitConfigAuditIntegrationTest {
 
   @Test
   void auditFailureRollsBackRuleUpdateAndDeactivation() {
-    Long id = rules.create(BenefitRuleType.VISIT, definition(500)).getId();
+    Long id = rules.create(BenefitRuleType.VISIT, definition(500), ordinaryId).getId();
     long audits = audits("BENEFIT_RULE");
     failAuditFor("BENEFIT_RULE_UPDATED", "BENEFIT_RULE_DEACTIVATED");
     try {
-      assertThatThrownBy(() -> rules.update(id, 0L, definition(900)))
+      assertThatThrownBy(() -> rules.update(id, 0L, definition(900), ordinaryId))
           .isInstanceOf(DataIntegrityViolationException.class);
-      assertThatThrownBy(() -> rules.deactivate(id, 0L))
+      assertThatThrownBy(() -> rules.deactivate(id, 0L, ordinaryId))
           .isInstanceOf(DataIntegrityViolationException.class);
     } finally {
       jdbc.execute("alter table t_audit_events drop constraint ck_benefit_config_audit_test");

@@ -5,6 +5,7 @@ import com.kizuna.customer.api.dto.CustomerPointBalanceResponse;
 import com.kizuna.customer.application.CustomerPointService;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.shared.web.Replays;
 import jakarta.validation.Valid;
 import java.security.Principal;
@@ -46,14 +47,12 @@ public class CustomerPointController {
       @Valid @RequestBody CustomerPointAdjustmentRequest request,
       Principal principal) {
     var command = request.command();
+    long actorId = JwtClaims.userIdOf(principal);
     return ResponseEntity.ok(
         CustomerPointBalanceResponse.of(
             Replays.write(
                 DbConstraint.UQ_T_POINT_ENTRIES_IDEMPOTENCY_KEY,
-                () ->
-                    customerPointService.adjust(storeId, customerId, command, principal.getName()),
-                () ->
-                    customerPointService.replayAdjust(
-                        storeId, customerId, command, principal.getName()))));
+                () -> customerPointService.adjust(storeId, customerId, command, actorId),
+                () -> customerPointService.replayAdjust(storeId, customerId, command, actorId))));
   }
 }

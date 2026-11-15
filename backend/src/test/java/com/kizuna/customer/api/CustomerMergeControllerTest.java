@@ -1,5 +1,6 @@
 package com.kizuna.customer.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -20,10 +21,13 @@ import com.kizuna.customer.domain.CustomerMerge;
 import com.kizuna.customer.domain.CustomerMergeView;
 import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Set;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -40,7 +44,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -60,6 +63,7 @@ import tools.jackson.databind.ObjectMapper;
 class CustomerMergeControllerTest {
 
   private static final Long STORE_ID = 7L;
+  private static final long ACTOR_ID = 42L;
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
   @TestConfiguration
@@ -75,9 +79,14 @@ class CustomerMergeControllerTest {
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
   @MockitoBean StoreScopeResolver storeScopeResolver;
 
+  /** 利用者の店舗集合に名乗る店舗が含まれている状態。 */
+  @BeforeEach
+  void storeIsInScope() {
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(STORE_ID)));
+  }
+
   @Test
   @DisplayName("履歴は向き・相手の行・実行者・移した件数を snake_case で返すこと")
-  @WithMockUser(authorities = "PERM_CUSTOMER_MERGE")
   void historyExposesTheEvidenceInSnakeCase() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     var row = historyRow();
@@ -85,7 +94,7 @@ class CustomerMergeControllerTest {
         .thenReturn(new PageImpl<>(List.of(row)));
 
     mockMvc
-        .perform(storeGet("/customers/c1/merges"))
+        .perform(storeGet("/customers/c1/merges", "PERM_CUSTOMER_MERGE"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].direction").value("SURVIVING"))
         .andExpect(jsonPath("$.content[0].counterpart_customer_id").value("c2"))
@@ -97,7 +106,6 @@ class CustomerMergeControllerTest {
 
   @Test
   @DisplayName("履歴は新しい統合から並べたページで返ること")
-  @WithMockUser(authorities = "PERM_CUSTOMER_MERGE")
   void historyIsAPageNewestFirst() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     var pageable = ArgumentCaptor.forClass(Pageable.class);
@@ -105,7 +113,7 @@ class CustomerMergeControllerTest {
         .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
     mockMvc
-        .perform(storeGet("/customers/c1/merges"))
+        .perform(storeGet("/customers/c1/merges", "PERM_CUSTOMER_MERGE"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 
@@ -115,11 +123,12 @@ class CustomerMergeControllerTest {
 
   @Test
   @DisplayName("統合権限を持たない利用者は履歴を読めず、読み口にも届かないこと")
-  @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
   void historyIsForbiddenWithoutTheMergePermission() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
-    mockMvc.perform(storeGet("/customers/c1/merges")).andExpect(status().isForbidden());
+    mockMvc
+        .perform(storeGet("/customers/c1/merges", "PERM_CUSTOMER_MANAGE"))
+        .andExpect(status().isForbidden());
 
     // 履歴は誰がどの顧客を畳んだかを明かす。拒否は読み取りの手前で成立していること
     verify(customerMergeService, never()).history(any(), anyString(), any());
@@ -128,11 +137,10 @@ class CustomerMergeControllerTest {
   @Autowired private ObjectMapper json;
 
   @Test
-  @WithMockUser(authorities = {"PERM_CUSTOMER_MANAGE", "PERM_CUSTOMER_MERGE"})
   void acceptsFiveHundredCharactersAfterStrippingReason() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     String reason = "理由".repeat(250);
-    when(customerMergeService.merge(any(), anyString(), any(), anyString()))
+    when(customerMergeService.merge(any(), anyString(), any(), anyLong()))
         .thenReturn(
             CustomerMerge.record(
                 STORE_ID,
@@ -147,25 +155,23 @@ class CustomerMergeControllerTest {
                 null));
     mockMvc.perform(mergeRequest(" \t" + reason + "\n　")).andExpect(status().isOk());
     var captured = ArgumentCaptor.forClass(MergeExecution.class);
-    verify(customerMergeService).merge(eq(STORE_ID), anyString(), captured.capture(), anyString());
+    verify(customerMergeService).merge(eq(STORE_ID), anyString(), captured.capture(), eq(ACTOR_ID));
     assertThat(captured.getValue().operationReason()).isEqualTo(reason);
   }
 
   @ParameterizedTest
   @NullAndEmptySource
   @ValueSource(strings = {" \t\n　", "too-long"})
-  @WithMockUser(authorities = {"PERM_CUSTOMER_MANAGE", "PERM_CUSTOMER_MERGE"})
   void rejectsEmptyOrOversizedNormalizedReason(String reason) throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     mockMvc
         .perform(mergeRequest("too-long".equals(reason) ? "理".repeat(501) : reason))
         .andExpect(status().isBadRequest());
-    verify(customerMergeService, never()).merge(any(), anyString(), any(), anyString());
+    verify(customerMergeService, never()).merge(any(), anyString(), any(), anyLong());
   }
 
   @Test
   @DisplayName("優先指定のキーを欠いた統合は 400 で、null の明示と区別されること")
-  @WithMockUser(authorities = {"PERM_CUSTOMER_MANAGE", "PERM_CUSTOMER_MERGE"})
   void rejectsPreferredContactsMissingAKey() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     var body =
@@ -178,12 +184,12 @@ class CustomerMergeControllerTest {
     mockMvc
         .perform(
             post("/customers/c1/merges")
-                .principal(() -> "tanaka.hanako@kizuna.test")
+                .with(jwtUser(ACTOR_ID, "PERM_CUSTOMER_MANAGE", "PERM_CUSTOMER_MERGE"))
                 .header("X-Store-ID", STORE_ID.toString())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body.toString()))
         .andExpect(status().isBadRequest());
-    verify(customerMergeService, never()).merge(any(), anyString(), any(), anyString());
+    verify(customerMergeService, never()).merge(any(), anyString(), any(), anyLong());
   }
 
   private MockHttpServletRequestBuilder mergeRequest(String reason) {
@@ -195,16 +201,14 @@ class CustomerMergeControllerTest {
             .put("operation_reason", reason);
     body.putObject("preferred_contacts").putNull("phone").putNull("email").putNull("line");
     return post("/customers/c1/merges")
-        .principal(() -> "tanaka.hanako@kizuna.test")
+        .with(jwtUser(ACTOR_ID, "PERM_CUSTOMER_MANAGE", "PERM_CUSTOMER_MERGE"))
         .header("X-Store-ID", STORE_ID.toString())
         .contentType(MediaType.APPLICATION_JSON)
         .content(body.toString());
   }
 
-  private MockHttpServletRequestBuilder storeGet(String path) {
-    return get(path)
-        .header("X-Store-ID", STORE_ID.toString())
-        .principal(() -> "tanaka.hanako@kizuna.test");
+  private MockHttpServletRequestBuilder storeGet(String path, String... authorities) {
+    return get(path).header("X-Store-ID", STORE_ID.toString()).with(jwtUser(ACTOR_ID, authorities));
   }
 
   /** パスの c1 が存続行として受けた統合。相手は被統合行の c2。 */

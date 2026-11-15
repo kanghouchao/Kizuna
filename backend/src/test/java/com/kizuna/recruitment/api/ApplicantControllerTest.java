@@ -1,5 +1,6 @@
 package com.kizuna.recruitment.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.nullValue;
@@ -27,14 +28,15 @@ import com.kizuna.recruitment.domain.ReceptionChannel;
 import com.kizuna.settings.application.ApplicantRetentionSettings;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.lang.reflect.RecordComponent;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -46,14 +48,9 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.test.context.TestSecurityContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 @WebMvcTest(ApplicantController.class)
 @Import({ApplicantControllerTest.MethodSecurity.class, StoreScopeHolder.class})
@@ -67,25 +64,6 @@ class ApplicantControllerTest {
   @MockitoBean SystemConfigService configs;
   @MockitoBean StoreExistenceCheck stores;
   @MockitoBean StoreScopeResolver storeScopeResolver;
-
-  private static TestActor actor() {
-    return new TestActor();
-  }
-
-  private static class TestActor {
-    RequestPostProcessor authorities(GrantedAuthority... authorities) {
-      return authorities(List.of(authorities));
-    }
-
-    RequestPostProcessor authorities(Collection<? extends GrantedAuthority> authorities) {
-      var authentication = new UsernamePasswordAuthenticationToken("actor", "unused", authorities);
-      TestSecurityContextHolder.setAuthentication(authentication);
-      return request -> {
-        request.setUserPrincipal(authentication);
-        return request;
-      };
-    }
-  }
 
   // 応答への変換は controller が行うので、書き込みと詳細の呼出には service の結果が要る。
   static final ApplicantViews.Detail DETAIL =
@@ -114,10 +92,11 @@ class ApplicantControllerTest {
   @BeforeEach
   void setup() {
     when(stores.exists(anyLong())).thenReturn(true);
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(1L, 7L)));
     when(service.get(anyLong(), any())).thenReturn(DETAIL);
-    when(service.create(anyLong(), any(), any())).thenReturn(DETAIL);
-    when(service.decide(anyLong(), any(), any(), any())).thenReturn(DETAIL);
-    when(service.enroll(anyLong(), any(), any(), any())).thenReturn(DETAIL);
+    when(service.create(anyLong(), any(), anyLong())).thenReturn(DETAIL);
+    when(service.decide(anyLong(), any(), any(), anyLong())).thenReturn(DETAIL);
+    when(service.enroll(anyLong(), any(), any(), anyLong())).thenReturn(DETAIL);
   }
 
   @Test
@@ -128,7 +107,7 @@ class ApplicantControllerTest {
     mvc.perform(
             get("/applicants/a/history")
                 .header("X-Store-ID", "1")
-                .with(actor().authorities(new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"))))
+                .with(jwtUser(42L, "PERM_RECRUITMENT_VIEW")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
     assertThat(pageable.getValue().getSort())
@@ -158,7 +137,7 @@ class ApplicantControllerTest {
     mvc.perform(
             get("/applicants")
                 .header("X-Store-ID", "1")
-                .with(actor().authorities(new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"))))
+                .with(jwtUser(42L, "PERM_RECRUITMENT_VIEW")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].name").value("応募者"))
         .andExpect(jsonPath("$.content[0].enrollment_id").value("e1"))
@@ -188,7 +167,7 @@ class ApplicantControllerTest {
     mvc.perform(
             get("/applicants/a")
                 .header("X-Store-ID", "7")
-                .with(actor().authorities(new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"))))
+                .with(jwtUser(42L, "PERM_RECRUITMENT_VIEW")))
         .andExpect(status().isOk());
     verify(service).get(7L, "a");
   }
@@ -200,13 +179,9 @@ class ApplicantControllerTest {
                 .header("X-Store-ID", "7")
                 .contentType("application/json")
                 .content("{\"name\":\"応募者\",\"channel\":\"WEB\",\"source_type\":\"DIRECT\"}")
-                .with(
-                    actor()
-                        .authorities(
-                            new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
-                            new SimpleGrantedAuthority("PERM_RECRUITMENT_MANAGE"))))
+                .with(jwtUser(42L, "PERM_RECRUITMENT_VIEW", "PERM_RECRUITMENT_MANAGE")))
         .andExpect(status().isCreated());
-    verify(service).create(eq(7L), any(ApplicantIntake.class), eq("actor"));
+    verify(service).create(eq(7L), any(ApplicantIntake.class), eq(42L));
   }
 
   @Test
@@ -215,7 +190,7 @@ class ApplicantControllerTest {
       mvc.perform(
               get("/applicants" + path)
                   .header("X-Store-ID", "1")
-                  .with(actor().authorities(new SimpleGrantedAuthority("PERM_CAST_MANAGE"))))
+                  .with(jwtUser(42L, "PERM_CAST_MANAGE")))
           .andExpect(status().isForbidden());
     }
     verifyNoInteractions(service);
@@ -231,7 +206,7 @@ class ApplicantControllerTest {
                   .header("X-Store-ID", "1")
                   .contentType("application/json")
                   .content(body)
-                  .with(actor().authorities(new SimpleGrantedAuthority(permission))))
+                  .with(jwtUser(42L, permission)))
           .andExpect(status().isForbidden());
     }
     mvc.perform(
@@ -239,11 +214,7 @@ class ApplicantControllerTest {
                 .header("X-Store-ID", "1")
                 .contentType("application/json")
                 .content(body)
-                .with(
-                    actor()
-                        .authorities(
-                            new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
-                            new SimpleGrantedAuthority("PERM_RECRUITMENT_MANAGE"))))
+                .with(jwtUser(42L, "PERM_RECRUITMENT_VIEW", "PERM_RECRUITMENT_MANAGE")))
         .andExpect(status().isCreated());
   }
 
@@ -258,10 +229,7 @@ class ApplicantControllerTest {
                   .header("X-Store-ID", "1")
                   .contentType("application/json")
                   .content("{\"version\":0,\"status\":\"HIRED\",\"reason\":\"確認\"}")
-                  .with(
-                      actor()
-                          .authorities(
-                              permissions.stream().map(SimpleGrantedAuthority::new).toList())))
+                  .with(jwtUser(42L, permissions.toArray(String[]::new))))
           .andExpect(status().isForbidden());
     }
     verifyNoInteractions(service);
@@ -270,13 +238,9 @@ class ApplicantControllerTest {
                 .header("X-Store-ID", "7")
                 .contentType("application/json")
                 .content("{\"version\":0,\"status\":\"HIRED\",\"reason\":\"確認\"}")
-                .with(
-                    actor()
-                        .authorities(
-                            new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
-                            new SimpleGrantedAuthority("PERM_RECRUITMENT_DECIDE"))))
+                .with(jwtUser(42L, "PERM_RECRUITMENT_VIEW", "PERM_RECRUITMENT_DECIDE")))
         .andExpect(status().isOk());
-    verify(service).decide(eq(7L), eq("a"), any(ApplicantCommands.StatusChange.class), eq("actor"));
+    verify(service).decide(eq(7L), eq("a"), any(ApplicantCommands.StatusChange.class), eq(42L));
   }
 
   @Test
@@ -291,10 +255,7 @@ class ApplicantControllerTest {
                   .header("X-Store-ID", "1")
                   .contentType("application/json")
                   .content(body)
-                  .with(
-                      actor()
-                          .authorities(
-                              permissions.stream().map(SimpleGrantedAuthority::new).toList())))
+                  .with(jwtUser(42L, permissions.toArray(String[]::new))))
           .andExpect(status().isForbidden());
     }
     verifyNoInteractions(service);
@@ -303,14 +264,10 @@ class ApplicantControllerTest {
                 .header("X-Store-ID", "7")
                 .contentType("application/json")
                 .content(body)
-                .with(
-                    actor()
-                        .authorities(
-                            new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
-                            new SimpleGrantedAuthority("PERM_CAST_MANAGE"))))
+                .with(jwtUser(42L, "PERM_RECRUITMENT_VIEW", "PERM_CAST_MANAGE")))
         .andExpect(status().isCreated());
     var request = ArgumentCaptor.forClass(ApplicantCommands.Enrollment.class);
-    verify(service).enroll(eq(7L), eq("a"), request.capture(), eq("actor"));
+    verify(service).enroll(eq(7L), eq("a"), request.capture(), eq(42L));
     assertThat(request.getValue().cast().startedOn()).isEqualTo(LocalDate.of(2026, 11, 1));
   }
 
@@ -327,11 +284,7 @@ class ApplicantControllerTest {
                   .header("X-Store-ID", "1")
                   .contentType("application/json")
                   .content(body)
-                  .with(
-                      actor()
-                          .authorities(
-                              new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
-                              new SimpleGrantedAuthority("PERM_CAST_MANAGE"))))
+                  .with(jwtUser(42L, "PERM_RECRUITMENT_VIEW", "PERM_CAST_MANAGE")))
           .andExpect(status().isBadRequest());
     verifyNoInteractions(service);
   }
@@ -343,11 +296,7 @@ class ApplicantControllerTest {
                 .header("X-Store-ID", "1")
                 .contentType("application/json")
                 .content("{\"version\":0,\"status\":\"REJECTED\",\"reason\":\" \"}")
-                .with(
-                    actor()
-                        .authorities(
-                            new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
-                            new SimpleGrantedAuthority("PERM_RECRUITMENT_DECIDE"))))
+                .with(jwtUser(42L, "PERM_RECRUITMENT_VIEW", "PERM_RECRUITMENT_DECIDE")))
         .andExpect(status().isBadRequest());
     verifyNoInteractions(service);
   }
@@ -358,7 +307,7 @@ class ApplicantControllerTest {
     mvc.perform(
             get("/applicants/policy")
                 .header("X-Store-ID", "1")
-                .with(actor().authorities(new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"))))
+                .with(jwtUser(42L, "PERM_RECRUITMENT_VIEW")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.final_decision_configured").doesNotExist())
         .andExpect(jsonPath("$.retention_periods.rejected_months").value(6))
@@ -372,7 +321,7 @@ class ApplicantControllerTest {
     mvc.perform(
             get("/applicants/policy")
                 .header("X-Store-ID", "1")
-                .with(actor().authorities(new SimpleGrantedAuthority("PERM_CAST_MANAGE"))))
+                .with(jwtUser(42L, "PERM_CAST_MANAGE")))
         .andExpect(status().isForbidden());
     verifyNoInteractions(service);
   }
@@ -385,11 +334,7 @@ class ApplicantControllerTest {
                 .contentType("application/json")
                 .content(
                     "{\"intake\":{\"name\":\"応募者\",\"channel\":\"WEB\",\"source_type\":\"DIRECT\"}}")
-                .with(
-                    actor()
-                        .authorities(
-                            new SimpleGrantedAuthority("PERM_RECRUITMENT_VIEW"),
-                            new SimpleGrantedAuthority("PERM_RECRUITMENT_MANAGE"))))
+                .with(jwtUser(42L, "PERM_RECRUITMENT_VIEW", "PERM_RECRUITMENT_MANAGE")))
         .andExpect(status().isBadRequest());
   }
 }

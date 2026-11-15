@@ -3,6 +3,7 @@ package com.kizuna.customer.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.kizuna.audit.recording.AuditActor;
 import com.kizuna.customer.api.dto.CustomerMergeHistoryResponse;
 import com.kizuna.customer.api.dto.CustomerMergeRequest;
 import com.kizuna.customer.api.dto.CustomerMergeResponse;
@@ -22,15 +23,12 @@ import com.kizuna.customer.domain.MergeSnapshot;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
+import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.User;
-import com.kizuna.user.domain.UserRepository;
-import com.kizuna.user.domain.UserType;
 import jakarta.persistence.EntityManager;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -52,7 +50,6 @@ import org.springframework.data.domain.PageRequest;
 @ExtendWith(MockitoExtension.class)
 class CustomerMergeServiceTest {
 
-  private static final String ACTOR_EMAIL = "manager@kizuna.test";
   private static final long ACTOR_ID = 42L;
   private static final long STORE_ID = 7L;
 
@@ -69,7 +66,7 @@ class CustomerMergeServiceTest {
   @Mock private CustomerRepository customerRepository;
   @Mock private CustomerMemberLinkRepository customerMemberLinkRepository;
   @Mock private CustomerMergeRepository customerMergeRepository;
-  @Mock private UserRepository userRepository;
+  @Mock private ActorIdentityService actorIdentity;
 
   @Mock private MergePreparation preparation;
   @Mock private MergeConfirmation confirmation;
@@ -86,8 +83,7 @@ class CustomerMergeServiceTest {
   @Test
   @DisplayName("同じ顧客同士の統合は 400 系で拒まれ、行を一切押さえないこと")
   void rejectsSelfMerge() {
-    assertThatThrownBy(
-            () -> service.merge(STORE_ID, SURVIVING_ID, input(SURVIVING_ID), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.merge(STORE_ID, SURVIVING_ID, input(SURVIVING_ID), ACTOR_ID))
         .isInstanceOf(ServiceException.class);
 
     Mockito.verify(customerRepository, Mockito.never())
@@ -97,11 +93,10 @@ class CustomerMergeServiceTest {
   @Test
   @DisplayName("押さえられない顧客は他店舗も不在も区別なく 404 になること")
   void rejectsUnknownCustomer() {
-    givenActor();
     Mockito.when(customerRepository.findByIdAndStoreIdForUpdate(MERGED_ID, STORE_ID))
         .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_ID))
         .isInstanceOf(NotFoundException.class);
   }
 
@@ -114,7 +109,7 @@ class CustomerMergeServiceTest {
     givenNoActiveLinks();
     givenStore();
 
-    service.merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL);
+    service.merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_ID);
 
     InOrder inOrder = Mockito.inOrder(customerRepository);
     inOrder.verify(customerRepository).findByIdAndStoreIdForUpdate(MERGED_ID, STORE_ID);
@@ -124,11 +119,10 @@ class CustomerMergeServiceTest {
   @Test
   @DisplayName("存続行に墓標を指定した統合は、2 本目のロックを待つ前に 409 で拒まれること")
   void rejectsMergingIntoATombstone() {
-    givenActor();
     givenFirstRowLocked();
     Mockito.when(customerRepository.isMerged(STORE_ID, SURVIVING_ID)).thenReturn(true);
 
-    assertThatThrownBy(() -> service.merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_ID))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("統合済み");
 
@@ -142,12 +136,11 @@ class CustomerMergeServiceTest {
   @Test
   @DisplayName("既に墓標の行を再度統合しようとすると 409 で拒まれること（応答喪失後の再送が台帳を壊さない）")
   void rejectsMergingATombstoneAgain() {
-    givenActor();
     givenFirstRowLocked();
     Mockito.when(customerRepository.isMerged(STORE_ID, SURVIVING_ID)).thenReturn(false);
     Mockito.when(customerRepository.isMerged(STORE_ID, MERGED_ID)).thenReturn(true);
 
-    assertThatThrownBy(() -> service.merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_ID))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("統合済み");
 
@@ -159,7 +152,6 @@ class CustomerMergeServiceTest {
   @Test
   @DisplayName("両行が ACTIVE 関連を持つ統合は 409 で拒まれ、先に関連を解除することが応答から判ること")
   void rejectsWhenBothRowsCarryAnActiveLink() {
-    givenActor();
     givenBothRowsLocked();
     givenNeitherIsMerged();
     Mockito.when(
@@ -171,7 +163,7 @@ class CustomerMergeServiceTest {
                 STORE_ID, MERGED_ID, LinkStatus.ACTIVE))
         .thenReturn(true);
 
-    assertThatThrownBy(() -> service.merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_ID))
         .isInstanceOf(ConflictException.class)
         .hasMessageContaining("先に関連を解除");
 
@@ -196,7 +188,7 @@ class CustomerMergeServiceTest {
 
     assertThat(
             service
-                .merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL)
+                .merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_ID)
                 .getSurvivingCustomerId())
         .isEqualTo(SURVIVING_ID);
   }
@@ -215,8 +207,7 @@ class CustomerMergeServiceTest {
         .thenReturn(3);
 
     CustomerMergeResponse response =
-        CustomerMergeResponse.of(
-            service.merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL));
+        CustomerMergeResponse.of(service.merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_ID));
 
     assertThat(response.movedOrderCount()).isEqualTo(7);
     assertThat(response.movedLinkCount()).isEqualTo(3);
@@ -240,7 +231,7 @@ class CustomerMergeServiceTest {
     givenNoActiveLinks();
     givenStore();
 
-    service.merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_EMAIL);
+    service.merge(STORE_ID, SURVIVING_ID, input(MERGED_ID), ACTOR_ID);
 
     InOrder inOrder = Mockito.inOrder(customerRepository);
     inOrder.verify(customerRepository).flattenMergedInto(SURVIVING_ID, MERGED_ID, STORE_ID);
@@ -377,18 +368,8 @@ class CustomerMergeServiceTest {
   }
 
   private void givenActor() {
-    User actor =
-        User.builder()
-            .email(ACTOR_EMAIL)
-            .password("encoded")
-            .displayName("田中花子")
-            .enabled(true)
-            .userType(UserType.STAFF)
-            .storeIds(Set.of(STORE_ID))
-            .roleIds(Set.of(1L))
-            .build();
-    actor.setId(ACTOR_ID);
-    Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
+    Mockito.when(actorIdentity.requireActor(ACTOR_ID))
+        .thenReturn(new AuditActor(ACTOR_ID, "STAFF", "田中花子"));
   }
 
   /** 両行が押さえられた状態。戻り値は被統合行の実体（墓標化の宛先）。 */
