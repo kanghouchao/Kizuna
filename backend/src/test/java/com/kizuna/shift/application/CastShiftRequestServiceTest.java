@@ -16,7 +16,6 @@ import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shift.api.dto.ShiftChangeRequestCreateRequest;
 import com.kizuna.shift.api.dto.ShiftRequestCreateRequest;
 import com.kizuna.shift.domain.AttendanceRepository;
@@ -29,8 +28,6 @@ import com.kizuna.shift.domain.ShiftRequestType;
 import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.User;
-import com.kizuna.user.domain.UserRepository;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
@@ -51,7 +48,6 @@ import org.springframework.data.domain.PageRequest;
 class CastShiftRequestServiceTest {
   @Mock private StoreRepository storeRepository;
 
-  @Mock private UserRepository userRepository;
   @Mock private CastEnrollmentRepository castRepository;
   @Mock private ShiftRequestRepository shiftRequestRepository;
   @Mock private ShiftRepository shiftRepository;
@@ -69,7 +65,7 @@ class CastShiftRequestServiceTest {
         .thenReturn(Optional.of(CastEnrollment.builder().build()));
   }
 
-  private static final String EMAIL = "cast@kizuna.test";
+  private static final long USER_ID = 42L;
 
   private ShiftRequestCreateRequest validRequest() {
     ShiftRequestCreateRequest req = new ShiftRequestCreateRequest();
@@ -80,23 +76,17 @@ class CastShiftRequestServiceTest {
     return req;
   }
 
-  private User userWithId(long id) {
-    User user = mock(User.class);
-    when(user.getId()).thenReturn(id);
-    return user;
-  }
-
   @Test
   void submit_rejectsWhenStartEqualsEnd() {
     ShiftRequestCreateRequest req = validRequest();
     req.setStartTime(LocalTime.of(20, 0));
     req.setEndTime(LocalTime.of(20, 0));
 
-    assertThatThrownBy(() -> service.submit(EMAIL, req.command()))
+    assertThatThrownBy(() -> service.submit(USER_ID, req.command()))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("開始時刻と終了時刻");
 
-    verifyNoInteractions(userRepository, castRepository, shiftRequestRepository);
+    verifyNoInteractions(castRepository, shiftRequestRepository);
   }
 
   @Test
@@ -106,23 +96,9 @@ class CastShiftRequestServiceTest {
     when(businessDateService.currentBusinessDate())
         .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
 
-    assertThatThrownBy(() -> service.submit(EMAIL, req.command()))
+    assertThatThrownBy(() -> service.submit(USER_ID, req.command()))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("本日以降");
-
-    verifyNoInteractions(userRepository, castRepository, shiftRequestRepository);
-  }
-
-  @Test
-  void submit_throwsWhenEmailUnknown() {
-    ShiftRequestCreateRequest req = validRequest();
-    when(businessDateService.currentBusinessDate())
-        .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
-    when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.empty());
-
-    assertThatThrownBy(() -> service.submit(EMAIL, req.command()))
-        .isInstanceOf(StaleSessionException.class)
-        .hasMessageContaining("認証セッションの主体が存在しません");
 
     verifyNoInteractions(castRepository, shiftRequestRepository);
   }
@@ -130,13 +106,11 @@ class CastShiftRequestServiceTest {
   @Test
   void submit_rejectsWhenNotAffiliatedWithStore() {
     ShiftRequestCreateRequest req = validRequest();
-    User user = userWithId(42L);
     when(businessDateService.currentBusinessDate())
         .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
-    when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByUserIdAndStoreId(42L, 1L)).thenReturn(List.of());
 
-    assertThatThrownBy(() -> service.submit(EMAIL, req.command()))
+    assertThatThrownBy(() -> service.submit(USER_ID, req.command()))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("所属していません");
 
@@ -146,14 +120,12 @@ class CastShiftRequestServiceTest {
   @Test
   void submit_savesWithResolvedCastIdAndStoreId() {
     ShiftRequestCreateRequest req = validRequest();
-    User user = userWithId(42L);
     when(businessDateService.currentBusinessDate())
         .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
-    when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByUserIdAndStoreId(42L, 1L)).thenReturn(List.of("cast-1"));
     when(shiftRequestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-    ShiftRequest result = service.submit(EMAIL, req.command());
+    ShiftRequest result = service.submit(USER_ID, req.command());
 
     ArgumentCaptor<ShiftRequest> captor = ArgumentCaptor.forClass(ShiftRequest.class);
     verify(shiftRequestRepository).save(captor.capture());
@@ -195,11 +167,11 @@ class CastShiftRequestServiceTest {
     req.setStartTime(LocalTime.of(20, 0));
     req.setEndTime(LocalTime.of(20, 0));
 
-    assertThatThrownBy(() -> service.submitChange(EMAIL, req.command()))
+    assertThatThrownBy(() -> service.submitChange(USER_ID, req.command()))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("開始時刻と終了時刻");
 
-    verifyNoInteractions(userRepository, shiftRepository, shiftRequestRepository);
+    verifyNoInteractions(shiftRepository, shiftRequestRepository);
   }
 
   @Test
@@ -209,11 +181,11 @@ class CastShiftRequestServiceTest {
     when(businessDateService.currentBusinessDate())
         .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
 
-    assertThatThrownBy(() -> service.submitChange(EMAIL, req.command()))
+    assertThatThrownBy(() -> service.submitChange(USER_ID, req.command()))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("本日以降");
 
-    verifyNoInteractions(userRepository, shiftRepository, shiftRequestRepository);
+    verifyNoInteractions(shiftRepository, shiftRequestRepository);
   }
 
   @Test
@@ -221,13 +193,11 @@ class CastShiftRequestServiceTest {
     ShiftChangeRequestCreateRequest req = validChangeRequest();
     when(businessDateService.currentBusinessDate())
         .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
-    User user = userWithId(42L);
-    when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByUserId(42L)).thenReturn(List.of("cast-1"));
     when(shiftRepository.findByIdAndCastIdIn("sh1", List.of("cast-1")))
         .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.submitChange(EMAIL, req.command()))
+    assertThatThrownBy(() -> service.submitChange(USER_ID, req.command()))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("対象のシフトが見つかりません");
 
@@ -239,14 +209,12 @@ class CastShiftRequestServiceTest {
     ShiftChangeRequestCreateRequest req = validChangeRequest();
     when(businessDateService.currentBusinessDate())
         .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
-    User user = userWithId(42L);
-    when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByUserId(42L)).thenReturn(List.of("cast-1"));
     // 他人のシフトは本人の cast_id 集合で引く問い合わせに現れない。
     when(shiftRepository.findByIdAndCastIdIn("sh1", List.of("cast-1")))
         .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.submitChange(EMAIL, req.command()))
+    assertThatThrownBy(() -> service.submitChange(USER_ID, req.command()))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("対象のシフトが見つかりません");
 
@@ -258,14 +226,12 @@ class CastShiftRequestServiceTest {
     ShiftChangeRequestCreateRequest req = validChangeRequest();
     when(businessDateService.currentBusinessDate())
         .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
-    User user = userWithId(42L);
-    when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByUserId(42L)).thenReturn(List.of("cast-1"));
     when(shiftRepository.findByIdAndCastIdIn("sh1", List.of("cast-1")))
         .thenReturn(Optional.of(shiftOf("cast-1", ShiftStatus.CONFIRMED)));
     when(attendanceRepository.hasActiveAttendance(7L, "sh1")).thenReturn(true);
 
-    assertThatThrownBy(() -> service.submitChange(EMAIL, req.command()))
+    assertThatThrownBy(() -> service.submitChange(USER_ID, req.command()))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("実績が記録されているシフト");
 
@@ -277,13 +243,11 @@ class CastShiftRequestServiceTest {
     ShiftChangeRequestCreateRequest req = validChangeRequest();
     when(businessDateService.currentBusinessDate())
         .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
-    User user = userWithId(42L);
-    when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByUserId(42L)).thenReturn(List.of("cast-1"));
     when(shiftRepository.findByIdAndCastIdIn("sh1", List.of("cast-1")))
         .thenReturn(Optional.of(shiftOf("cast-1", ShiftStatus.TENTATIVE)));
 
-    assertThatThrownBy(() -> service.submitChange(EMAIL, req.command()))
+    assertThatThrownBy(() -> service.submitChange(USER_ID, req.command()))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("確定済みのシフトのみ");
 
@@ -295,14 +259,12 @@ class CastShiftRequestServiceTest {
     ShiftChangeRequestCreateRequest req = validChangeRequest();
     when(businessDateService.currentBusinessDate())
         .thenReturn(LocalDate.now(ZoneId.of("Asia/Tokyo")));
-    User user = userWithId(42L);
-    when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByUserId(42L)).thenReturn(List.of("cast-1"));
     when(shiftRepository.findByIdAndCastIdIn("sh1", List.of("cast-1")))
         .thenReturn(Optional.of(shiftOf("cast-1", ShiftStatus.CONFIRMED)));
     when(shiftRequestRepository.save(any())).thenAnswer(i -> i.getArgument(0));
 
-    ShiftRequest result = service.submitChange(EMAIL, req.command());
+    ShiftRequest result = service.submitChange(USER_ID, req.command());
 
     ArgumentCaptor<ShiftRequest> captor = ArgumentCaptor.forClass(ShiftRequest.class);
     verify(shiftRequestRepository).save(captor.capture());
@@ -324,11 +286,9 @@ class CastShiftRequestServiceTest {
 
   @Test
   void history_returnsEmptyWhenNoCastLinked() {
-    User user = userWithId(42L);
-    when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     when(castRepository.findIdsByUserId(42L)).thenReturn(List.of());
 
-    Page<CastShiftRequestView> result = service.history(EMAIL, PageRequest.of(0, 20));
+    Page<CastShiftRequestView> result = service.history(USER_ID, PageRequest.of(0, 20));
 
     assertThat(result.getContent()).isEmpty();
     verifyNoInteractions(shiftRequestRepository);
@@ -336,8 +296,6 @@ class CastShiftRequestServiceTest {
 
   @Test
   void history_mapsAcrossCastIds() {
-    User user = userWithId(42L);
-    when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     List<String> castIds = List.of("cast-store-a", "cast-store-b");
     when(castRepository.findIdsByUserId(42L)).thenReturn(castIds);
 
@@ -345,7 +303,7 @@ class CastShiftRequestServiceTest {
     when(shiftRequestRepository.findHistoryByCastIds(eq(castIds), any()))
         .thenReturn(new PageImpl<>(List.of(view)));
 
-    Page<CastShiftRequestView> result = service.history(EMAIL, PageRequest.of(0, 20));
+    Page<CastShiftRequestView> result = service.history(USER_ID, PageRequest.of(0, 20));
 
     assertThat(result.getContent()).containsExactly(view);
     verify(shiftRequestRepository, never()).findByStoreIdOrderByCreatedAtAsc(any());

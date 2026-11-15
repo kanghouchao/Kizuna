@@ -1,5 +1,6 @@
 package com.kizuna.shift.api.me;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -25,7 +26,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -49,14 +49,13 @@ class SelfShiftRequestControllerTest {
 
   @Test
   @DisplayName("本人の出勤希望履歴は提出の新しい順の Page で返すこと")
-  @WithMockUser(username = "cast@example.test", roles = "CAST")
   void historyIsAPageNewestFirst() throws Exception {
     ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
-    when(castShiftRequestService.history(eq("cast@example.test"), pageable.capture()))
+    when(castShiftRequestService.history(eq(42L), pageable.capture()))
         .thenReturn(new PageImpl<>(List.of()));
 
     mockMvc
-        .perform(get("/me/shift-requests").principal(() -> "cast@example.test"))
+        .perform(get("/me/shift-requests").with(jwtUser(42L, "ROLE_CAST")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 

@@ -1,5 +1,6 @@
 package com.kizuna.shift.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
@@ -19,7 +20,6 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithAnonymousUser;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -46,26 +46,25 @@ class MemberShiftControllerTest {
 
   @Test
   @DisplayName("会員は指定店舗・指定日の確定シフトを引けること")
-  @WithMockUser(authorities = "ROLE_MEMBER")
   void memberCanReadConfirmedCasts() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(confirmedShiftLookupService.listConfirmedCasts(anyLong(), any())).thenReturn(List.of());
 
-    mockMvc.perform(get(PATH)).andExpect(status().isOk());
+    mockMvc.perform(get(PATH).with(jwtUser(1L, "ROLE_MEMBER"))).andExpect(status().isOk());
   }
 
   @Test
   @DisplayName("キャストは指名候補の出勤参照に到達できないこと")
-  @WithMockUser(authorities = "ROLE_CAST")
   void castIsRejected() throws Exception {
-    mockMvc.perform(get(PATH)).andExpect(status().isForbidden());
+    mockMvc.perform(get(PATH).with(jwtUser(1L, "ROLE_CAST"))).andExpect(status().isForbidden());
   }
 
   @Test
   @DisplayName("受注管理権限を持つスタッフでも会員向け経路には到達できないこと")
-  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void staffIsRejected() throws Exception {
-    mockMvc.perform(get(PATH)).andExpect(status().isForbidden());
+    mockMvc
+        .perform(get(PATH).with(jwtUser(1L, "PERM_ORDER_MANAGE")))
+        .andExpect(status().isForbidden());
   }
 
   @Test

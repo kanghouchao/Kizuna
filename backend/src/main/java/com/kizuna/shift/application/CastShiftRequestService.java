@@ -5,7 +5,6 @@ import com.kizuna.cast.domain.CastEnrollmentRepository;
 import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shift.application.ShiftCommand.SubmitChangeRequest;
 import com.kizuna.shift.application.ShiftCommand.SubmitRequest;
 import com.kizuna.shift.domain.AttendanceRepository;
@@ -18,7 +17,6 @@ import com.kizuna.shift.domain.ShiftRequestType;
 import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.UserRepository;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.List;
@@ -39,7 +37,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class CastShiftRequestService {
 
-  private final UserRepository userRepository;
   private final CastEnrollmentRepository castRepository;
   private final ShiftRequestRepository shiftRequestRepository;
   private final ShiftRepository shiftRepository;
@@ -49,10 +46,9 @@ public class CastShiftRequestService {
   private final BusinessAudit audit;
 
   @Transactional
-  public ShiftRequest submit(String email, SubmitRequest command) {
+  public ShiftRequest submit(long userId, SubmitRequest command) {
     validateRequestedSlot(command.workDate(), command.startTime(), command.endTime());
 
-    Long userId = resolveUserId(email);
     String castId =
         castRepository.findIdsByUserIdAndStoreId(userId, command.storeId()).stream()
             .findFirst()
@@ -89,10 +85,9 @@ public class CastShiftRequestService {
    * であることを要求する。店舗はシフトから導出し、シフト自体はこの時点では変更しない（店舗の承認で更新される）。
    */
   @Transactional
-  public ShiftRequest submitChange(String email, SubmitChangeRequest command) {
+  public ShiftRequest submitChange(long userId, SubmitChangeRequest command) {
     validateRequestedSlot(command.workDate(), command.startTime(), command.endTime());
 
-    Long userId = resolveUserId(email);
     List<String> castIds = castRepository.findIdsByUserId(userId);
     Shift shift =
         shiftRepository
@@ -140,8 +135,7 @@ public class CastShiftRequestService {
 
   /** 本人の出勤希望履歴。提出のたびに増え続けるので、上限の無い一覧では返さない。 */
   @Transactional(readOnly = true)
-  public Page<CastShiftRequestView> history(String email, Pageable pageable) {
-    Long userId = resolveUserId(email);
+  public Page<CastShiftRequestView> history(long userId, Pageable pageable) {
     List<String> castIds = castRepository.findIdsByUserId(userId);
     if (castIds.isEmpty()) {
       return Page.empty(pageable);
@@ -165,12 +159,5 @@ public class CastShiftRequestService {
         .findByIdAndStoreIdForUpdate(id, storeId)
         .filter(CastEnrollment::isMembershipActive)
         .orElseThrow(() -> new ServiceException("指定店舗に所属していません"));
-  }
-
-  private Long resolveUserId(String email) {
-    return userRepository
-        .findByEmail(email)
-        .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
-        .getId();
   }
 }

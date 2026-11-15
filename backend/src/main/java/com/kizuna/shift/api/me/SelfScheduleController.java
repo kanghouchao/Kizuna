@@ -1,5 +1,6 @@
 package com.kizuna.shift.api.me;
 
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.shift.api.dto.CastScheduleResponse;
 import com.kizuna.shift.api.dto.ShiftMapper;
 import com.kizuna.shift.application.CastScheduleService;
@@ -31,7 +32,7 @@ public class SelfScheduleController {
       @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
       @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
     return ResponseEntity.ok(
-        castScheduleService.myWeek(principal.getName(), from, to).stream()
+        castScheduleService.myWeek(JwtClaims.userIdOf(principal), from, to).stream()
             .map(shiftMapper::toScheduleResponse)
             .toList());
   }

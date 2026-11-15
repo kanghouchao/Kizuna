@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
 
 import com.kizuna.cast.domain.CastEnrollment;
 import com.kizuna.cast.domain.CastEnrollmentRepository;
@@ -13,14 +12,9 @@ import com.kizuna.cast.domain.CastEnrollmentSnapshotRepository;
 import com.kizuna.cast.domain.CastEnrollmentStatusHistoryRepository;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.User;
-import com.kizuna.user.domain.UserRepository;
-import com.kizuna.user.domain.UserType;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -33,32 +27,20 @@ class CastEnrollmentServiceTest {
   @Mock CastEnrollmentRepository enrollments;
   @Mock CastEnrollmentSnapshotRepository snapshots;
   @Mock CastEnrollmentStatusHistoryRepository histories;
-  @Mock UserRepository users;
   @Mock StoreRepository stores;
   @Mock BusinessAudit audit;
   @InjectMocks CastEnrollmentService service;
 
   @Test
-  void fieldRemovalResolvesActorOnceAndPreservesEveryFullPreviousMap() {
+  void fieldRemovalRecordsActorAndPreservesEveryFullPreviousMap() {
     var first =
         CastEnrollment.builder()
             .customFields(new HashMap<>(Map.of("memo", "一", "other", "保持")))
             .build();
     var second = CastEnrollment.builder().customFields(new HashMap<>(Map.of("memo", "二"))).build();
     var untouched = CastEnrollment.builder().customFields(Map.of("other", "対象外")).build();
-    User actor =
-        User.builder()
-            .userType(UserType.CAST)
-            .storeIds(Set.of(1L))
-            .email("actor@kizuna.test")
-            .password("encoded")
-            .build();
-    actor.setId(42L);
-    when(users.findByEmail("actor")).thenReturn(Optional.of(actor));
+    service.removeInternalField(List.of(first, second, untouched), "memo", 42L);
 
-    service.removeInternalField(List.of(first, second, untouched), "memo", "actor");
-
-    verify(users).findByEmail("actor");
     var captured = ArgumentCaptor.forClass(CastEnrollmentSnapshot.class);
     verify(snapshots, times(2)).save(captured.capture());
     assertThat(captured.getAllValues())
@@ -72,8 +54,8 @@ class CastEnrollmentServiceTest {
   }
 
   @Test
-  void fieldRemovalWithoutValuesDoesNotResolveActorOrSaveSnapshots() {
-    service.removeInternalField(List.of(CastEnrollment.builder().build()), "missing", "actor");
-    verifyNoInteractions(users, snapshots);
+  void fieldRemovalWithoutValuesDoesNotSaveSnapshots() {
+    service.removeInternalField(List.of(CastEnrollment.builder().build()), "missing", 42L);
+    verifyNoInteractions(snapshots);
   }
 }

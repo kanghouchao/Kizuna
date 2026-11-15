@@ -40,7 +40,8 @@ public class CastFieldDefinitionService {
   }
 
   @Transactional
-  public CastFieldDefinition create(Long storeId, CastFieldDefinitionCreateCommand command) {
+  public CastFieldDefinition create(
+      Long storeId, CastFieldDefinitionCreateCommand command, long actorId) {
     storeRepository.lockCastFields(storeId);
     if (repository.existsByStoreIdAndKey(storeId, command.key())) {
       throw new ServiceException("このキーは既に登録されています: " + command.key());
@@ -59,11 +60,14 @@ public class CastFieldDefinitionService {
             .build();
     definition.setStoreId(storeId);
     repository.saveAndFlush(definition);
-    audit.recordCurrent(
+    audit.recordById(
+        actorId,
         definition.getStoreId(),
         "CAST_FIELD_DEFINITION_CREATED",
         "CAST_FIELD_DEFINITION",
         definition.getId(),
+        null,
+        null,
         Map.of(),
         snapshot(definition));
     return definition;
@@ -82,7 +86,8 @@ public class CastFieldDefinitionService {
   }
 
   @Transactional
-  public CastFieldDefinition update(Long storeId, String id, CastFieldDefinitionPatch patch) {
+  public CastFieldDefinition update(
+      Long storeId, String id, CastFieldDefinitionPatch patch, long actorId) {
     storeRepository.lockCastFields(storeId);
     CastFieldDefinition definition =
         repository
@@ -97,11 +102,14 @@ public class CastFieldDefinitionService {
       repository.flush();
       var after = new HashMap<>(snapshot(definition));
       if (labelChanged) after.put("redacted_fields_changed", "label");
-      audit.recordCurrent(
+      audit.recordById(
+          actorId,
           definition.getStoreId(),
           "CAST_FIELD_DEFINITION_UPDATED",
           "CAST_FIELD_DEFINITION",
           id,
+          null,
+          null,
           before,
           after);
     }
@@ -109,7 +117,7 @@ public class CastFieldDefinitionService {
   }
 
   @Transactional
-  public void delete(Long storeId, String id, String actorEmail) {
+  public void delete(Long storeId, String id, long actorId) {
     storeRepository.lockCastFields(storeId);
     CastFieldDefinition definition =
         repository
@@ -124,8 +132,7 @@ public class CastFieldDefinitionService {
     var enrollmentBefore = new HashMap<String, Map<String, String>>();
     affectedEnrollments.forEach(
         enrollment -> enrollmentBefore.put(enrollment.getId(), snapshot(enrollment)));
-    var savedSnapshots =
-        enrollmentService.removeInternalField(affectedEnrollments, key, actorEmail);
+    var savedSnapshots = enrollmentService.removeInternalField(affectedEnrollments, key, actorId);
     var affectedProfiles =
         profileRepository.findByStoreId(storeId).stream()
             .filter(profile -> profile.getCustomFields().containsKey(key))
@@ -138,8 +145,8 @@ public class CastFieldDefinitionService {
         });
     repository.delete(definition);
     repository.flush();
-    audit.record(
-        actorEmail,
+    audit.recordById(
+        actorId,
         definition.getStoreId(),
         "CAST_FIELD_DEFINITION_DELETED",
         "CAST_FIELD_DEFINITION",
@@ -154,8 +161,8 @@ public class CastFieldDefinitionService {
       var after = new HashMap<>(snapshot(enrollment));
       after.put("snapshot_id", snapshotIds.get(enrollment.getId()));
       after.put("redacted_fields_changed", "internal_custom_fields");
-      audit.record(
-          actorEmail,
+      audit.recordById(
+          actorId,
           enrollment.getStoreId(),
           "CAST_INTERNAL_FIELD_REMOVED",
           "CAST_ENROLLMENT",
@@ -168,8 +175,8 @@ public class CastFieldDefinitionService {
     for (CastProfile profile : affectedProfiles) {
       var after = new HashMap<>(snapshot(profile));
       after.put("redacted_fields_changed", "public_custom_fields");
-      audit.record(
-          actorEmail,
+      audit.recordById(
+          actorId,
           profile.getStoreId(),
           "CAST_PROFILE_FIELD_REMOVED",
           "CAST_PROFILE",

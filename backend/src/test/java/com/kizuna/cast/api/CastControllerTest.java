@@ -1,5 +1,6 @@
 package com.kizuna.cast.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -28,12 +29,15 @@ import com.kizuna.cast.domain.CastInvitationStatus;
 import com.kizuna.cast.domain.CastProfile;
 import com.kizuna.cast.domain.CastPublicationStatus;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -46,7 +50,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
@@ -76,23 +79,31 @@ class CastControllerTest {
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
   @MockitoBean StoreScopeResolver storeScopeResolver;
 
+  @BeforeEach
+  void authorizeStore() {
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(1L)));
+  }
+
   @Test
   @DisplayName("GET /casts?sort=name でも id が副キーとして補われること")
-  @WithMockUser(authorities = "PERM_CAST_MANAGE")
   void listAppendsIdTiebreakerWhenCallerOverridesSort() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
     Page<CastDetail> empty = new PageImpl<>(List.of());
     when(castService.list(eq(1L), any(), pageableCaptor.capture())).thenReturn(empty);
 
-    mockMvc.perform(get("/casts?sort=name").header("X-Store-ID", "1")).andExpect(status().isOk());
+    mockMvc
+        .perform(
+            get("/casts?sort=name")
+                .with(jwtUser(42L, "PERM_CAST_MANAGE"))
+                .header("X-Store-ID", "1"))
+        .andExpect(status().isOk());
 
     assertThat(pageableCaptor.getValue().getSort().getOrderFor("id")).isNotNull();
   }
 
   @Test
   @DisplayName("上限を超える取得件数は Pageable 共通の上限 100 件へ丸めて service へ渡ること")
-  @WithMockUser(authorities = "PERM_CAST_MANAGE")
   void listClampsSizeToSharedPageLimit() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
@@ -100,7 +111,11 @@ class CastControllerTest {
         .thenReturn(new PageImpl<>(List.of()));
 
     mockMvc
-        .perform(get("/casts").param("size", "1000").header("X-Store-ID", "1"))
+        .perform(
+            get("/casts")
+                .with(jwtUser(42L, "PERM_CAST_MANAGE"))
+                .param("size", "1000")
+                .header("X-Store-ID", "1"))
         .andExpect(status().isOk());
 
     assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(100);
@@ -108,13 +123,16 @@ class CastControllerTest {
 
   @Test
   @DisplayName("取得位置が int を超えるページ指定は service を呼ばずに 400 を返すこと")
-  @WithMockUser(authorities = "PERM_CAST_MANAGE")
   void listRejectsPageBeyondIntOffset() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
         .perform(
-            get("/casts").param("page", "99999999").param("size", "100").header("X-Store-ID", "1"))
+            get("/casts")
+                .with(jwtUser(42L, "PERM_CAST_MANAGE"))
+                .param("page", "99999999")
+                .param("size", "100")
+                .header("X-Store-ID", "1"))
         .andExpect(status().isBadRequest());
 
     verify(castService, never()).list(anyLong(), any(), any());
@@ -122,7 +140,6 @@ class CastControllerTest {
 
   @Test
   @DisplayName("在籍の状態履歴とスナップショットは記録の新しい順の Page で返すこと")
-  @WithMockUser(authorities = "PERM_CAST_MANAGE")
   void enrollmentHistoriesArePagesNewestFirst() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<Pageable> histories = ArgumentCaptor.forClass(Pageable.class);
@@ -133,11 +150,17 @@ class CastControllerTest {
         .thenReturn(new PageImpl<>(List.of()));
 
     mockMvc
-        .perform(get("/casts/e1/status-histories").header("X-Store-ID", "1"))
+        .perform(
+            get("/casts/e1/status-histories")
+                .with(jwtUser(42L, "PERM_CAST_MANAGE"))
+                .header("X-Store-ID", "1"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
     mockMvc
-        .perform(get("/casts/e1/snapshots").header("X-Store-ID", "1"))
+        .perform(
+            get("/casts/e1/snapshots")
+                .with(jwtUser(42L, "PERM_CAST_MANAGE"))
+                .header("X-Store-ID", "1"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 
@@ -157,7 +180,6 @@ class CastControllerTest {
 
   @Test
   @DisplayName("空白だけの検索語は「指定なし」として service へ渡ること")
-  @WithMockUser(authorities = "PERM_CAST_MANAGE")
   void listPassesBlankSearchAsNull() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<String> searchCaptor = ArgumentCaptor.forClass(String.class);
@@ -165,50 +187,51 @@ class CastControllerTest {
     when(castService.list(eq(1L), searchCaptor.capture(), any())).thenReturn(empty);
 
     mockMvc
-        .perform(get("/casts").param("search", "  ").header("X-Store-ID", "1"))
+        .perform(
+            get("/casts")
+                .with(jwtUser(42L, "PERM_CAST_MANAGE"))
+                .param("search", "  ")
+                .header("X-Store-ID", "1"))
         .andExpect(status().isOk());
 
     assertThat(searchCaptor.getValue()).isNull();
   }
 
   @Test
-  @DisplayName("POST /casts/{id}/invitation は操作者のメールを監査の主体として service へ渡すこと")
-  @WithMockUser(username = "operator@example.test", authorities = "PERM_CAST_INVITE")
+  @DisplayName("POST /casts/{id}/invitation は操作者の利用者 ID を監査の主体として service へ渡すこと")
   void issueInvitationPassesTheOperatorAsAuditActor() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(castInvitationService.issue(1L, "cast-1", "operator@example.test"))
+    when(castInvitationService.issue(1L, "cast-1", 42L))
         .thenReturn(
             CastInvitation.builder().token("token").expiresAt(OffsetDateTime.now()).build());
 
     mockMvc
         .perform(
             post("/casts/cast-1/invitation")
-                .principal(() -> "operator@example.test")
+                .with(jwtUser(42L, "PERM_CAST_INVITE"))
                 .header("X-Store-ID", "1"))
         .andExpect(status().isCreated());
 
-    verify(castInvitationService).issue(1L, "cast-1", "operator@example.test");
+    verify(castInvitationService).issue(1L, "cast-1", 42L);
   }
 
   @Test
   @DisplayName("DELETE /casts/{id} は本体無しの 204 で返ること")
-  @WithMockUser(authorities = "PERM_CAST_MANAGE")
   void deleteRespondsWithNoContent() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
         .perform(
             delete("/casts/cast-1")
-                .principal(() -> "operator@example.test")
+                .with(jwtUser(42L, "PERM_CAST_MANAGE"))
                 .header("X-Store-ID", "1"))
         .andExpect(status().isNoContent());
 
-    verify(castService).delete(1L, "cast-1", "operator@example.test");
+    verify(castService).delete(1L, "cast-1", 42L);
   }
 
   @Test
   @DisplayName("詳細は内部・公開のカスタムフィールド値を一つの custom_fields に合わせて返すこと")
-  @WithMockUser(authorities = "PERM_CAST_MANAGE")
   void detailCombinesInternalAndPublicCustomFields() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     CastEnrollment enrollment =
@@ -223,7 +246,7 @@ class CastControllerTest {
         .thenReturn(new CastDetail(enrollment, profile, CastInvitationStatus.INVITED, false));
 
     mockMvc
-        .perform(get("/casts/e1").header("X-Store-ID", "1"))
+        .perform(get("/casts/e1").with(jwtUser(42L, "PERM_CAST_MANAGE")).header("X-Store-ID", "1"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value("e1"))
         .andExpect(jsonPath("$.name").value("花"))
@@ -235,28 +258,28 @@ class CastControllerTest {
 
   @Test
   @DisplayName("公開状態の切替はキャスト管理権限で操作できること")
-  @WithMockUser(authorities = "PERM_CAST_MANAGE")
   void publicationCanBeChanged() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     mockMvc
         .perform(
             MockMvcRequestBuilders.patch("/casts/cast-1/publication")
+                .with(jwtUser(42L, "PERM_CAST_MANAGE"))
                 .header("X-Store-ID", "1")
                 .contentType("application/json")
                 .content("{\"publication_status\":\"PUBLISHED\"}"))
         .andExpect(status().isOk());
 
-    verify(castService).changePublication(1L, "cast-1", CastPublicationStatus.PUBLISHED);
+    verify(castService).changePublication(1L, "cast-1", CastPublicationStatus.PUBLISHED, 42L);
   }
 
   @Test
-  @WithMockUser(authorities = "PERM_CAST_MANAGE")
   void publicationRejectsMissingAndUnknownStatus() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     for (String body : List.of("{}", "{\"publication_status\":\"ACTIVE\"}")) {
       mockMvc
           .perform(
               MockMvcRequestBuilders.patch("/casts/cast-1/publication")
+                  .with(jwtUser(42L, "PERM_CAST_MANAGE"))
                   .header("X-Store-ID", "1")
                   .contentType("application/json")
                   .content(body))
@@ -265,12 +288,12 @@ class CastControllerTest {
   }
 
   @Test
-  @WithMockUser(authorities = "PERM_CAST_INVITE")
   void publicationRequiresManagePermission() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     mockMvc
         .perform(
             MockMvcRequestBuilders.patch("/casts/cast-1/publication")
+                .with(jwtUser(42L, "PERM_CAST_INVITE"))
                 .header("X-Store-ID", "1")
                 .contentType("application/json")
                 .content("{\"publication_status\":\"PUBLISHED\"}"))
@@ -279,21 +302,20 @@ class CastControllerTest {
 
   @Test
   @DisplayName("キャスト作成は入店日を必須とし、未来日を受け付けること")
-  @WithMockUser(username = "operator@example.test", authorities = "PERM_CAST_MANAGE")
   void createRequiresStartedOn() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     mockMvc
         .perform(
             post("/casts")
-                .principal(() -> "operator@example.test")
+                .with(jwtUser(42L, "PERM_CAST_MANAGE"))
                 .header("X-Store-ID", "1")
                 .contentType("application/json")
                 .content("{\"name\":\"花\"}"))
         .andExpect(status().isBadRequest());
-    verify(castService, never()).create(anyLong(), any(), any());
+    verify(castService, never()).create(anyLong(), any(), anyLong());
 
     ArgumentCaptor<CastCreateCommand> captor = ArgumentCaptor.forClass(CastCreateCommand.class);
-    when(castService.create(eq(1L), captor.capture(), eq("operator@example.test")))
+    when(castService.create(eq(1L), captor.capture(), eq(42L)))
         .thenReturn(
             new CastDetail(
                 CastEnrollment.builder().status(CastEnrollmentStatus.ENROLLED).build(),
@@ -303,7 +325,7 @@ class CastControllerTest {
     mockMvc
         .perform(
             post("/casts")
-                .principal(() -> "operator@example.test")
+                .with(jwtUser(42L, "PERM_CAST_MANAGE"))
                 .header("X-Store-ID", "1")
                 .contentType("application/json")
                 .content("{\"name\":\"花\",\"started_on\":\"2099-04-01\"}"))

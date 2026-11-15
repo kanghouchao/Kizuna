@@ -31,9 +31,7 @@ import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
@@ -53,8 +51,6 @@ import org.springframework.orm.jpa.SharedEntityManagerCreator;
 import org.springframework.orm.jpa.hibernate.SpringBeanContainer;
 import org.springframework.orm.jpa.vendor.HibernateJpaDialect;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -151,17 +147,6 @@ class CastDeleteAuditIntegrationTest {
                 .getId());
   }
 
-  @BeforeEach
-  void authenticate() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken(ORDINARY, null, List.of()));
-  }
-
-  @AfterEach
-  void clear() {
-    SecurityContextHolder.clearContext();
-  }
-
   @AfterAll
   void close() {
     if (context != null) context.close();
@@ -170,12 +155,12 @@ class CastDeleteAuditIntegrationTest {
   @Test
   void deletionCommitsAuditWithCascadeCountsAndRemovesRows() {
     String id = create();
-    castInvitations.issue(storeId, id, ORDINARY);
+    castInvitations.issue(storeId, id, ordinaryId);
     long histories = count("t_cast_enrollment_status_histories", id);
     long snapshots = count("t_cast_enrollment_snapshots", id);
     assertThat(count("t_cast_invitations", "cast_id", id)).isEqualTo(1);
 
-    casts.delete(storeId, id, ORDINARY);
+    casts.delete(storeId, id, ordinaryId);
 
     assertThat(
             jdbc.queryForObject(
@@ -211,7 +196,7 @@ class CastDeleteAuditIntegrationTest {
     jdbc.update("insert into t_orders(cast_id) values (?)", id);
     long audits = deleteAudits();
 
-    assertThatThrownBy(() -> casts.delete(storeId, id, ORDINARY))
+    assertThatThrownBy(() -> casts.delete(storeId, id, ordinaryId))
         .isInstanceOf(ConflictException.class);
 
     assertThat(deleteAudits()).isEqualTo(audits);
@@ -230,7 +215,7 @@ class CastDeleteAuditIntegrationTest {
     jdbc.execute(
         "alter table t_audit_events add constraint ck_cast_delete_audit_test check(action <> 'CAST_ENROLLMENT_DELETED') not valid");
     try {
-      assertThatThrownBy(() -> casts.delete(storeId, id, ORDINARY))
+      assertThatThrownBy(() -> casts.delete(storeId, id, ordinaryId))
           .isInstanceOf(DataIntegrityViolationException.class);
     } finally {
       jdbc.execute("alter table t_audit_events drop constraint ck_cast_delete_audit_test");
@@ -260,7 +245,7 @@ class CastDeleteAuditIntegrationTest {
                 null,
                 null,
                 null),
-            ORDINARY)
+            ordinaryId)
         .enrollment()
         .getId();
   }

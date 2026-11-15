@@ -16,6 +16,7 @@ import com.kizuna.cast.application.CastEnrollmentService;
 import com.kizuna.cast.application.CastInvitationService;
 import com.kizuna.cast.application.CastService;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
 import java.security.Principal;
@@ -71,7 +72,8 @@ public class CastController {
       @CurrentStore Long storeId,
       @Valid @RequestBody CastCreateRequest request,
       Principal principal) {
-    var created = castService.create(storeId, castMapper.toCommand(request), principal.getName());
+    var created =
+        castService.create(storeId, castMapper.toCommand(request), JwtClaims.userIdOf(principal));
     return ResponseEntity.status(HttpStatus.CREATED).body(castMapper.toResponse(created));
   }
 
@@ -84,14 +86,15 @@ public class CastController {
       Principal principal) {
     return ResponseEntity.ok(
         castMapper.toResponse(
-            castService.update(storeId, id, castMapper.toCommand(request), principal.getName())));
+            castService.update(
+                storeId, id, castMapper.toCommand(request), JwtClaims.userIdOf(principal))));
   }
 
   @DeleteMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_CAST_MANAGE')")
   public ResponseEntity<Void> delete(
       @CurrentStore Long storeId, @PathVariable String id, Principal principal) {
-    castService.delete(storeId, id, principal.getName());
+    castService.delete(storeId, id, JwtClaims.userIdOf(principal));
     return ResponseEntity.noContent().build();
   }
 
@@ -102,7 +105,7 @@ public class CastController {
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(
             CastInvitationResponse.of(
-                castInvitationService.issue(storeId, id, principal.getName())));
+                castInvitationService.issue(storeId, id, JwtClaims.userIdOf(principal))));
   }
 
   @PatchMapping("/{id}/publication")
@@ -110,10 +113,12 @@ public class CastController {
   public ResponseEntity<CastPublicationResponse> changePublication(
       @CurrentStore Long storeId,
       @PathVariable String id,
-      @Valid @RequestBody CastPublicationRequest request) {
+      @Valid @RequestBody CastPublicationRequest request,
+      Principal principal) {
     return ResponseEntity.ok(
         new CastPublicationResponse(
-            castService.changePublication(storeId, id, request.publicationStatus())));
+            castService.changePublication(
+                storeId, id, request.publicationStatus(), JwtClaims.userIdOf(principal))));
   }
 
   @PostMapping("/{id}/suspension")
@@ -121,7 +126,7 @@ public class CastController {
   public CastEnrollmentStatusResponse suspend(
       @CurrentStore Long storeId, @PathVariable String id, Principal principal) {
     return CastEnrollmentStatusResponse.of(
-        enrollmentService.suspend(storeId, id, principal.getName()));
+        enrollmentService.suspend(storeId, id, JwtClaims.userIdOf(principal)));
   }
 
   @PostMapping("/{id}/resumption")
@@ -129,7 +134,7 @@ public class CastController {
   public CastEnrollmentStatusResponse resume(
       @CurrentStore Long storeId, @PathVariable String id, Principal principal) {
     return CastEnrollmentStatusResponse.of(
-        enrollmentService.resume(storeId, id, principal.getName()));
+        enrollmentService.resume(storeId, id, JwtClaims.userIdOf(principal)));
   }
 
   @PostMapping("/{id}/withdrawal")
@@ -137,7 +142,7 @@ public class CastController {
   public CastEnrollmentStatusResponse withdraw(
       @CurrentStore Long storeId, @PathVariable String id, Principal principal) {
     return CastEnrollmentStatusResponse.of(
-        enrollmentService.withdraw(storeId, id, principal.getName()));
+        enrollmentService.withdraw(storeId, id, JwtClaims.userIdOf(principal)));
   }
 
   @GetMapping("/{id}/status-histories")

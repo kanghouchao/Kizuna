@@ -30,11 +30,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 class CastFieldAuditTest {
@@ -59,7 +56,6 @@ class CastFieldAuditTest {
             enrollments,
             mock(CastEnrollmentStatusHistoryRepository.class),
             snapshots,
-            users,
             stores,
             audit);
     service =
@@ -74,11 +70,8 @@ class CastFieldAuditTest {
             .roleIds(Set.of(1L))
             .build();
     actor.setId(9L);
-    when(users.findByEmail("operator@example.test")).thenReturn(Optional.of(actor));
+    when(users.findById(9L)).thenReturn(Optional.of(actor));
     when(definitions.findMaxDisplayOrder(STORE_ID)).thenReturn(null);
-    SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken("operator@example.test", null, List.of()));
     when(events.saveAndFlush(any()))
         .thenAnswer(
             call -> {
@@ -96,15 +89,10 @@ class CastFieldAuditTest {
             });
   }
 
-  @AfterEach
-  void clear() {
-    SecurityContextHolder.clearContext();
-  }
-
   @Test
   void creationRecordsSafeDefinitionWithoutCustomKeyOrLabel() {
     var request = new CastFieldDefinitionCreateCommand("private-key", "秘密の項目", true);
-    assertThat(service.create(STORE_ID, request).getId()).isEqualTo("definition");
+    assertThat(service.create(STORE_ID, request, 9L).getId()).isEqualTo("definition");
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("CAST_FIELD_DEFINITION_CREATED");
@@ -137,10 +125,10 @@ class CastFieldAuditTest {
         .thenReturn(Optional.of(definition));
     when(definitions.save(any())).thenAnswer(call -> call.getArgument(0));
     var same = new CastFieldDefinitionPatch("旧い秘密", 3, false);
-    service.update(STORE_ID, "definition", same);
+    service.update(STORE_ID, "definition", same, 9L);
     assertThat(recorded).isEmpty();
     var changed = new CastFieldDefinitionPatch("新しい秘密", null, null);
-    service.update(STORE_ID, "definition", changed);
+    service.update(STORE_ID, "definition", changed, 9L);
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
     assertThat(event.getAction()).isEqualTo("CAST_FIELD_DEFINITION_UPDATED");
@@ -152,7 +140,7 @@ class CastFieldAuditTest {
             "exists", "is_public", "display_order", "version", "redacted_fields_changed")
         .containsEntry("redacted_fields_changed", "label");
     assertThat(event.getAfterValues().toString()).doesNotContain("秘密", "private-key");
-    service.update(STORE_ID, "definition", changed);
+    service.update(STORE_ID, "definition", changed, 9L);
     assertThat(recorded).hasSize(1);
   }
 
@@ -194,7 +182,7 @@ class CastFieldAuditTest {
               saved.add(snapshot);
               return snapshot;
             });
-    service.delete(STORE_ID, "definition", "operator@example.test");
+    service.delete(STORE_ID, "definition", 9L);
     assertThat(affected.getCustomFields()).containsExactlyEntriesOf(Map.of("remaining", "残す値"));
     assertThat(profile.getCustomFields()).containsExactlyEntriesOf(Map.of("remaining", "残す値"));
     assertThat(saved)

@@ -28,16 +28,12 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.User;
-import com.kizuna.user.domain.UserRepository;
-import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,8 +45,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 @ExtendWith(MockitoExtension.class)
 class CastServiceTest {
@@ -66,18 +60,15 @@ class CastServiceTest {
   @Mock StoreRepository stores;
   @Mock CastEnrollmentStatusHistoryRepository histories;
   @Mock CastEnrollmentSnapshotRepository snapshots;
-  @Mock UserRepository users;
   @Mock BusinessAudit audit;
   CastService service;
 
   @BeforeEach
   void setup() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken("actor", null, List.of()));
     service =
         new CastService(
             enrollments,
-            new CastEnrollmentService(enrollments, histories, snapshots, users, stores, audit),
+            new CastEnrollmentService(enrollments, histories, snapshots, stores, audit),
             profiles,
             stores,
             invitations,
@@ -86,11 +77,6 @@ class CastServiceTest {
             orders,
             applicantReferences,
             audit);
-  }
-
-  @AfterEach
-  void clearAuthentication() {
-    SecurityContextHolder.clearContext();
   }
 
   private void existing() {
@@ -114,20 +100,8 @@ class CastServiceTest {
     return values;
   }
 
-  private void actor() {
-    User actor =
-        User.builder()
-            .userType(UserType.CAST)
-            .email("actor@kizuna.test")
-            .password("encoded")
-            .build();
-    actor.setId(1L);
-    when(users.findByEmail("actor")).thenReturn(Optional.of(actor));
-  }
-
   @Test
   void createIsUnpublished() {
-    actor();
     when(enrollments.save(any()))
         .thenAnswer(
             inv -> {
@@ -139,7 +113,7 @@ class CastServiceTest {
     var command =
         new CastCreateCommand(
             "花", null, LocalDate.of(2026, 1, 1), null, null, null, null, null, null, null, null);
-    var created = service.create(STORE_ID, command, "actor");
+    var created = service.create(STORE_ID, command, 1L);
     assertThat(created.enrollment().getId()).isEqualTo("e1");
     assertThat(created.deletable()).isTrue();
     var savedEnrollment = ArgumentCaptor.forClass(CastEnrollment.class);
@@ -165,7 +139,6 @@ class CastServiceTest {
 
   @Test
   void updateSplitsValuesAndReturnsCombinedManagementView() {
-    actor();
     existing();
     when(definitions.findAllByStoreIdOrderByDisplayOrderAsc(STORE_ID))
         .thenReturn(
@@ -173,7 +146,7 @@ class CastServiceTest {
                 CastFieldDefinition.builder().key("memo").isPublic(false).build(),
                 CastFieldDefinition.builder().key("hobby").isPublic(true).build()));
     var values = Map.of("memo", "内部", "hobby", "読書");
-    assertThat(combined(service.update(STORE_ID, "e1", customFields(values), "actor")))
+    assertThat(combined(service.update(STORE_ID, "e1", customFields(values), 1L)))
         .containsExactlyInAnyOrderEntriesOf(values);
     assertThat(
             enrollments.findByIdAndStoreIdForUpdate("e1", STORE_ID).orElseThrow().getCustomFields())
@@ -181,14 +154,14 @@ class CastServiceTest {
     assertThat(
             profiles.findByEnrollmentIdAndStoreId("e1", STORE_ID).orElseThrow().getCustomFields())
         .containsOnlyKeys("hobby");
-    assertThat(combined(service.update(STORE_ID, "e1", customFields(Map.of()), "actor"))).isEmpty();
+    assertThat(combined(service.update(STORE_ID, "e1", customFields(Map.of()), 1L))).isEmpty();
   }
 
   @Test
   void unknownFieldIsRejected() {
     existing();
     var command = customFields(Map.of("unknown", "値"));
-    assertThatThrownBy(() -> service.update(STORE_ID, "e1", command, "actor"))
+    assertThatThrownBy(() -> service.update(STORE_ID, "e1", command, 1L))
         .isInstanceOf(ServiceException.class);
   }
 
@@ -198,7 +171,7 @@ class CastServiceTest {
     when(definitions.findAllByStoreIdOrderByDisplayOrderAsc(STORE_ID))
         .thenReturn(List.of(CastFieldDefinition.builder().key("memo").isPublic(false).build()));
     var command = customFields(Map.of("memo", "x".repeat(501)));
-    assertThatThrownBy(() -> service.update(STORE_ID, "e1", command, "actor"))
+    assertThatThrownBy(() -> service.update(STORE_ID, "e1", command, 1L))
         .isInstanceOf(ServiceException.class);
   }
 
@@ -208,7 +181,7 @@ class CastServiceTest {
     when(enrollments.findByIdAndStoreId("e1", STORE_ID)).thenReturn(Optional.of(enrollment));
     when(profiles.findByEnrollmentIdAndStoreId("e1", STORE_ID))
         .thenReturn(Optional.of(CastProfile.builder().name("花").enrollmentId("e1").build()));
-    assertThat(service.changePublication(STORE_ID, "e1", CastPublicationStatus.PUBLISHED))
+    assertThat(service.changePublication(STORE_ID, "e1", CastPublicationStatus.PUBLISHED, 1L))
         .isEqualTo(CastPublicationStatus.PUBLISHED);
   }
 
@@ -263,7 +236,7 @@ class CastServiceTest {
   void updateReturnsReferenceAwareDeletability() {
     existing();
     when(orders.findReferencedCastIds(Set.of("e1"))).thenReturn(Set.of("e1"));
-    assertThat(service.update(STORE_ID, "e1", customFields(null), "actor").deletable()).isFalse();
+    assertThat(service.update(STORE_ID, "e1", customFields(null), 1L).deletable()).isFalse();
   }
 
   @Test
@@ -271,7 +244,7 @@ class CastServiceTest {
     when(enrollments.findByIdAndStoreIdForUpdate("e1", STORE_ID))
         .thenReturn(Optional.of(CastEnrollment.builder().build()));
     when(attendance.findReferencedCastIds(List.of("e1"))).thenReturn(Set.of("e1"));
-    assertThatThrownBy(() -> service.delete(STORE_ID, "e1", "actor"))
+    assertThatThrownBy(() -> service.delete(STORE_ID, "e1", 1L))
         .isInstanceOf(ConflictException.class);
   }
 }

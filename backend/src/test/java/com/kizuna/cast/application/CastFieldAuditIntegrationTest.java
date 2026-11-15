@@ -35,7 +35,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -60,10 +59,6 @@ import org.springframework.orm.jpa.SharedEntityManagerCreator;
 import org.springframework.orm.jpa.hibernate.SpringBeanContainer;
 import org.springframework.orm.jpa.vendor.HibernateJpaDialect;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -149,24 +144,13 @@ class CastFieldAuditIntegrationTest {
   }
 
   @BeforeEach
-  void authenticate() {
+  void openStore() {
     storeId = store();
-    authenticate(storeId, ORDINARY);
+    actingStore = storeId;
   }
 
   private Long currentStore() {
     return actingStore;
-  }
-
-  private void authenticate(Long store, String email) {
-    actingStore = store;
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken(email, null, List.of()));
-  }
-
-  @AfterEach
-  void clear() {
-    SecurityContextHolder.clearContext();
   }
 
   @AfterAll
@@ -175,8 +159,12 @@ class CastFieldAuditIntegrationTest {
   }
 
   private String definition(String key, boolean isPublic) {
+    return definition(key, isPublic, ordinaryId);
+  }
+
+  private String definition(String key, boolean isPublic, long actorId) {
     var command = new CastFieldDefinitionCreateCommand(key, "秘密のラベル", isPublic);
-    return fields.create(currentStore(), command).getId();
+    return fields.create(currentStore(), command, actorId).getId();
   }
 
   private String cast(Map<String, String> values) {
@@ -196,7 +184,7 @@ class CastFieldAuditIntegrationTest {
                     null,
                     null,
                     null),
-                ORDINARY)
+                ordinaryId)
             .enrollment()
             .getId();
     if (!values.isEmpty()) write(id, values);
@@ -204,7 +192,7 @@ class CastFieldAuditIntegrationTest {
   }
 
   private void write(String id, Map<String, String> values) {
-    casts.update(currentStore(), id, customFields(values), ORDINARY);
+    casts.update(currentStore(), id, customFields(values), ordinaryId);
   }
 
   private static CastUpdateCommand customFields(Map<String, String> values) {
@@ -244,14 +232,14 @@ class CastFieldAuditIntegrationTest {
     String second = cast(Map.of("private-key", "二人目の秘密"));
     String untouched = cast(Map.of());
     var edit = new CastFieldDefinitionPatch("変更した秘密", null, null);
-    fields.update(storeId, internal, edit);
-    fields.update(storeId, internal, edit);
-    fields.update(storeId, internal, new CastFieldDefinitionPatch(null, null, null));
+    fields.update(storeId, internal, edit, ordinaryId);
+    fields.update(storeId, internal, edit, ordinaryId);
+    fields.update(storeId, internal, new CastFieldDefinitionPatch(null, null, null), ordinaryId);
     assertThat(
             jdbc.queryForObject(
                 "select version from t_cast_field_definitions where id=?", Long.class, internal))
         .isEqualTo(1);
-    fields.delete(storeId, internal, ORDINARY);
+    fields.delete(storeId, internal, ordinaryId);
     assertThat(fields.list(storeId)).extracting(d -> d.getId()).containsExactly(external);
     assertThat(stored(first))
         .containsEntry("internal_values", "{}")
@@ -299,7 +287,7 @@ class CastFieldAuditIntegrationTest {
               assertThat(row.get("target_id")).isEqualTo(row.get("enrollment_id"));
               assertThat(row.get("old_values").toString()).contains("private-key");
             });
-    fields.delete(storeId, external, ORDINARY);
+    fields.delete(storeId, external, ordinaryId);
     assertThat(stored(first))
         .containsEntry("public_values", "{}")
         .containsEntry("public_version", 2L);
@@ -351,12 +339,15 @@ class CastFieldAuditIntegrationTest {
                 if (rejected.endsWith("CREATED")) definition("new-key", false);
                 else if (rejected.endsWith("UPDATED")) {
                   fields.update(
-                      storeId, internal, new CastFieldDefinitionPatch("rollbackする秘密", 10, null));
+                      storeId,
+                      internal,
+                      new CastFieldDefinitionPatch("rollbackする秘密", 10, null),
+                      ordinaryId);
                 } else
                   fields.delete(
                       storeId,
                       rejected.equals("CAST_PROFILE_FIELD_REMOVED") ? external : internal,
-                      ORDINARY);
+                      ordinaryId);
               })
           .isInstanceOf(DataIntegrityViolationException.class);
       assertThat(stored(id)).isEqualTo(before);
@@ -383,9 +374,12 @@ class CastFieldAuditIntegrationTest {
     transactions.executeWithoutResult(
         status -> {
           fields.update(
-              storeId, internal, new CastFieldDefinitionPatch("rollbackする秘密", null, null));
-          fields.delete(storeId, internal, ORDINARY);
-          fields.delete(storeId, external, ORDINARY);
+              storeId,
+              internal,
+              new CastFieldDefinitionPatch("rollbackする秘密", null, null),
+              ordinaryId);
+          fields.delete(storeId, internal, ordinaryId);
+          fields.delete(storeId, external, ordinaryId);
           definition("private-key", true);
           status.setRollbackOnly();
         });
@@ -399,14 +393,7 @@ class CastFieldAuditIntegrationTest {
 
   @Test
   void secondActorAndSnapshotAreConsistentAcrossCreationUpdateAndDeletion() {
-    var jwt =
-        Jwt.withTokenValue(UUID.randomUUID().toString())
-            .header("alg", "HS256")
-            .subject(SECOND)
-            .build();
-    SecurityContextHolder.getContext()
-        .setAuthentication(new JwtAuthenticationToken(jwt, List.of()));
-    String definition = definition("private-key", false);
+    String definition = definition("private-key", false, secondId);
     String id =
         casts
             .create(
@@ -423,12 +410,12 @@ class CastFieldAuditIntegrationTest {
                     null,
                     null,
                     null),
-                SECOND)
+                secondId)
             .enrollment()
             .getId();
-    casts.update(storeId, id, customFields(Map.of("private-key", "秘密の値")), SECOND);
-    fields.update(storeId, definition, new CastFieldDefinitionPatch(null, 4, null));
-    fields.delete(storeId, definition, SECOND);
+    casts.update(storeId, id, customFields(Map.of("private-key", "秘密の値")), secondId);
+    fields.update(storeId, definition, new CastFieldDefinitionPatch(null, 4, null), secondId);
+    fields.delete(storeId, definition, secondId);
     var rows =
         jdbc.queryForList(
             "select actor_id,actor_type,originating_store_id from t_audit_events where target_id=? or source_id=? order by id",
@@ -453,7 +440,7 @@ class CastFieldAuditIntegrationTest {
     String ownDefinition = definition("private-key", false);
     String ownCast = cast(Map.of("private-key", "秘密の自店値"));
     Long otherStore = store();
-    authenticate(otherStore, ORDINARY);
+    actingStore = otherStore;
     String foreignDefinition = definition("private-key", false);
     String foreignCast = cast(Map.of("private-key", "秘密の他店値"));
     var foreignBefore = stored(foreignCast);
@@ -462,15 +449,18 @@ class CastFieldAuditIntegrationTest {
             "select count(*) from t_audit_events where originating_store_id=?",
             Long.class,
             otherStore);
-    authenticate(storeId, ORDINARY);
+    actingStore = storeId;
     assertThatThrownBy(
             () ->
                 fields.update(
-                    storeId, foreignDefinition, new CastFieldDefinitionPatch(null, null, null)))
+                    storeId,
+                    foreignDefinition,
+                    new CastFieldDefinitionPatch(null, null, null),
+                    ordinaryId))
         .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> fields.delete(storeId, foreignDefinition, ORDINARY))
+    assertThatThrownBy(() -> fields.delete(storeId, foreignDefinition, ordinaryId))
         .isInstanceOf(NotFoundException.class);
-    fields.delete(storeId, ownDefinition, ORDINARY);
+    fields.delete(storeId, ownDefinition, ordinaryId);
     assertThat(stored(ownCast)).containsEntry("internal_values", "{}");
     assertThat(stored(foreignCast)).isEqualTo(foreignBefore);
     assertThat(
@@ -495,7 +485,7 @@ class CastFieldAuditIntegrationTest {
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("既に登録");
     var request = new CastFieldDefinitionPatch(null, null, true);
-    assertThatThrownBy(() -> fields.update(storeId, id, request))
+    assertThatThrownBy(() -> fields.update(storeId, id, request, ordinaryId))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("公開区分");
     assertThat(count("t_audit_events")).isEqualTo(count);
@@ -520,35 +510,25 @@ class CastFieldAuditIntegrationTest {
       var leader =
           executor.submit(
               () -> {
-                authenticate(storeId, ORDINARY);
-                try {
-                  transactions.executeWithoutResult(
-                      status -> {
-                        if (writerFirst) write(id, Map.of("private-key", "秘密の並行更新値"));
-                        else fields.delete(storeId, definition, ORDINARY);
-                        locked.countDown();
-                        await(release);
-                      });
-                } finally {
-                  clear();
-                }
+                transactions.executeWithoutResult(
+                    status -> {
+                      if (writerFirst) write(id, Map.of("private-key", "秘密の並行更新値"));
+                      else fields.delete(storeId, definition, ordinaryId);
+                      locked.countDown();
+                      await(release);
+                    });
               });
       try {
         assertThat(locked.await(10, TimeUnit.SECONDS)).isTrue();
         var follower =
             executor.submit(
                 () -> {
-                  authenticate(storeId, ORDINARY);
-                  try {
-                    attempting.countDown();
-                    if (writerFirst) fields.delete(storeId, definition, ORDINARY);
-                    else
-                      assertThatThrownBy(() -> write(id, Map.of("private-key", "秘密の遅延入力")))
-                          .isInstanceOf(ServiceException.class)
-                          .hasMessageContaining("未知のカスタムフィールドキー");
-                  } finally {
-                    clear();
-                  }
+                  attempting.countDown();
+                  if (writerFirst) fields.delete(storeId, definition, ordinaryId);
+                  else
+                    assertThatThrownBy(() -> write(id, Map.of("private-key", "秘密の遅延入力")))
+                        .isInstanceOf(ServiceException.class)
+                        .hasMessageContaining("未知のカスタムフィールドキー");
                 });
         assertThat(attempting.await(10, TimeUnit.SECONDS)).isTrue();
         assertDatabaseLockWait();
@@ -607,19 +587,14 @@ class CastFieldAuditIntegrationTest {
   }
 
   private boolean concurrentCreate(String key, CountDownLatch ready, CountDownLatch start) {
-    authenticate(storeId, ORDINARY);
+    ready.countDown();
+    await(start);
     try {
-      ready.countDown();
-      await(start);
-      try {
-        definition(key, false);
-        return true;
-      } catch (ServiceException rejected) {
-        assertThat(rejected).hasMessageContaining("最大20件");
-        return false;
-      }
-    } finally {
-      clear();
+      definition(key, false);
+      return true;
+    } catch (ServiceException rejected) {
+      assertThat(rejected).hasMessageContaining("最大20件");
+      return false;
     }
   }
 

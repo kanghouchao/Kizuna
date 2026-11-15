@@ -1,5 +1,6 @@
 package com.kizuna.cast.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -25,7 +26,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -43,11 +43,11 @@ class CastPersonControllerTest {
   @MockitoBean StoreScopeResolver storeScopeResolver;
 
   @Test
-  @WithMockUser(authorities = "PERM_CAST_PERSON_VIEW")
   void adminCanSearchPeople() throws Exception {
     var pageable = ArgumentCaptor.forClass(Pageable.class);
     when(service.list(eq("花"), pageable.capture())).thenReturn(Page.empty());
-    mvc.perform(get("/cast-persons").param("search", "花"))
+    mvc.perform(
+            get("/cast-persons").with(jwtUser(42L, "PERM_CAST_PERSON_VIEW")).param("search", "花"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content").isEmpty())
         .andExpect(jsonPath("$.total_elements").value(0));
@@ -55,11 +55,13 @@ class CastPersonControllerTest {
   }
 
   @Test
-  @WithMockUser(authorities = "PERM_CAST_PERSON_VIEW")
   void enrollmentsAreAPageNewestFirstAndRejectOutOfRangePages() throws Exception {
     var pageable = ArgumentCaptor.forClass(Pageable.class);
     when(service.enrollments(eq(1L), pageable.capture())).thenReturn(Page.empty());
-    mvc.perform(get("/cast-persons/1/enrollments").param("size", "0"))
+    mvc.perform(
+            get("/cast-persons/1/enrollments")
+                .with(jwtUser(42L, "PERM_CAST_PERSON_VIEW"))
+                .param("size", "0"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
     assertThat(pageable.getValue())
@@ -68,15 +70,21 @@ class CastPersonControllerTest {
                 0,
                 20,
                 Sort.by(Sort.Direction.DESC, CastEnrollment::getCreatedAt, CastEnrollment::getId)));
-    mvc.perform(get("/cast-persons/1/enrollments").param("page", "99999999").param("size", "100"))
+    mvc.perform(
+            get("/cast-persons/1/enrollments")
+                .with(jwtUser(42L, "PERM_CAST_PERSON_VIEW"))
+                .param("page", "99999999")
+                .param("size", "100"))
         .andExpect(status().isBadRequest());
   }
 
   @Test
-  @WithMockUser(authorities = "PERM_CAST_MANAGE")
   void storePermissionCannotReadAnyPersonEndpoint() throws Exception {
     for (String path : new String[] {"", "/1", "/1/enrollments"}) {
-      mvc.perform(get("/cast-persons" + path).header("X-Store-ID", "2"))
+      mvc.perform(
+              get("/cast-persons" + path)
+                  .with(jwtUser(42L, "PERM_CAST_MANAGE"))
+                  .header("X-Store-ID", "2"))
           .andExpect(status().isForbidden());
     }
   }

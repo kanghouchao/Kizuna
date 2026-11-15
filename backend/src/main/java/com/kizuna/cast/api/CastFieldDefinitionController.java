@@ -6,6 +6,7 @@ import com.kizuna.cast.api.dto.CastFieldDefinitionResponse;
 import com.kizuna.cast.api.dto.CastFieldDefinitionUpdateRequest;
 import com.kizuna.cast.application.CastFieldDefinitionService;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import jakarta.validation.Valid;
 import java.security.Principal;
 import java.util.List;
@@ -42,9 +43,13 @@ public class CastFieldDefinitionController {
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_CAST_FIELD_DEF_MANAGE')")
   public ResponseEntity<CastFieldDefinitionResponse> create(
-      @CurrentStore Long storeId, @Valid @RequestBody CastFieldDefinitionCreateRequest request) {
+      @CurrentStore Long storeId,
+      @Valid @RequestBody CastFieldDefinitionCreateRequest request,
+      Principal principal) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(mapper.toResponse(service.create(storeId, mapper.toCommand(request))));
+        .body(
+            mapper.toResponse(
+                service.create(storeId, mapper.toCommand(request), JwtClaims.userIdOf(principal))));
   }
 
   @PutMapping("/{id}")
@@ -52,16 +57,18 @@ public class CastFieldDefinitionController {
   public ResponseEntity<CastFieldDefinitionResponse> update(
       @CurrentStore Long storeId,
       @PathVariable String id,
-      @Valid @RequestBody CastFieldDefinitionUpdateRequest request) {
+      @Valid @RequestBody CastFieldDefinitionUpdateRequest request,
+      Principal principal) {
     return ResponseEntity.ok(
-        mapper.toResponse(service.update(storeId, id, mapper.toPatch(request))));
+        mapper.toResponse(
+            service.update(storeId, id, mapper.toPatch(request), JwtClaims.userIdOf(principal))));
   }
 
   @DeleteMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_CAST_FIELD_DEF_MANAGE')")
   public ResponseEntity<Void> delete(
       @CurrentStore Long storeId, @PathVariable String id, Principal principal) {
-    service.delete(storeId, id, principal.getName());
+    service.delete(storeId, id, JwtClaims.userIdOf(principal));
     return ResponseEntity.noContent().build();
   }
 }

@@ -1,6 +1,8 @@
 package com.kizuna.shift.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -11,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.shift.api.dto.ShiftMapperImpl;
 import com.kizuna.shift.application.ShiftLineageService;
@@ -19,6 +22,7 @@ import com.kizuna.shift.domain.ShiftRequest;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -31,7 +35,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithAnonymousUser;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -50,6 +53,7 @@ class ShiftControllerTest {
   static class MethodSecurityConfig {}
 
   private static final Long STORE_ID = 7L;
+  private static final long ACTOR_ID = 42L;
 
   @Autowired private MockMvc mockMvc;
 
@@ -63,32 +67,36 @@ class ShiftControllerTest {
 
   @Test
   @DisplayName("一覧は名乗られた店舗の id で service を呼ぶこと")
-  @WithMockUser(authorities = "PERM_SHIFT_MANAGE")
   void listPassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(STORE_ID)));
 
     mockMvc
         .perform(
             get("/shifts")
                 .param("from", "2026-07-01")
                 .param("to", "2026-07-31")
-                .header("X-Store-ID", STORE_ID.toString()))
+                .header("X-Store-ID", STORE_ID.toString())
+                .with(jwtUser(ACTOR_ID, "PERM_SHIFT_MANAGE")))
         .andExpect(status().isOk());
 
     verify(shiftService).list(STORE_ID, LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 31));
   }
 
   @Test
-  @DisplayName("削除は名乗られた店舗の id で service を呼ぶこと")
-  @WithMockUser(authorities = "PERM_SHIFT_MANAGE")
+  @DisplayName("削除は名乗られた店舗の id とトークンの利用者 ID で service を呼ぶこと")
   void deletePassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(STORE_ID)));
 
     mockMvc
-        .perform(delete("/shifts/s1").header("X-Store-ID", STORE_ID.toString()))
+        .perform(
+            delete("/shifts/s1")
+                .header("X-Store-ID", STORE_ID.toString())
+                .with(jwtUser(ACTOR_ID, "PERM_SHIFT_MANAGE")))
         .andExpect(status().isNoContent());
 
-    verify(shiftService).delete(STORE_ID, "s1");
+    verify(shiftService).delete(STORE_ID, "s1", ACTOR_ID);
   }
 
   @Test
@@ -106,15 +114,18 @@ class ShiftControllerTest {
 
   @Test
   @DisplayName("変更申請の履歴は提出の新しい順の Page で返すこと")
-  @WithMockUser(authorities = "PERM_SHIFT_MANAGE")
   void changeRequestsAreAPageNewestFirst() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(STORE_ID)));
     ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
     when(shiftLineageService.changeRequests(eq(STORE_ID), eq("s1"), pageable.capture()))
         .thenReturn(new PageImpl<>(List.of()));
 
     mockMvc
-        .perform(get("/shifts/s1/change-requests").header("X-Store-ID", STORE_ID.toString()))
+        .perform(
+            get("/shifts/s1/change-requests")
+                .header("X-Store-ID", STORE_ID.toString())
+                .with(jwtUser(ACTOR_ID, "PERM_SHIFT_MANAGE")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 

@@ -1,6 +1,7 @@
 package com.kizuna.shift.api;
 
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.shift.api.dto.AttendanceCancellationRequest;
 import com.kizuna.shift.api.dto.AttendanceCorrectionRequest;
 import com.kizuna.shift.api.dto.AttendanceCreateRequest;
@@ -59,7 +60,8 @@ public class AttendanceController {
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(
             attendanceMapper.toResponse(
-                attendanceService.record(storeId, request.command(), principal.getName())));
+                attendanceService.record(
+                    storeId, request.command(), JwtClaims.userIdOf(principal))));
   }
 
   @PutMapping("/{id}")
@@ -71,7 +73,8 @@ public class AttendanceController {
       Principal principal) {
     return ResponseEntity.ok(
         attendanceMapper.toResponse(
-            attendanceService.correct(storeId, id, request.command(), principal.getName())));
+            attendanceService.correct(
+                storeId, id, request.command(), JwtClaims.userIdOf(principal))));
   }
 
   @PostMapping("/{id}/cancellation")
@@ -81,7 +84,7 @@ public class AttendanceController {
       @PathVariable String id,
       @Valid @RequestBody AttendanceCancellationRequest request,
       Principal principal) {
-    attendanceService.cancel(storeId, id, request.getReason(), principal.getName());
+    attendanceService.cancel(storeId, id, request.getReason(), JwtClaims.userIdOf(principal));
     return ResponseEntity.noContent().build();
   }
 }

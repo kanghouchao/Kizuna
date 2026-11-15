@@ -7,7 +7,6 @@ import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.shift.application.ShiftCommand.CorrectAttendance;
 import com.kizuna.shift.application.ShiftCommand.RecordAttendance;
@@ -19,7 +18,6 @@ import com.kizuna.shift.domain.Shift;
 import com.kizuna.shift.domain.ShiftRepository;
 import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.UserRepository;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -55,7 +53,6 @@ public class AttendanceService {
   private final AttendanceCorrectionRepository correctionRepository;
   private final ShiftRepository shiftRepository;
   private final CastService castService;
-  private final UserRepository userRepository;
   private final BusinessDateService businessDateService;
   private final BusinessAudit audit;
 
@@ -72,8 +69,7 @@ public class AttendanceService {
   }
 
   @Transactional
-  public Attendance record(Long storeId, RecordAttendance command, String actorEmail) {
-    Long actorId = resolveActorId(actorEmail);
+  public Attendance record(Long storeId, RecordAttendance command, long actorId) {
     // 実績行はキャストとシフトの両方を指す。押さえる順序は系全体で キャスト → シフト に揃える
     // （逆順に押さえるとキャスト削除の連鎖と環になる。契約は CastEnrollmentRepository#findByIdAndStoreIdForUpdate）。
     if (!castService.existsInStoreForUpdate(storeId, command.castId())) {
@@ -105,8 +101,7 @@ public class AttendanceService {
 
   /** 記入の誤りを訂正し、同一トランザクションで編集前の姿を訂正履歴へ残す。 */
   @Transactional
-  public Attendance correct(Long storeId, String id, CorrectAttendance command, String actorEmail) {
-    Long actorId = resolveActorId(actorEmail);
+  public Attendance correct(Long storeId, String id, CorrectAttendance command, long actorId) {
     Attendance attendance = findAttendance(storeId, id);
     requireInheritedBusinessDate(storeId, attendance, command.businessDate());
 
@@ -136,8 +131,7 @@ public class AttendanceService {
 
   /** 誤建の実績に取消標記を付ける。行は残り、導出・照会から外れるだけである。 */
   @Transactional
-  public void cancel(Long storeId, String id, String reason, String actorEmail) {
-    Long actorId = resolveActorId(actorEmail);
+  public void cancel(Long storeId, String id, String reason, long actorId) {
     Attendance attendance = findAttendance(storeId, id);
     var before = ShiftAuditSnapshot.of(attendance);
     attendance.cancel(reason, actorId, Timestamps.now());
@@ -204,12 +198,5 @@ public class AttendanceService {
     return shiftRepository
         .findByIdAndStoreIdForUpdate(shiftId, storeId)
         .orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + shiftId));
-  }
-
-  private Long resolveActorId(String actorEmail) {
-    return userRepository
-        .findByEmail(actorEmail)
-        .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
-        .getId();
   }
 }

@@ -8,7 +8,6 @@ import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shift.application.ShiftCommand.CreateShift;
 import com.kizuna.shift.application.ShiftViews.PublicShift;
 import com.kizuna.shift.application.ShiftViews.ShiftView;
@@ -20,7 +19,6 @@ import com.kizuna.shift.domain.ShiftRequestRepository;
 import com.kizuna.shift.domain.ShiftStatus;
 import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.UserRepository;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.HashMap;
@@ -30,7 +28,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Limit;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,7 +40,6 @@ public class ShiftService {
   private final CastEnrollmentRepository enrollments;
   private final StoreRepository storeRepository;
   private final CastProfileRepository castRepository;
-  private final UserRepository userRepository;
   private final BusinessDateService businessDateService;
   private final BusinessAudit audit;
   private final ShiftRequestRepository requests;
@@ -88,7 +84,7 @@ public class ShiftService {
   }
 
   @Transactional
-  public ShiftView create(Long storeId, CreateShift command, String actorEmail) {
+  public ShiftView create(Long storeId, CreateShift command, long actorId) {
     if (command.startTime().equals(command.endTime())) {
       throw new ServiceException("開始時刻と終了時刻が同一です");
     }
@@ -102,7 +98,7 @@ public class ShiftService {
             .endTime(command.endTime())
             .status(command.status() == null ? ShiftStatus.TENTATIVE : command.status())
             .published(command.published() == null || command.published())
-            .createdBy(resolveActorId(actorEmail))
+            .createdBy(actorId)
             .build();
     shift.setStoreId(storeId);
     shiftRepository.save(shift);
@@ -121,7 +117,7 @@ public class ShiftService {
   }
 
   @Transactional
-  public ShiftView update(Long storeId, String id, ShiftPatch patch, String actorEmail) {
+  public ShiftView update(Long storeId, String id, ShiftPatch patch, long actorId) {
     CastEnrollment target = patch.castId() == null ? null : lockEnrollment(storeId, patch.castId());
 
     // 実績の有無を読んで可否を決める以上、実績の記録・訂正と直列でなければ守衛は素通りされる。
@@ -147,7 +143,7 @@ public class ShiftService {
 
     var before = ShiftAuditSnapshot.of(shift);
     shift.apply(patch);
-    shift.stampUpdatedBy(resolveActorId(actorEmail));
+    shift.stampUpdatedBy(actorId);
 
     boolean changed = !before.equals(ShiftAuditSnapshot.of(shift));
     shiftRepository.save(shift);
@@ -188,12 +184,11 @@ public class ShiftService {
 
   /** 店外への露出可否は承認と独立した軸なので、状態や時間帯の更新とは別の口で受ける。 */
   @Transactional
-  public ShiftView changePublication(
-      Long storeId, String id, boolean published, String actorEmail) {
+  public ShiftView changePublication(Long storeId, String id, boolean published, long actorId) {
     Shift shift = findShift(storeId, id);
     var before = ShiftAuditSnapshot.of(shift);
     shift.changePublication(published);
-    shift.stampUpdatedBy(resolveActorId(actorEmail));
+    shift.stampUpdatedBy(actorId);
     boolean changed = !before.equals(ShiftAuditSnapshot.of(shift));
     shiftRepository.save(shift);
     shiftRepository.flush();
@@ -212,7 +207,7 @@ public class ShiftService {
   }
 
   @Transactional
-  public void delete(Long storeId, String id) {
+  public void delete(Long storeId, String id, long actorId) {
     Shift shift = findShiftForUpdate(storeId, id);
     var before = ShiftAuditSnapshot.of(shift);
     // 実績が参照する限り削除しない。取消済みも数えるのは、参照を外して消すと「予定通りの出勤」が
@@ -220,19 +215,22 @@ public class ShiftService {
     if (attendanceRepository.existsByStoreIdAndShiftId(storeId, id)) {
       throw new ConflictException("実績が記録されているシフトは削除できません。実績を取り消したうえで下書きに戻してください");
     }
-    recordUnlinkedRequests(storeId, id);
+    recordUnlinkedRequests(storeId, id, actorId);
     shiftRepository.delete(shift);
     shiftRepository.flush();
-    audit.recordCurrent(
+    audit.recordById(
+        actorId,
         shift.getStoreId(),
         "SHIFT_DELETED",
         "SHIFT",
         id,
+        null,
+        null,
         before.values(),
         Map.of("exists", "false"));
   }
 
-  private void recordUnlinkedRequests(Long storeId, String shiftId) {
+  private void recordUnlinkedRequests(Long storeId, String shiftId, long actorId) {
     String afterId = "";
     while (true) {
       var page = requests.findLinkedForUpdate(storeId, shiftId, afterId, Limit.of(100));
@@ -242,8 +240,8 @@ public class ShiftService {
         var after = new HashMap<>(before);
         after.put("shift_id", "");
         // FKのSET NULLはversionを増やさない。削除が失敗すればこの監査も同じ取引で取り消される。
-        audit.record(
-            SecurityContextHolder.getContext().getAuthentication().getName(),
+        audit.recordById(
+            actorId,
             request.getStoreId(),
             "SHIFT_REQUEST_UNLINKED",
             "SHIFT_REQUEST",
@@ -276,12 +274,5 @@ public class ShiftService {
     return shiftRepository
         .findByIdAndStoreIdForUpdate(id, storeId)
         .orElseThrow(() -> new NotFoundException("シフトが見つかりません: " + id));
-  }
-
-  private Long resolveActorId(String actorEmail) {
-    return userRepository
-        .findByEmail(actorEmail)
-        .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"))
-        .getId();
   }
 }
