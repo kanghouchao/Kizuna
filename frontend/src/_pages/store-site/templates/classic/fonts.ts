@@ -9,7 +9,7 @@ export const classicDisplay = Shippori_Mincho_B1({
 });
 
 export const classicBody = Zen_Old_Mincho({
-  weight: ['400', '700'],
+  weight: '400',
   preload: false,
   display: 'swap',
   variable: '--classic-font-body',
