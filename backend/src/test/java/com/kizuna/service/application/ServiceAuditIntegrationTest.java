@@ -49,7 +49,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -73,10 +72,6 @@ import org.springframework.orm.jpa.SharedEntityManagerCreator;
 import org.springframework.orm.jpa.hibernate.SpringBeanContainer;
 import org.springframework.orm.jpa.vendor.HibernateJpaDialect;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -168,7 +163,7 @@ class ServiceAuditIntegrationTest {
   @BeforeEach
   void setup() {
     storeId = store();
-    authenticate(storeId, STAFF);
+    actAt(storeId);
     enrollment =
         transactions.execute(
             status -> {
@@ -186,19 +181,12 @@ class ServiceAuditIntegrationTest {
             });
   }
 
-  private void authenticate(Long store, String email) {
+  private void actAt(Long store) {
     actingStore = store;
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken(email, null, List.of()));
   }
 
   private Long currentStore() {
     return actingStore;
-  }
-
-  @AfterEach
-  void clear() {
-    SecurityContextHolder.clearContext();
   }
 
   @AfterAll
@@ -211,7 +199,7 @@ class ServiceAuditIntegrationTest {
         currentStore(),
         new ServiceSettingsCommand.Create(
             ServiceKind.SPECIAL_SERVICE, "複写しない秘密", null, ChargeType.PAID, 2000, 1000),
-        STAFF);
+        staffId);
   }
 
   private ServiceSettingsCommand.Update changed(long revision) {
@@ -219,7 +207,7 @@ class ServiceAuditIntegrationTest {
   }
 
   private void decide(String id, long terms, long revision, ConsentDecision decision) {
-    own.decide(currentStore(), CAST, id, new OwnConsentCommand(terms, revision, decision));
+    own.decide(currentStore(), castId, id, new OwnConsentCommand(terms, revision, decision));
   }
 
   private List<AuditEvent> audits() {
@@ -303,18 +291,18 @@ class ServiceAuditIntegrationTest {
         currentStore(),
         id,
         new ServiceSettingsCommand.Update("複写しない秘密", null, ChargeType.PAID, 2000, 1000, 1L),
-        STAFF);
+        staffId);
     assertThat(audits()).hasSize(1);
     settings.update(
         currentStore(),
         id,
         new ServiceSettingsCommand.Update("名称だけの秘密", null, ChargeType.PAID, 2000, 1000, 1L),
-        STAFF);
+        staffId);
     assertThat(audits().getLast().getAfterValues())
         .containsEntry("version", "1")
         .containsEntry("terms_version", "1")
         .containsEntry("redacted_fields_changed", "name");
-    authenticate(storeId, CAST);
+    actAt(storeId);
     decide(id, 1, 0, ConsentDecision.ACCEPTED);
     var initial = audits().getLast();
     assertThat(initial.getActorId()).isEqualTo(castId);
@@ -333,7 +321,7 @@ class ServiceAuditIntegrationTest {
         .containsEntry("version", "0");
     decide(id, 1, 1, ConsentDecision.ACCEPTED);
     assertThat(audits()).hasSize(3);
-    settings.update(currentStore(), id, changed(2), STAFF);
+    settings.update(currentStore(), id, changed(2), staffId);
     decide(id, 2, 1, ConsentDecision.ACCEPTED);
     assertThat(audits().getLast().getAfterValues())
         .containsEntry("version", "1")
@@ -356,7 +344,7 @@ class ServiceAuditIntegrationTest {
             jdbc.queryForObject(
                 "select total_fee from t_orders where id=?", Integer.class, orderId))
         .isEqualTo(15000);
-    settings.delete(currentStore(), id, 3, STAFF);
+    settings.delete(currentStore(), id, 3, staffId);
     assertThat(audits()).hasSize(7);
     var deleted = audits().getLast();
     assertThat(deleted.getAfterValues())
@@ -407,8 +395,9 @@ class ServiceAuditIntegrationTest {
               () -> {
                 switch (action) {
                   case "SERVICE_CREATED" -> special();
-                  case "SERVICE_UPDATED" -> settings.update(currentStore(), id, changed(1), STAFF);
-                  case "SERVICE_DELETED" -> settings.delete(currentStore(), id, 1, STAFF);
+                  case "SERVICE_UPDATED" ->
+                      settings.update(currentStore(), id, changed(1), staffId);
+                  case "SERVICE_DELETED" -> settings.delete(currentStore(), id, 1, staffId);
                   case "SERVICE_CONSENT_CHANGED" -> decide(id, 1, 1, ConsentDecision.REJECTED);
                   default -> throw new AssertionError(action);
                 }
@@ -429,9 +418,9 @@ class ServiceAuditIntegrationTest {
     transactions.executeWithoutResult(
         status -> {
           special();
-          settings.update(currentStore(), id, changed(1), STAFF);
+          settings.update(currentStore(), id, changed(1), staffId);
           decide(id, 2, 1, ConsentDecision.REJECTED);
-          settings.delete(currentStore(), id, 2, STAFF);
+          settings.delete(currentStore(), id, 2, staffId);
           assertThat(audits()).hasSize(6);
           status.setRollbackOnly();
         });
@@ -458,20 +447,18 @@ class ServiceAuditIntegrationTest {
 
   @Test
   void staffWritesUseActualActorWithoutChangingOwnChoiceAuthority() {
-    var jwt =
-        Jwt.withTokenValue(UUID.randomUUID().toString())
-            .header("alg", "HS256")
-            .subject(STAFF)
-            .build();
-    SecurityContextHolder.getContext()
-        .setAuthentication(new JwtAuthenticationToken(jwt, List.of(), STAFF));
     String id = special();
-    settings.update(currentStore(), id, changed(1), STAFF);
-    settings.delete(currentStore(), id, 2, STAFF);
+    settings.update(currentStore(), id, changed(1), staffId);
+    settings.delete(currentStore(), id, 2, staffId);
     assertThat(audits())
         .hasSize(3)
-        .allSatisfy(event -> assertThat(event.getActorId()).isEqualTo(staffId));
-    authenticate(storeId, CAST);
+        .allSatisfy(
+            event -> {
+              assertThat(event.getActorId()).isEqualTo(staffId);
+              assertThat(event.getActorType()).isEqualTo("STAFF");
+              assertThat(event.getActorName()).isEqualTo("検証担当");
+            });
+    actAt(storeId);
     String ownId = special();
     decide(ownId, 1, 0, ConsentDecision.ACCEPTED);
     assertThat(audits().getLast().getActorId()).isEqualTo(castId);
@@ -481,9 +468,9 @@ class ServiceAuditIntegrationTest {
   void foreignRowsMissingEnrollmentInvalidTermsAndStaleVersionsLeaveNoSuccess() {
     String id = special();
     var before = stored();
-    assertThatThrownBy(() -> settings.update(currentStore(), id, changed(2), STAFF))
+    assertThatThrownBy(() -> settings.update(currentStore(), id, changed(2), staffId))
         .isInstanceOf(ConflictException.class);
-    assertThatThrownBy(() -> settings.delete(currentStore(), id, 2, STAFF))
+    assertThatThrownBy(() -> settings.delete(currentStore(), id, 2, staffId))
         .isInstanceOf(ConflictException.class);
     assertThatThrownBy(() -> decide(id, 2, 0, ConsentDecision.ACCEPTED))
         .isInstanceOf(ConflictException.class);
@@ -493,7 +480,7 @@ class ServiceAuditIntegrationTest {
             () ->
                 own.decide(
                     currentStore(),
-                    STAFF,
+                    staffId,
                     id,
                     new OwnConsentCommand(1L, 0L, ConsentDecision.ACCEPTED)))
         .isInstanceOf(NotFoundException.class);
@@ -503,17 +490,17 @@ class ServiceAuditIntegrationTest {
                     currentStore(),
                     id,
                     new ServiceSettingsCommand.Update("秘密", null, ChargeType.FREE, 1, 0, 1L),
-                    STAFF))
+                    staffId))
         .isInstanceOf(ServiceException.class);
     Long foreign = store();
-    authenticate(foreign, STAFF);
-    assertThatThrownBy(() -> settings.update(currentStore(), id, changed(1), STAFF))
+    actAt(foreign);
+    assertThatThrownBy(() -> settings.update(currentStore(), id, changed(1), staffId))
         .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> settings.delete(currentStore(), id, 1, STAFF))
+    assertThatThrownBy(() -> settings.delete(currentStore(), id, 1, staffId))
         .isInstanceOf(NotFoundException.class);
     assertThatThrownBy(() -> decide(id, 1, 0, ConsentDecision.ACCEPTED))
         .isInstanceOf(NotFoundException.class);
-    authenticate(storeId, STAFF);
+    actAt(storeId);
     assertThat(stored()).isEqualTo(before);
     decide(id, 1, 0, ConsentDecision.REJECTED);
     var rejected = stored();
@@ -528,9 +515,9 @@ class ServiceAuditIntegrationTest {
                 .withdraw(OffsetDateTime.now()));
     assertThatThrownBy(() -> decide(id, 1, 1, ConsentDecision.ACCEPTED))
         .isInstanceOf(NotFoundException.class);
-    settings.delete(currentStore(), id, 1, STAFF);
+    settings.delete(currentStore(), id, 1, staffId);
     var deleted = stored();
-    assertThatThrownBy(() -> settings.delete(currentStore(), id, 2, STAFF))
+    assertThatThrownBy(() -> settings.delete(currentStore(), id, 2, staffId))
         .isInstanceOf(ServiceException.class);
     assertThat(stored()).isEqualTo(deleted);
   }
@@ -542,38 +529,27 @@ class ServiceAuditIntegrationTest {
     String id = special();
     var ready = new CountDownLatch(1);
     var release = new CountDownLatch(1);
-    Long capturedStore = storeId;
     try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {
       var first =
           pool.submit(
               () -> {
-                authenticate(capturedStore, STAFF);
-                try {
-                  transactions.executeWithoutResult(
-                      status -> {
-                        concurrentOperation(operation, id);
-                        ready.countDown();
-                        await(release);
-                      });
-                } finally {
-                  clear();
-                }
+                transactions.executeWithoutResult(
+                    status -> {
+                      concurrentOperation(operation, id);
+                      ready.countDown();
+                      await(release);
+                    });
               });
       try {
         assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
         var second =
             pool.submit(
                 () -> {
-                  authenticate(capturedStore, STAFF);
-                  try {
-                    assertThatThrownBy(() -> concurrentOperation(operation, id))
-                        .isInstanceOf(
-                            operation.equals("delete")
-                                ? ServiceException.class
-                                : ConflictException.class);
-                  } finally {
-                    clear();
-                  }
+                  assertThatThrownBy(() -> concurrentOperation(operation, id))
+                      .isInstanceOf(
+                          operation.equals("delete")
+                              ? ServiceException.class
+                              : ConflictException.class);
                 });
         assertDatabaseLockWait();
         release.countDown();
@@ -590,8 +566,8 @@ class ServiceAuditIntegrationTest {
 
   private void concurrentOperation(String operation, String id) {
     switch (operation) {
-      case "update" -> settings.update(currentStore(), id, changed(1), STAFF);
-      case "delete" -> settings.delete(currentStore(), id, 1, STAFF);
+      case "update" -> settings.update(currentStore(), id, changed(1), staffId);
+      case "delete" -> settings.delete(currentStore(), id, 1, staffId);
       case "decision" -> decide(id, 1, 0, ConsentDecision.ACCEPTED);
       default -> throw new AssertionError(operation);
     }

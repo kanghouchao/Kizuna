@@ -1,9 +1,9 @@
 package com.kizuna.advertising;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -36,15 +36,16 @@ import com.kizuna.advertising.domain.AdvertisingOrderCostReport;
 import com.kizuna.advertising.domain.AdvertisingRecruitmentEffectReport;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -57,11 +58,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.test.context.TestSecurityContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
@@ -88,32 +85,16 @@ class AdvertisingControllerTest {
   @MockitoBean StoreExistenceCheck stores;
   @MockitoBean StoreScopeResolver storeScopeResolver;
 
-  private static TestActor actor() {
-    return new TestActor();
-  }
-
-  private static class TestActor {
-    RequestPostProcessor authorities(Collection<? extends GrantedAuthority> authorities) {
-      var authentication = new UsernamePasswordAuthenticationToken("actor", "unused", authorities);
-      TestSecurityContextHolder.setAuthentication(authentication);
-      return request -> {
-        request.setUserPrincipal(authentication);
-        return request;
-      };
-    }
-  }
-
   @BeforeEach
   void setup() {
     when(stores.exists(anyLong())).thenReturn(true);
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(1L, 7L)));
   }
 
   private RequestPostProcessor permissions(String... permissions) {
-    return actor()
-        .authorities(
-            Arrays.stream(permissions)
-                .map(p -> new SimpleGrantedAuthority("PERM_ADVERTISING_COST_" + p))
-                .toList());
+    return jwtUser(
+        42L,
+        Arrays.stream(permissions).map(p -> "PERM_ADVERTISING_COST_" + p).toArray(String[]::new));
   }
 
   private String body() {
@@ -149,7 +130,7 @@ class AdvertisingControllerTest {
   @Test
   void creationPreservesRequiredNullFields() throws Exception {
     var at = OffsetDateTime.now();
-    when(service.create(any(), any(), anyString()))
+    when(service.create(any(), any(), anyLong()))
         .thenReturn(
             new CostView(
                 "c",
@@ -180,7 +161,7 @@ class AdvertisingControllerTest {
     assertThat(result.getResponse().getContentAsString())
         .contains("\"inquiry_count\":null", "\"agency_name\":null", "\"plan_name\":null");
     var request = ArgumentCaptor.forClass(AdvertisingCommand.Create.class);
-    verify(service).create(eq(1L), request.capture(), anyString());
+    verify(service).create(eq(1L), request.capture(), anyLong());
     assertThat(request.getValue().mediumId()).isEqualTo("m1");
   }
 
@@ -217,7 +198,7 @@ class AdvertisingControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body()))
         .andExpect(status().isCreated());
-    verify(service).create(eq(7L), any(), eq("actor"));
+    verify(service).create(eq(7L), any(), eq(42L));
   }
 
   @Test
@@ -396,9 +377,7 @@ class AdvertisingControllerTest {
   }
 
   private RequestPostProcessor orderPermissions(String... codes) {
-    return actor()
-        .authorities(
-            Arrays.stream(codes).map(c -> new SimpleGrantedAuthority("PERM_" + c)).toList());
+    return jwtUser(42L, Arrays.stream(codes).map(c -> "PERM_" + c).toArray(String[]::new));
   }
 
   @Test

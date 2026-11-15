@@ -9,6 +9,7 @@ import com.kizuna.remuneration.api.dto.RemunerationRequests.CancellationRequest;
 import com.kizuna.remuneration.application.RemunerationManagementService;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.shared.web.Replays;
 import jakarta.validation.Valid;
 import java.security.Principal;
@@ -59,8 +60,8 @@ public class BonusController {
     return BonusMutationResponse.of(
         Replays.write(
             DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-            () -> service.createBonus(storeId, command, principal.getName()),
-            () -> service.replayBonus(storeId, command, principal.getName())));
+            () -> service.createBonus(storeId, command, JwtClaims.userIdOf(principal)),
+            () -> service.replayBonus(storeId, command, JwtClaims.userIdOf(principal))));
   }
 
   @PostMapping("/{id}/corrections")
@@ -76,8 +77,8 @@ public class BonusController {
     return BonusMutationResponse.of(
         Replays.write(
             DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-            () -> service.correctBonus(storeId, command, principal.getName()),
-            () -> service.replayBonus(storeId, command, principal.getName())));
+            () -> service.correctBonus(storeId, command, JwtClaims.userIdOf(principal)),
+            () -> service.replayBonus(storeId, command, JwtClaims.userIdOf(principal))));
   }
 
   @PostMapping("/{id}/cancellation")
@@ -92,8 +93,8 @@ public class BonusController {
     return BonusMutationResponse.of(
         Replays.write(
             DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-            () -> service.cancelBonus(storeId, command, principal.getName()),
-            () -> service.replayBonus(storeId, command, principal.getName())));
+            () -> service.cancelBonus(storeId, command, JwtClaims.userIdOf(principal)),
+            () -> service.replayBonus(storeId, command, JwtClaims.userIdOf(principal))));
   }
 
   @GetMapping("/{id}/changes")

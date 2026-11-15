@@ -15,7 +15,6 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.store.domain.StoreRepository;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import java.util.Map;
 import java.util.function.Function;
@@ -35,15 +34,14 @@ public class OwnServiceConditionService {
   private final ServiceConsentRepository consents;
   private final ServiceConsentEventRepository events;
   private final CastEnrollmentRepository enrollments;
-  private final ActorIdentityService actors;
   private final StoreRepository stores;
   private final SpecialServiceRejectionHandler rejectionHandler;
   private final BusinessAudit audit;
 
   @Transactional(readOnly = true)
   public Page<OwnServiceCondition> list(
-      Long storeId, String actor, ServiceKind kind, Pageable pageable) {
-    String enrollment = requireEnrollment(storeId, actors.requireUserId(actor));
+      Long storeId, long actorId, ServiceKind kind, Pageable pageable) {
+    String enrollment = requireEnrollment(storeId, actorId);
     Specification<ServiceItem> filter =
         (root, query, cb) ->
             cb.and(cb.equal(root.get("storeId"), storeId), cb.isFalse(root.get("deleted")));
@@ -61,9 +59,8 @@ public class OwnServiceConditionService {
 
   @Transactional
   public OwnServiceCondition decide(
-      Long storeId, String actor, String id, OwnConsentCommand command) {
+      Long storeId, long actorId, String id, OwnConsentCommand command) {
     stores.lockCastFields(storeId);
-    Long actorId = actors.requireUserId(actor);
     String enrollment = requireEnrollment(storeId, actorId);
     var item =
         items

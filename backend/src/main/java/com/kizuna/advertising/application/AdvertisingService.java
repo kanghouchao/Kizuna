@@ -21,7 +21,6 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.ServiceUnavailableException;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -48,7 +47,6 @@ public class AdvertisingService {
   private final MediumLookup mediumLookup;
   private final AdvertisingChangeRepository changes;
   private final OperationReceipts receipts;
-  private final ActorIdentityService actors;
   private final BusinessAudit audit;
   private final ObjectMapper json;
   private final Clock clock;
@@ -103,11 +101,11 @@ public class AdvertisingService {
   }
 
   @Transactional(timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
-  public CostView create(Long storeId, AdvertisingCommand.Create command, String actor) {
+  public CostView create(Long storeId, AdvertisingCommand.Create command, long actorId) {
     var month = AdvertisingInput.month(command.month());
     var values = command.values();
     return receipts.once(
-        key(storeId, actor, command.requestId()),
+        key(storeId, actorId, command.requestId()),
         command.fingerprint(),
         () -> {
           var selected = mediumLookup.findAll(storeId, Set.of(values.mediumId()));
@@ -120,17 +118,17 @@ public class AdvertisingService {
           MediumLookup.flush(records::flush, DbConstraint.FK_T_ADVERTISING_COSTS_MEDIUM);
           var after =
               CostView.of(cost, MediumLookup.referenced(selected, cost.getMediumId()).name());
-          change(storeId, actor, month, "CREATED", null, after, null, null);
+          change(storeId, actorId, month, "CREATED", null, after, null, null);
           return committed("CREATED", cost);
         },
         receipt -> recorded(storeId, receipt));
   }
 
   @Transactional(timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
-  public CostView replace(Long storeId, AdvertisingCommand.Replace command, String actor) {
+  public CostView replace(Long storeId, AdvertisingCommand.Replace command, long actorId) {
     var values = command.values();
     return receipts.once(
-        key(storeId, actor, command.requestId()),
+        key(storeId, actorId, command.requestId()),
         command.fingerprint(),
         () -> {
           var cost = locked(storeId, command.id());
@@ -146,7 +144,8 @@ public class AdvertisingService {
           MediumLookup.flush(records::flush, DbConstraint.FK_T_ADVERTISING_COSTS_MEDIUM);
           var after =
               CostView.of(cost, MediumLookup.referenced(selected, cost.getMediumId()).name());
-          change(storeId, actor, cost.getMonth(), "UPDATED", before, after, command.reason(), null);
+          change(
+              storeId, actorId, cost.getMonth(), "UPDATED", before, after, command.reason(), null);
           return committed("UPDATED", cost);
         },
         receipt -> recorded(storeId, receipt));
@@ -154,17 +153,17 @@ public class AdvertisingService {
 
   /** 作成と置換の要求キーの一意制約に敗れた要求を、成立済みの受領から解決する。 */
   @Transactional(readOnly = true)
-  public CostView replayCost(Long storeId, AdvertisingCommand command, String actor) {
+  public CostView replayCost(Long storeId, AdvertisingCommand command, long actorId) {
     return receipts.replayOnly(
-        key(storeId, actor, command.requestId()),
+        key(storeId, actorId, command.requestId()),
         command.fingerprint(),
         receipt -> recorded(storeId, receipt));
   }
 
   @Transactional(timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
-  public void delete(Long storeId, AdvertisingCommand.Delete command, String actor) {
+  public void delete(Long storeId, AdvertisingCommand.Delete command, long actorId) {
     receipts.once(
-        key(storeId, actor, command.requestId()),
+        key(storeId, actorId, command.requestId()),
         command.fingerprint(),
         () -> {
           var cost = locked(storeId, command.id());
@@ -173,16 +172,17 @@ public class AdvertisingService {
           cost.delete();
           records.advance(storeId, cost.getMonth());
           records.flush();
-          change(storeId, actor, cost.getMonth(), "DELETED", before, null, command.reason(), null);
+          change(
+              storeId, actorId, cost.getMonth(), "DELETED", before, null, command.reason(), null);
           return committed("DELETED", cost);
         },
         receipt -> null);
   }
 
   @Transactional(readOnly = true)
-  public void replayDelete(Long storeId, AdvertisingCommand.Delete command, String actor) {
+  public void replayDelete(Long storeId, AdvertisingCommand.Delete command, long actorId) {
     receipts.replayOnly(
-        key(storeId, actor, command.requestId()), command.fingerprint(), receipt -> null);
+        key(storeId, actorId, command.requestId()), command.fingerprint(), receipt -> null);
   }
 
   private AdvertisingCost locked(Long storeId, String id) {
@@ -192,11 +192,11 @@ public class AdvertisingService {
   }
 
   @Transactional(timeoutString = "#{@appProperties.advertisingCost.readTimeoutSeconds}")
-  public CopyResult copy(Long storeId, AdvertisingCommand.Copy command, String actor) {
+  public CopyResult copy(Long storeId, AdvertisingCommand.Copy command, long actorId) {
     String target = command.targetMonth();
     String source = source(target);
     return receipts.once(
-        key(storeId, actor, command.requestId()),
+        key(storeId, actorId, command.requestId()),
         command.fingerprint(),
         () -> {
           records.lockMonth(storeId, source);
@@ -218,7 +218,7 @@ public class AdvertisingService {
             records.flush();
             change(
                 storeId,
-                actor,
+                actorId,
                 target,
                 "COPIED",
                 null,
@@ -245,10 +245,10 @@ public class AdvertisingService {
   }
 
   @Transactional(readOnly = true)
-  public CopyResult replayCopy(Long storeId, AdvertisingCommand.Copy command, String actor) {
+  public CopyResult replayCopy(Long storeId, AdvertisingCommand.Copy command, long actorId) {
     source(command.targetMonth());
     return receipts.replayOnly(
-        key(storeId, actor, command.requestId()),
+        key(storeId, actorId, command.requestId()),
         command.fingerprint(),
         receipt -> copied(storeId, receipt));
   }
@@ -359,8 +359,8 @@ public class AdvertisingService {
     return new ServiceUnavailableException("広告費が処理可能な上限を超えています。対象を確認してください");
   }
 
-  private ReceiptKey key(Long storeId, String actor, UUID requestId) {
-    return new ReceiptKey(storeId, actors.requireUserId(actor), requestId.toString());
+  private ReceiptKey key(Long storeId, long actorId, UUID requestId) {
+    return new ReceiptKey(storeId, actorId, requestId.toString());
   }
 
   private static Committed committed(String action, AdvertisingCost cost) {
@@ -379,7 +379,7 @@ public class AdvertisingService {
 
   private void change(
       Long storeId,
-      String actor,
+      long actorId,
       String month,
       String action,
       CostView before,
@@ -391,7 +391,7 @@ public class AdvertisingService {
         AdvertisingChange.builder()
             .month(month)
             .costId(id)
-            .actorId(actors.requireUserId(actor))
+            .actorId(actorId)
             .action(action)
             .reason(reason)
             .sourceCostId(source)
@@ -403,8 +403,8 @@ public class AdvertisingService {
     c.setStoreId(storeId);
     records.persist(c);
     records.flush();
-    audit.record(
-        actor,
+    audit.recordById(
+        actorId,
         storeId,
         "ADVERTISING_COST_" + action,
         "ADVERTISING_COST",

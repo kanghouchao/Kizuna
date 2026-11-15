@@ -2,9 +2,7 @@ package com.kizuna.advertising;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import com.kizuna.advertising.api.dto.AdvertisingRequests.CreateRequest;
 import com.kizuna.advertising.api.dto.AdvertisingRequests.DeleteRequest;
@@ -29,7 +27,6 @@ import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.store.StoreShortNames;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import java.time.Clock;
 import java.util.Map;
@@ -57,6 +54,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class AdvertisingMediumIntegrationTest {
   private static final String ACTOR = "advertising-medium@example.test";
+  private long actorId;
   private ConfigurableApplicationContext context;
   private JdbcTemplate jdbc;
   private AdvertisingService costs;
@@ -83,12 +81,11 @@ class AdvertisingMediumIntegrationTest {
     jdbc = context.getBean(JdbcTemplate.class);
     costs = context.getBean(AdvertisingService.class);
     media = context.getBean(MediumService.class);
-    long actorId =
+    actorId =
         jdbc.queryForObject(
             "insert into t_users(email,display_name,user_type) values (?,'広告担当','STAFF') returning id",
             Long.class,
             ACTOR);
-    when(context.getBean(ActorIdentityService.class).requireUserId(any())).thenReturn(actorId);
   }
 
   @AfterAll
@@ -132,7 +129,7 @@ class AdvertisingMediumIntegrationTest {
     costs.delete(
         store,
         new DeleteRequest(cost.version(), "誤入力", UUID.randomUUID()).command(cost.id()),
-        ACTOR);
+        actorId);
 
     assertThatThrownBy(() -> media.delete(store, id, 0L))
         .isInstanceOf(ConflictException.class)
@@ -163,7 +160,7 @@ class AdvertisingMediumIntegrationTest {
                 "修正",
                 UUID.randomUUID())
             .command(cost.id()),
-        ACTOR);
+        actorId);
 
     media.rename(store, id, "新名", 0L);
 
@@ -210,7 +207,7 @@ class AdvertisingMediumIntegrationTest {
                 100,
                 UUID.randomUUID())
             .command(),
-        ACTOR);
+        actorId);
   }
 
   private long store() {
@@ -248,11 +245,6 @@ class AdvertisingMediumIntegrationTest {
     @Bean
     AppProperties appProperties() {
       return new AppProperties();
-    }
-
-    @Bean
-    ActorIdentityService actors() {
-      return mock(ActorIdentityService.class);
     }
 
     @Bean

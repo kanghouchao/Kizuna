@@ -15,6 +15,7 @@ import com.kizuna.advertising.application.AdvertisingFailures;
 import com.kizuna.advertising.application.AdvertisingService;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.shared.web.Replays;
 import jakarta.validation.Valid;
 import java.security.Principal;
@@ -81,8 +82,8 @@ public class AdvertisingCostController {
             () ->
                 Replays.write(
                     DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-                    () -> service.create(storeId, command, actor.getName()),
-                    () -> service.replayCost(storeId, command, actor.getName()))));
+                    () -> service.create(storeId, command, JwtClaims.userIdOf(actor)),
+                    () -> service.replayCost(storeId, command, JwtClaims.userIdOf(actor)))));
   }
 
   @PutMapping("/advertising-costs/{id}")
@@ -99,8 +100,8 @@ public class AdvertisingCostController {
             () ->
                 Replays.write(
                     DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-                    () -> service.replace(storeId, command, actor.getName()),
-                    () -> service.replayCost(storeId, command, actor.getName()))));
+                    () -> service.replace(storeId, command, JwtClaims.userIdOf(actor)),
+                    () -> service.replayCost(storeId, command, JwtClaims.userIdOf(actor)))));
   }
 
   @DeleteMapping("/advertising-costs/{id}")
@@ -118,11 +119,11 @@ public class AdvertisingCostController {
             Replays.write(
                 DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
                 () -> {
-                  service.delete(storeId, command, actor.getName());
+                  service.delete(storeId, command, JwtClaims.userIdOf(actor));
                   return true;
                 },
                 () -> {
-                  service.replayDelete(storeId, command, actor.getName());
+                  service.replayDelete(storeId, command, JwtClaims.userIdOf(actor));
                   return true;
                 }));
   }
@@ -151,8 +152,8 @@ public class AdvertisingCostController {
             () ->
                 Replays.write(
                     DbConstraint.UQ_T_OPERATION_RECEIPTS_KEY,
-                    () -> service.copy(storeId, command, actor.getName()),
-                    () -> service.replayCopy(storeId, command, actor.getName()))));
+                    () -> service.copy(storeId, command, JwtClaims.userIdOf(actor)),
+                    () -> service.replayCopy(storeId, command, JwtClaims.userIdOf(actor)))));
   }
 
   @GetMapping("/advertising-cost-months/{month}/changes")

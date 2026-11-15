@@ -53,9 +53,7 @@ class ServiceAuditTest {
 
   @BeforeEach
   void setup() {
-    settings =
-        new ServiceSettingsService(
-            items, revisions, new ActorIdentityService(users), mock(StoreRepository.class), audit);
+    settings = new ServiceSettingsService(items, revisions, mock(StoreRepository.class), audit);
     var actor =
         User.builder()
             .email("operator@example.test")
@@ -65,7 +63,6 @@ class ServiceAuditTest {
             .roleIds(Set.of(1L))
             .build();
     actor.setId(9L);
-    when(users.findByEmail("operator@example.test")).thenReturn(Optional.of(actor));
     when(users.findById(9L)).thenReturn(Optional.of(actor));
     when(events.saveAndFlush(any()))
         .thenAnswer(
@@ -98,7 +95,7 @@ class ServiceAuditTest {
                 STORE_ID,
                 new ServiceSettingsCommand.Create(
                     ServiceKind.COURSE, "秘密の名称", 60, null, 12000, 6000),
-                "operator@example.test"))
+                9L))
         .isEqualTo("service");
     assertThat(recorded)
         .singleElement()
@@ -135,13 +132,13 @@ class ServiceAuditTest {
         STORE_ID,
         "service",
         new ServiceSettingsCommand.Update("旧い秘密", 60, null, 12000, 6000, 1L),
-        "operator@example.test");
+        9L);
     assertThat(recorded).isEmpty();
     settings.update(
         STORE_ID,
         "service",
         new ServiceSettingsCommand.Update("新しい秘密", 60, null, 12000, 6000, 1L),
-        "operator@example.test");
+        9L);
     assertThat(recorded)
         .singleElement()
         .satisfies(
@@ -161,7 +158,7 @@ class ServiceAuditTest {
                   .containsEntry("terms_version", "1");
               assertThat(event.getSourceId()).isEqualTo("revision");
             });
-    settings.delete(STORE_ID, "service", 2L, "operator@example.test");
+    settings.delete(STORE_ID, "service", 2L, 9L);
     assertThat(recorded).hasSize(2);
     assertThat(recorded.getLast().getAction()).isEqualTo("SERVICE_DELETED");
     assertThat(recorded.getLast().getAfterValues())
@@ -187,15 +184,7 @@ class ServiceAuditTest {
             actors);
     var own =
         new OwnServiceConditionService(
-            items,
-            revisions,
-            consents,
-            consentEvents,
-            enrollments,
-            actors,
-            stores,
-            rejection,
-            audit);
+            items, revisions, consents, consentEvents, enrollments, stores, rejection, audit);
     var item =
         ServiceItem.create(
             STORE_ID,
@@ -226,11 +215,7 @@ class ServiceAuditTest {
               event.setId("decision-event");
               return event;
             });
-    own.decide(
-        STORE_ID,
-        "operator@example.test",
-        "service",
-        new OwnConsentCommand(1L, 0L, ConsentDecision.ACCEPTED));
+    own.decide(STORE_ID, 9L, "service", new OwnConsentCommand(1L, 0L, ConsentDecision.ACCEPTED));
     assertThat(recorded)
         .singleElement()
         .satisfies(
@@ -255,17 +240,9 @@ class ServiceAuditTest {
                   .containsEntry("decision", "ACCEPTED")
                   .containsEntry("service_revision_id", "revision");
             });
-    own.decide(
-        STORE_ID,
-        "operator@example.test",
-        "service",
-        new OwnConsentCommand(1L, 1L, ConsentDecision.ACCEPTED));
+    own.decide(STORE_ID, 9L, "service", new OwnConsentCommand(1L, 1L, ConsentDecision.ACCEPTED));
     assertThat(recorded).hasSize(1);
-    own.decide(
-        STORE_ID,
-        "operator@example.test",
-        "service",
-        new OwnConsentCommand(1L, 1L, ConsentDecision.REJECTED));
+    own.decide(STORE_ID, 9L, "service", new OwnConsentCommand(1L, 1L, ConsentDecision.REJECTED));
     assertThat(recorded).hasSize(2);
     assertThat(recorded.getLast().getBeforeValues()).containsEntry("decision", "ACCEPTED");
     assertThat(recorded.getLast().getAfterValues()).containsEntry("decision", "REJECTED");

@@ -5,6 +5,7 @@ import com.kizuna.remuneration.api.dto.StatementAcceptanceResponse;
 import com.kizuna.remuneration.application.StatementAcceptanceService;
 import com.kizuna.remuneration.application.StatementAcceptanceService.Acceptance;
 import com.kizuna.shared.exception.DbConstraint;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.shared.web.Replays;
 import jakarta.validation.Valid;
 import java.security.Principal;
@@ -32,8 +33,8 @@ public class SelfStatementAcceptanceController {
     Acceptance result =
         Replays.write(
             DbConstraint.UQ_T_STATEMENT_ACCEPTANCES_CONTENT,
-            () -> service.accept(principal.getName(), command),
-            () -> service.existing(principal.getName(), command));
+            () -> service.accept(JwtClaims.userIdOf(principal), command),
+            () -> service.existing(JwtClaims.userIdOf(principal), command));
     return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK)
         .body(StatementAcceptanceResponse.of(result.summary()));
   }
