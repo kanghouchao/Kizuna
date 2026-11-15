@@ -1,12 +1,14 @@
 package com.kizuna.storeprofile.api;
 
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.storeprofile.api.dto.StoreProfileMapper;
 import com.kizuna.storeprofile.api.dto.StoreProfileResponse;
 import com.kizuna.storeprofile.api.dto.StoreProfileUpdateRequest;
 import com.kizuna.storeprofile.application.StoreProfileService;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
+import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,10 +35,13 @@ public class StoreProfileController {
   @PutMapping
   @PreAuthorize("hasAuthority('PERM_STORE_PROFILE_MANAGE')")
   public ResponseEntity<StoreProfileResponse> update(
-      @CurrentStore Long storeId, @Valid @RequestBody StoreProfileUpdateRequest request) {
+      @CurrentStore Long storeId,
+      @Valid @RequestBody StoreProfileUpdateRequest request,
+      Principal principal) {
     return ResponseEntity.ok(
         storeProfileMapper.toResponse(
-            storeProfileService.update(storeId, storeProfileMapper.toPatch(request))));
+            storeProfileService.update(
+                storeId, JwtClaims.userIdOf(principal), storeProfileMapper.toPatch(request))));
   }
 
   @GetMapping("/public")

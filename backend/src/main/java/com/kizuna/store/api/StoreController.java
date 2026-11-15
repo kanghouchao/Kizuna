@@ -2,6 +2,7 @@ package com.kizuna.store.api;
 
 import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.store.api.dto.AdminStoreCreationResponse;
 import com.kizuna.store.api.dto.AdminStoreResponse;
 import com.kizuna.store.api.dto.StoreCreateDTO;
@@ -11,6 +12,7 @@ import com.kizuna.store.application.AdminStoreService;
 import com.kizuna.store.application.StoreRegistryService;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
+import java.security.Principal;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -87,23 +89,23 @@ public class StoreController {
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_STORE_MANAGE')")
   public ResponseEntity<AdminStoreCreationResponse> create(
-      @Valid @RequestBody StoreCreateDTO store) {
-    Long id = storeRegistryService.create(store.command());
+      @Valid @RequestBody StoreCreateDTO store, Principal principal) {
+    Long id = storeRegistryService.create(JwtClaims.userIdOf(principal), store.command());
     return ResponseEntity.status(HttpStatus.CREATED).body(new AdminStoreCreationResponse(id));
   }
 
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_STORE_MANAGE')")
   public ResponseEntity<Void> update(
-      @PathVariable String id, @Valid @RequestBody StoreUpdateDTO store) {
-    storeRegistryService.update(scope(), id, store.patch());
+      @PathVariable String id, @Valid @RequestBody StoreUpdateDTO store, Principal principal) {
+    storeRegistryService.update(JwtClaims.userIdOf(principal), scope(), id, store.patch());
     return ResponseEntity.noContent().build();
   }
 
   @DeleteMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_STORE_MANAGE')")
-  public ResponseEntity<Void> delete(@PathVariable String id) {
-    storeRegistryService.delete(scope(), id);
+  public ResponseEntity<Void> delete(@PathVariable String id, Principal principal) {
+    storeRegistryService.delete(JwtClaims.userIdOf(principal), scope(), id);
     return ResponseEntity.noContent().build();
   }
 

@@ -1,5 +1,7 @@
 package com.kizuna.medium;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -17,10 +19,12 @@ import com.kizuna.medium.domain.Medium;
 import com.kizuna.medium.domain.MediumStatus;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,10 +32,7 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.test.context.TestSecurityContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
@@ -54,19 +55,11 @@ class MediumControllerTest {
   @BeforeEach
   void setup() {
     when(stores.exists(anyLong())).thenReturn(true);
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(1L)));
   }
 
   private static RequestPostProcessor permissions(String... permissions) {
-    var authentication =
-        new UsernamePasswordAuthenticationToken(
-            "actor",
-            "unused",
-            Arrays.stream(permissions).map(p -> new SimpleGrantedAuthority("PERM_" + p)).toList());
-    TestSecurityContextHolder.setAuthentication(authentication);
-    return request -> {
-      request.setUserPrincipal(authentication);
-      return request;
-    };
+    return jwtUser(42L, Arrays.stream(permissions).map(p -> "PERM_" + p).toArray(String[]::new));
   }
 
   private static MockHttpServletRequestBuilder json(
@@ -112,10 +105,10 @@ class MediumControllerTest {
   @Test
   void managersCreateRenameStopResumeAndDelete() throws Exception {
     var summary = medium("m1", "新名", MediumStatus.ACTIVE, 1L);
-    when(service.create(1L, "ヘブン")).thenReturn("m1");
-    when(service.rename(1L, "m1", "新名", 0L)).thenReturn(summary);
-    when(service.stop(1L, "m1", 1L)).thenReturn(summary);
-    when(service.resume(1L, "m1", 2L)).thenReturn(summary);
+    when(service.create(1L, 42L, "ヘブン")).thenReturn("m1");
+    when(service.rename(1L, 42L, "m1", "新名", 0L)).thenReturn(summary);
+    when(service.stop(1L, 42L, "m1", 1L)).thenReturn(summary);
+    when(service.resume(1L, 42L, "m1", 2L)).thenReturn(summary);
     var manage = permissions("ADVERTISING_COST_MANAGE");
 
     mvc.perform(json(post("/media"), "{\"name\":\" ヘブン \"}").with(manage))
@@ -130,7 +123,7 @@ class MediumControllerTest {
         .andExpect(status().isOk());
     mvc.perform(delete("/media/m1").param("version", "3").header("X-Store-ID", "1").with(manage))
         .andExpect(status().isNoContent());
-    verify(service).delete(1L, "m1", 3L);
+    verify(service).delete(1L, 42L, "m1", 3L);
   }
 
   @Test

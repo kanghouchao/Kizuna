@@ -380,7 +380,8 @@ class CredentialRevocationIntegrationTest {
               Set.of(PermissionCode.CUSTOMER_MANAGE.name()),
               roleVersion);
       Future<?> change =
-          executor.submit(() -> context.getBean(RoleService.class).update(changed, command));
+          executor.submit(
+              () -> context.getBean(RoleService.class).update(grantee.getId(), changed, command));
       awaitLockWait();
       proceed.countDown();
       grant.get(10, TimeUnit.SECONDS);

@@ -8,6 +8,7 @@ import com.kizuna.auth.api.dto.Token;
 import com.kizuna.auth.application.LineAuthService;
 import com.kizuna.auth.application.LineLogin;
 import com.kizuna.auth.infrastructure.RefreshTokenCookies;
+import com.kizuna.shared.web.JwtClaims;
 import jakarta.annotation.security.PermitAll;
 import jakarta.validation.Valid;
 import java.security.Principal;
@@ -68,7 +69,7 @@ public class LineController {
   @PreAuthorize("isAuthenticated()")
   public ResponseEntity<Void> link(
       Principal principal, @Valid @RequestBody LineAuthorizationRequest request) {
-    lineAuthService.link(principal.getName(), request.command());
+    lineAuthService.link(JwtClaims.userIdOf(principal), request.command());
     return ResponseEntity.noContent().build();
   }
 }

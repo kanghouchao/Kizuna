@@ -77,13 +77,13 @@ class StoreRegistryServiceTest {
     t.setId(1L);
     when(storeRepository.saveAndFlush(any())).thenReturn(t);
 
-    assertThat(storeRegistryService.create(command)).isEqualTo(1L);
+    assertThat(storeRegistryService.create(9L, command)).isEqualTo(1L);
 
     ArgumentCaptor<Store> saved = ArgumentCaptor.forClass(Store.class);
     verify(storeRepository).saveAndFlush(saved.capture());
     assertThat(saved.getValue().getShortName()).isEqualTo("新宿西");
     verify(storeProfileRepository).save(any());
-    verify(createdStoreGrant).grantToCurrent(1L);
+    verify(createdStoreGrant).grantToCreator(9L, 1L);
   }
 
   @Test
@@ -93,7 +93,7 @@ class StoreRegistryServiceTest {
     when(storeRepository.findByDomain("taken.example.com"))
         .thenReturn(Optional.of(createStore(9L, "既存", "taken.example.com")));
 
-    assertThatThrownBy(() -> storeRegistryService.create(command))
+    assertThatThrownBy(() -> storeRegistryService.create(9L, command))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("既に登録されています");
 
@@ -106,7 +106,7 @@ class StoreRegistryServiceTest {
     var command = new StoreCreateCommand("T3", "新宿", "fresh.example.com");
     when(storeRepository.saveAndFlush(any())).thenThrow(shortNameViolation());
 
-    assertThatThrownBy(() -> storeRegistryService.create(command))
+    assertThatThrownBy(() -> storeRegistryService.create(9L, command))
         .isInstanceOf(ConflictException.class)
         .hasMessage("この略称は既に使われています");
 
@@ -120,7 +120,7 @@ class StoreRegistryServiceTest {
     when(storeRepository.saveAndFlush(t)).thenThrow(shortNameViolation());
     var patch = new StorePatch("New", "新宿");
 
-    assertThatThrownBy(() -> storeRegistryService.update(ALL, "1", patch))
+    assertThatThrownBy(() -> storeRegistryService.update(9L, ALL, "1", patch))
         .isInstanceOf(ConflictException.class)
         .hasMessage("この略称は既に使われています");
   }
@@ -195,7 +195,7 @@ class StoreRegistryServiceTest {
 
     var patch = new StorePatch("New", "新");
 
-    storeRegistryService.update(ALL, "1", patch);
+    storeRegistryService.update(9L, ALL, "1", patch);
 
     assertThat(t.getName()).isEqualTo("New");
     assertThat(t.getShortName()).isEqualTo("新");
@@ -208,7 +208,7 @@ class StoreRegistryServiceTest {
 
     var patch = new StorePatch("New", null);
 
-    assertThatThrownBy(() -> storeRegistryService.update(ALL, "99", patch))
+    assertThatThrownBy(() -> storeRegistryService.update(9L, ALL, "99", patch))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("店舗が見つかりません");
   }
@@ -219,7 +219,7 @@ class StoreRegistryServiceTest {
     when(completedOrderCheck.existsForStore(1L)).thenReturn(false);
     when(pointLedgerService.hasEntriesForStore(1L)).thenReturn(false);
 
-    storeRegistryService.delete(ALL, "1");
+    storeRegistryService.delete(9L, ALL, "1");
 
     verify(storeRepository).deleteById(1L);
   }
@@ -231,7 +231,7 @@ class StoreRegistryServiceTest {
     active.activate();
     when(storeRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(active));
 
-    assertThatThrownBy(() -> storeRegistryService.delete(ALL, "1"))
+    assertThatThrownBy(() -> storeRegistryService.delete(9L, ALL, "1"))
         .isInstanceOf(ServiceException.class)
         .hasMessage("稼働中の店舗は削除できません");
     verify(storeRepository, never()).deleteById(any());
@@ -242,7 +242,7 @@ class StoreRegistryServiceTest {
     when(storeRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(preparingStore(1L)));
     when(completedOrderCheck.existsForStore(1L)).thenReturn(true);
 
-    assertThatThrownBy(() -> storeRegistryService.delete(ALL, "1"))
+    assertThatThrownBy(() -> storeRegistryService.delete(9L, ALL, "1"))
         .isInstanceOf(ServiceException.class)
         .hasMessage("完了済みの受注またはポイント仕訳が存在する店舗は削除できません");
     verify(storeRepository, never()).deleteById(any());
@@ -255,7 +255,7 @@ class StoreRegistryServiceTest {
     when(completedOrderCheck.existsForStore(1L)).thenReturn(false);
     when(pointLedgerService.hasEntriesForStore(1L)).thenReturn(true);
 
-    assertThatThrownBy(() -> storeRegistryService.delete(ALL, "1"))
+    assertThatThrownBy(() -> storeRegistryService.delete(9L, ALL, "1"))
         .isInstanceOf(ServiceException.class)
         .hasMessage("完了済みの受注またはポイント仕訳が存在する店舗は削除できません");
     verify(storeRepository, never()).deleteById(any());
@@ -268,7 +268,7 @@ class StoreRegistryServiceTest {
     when(pointLedgerService.hasEntriesForStore(1L)).thenReturn(false);
     when(attendanceRecordCheck.existsForStore(1L)).thenReturn(true);
 
-    assertThatThrownBy(() -> storeRegistryService.delete(ALL, "1"))
+    assertThatThrownBy(() -> storeRegistryService.delete(9L, ALL, "1"))
         .isInstanceOf(ServiceException.class)
         .hasMessage("当日実績が記録されている店舗は削除できません");
     verify(storeRepository, never()).deleteById(any());
@@ -290,7 +290,7 @@ class StoreRegistryServiceTest {
         .when(storeRepository)
         .flush();
 
-    assertThatThrownBy(() -> storeRegistryService.delete(ALL, "1"))
+    assertThatThrownBy(() -> storeRegistryService.delete(9L, ALL, "1"))
         .isInstanceOf(ServiceException.class)
         .hasMessage(message);
   }
@@ -305,7 +305,7 @@ class StoreRegistryServiceTest {
                 new ConstraintViolationException("違反", new SQLException("外部キー違反"), constraint)))
         .when(storeRepository)
         .flush();
-    assertThatThrownBy(() -> storeRegistryService.delete(ALL, "1"))
+    assertThatThrownBy(() -> storeRegistryService.delete(9L, ALL, "1"))
         .isInstanceOf(ConflictException.class)
         .hasMessage("非公開添付の記録が存在する店舗は削除できません");
   }
@@ -314,14 +314,14 @@ class StoreRegistryServiceTest {
   void delete_missingStore_throwsNotFound() {
     when(storeRepository.findByIdForUpdate(99L)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> storeRegistryService.delete(ALL, "99"))
+    assertThatThrownBy(() -> storeRegistryService.delete(9L, ALL, "99"))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("店舗が見つかりません");
   }
 
   @Test
   void delete_throwsOnInvalidId() {
-    assertThatThrownBy(() -> storeRegistryService.delete(ALL, "invalid"))
+    assertThatThrownBy(() -> storeRegistryService.delete(9L, ALL, "invalid"))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("店舗 ID の形式が不正です");
   }
@@ -347,9 +347,9 @@ class StoreRegistryServiceTest {
 
     assertThatThrownBy(() -> storeRegistryService.getById(ONLY_2, "1"))
         .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> storeRegistryService.update(ONLY_2, "1", patch))
+    assertThatThrownBy(() -> storeRegistryService.update(9L, ONLY_2, "1", patch))
         .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> storeRegistryService.delete(ONLY_2, "1"))
+    assertThatThrownBy(() -> storeRegistryService.delete(9L, ONLY_2, "1"))
         .isInstanceOf(NotFoundException.class);
 
     verify(storeRepository, never()).findById(any());

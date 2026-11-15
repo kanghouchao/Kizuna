@@ -101,7 +101,7 @@ class ServiceIdentityServiceTest {
               return saved;
             });
 
-    ServiceIdentityViews.Detail res = service.create(createCommand(Set.of(CUSTOM_ROLE)));
+    ServiceIdentityViews.Detail res = service.create(9L, createCommand(Set.of(CUSTOM_ROLE)));
 
     User saved = userCaptor.getValue();
     var order = inOrder(roleRepository, repository);
@@ -123,7 +123,7 @@ class ServiceIdentityServiceTest {
     when(roleRepository.findAllById(Set.of(CUSTOM_ROLE, SYSTEM_ROLE)))
         .thenReturn(List.of(role(CUSTOM_ROLE, "バッチ実行", false), role(SYSTEM_ROLE, "任意の名称", true)));
 
-    assertThatThrownBy(() -> service.create(createCommand(Set.of(CUSTOM_ROLE, SYSTEM_ROLE))))
+    assertThatThrownBy(() -> service.create(9L, createCommand(Set.of(CUSTOM_ROLE, SYSTEM_ROLE))))
         .isInstanceOf(InvalidRoleGrantException.class);
     verify(repository, never()).saveAndFlush(any());
   }
@@ -134,7 +134,7 @@ class ServiceIdentityServiceTest {
     when(roleRepository.findAllById(Set.of(CUSTOM_ROLE, 99L)))
         .thenReturn(List.of(role(CUSTOM_ROLE, "バッチ実行", false)));
 
-    assertThatThrownBy(() -> service.create(createCommand(Set.of(CUSTOM_ROLE, 99L))))
+    assertThatThrownBy(() -> service.create(9L, createCommand(Set.of(CUSTOM_ROLE, 99L))))
         .isInstanceOf(ServiceException.class);
   }
 
@@ -147,7 +147,8 @@ class ServiceIdentityServiceTest {
     when(repository.findById(5L)).thenReturn(Optional.of(existing));
     when(repository.saveAndFlush(existing)).thenReturn(existing);
 
-    ServiceIdentityViews.Detail res = service.update(5L, updateCommand(Set.of(CUSTOM_ROLE), 0L));
+    ServiceIdentityViews.Detail res =
+        service.update(9L, 5L, updateCommand(Set.of(CUSTOM_ROLE), 0L));
 
     assertThat(existing.getStoreIds()).containsExactly(2L);
     assertThat(res.storeIds()).containsExactly(2L);
@@ -162,7 +163,7 @@ class ServiceIdentityServiceTest {
     when(roleRepository.findAllById(Set.of(SYSTEM_ROLE)))
         .thenReturn(List.of(role(SYSTEM_ROLE, "任意の名称", true)));
 
-    assertThatThrownBy(() -> service.update(5L, updateCommand(Set.of(SYSTEM_ROLE), 0L)))
+    assertThatThrownBy(() -> service.update(9L, 5L, updateCommand(Set.of(SYSTEM_ROLE), 0L)))
         .isInstanceOf(InvalidRoleGrantException.class);
     verify(repository, never()).saveAndFlush(any());
   }
@@ -174,7 +175,7 @@ class ServiceIdentityServiceTest {
         .thenReturn(List.of(role(CUSTOM_ROLE, "バッチ実行", false)));
     when(repository.findById(5L)).thenReturn(Optional.of(serviceIdentity(5L, Set.of(CUSTOM_ROLE))));
 
-    assertThatThrownBy(() -> service.update(5L, updateCommand(Set.of(CUSTOM_ROLE), 1L)))
+    assertThatThrownBy(() -> service.update(9L, 5L, updateCommand(Set.of(CUSTOM_ROLE), 1L)))
         .isInstanceOf(StaleServiceIdentityUpdateException.class);
   }
 
@@ -195,7 +196,7 @@ class ServiceIdentityServiceTest {
             .build();
     when(repository.findById(6L)).thenReturn(Optional.of(staff));
 
-    assertThatThrownBy(() -> service.update(6L, updateCommand(Set.of(CUSTOM_ROLE), 0L)))
+    assertThatThrownBy(() -> service.update(9L, 6L, updateCommand(Set.of(CUSTOM_ROLE), 0L)))
         .isInstanceOf(NotFoundException.class);
   }
 
@@ -208,10 +209,10 @@ class ServiceIdentityServiceTest {
     when(repository.findByIdForUpdate(5L)).thenReturn(Optional.of(existing));
     when(repository.saveAndFlush(existing)).thenReturn(existing);
 
-    service.suspend(5L);
+    service.suspend(9L, 5L);
     assertThat(existing.getEnabled()).isFalse();
 
-    service.suspend(5L);
+    service.suspend(9L, 5L);
     verify(credentialOperations, times(2)).stop(existing);
     verify(repository).saveAndFlush(existing);
   }
@@ -224,10 +225,10 @@ class ServiceIdentityServiceTest {
     when(repository.findByIdForUpdate(5L)).thenReturn(Optional.of(existing));
     when(repository.saveAndFlush(existing)).thenReturn(existing);
 
-    service.resume(5L);
+    service.resume(9L, 5L);
     assertThat(existing.getEnabled()).isTrue();
 
-    service.resume(5L);
+    service.resume(9L, 5L);
     verify(repository).saveAndFlush(existing);
   }
 

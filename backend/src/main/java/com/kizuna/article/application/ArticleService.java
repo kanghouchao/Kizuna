@@ -64,15 +64,17 @@ public class ArticleService {
   }
 
   @Transactional
-  public String create(Long storeId, String title, String body, String coverImageUrl) {
+  public String create(
+      Long storeId, long actorId, String title, String body, String coverImageUrl) {
     var article = articles.saveAndFlush(Article.write(storeId, title, body, coverImageUrl));
-    record(storeId, "ARTICLE_CREATED", article, absent(), snapshot(article));
+    record(storeId, actorId, "ARTICLE_CREATED", article, absent(), snapshot(article));
     return article.getId();
   }
 
   @Transactional
   public Article edit(
       Long storeId,
+      long actorId,
       String id,
       String title,
       String body,
@@ -85,38 +87,41 @@ public class ArticleService {
     articles.saveAndFlush(article);
     var after = snapshot(article);
     if (bodyChanged) after.put("redacted_fields_changed", "body");
-    record(storeId, "ARTICLE_UPDATED", article, before, after);
+    record(storeId, actorId, "ARTICLE_UPDATED", article, before, after);
     return article;
   }
 
   @Transactional
-  public Article publish(Long storeId, String id, Publication publication, long expectedVersion) {
+  public Article publish(
+      Long storeId, long actorId, String id, Publication publication, long expectedVersion) {
     var article = find(storeId, id);
     article.requireVersion(expectedVersion);
     var before = snapshot(article);
     article.publish(publication);
     articles.saveAndFlush(article);
-    record(storeId, "ARTICLE_PUBLICATION_CHANGED", article, before, snapshot(article));
+    record(storeId, actorId, "ARTICLE_PUBLICATION_CHANGED", article, before, snapshot(article));
     return article;
   }
 
   @Transactional
-  public void delete(Long storeId, String id, long expectedVersion) {
+  public void delete(Long storeId, long actorId, String id, long expectedVersion) {
     var article = find(storeId, id);
     article.requireVersion(expectedVersion);
     var before = snapshot(article);
     articles.delete(article);
     articles.flush();
-    record(storeId, "ARTICLE_DELETED", article, before, absent());
+    record(storeId, actorId, "ARTICLE_DELETED", article, before, absent());
   }
 
   private void record(
       Long storeId,
+      long actorId,
       String action,
       Article article,
       Map<String, String> before,
       Map<String, String> after) {
-    audit.recordCurrent(storeId, action, "ARTICLE", article.getId(), before, after);
+    audit.recordById(
+        actorId, storeId, action, "ARTICLE", article.getId(), null, null, before, after);
   }
 
   /** 本文は監査に複製しない。変わったことは更新の redacted_fields_changed で表す。 */

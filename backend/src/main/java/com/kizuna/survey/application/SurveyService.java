@@ -54,8 +54,8 @@ public class SurveyService {
   private final Clock clock;
 
   @Transactional
-  public Written write(Long storeId, String email, SurveyCommand command) {
-    var actor = identities.requireActor(email);
+  public Written write(Long storeId, long actorId, SurveyCommand command) {
+    var actor = identities.requireActor(actorId);
     return receipts.once(
         new ReceiptKey(storeId, actor.id(), command.key()),
         fingerprint(command),
@@ -63,13 +63,13 @@ public class SurveyService {
           lock(storeId, command);
           var result =
               switch (normalize(storeId, command)) {
-                case SurveyCommand.Create c -> create(storeId, email, actor, c);
-                case SurveyCommand.Revise c -> revise(storeId, email, actor, c);
-                case SurveyCommand.Replace c -> replace(storeId, email, actor, c);
-                case SurveyCommand.RevisionAction c -> transition(storeId, email, actor, c);
-                case SurveyCommand.Receive c -> receive(storeId, email, actor, c);
-                case SurveyCommand.Withdraw c -> withdraw(storeId, email, actor, c);
-                case SurveyCommand.Correct c -> correct(storeId, email, actor, c);
+                case SurveyCommand.Create c -> create(storeId, actor, c);
+                case SurveyCommand.Revise c -> revise(storeId, actor, c);
+                case SurveyCommand.Replace c -> replace(storeId, actor, c);
+                case SurveyCommand.RevisionAction c -> transition(storeId, actor, c);
+                case SurveyCommand.Receive c -> receive(storeId, actor, c);
+                case SurveyCommand.Withdraw c -> withdraw(storeId, actor, c);
+                case SurveyCommand.Correct c -> correct(storeId, actor, c);
               };
           StoreScopedEntity row = result.revision() == null ? result.answer() : result.revision();
           return new Committed(
@@ -81,8 +81,8 @@ public class SurveyService {
   }
 
   @Transactional(readOnly = true)
-  public Written replayOnly(Long storeId, String email, SurveyCommand command) {
-    var actor = identities.requireActor(email);
+  public Written replayOnly(Long storeId, long actorId, SurveyCommand command) {
+    var actor = identities.requireActor(actorId);
     return receipts.replayOnly(
         new ReceiptKey(storeId, actor.id(), command.key()),
         fingerprint(command),
@@ -113,18 +113,18 @@ public class SurveyService {
 
   private record Result(SurveyRevision revision, SurveyAnswer answer, Operation type) {}
 
-  private Result create(Long storeId, String email, AuditActor actor, SurveyCommand.Create c) {
+  private Result create(Long storeId, AuditActor actor, SurveyCommand.Create c) {
     var survey = surveys.saveAndFlush(SurveySeries.create(storeId, actor.id(), actor.name()));
     var revision =
         revisions.saveAndFlush(
             SurveyRevision.draft(survey, 1, null, c.definition(), actor.id(), actor.name()));
     survey.advance(revision.getId());
     surveys.flush();
-    revisionHistory(email, actor, revision, Operation.DRAFT_CREATED, null, null);
+    revisionHistory(actor, revision, Operation.DRAFT_CREATED, null, null);
     return new Result(revision, null, Operation.DRAFT_CREATED);
   }
 
-  private Result revise(Long storeId, String email, AuditActor actor, SurveyCommand.Revise c) {
+  private Result revise(Long storeId, AuditActor actor, SurveyCommand.Revise c) {
     var survey =
         surveys.findByIdAndStoreId(c.surveyId(), storeId).orElseThrow(SurveyService::missing);
     var based = revisionRow(storeId, c.surveyId(), c.basedOn());
@@ -143,22 +143,21 @@ public class SurveyService {
                 actor.name()));
     survey.advance(revision.getId());
     surveys.flush();
-    revisionHistory(email, actor, revision, Operation.DRAFT_CREATED, null, null);
+    revisionHistory(actor, revision, Operation.DRAFT_CREATED, null, null);
     return new Result(revision, null, Operation.DRAFT_CREATED);
   }
 
-  private Result replace(Long storeId, String email, AuditActor actor, SurveyCommand.Replace c) {
+  private Result replace(Long storeId, AuditActor actor, SurveyCommand.Replace c) {
     var row = revisionRow(storeId, c.surveyId(), c.revisionId());
     row.requireVersion(c.version());
     var before = before(row);
     row.replace(c.definition());
     revisions.flush();
-    revisionHistory(email, actor, row, Operation.DRAFT_REPLACED, before, null);
+    revisionHistory(actor, row, Operation.DRAFT_REPLACED, before, null);
     return new Result(row, null, Operation.DRAFT_REPLACED);
   }
 
-  private Result transition(
-      Long storeId, String email, AuditActor actor, SurveyCommand.RevisionAction c) {
+  private Result transition(Long storeId, AuditActor actor, SurveyCommand.RevisionAction c) {
     var row = revisionRow(storeId, c.surveyId(), c.revisionId());
     row.requireVersion(c.version());
     var before = before(row);
@@ -168,11 +167,11 @@ public class SurveyService {
       row.open(now());
     } else row.close(now());
     revisions.flush();
-    revisionHistory(email, actor, row, c.type(), before, c.reason());
+    revisionHistory(actor, row, c.type(), before, c.reason());
     return new Result(row, null, c.type());
   }
 
-  private Result receive(Long storeId, String email, AuditActor actor, SurveyCommand.Receive c) {
+  private Result receive(Long storeId, AuditActor actor, SurveyCommand.Receive c) {
     var revision = revisionRow(storeId, c.surveyId(), c.revisionId());
     revision.requireVersion(c.version());
     revision.require(RevisionStatus.OPEN);
@@ -180,21 +179,21 @@ public class SurveyService {
     var row =
         answers.saveAndFlush(
             SurveyAnswer.receive(revision, c.input(), actor.id(), actor.name(), null));
-    answerHistory(email, actor, row, Operation.RECEIVED, null, null, null);
+    answerHistory(actor, row, Operation.RECEIVED, null, null, null);
     return new Result(null, row, Operation.RECEIVED);
   }
 
-  private Result withdraw(Long storeId, String email, AuditActor actor, SurveyCommand.Withdraw c) {
+  private Result withdraw(Long storeId, AuditActor actor, SurveyCommand.Withdraw c) {
     var row = answerRow(storeId, c.responseId());
     row.requireVersion(c.version());
     var before = before(row);
     row.withdraw();
     answers.flush();
-    answerHistory(email, actor, row, Operation.WITHDRAWN, before, c.reason(), null);
+    answerHistory(actor, row, Operation.WITHDRAWN, before, c.reason(), null);
     return new Result(null, row, Operation.WITHDRAWN);
   }
 
-  private Result correct(Long storeId, String email, AuditActor actor, SurveyCommand.Correct c) {
+  private Result correct(Long storeId, AuditActor actor, SurveyCommand.Correct c) {
     var old = answerRow(storeId, c.responseId());
     old.requireVersion(c.version());
     old.requireNoSuccessor();
@@ -206,8 +205,8 @@ public class SurveyService {
             SurveyAnswer.receive(revision, c.input(), actor.id(), actor.name(), old.getId()));
     old.correctTo(row.getId());
     answers.flush();
-    answerHistory(email, actor, old, Operation.CORRECTION_LINKED, before, c.reason(), row.getId());
-    answerHistory(email, actor, row, Operation.CORRECTION_RECEIVED, null, null, old.getId());
+    answerHistory(actor, old, Operation.CORRECTION_LINKED, before, c.reason(), row.getId());
+    answerHistory(actor, row, Operation.CORRECTION_RECEIVED, null, null, old.getId());
     return new Result(null, row, Operation.CORRECTION_RECEIVED);
   }
 
@@ -367,15 +366,14 @@ public class SurveyService {
   }
 
   private void revisionHistory(
-      String email,
       AuditActor actor,
       SurveyRevision row,
       Operation type,
       SurveyHistory.Before before,
       String reason) {
     history.save(SurveyHistory.revision(row, type, actor.id(), actor.name(), before, reason));
-    audit.record(
-        email,
+    audit.recordById(
+        actor.id(),
         row.getStoreId(),
         "SURVEY_" + type,
         "SURVEY_REVISION",
@@ -387,7 +385,6 @@ public class SurveyService {
   }
 
   private void answerHistory(
-      String email,
       AuditActor actor,
       SurveyAnswer row,
       Operation type,
@@ -396,8 +393,8 @@ public class SurveyService {
       String related) {
     history.save(
         SurveyHistory.answer(row, type, actor.id(), actor.name(), before, reason, related));
-    audit.record(
-        email,
+    audit.recordById(
+        actor.id(),
         row.getStoreId(),
         "SURVEY_" + type,
         "SURVEY_RESPONSE",

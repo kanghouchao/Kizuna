@@ -1,5 +1,6 @@
 package com.kizuna.task.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -28,10 +29,8 @@ import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.StoreScopeResolver;
 import com.kizuna.user.domain.User;
 import java.time.LocalDate;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -45,14 +44,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 /** 実行履歴が開始の新しい順を既定の並びとして Page で返し、実行の記録に解決した実行者を渡すことの単体テスト。 */
 @WebMvcTest(TaskExecutionController.class)
@@ -76,16 +69,13 @@ class TaskExecutionControllerTest {
 
   @Test
   @DisplayName("実行履歴は開始の新しい順を既定の並びとして query を呼び、Page で返すこと")
-  @WithMockUser(authorities = "PERM_TASK_MANAGE")
   void listIsAPageNewestFirst() throws Exception {
     var pageable = ArgumentCaptor.forClass(Pageable.class);
     when(query.list(pageable.capture()))
         .thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 50), 0));
 
     mockMvc
-        .perform(
-            get("/task-executions")
-                .principal(SecurityContextHolder.getContext().getAuthentication()))
+        .perform(get("/task-executions").with(jwtUser(9L, "PERM_TASK_MANAGE")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 
@@ -104,7 +94,7 @@ class TaskExecutionControllerTest {
         .thenReturn(List.of(new TaskOptions.UncoveredStore(3L, "新店")));
 
     mockMvc
-        .perform(get("/task-executions/uncovered-stores").with(jwt("PERM_TASK_MANAGE")))
+        .perform(get("/task-executions/uncovered-stores").with(jwtUser(9L, "PERM_TASK_MANAGE")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].id").value(3))
         .andExpect(jsonPath("$[0].name").value("新店"));
@@ -114,7 +104,7 @@ class TaskExecutionControllerTest {
   @DisplayName("店舗集合を解決できなければ未登録の店舗を返さず 403 にすること")
   void uncoveredStoresWithoutAScopeAreForbidden() throws Exception {
     mockMvc
-        .perform(get("/task-executions/uncovered-stores").with(jwt("PERM_TASK_MANAGE")))
+        .perform(get("/task-executions/uncovered-stores").with(jwtUser(9L, "PERM_TASK_MANAGE")))
         .andExpect(status().isForbidden());
 
     verify(options, never()).uncoveredStores(any());
@@ -124,7 +114,7 @@ class TaskExecutionControllerTest {
   @DisplayName("どの端点も、処理の管理権限を欠く要求を 403 で拒み、何も読まず実行もしないこと")
   void everyEndpointRequiresTaskManage() throws Exception {
     when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(3L)));
-    var other = jwt("PERM_TASK_EXECUTE", "PERM_AUDIT_VIEW");
+    var other = jwtUser(9L, "PERM_TASK_EXECUTE", "PERM_AUDIT_VIEW");
     String reason = "{\"reason\":\"確認\"}";
     String execution =
         "{\"task_name\":\"NOTIFICATION_DELIVER\",\"logical_key\":\"k\",\"service_user_id\":10,"
@@ -148,35 +138,16 @@ class TaskExecutionControllerTest {
     verifyNoInteractions(executor, options, lifecycle, query, identities);
   }
 
-  private static RequestPostProcessor jwt(String... permissions) {
-    var token =
-        new JwtAuthenticationToken(
-            Jwt.withTokenValue("staff").header("alg", "none").subject("user").build(),
-            Arrays.stream(permissions).map(SimpleGrantedAuthority::new).toList(),
-            "user");
-    SecurityContextHolder.getContext().setAuthentication(token);
-    return request -> {
-      request.setUserPrincipal(token);
-      return request;
-    };
-  }
-
-  @AfterEach
-  void clearAuthentication() {
-    SecurityContextHolder.clearContext();
-  }
-
   @Test
   @DisplayName("実行主体の候補は名前順の Page で返し、範囲外のページを 400 にすること")
-  @WithMockUser(authorities = "PERM_TASK_MANAGE")
   void candidatesArePagesInNameOrder() throws Exception {
     var candidates = ArgumentCaptor.forClass(Pageable.class);
     when(options.candidates(eq("SERVICE_IDENTITY_CHECK"), candidates.capture()))
         .thenReturn(new PageImpl<>(List.of()));
-    var auth = SecurityContextHolder.getContext().getAuthentication();
+    var auth = jwtUser(9L, "PERM_TASK_MANAGE");
 
     mockMvc
-        .perform(get("/task-executions/service-identities").principal(auth))
+        .perform(get("/task-executions/service-identities").with(auth))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
     mockMvc
@@ -184,7 +155,7 @@ class TaskExecutionControllerTest {
             get("/task-executions/service-identities")
                 .param("page", "99999999")
                 .param("size", "100")
-                .principal(auth))
+                .with(auth))
         .andExpect(status().isBadRequest());
 
     assertThat(candidates.getValue())
@@ -193,10 +164,9 @@ class TaskExecutionControllerTest {
 
   @Test
   @DisplayName("実行要求を処理条件のとおりに渡し、店舗の指定を受け付けないこと")
-  @WithMockUser(authorities = "PERM_TASK_MANAGE")
   void executeBindsTheCommandAndRejectsAStore() throws Exception {
     var command = ArgumentCaptor.forClass(TaskCommand.class);
-    var auth = SecurityContextHolder.getContext().getAuthentication();
+    var auth = jwtUser(9L, "PERM_TASK_MANAGE");
     String body =
         "{\"task_name\":\"NOTIFICATION_DELIVER\",\"logical_key\":\"k\",\"service_user_id\":10,"
             + "\"period_start\":\"2026-10-07\",\"period_end\":\"2026-10-07\"%s}";
@@ -223,14 +193,14 @@ class TaskExecutionControllerTest {
             null,
             null);
     var actor = new AuditActor(9L, "STAFF", "運用担当");
-    when(identities.requireActor("user")).thenReturn(actor);
+    when(identities.requireActor(9L)).thenReturn(actor);
     when(executor.execute(any(), eq(actor)))
         .thenReturn(new TaskExecutor.Submission(execution, true));
 
     mockMvc
         .perform(
             post("/task-executions")
-                .principal(auth)
+                .with(auth)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body.formatted("")))
         .andExpect(status().isCreated())
@@ -244,9 +214,23 @@ class TaskExecutionControllerTest {
     mockMvc
         .perform(
             post("/task-executions")
-                .principal(auth)
+                .with(auth)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(body.formatted(",\"store_id\":\"1\"")))
         .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  @DisplayName("処理種別の手動実行可否は、トークンの利用者 ID で判定させること")
+  void taskTypesAreJudgedForTheTokenUser() throws Exception {
+    when(options.taskTypes(9L))
+        .thenReturn(List.of(new TaskOptions.TaskType("NOTIFICATION_DELIVER", true)));
+
+    mockMvc
+        .perform(get("/task-executions/task-types").with(jwtUser(9L, "PERM_TASK_MANAGE")))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].manual_allowed").value(true));
+
+    verify(options).taskTypes(9L);
   }
 }

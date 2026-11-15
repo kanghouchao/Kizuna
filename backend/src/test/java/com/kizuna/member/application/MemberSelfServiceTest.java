@@ -44,12 +44,11 @@ class MemberSelfServiceTest {
   @Test
   @DisplayName("home は本人の会員コードと表示名を返す")
   void homeReturnsOwnMemberCodeAndDisplayName() {
-    Mockito.when(userRepository.findByEmail("member@example.com"))
-        .thenReturn(Optional.of(memberUser(10L)));
+    Mockito.when(userRepository.findById(10L)).thenReturn(Optional.of(memberUser(10L)));
     Mockito.when(memberRepository.findByUserId(10L))
         .thenReturn(Optional.of(Member.builder().memberCode("123456789012").userId(10L).build()));
 
-    MemberHome response = service.home("member@example.com");
+    MemberHome response = service.home(10L);
 
     assertThat(response.memberCode()).isEqualTo("123456789012");
     assertThat(response.displayName()).isEqualTo("会員 花子");
@@ -58,20 +57,17 @@ class MemberSelfServiceTest {
   @Test
   @DisplayName("認証主体のユーザーが存在しない場合は 401 系例外")
   void homeThrowsWhenUserMissing() {
-    Mockito.when(userRepository.findByEmail("member@example.com")).thenReturn(Optional.empty());
+    Mockito.when(userRepository.findById(10L)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.home("member@example.com"))
-        .isInstanceOf(StaleSessionException.class);
+    assertThatThrownBy(() -> service.home(10L)).isInstanceOf(StaleSessionException.class);
   }
 
   @Test
   @DisplayName("会員行が存在しない場合は 401 系例外（登録と会員作成は原子的で、欠損は主体の破損を意味する）")
   void homeThrowsWhenMemberRowMissing() {
-    Mockito.when(userRepository.findByEmail("member@example.com"))
-        .thenReturn(Optional.of(memberUser(10L)));
+    Mockito.when(userRepository.findById(10L)).thenReturn(Optional.of(memberUser(10L)));
     Mockito.when(memberRepository.findByUserId(10L)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.home("member@example.com"))
-        .isInstanceOf(StaleSessionException.class);
+    assertThatThrownBy(() -> service.home(10L)).isInstanceOf(StaleSessionException.class);
   }
 }

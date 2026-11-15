@@ -27,9 +27,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.boot.WebApplicationType;
@@ -42,8 +40,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -52,6 +48,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class MediumIntegrationTest {
   private static final String ACTOR = "medium@example.test";
+  private long actorId;
   private ConfigurableApplicationContext context;
   private JdbcTemplate jdbc;
   private MediumService media;
@@ -75,19 +72,11 @@ class MediumIntegrationTest {
             .run();
     jdbc = context.getBean(JdbcTemplate.class);
     media = context.getBean(MediumService.class);
-    jdbc.update(
-        "insert into t_users(email,display_name,user_type) values (?,'媒体担当','STAFF')", ACTOR);
-  }
-
-  @BeforeEach
-  void authenticate() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken(ACTOR, null, List.of()));
-  }
-
-  @AfterEach
-  void clear() {
-    SecurityContextHolder.clearContext();
+    actorId =
+        jdbc.queryForObject(
+            "insert into t_users(email,display_name,user_type) values (?,'媒体担当','STAFF') returning id",
+            Long.class,
+            ACTOR);
   }
 
   @AfterAll
@@ -99,7 +88,7 @@ class MediumIntegrationTest {
   void createdMediumIsTrimmedListedActiveAndAudited() {
     long store = store();
 
-    String id = media.create(store, "  シティヘブン ");
+    String id = media.create(store, actorId, "  シティヘブン ");
 
     assertThat(media.list(store, null))
         .singleElement()
@@ -114,11 +103,12 @@ class MediumIntegrationTest {
   void sameNameIsRejectedWithinTheStoreButNotAcrossStoresOrCaseAndWidth() {
     long store = store();
     long other = store();
-    media.create(store, "ヘブン");
+    media.create(store, actorId, "ヘブン");
 
-    assertThatThrownBy(() -> media.create(store, " ヘブン")).isInstanceOf(ConflictException.class);
-    media.create(store, "ﾍﾌﾞﾝ");
-    media.create(other, "ヘブン");
+    assertThatThrownBy(() -> media.create(store, actorId, " ヘブン"))
+        .isInstanceOf(ConflictException.class);
+    media.create(store, actorId, "ﾍﾌﾞﾝ");
+    media.create(other, actorId, "ヘブン");
 
     assertThat(media.list(store, null)).extracting(Medium::getName).hasSize(2);
   }
@@ -136,8 +126,7 @@ class MediumIntegrationTest {
               () ->
                   transactions.executeWithoutResult(
                       status -> {
-                        authenticate();
-                        media.create(store, "同時");
+                        media.create(store, actorId, "同時");
                         inserted.countDown();
                         await(release);
                       }));
@@ -147,8 +136,7 @@ class MediumIntegrationTest {
         var attempt =
             loser.submit(
                 () -> {
-                  authenticate();
-                  return media.create(store, "同時");
+                  return media.create(store, actorId, "同時");
                 });
         Thread.sleep(300);
         release.countDown();
@@ -168,14 +156,14 @@ class MediumIntegrationTest {
   @Test
   void renameChecksNameAndVersionAndIsAudited() {
     long store = store();
-    String id = media.create(store, "旧名");
-    media.create(store, "使用中");
+    String id = media.create(store, actorId, "旧名");
+    media.create(store, actorId, "使用中");
 
-    assertThatThrownBy(() -> media.rename(store, id, "使用中", 0L))
+    assertThatThrownBy(() -> media.rename(store, actorId, id, "使用中", 0L))
         .isInstanceOf(ConflictException.class);
-    assertThatThrownBy(() -> media.rename(store, id, "新名", 9L))
+    assertThatThrownBy(() -> media.rename(store, actorId, id, "新名", 9L))
         .isInstanceOf(ConflictException.class);
-    var renamed = media.rename(store, id, " 新名 ", 0L);
+    var renamed = media.rename(store, actorId, id, " 新名 ", 0L);
 
     assertThat(renamed).returns("新名", Medium::getName).returns(1L, Medium::getVersion);
     assertThat(audits(id)).containsExactly("MEDIUM_CREATED", "MEDIUM_RENAMED");
@@ -196,13 +184,16 @@ class MediumIntegrationTest {
   @Test
   void stopAndResumeRejectRepeatsAndStaleVersionsAndAreAudited() {
     long store = store();
-    String id = media.create(store, "停止対象");
+    String id = media.create(store, actorId, "停止対象");
 
-    assertThatThrownBy(() -> media.resume(store, id, 0L)).isInstanceOf(ConflictException.class);
-    assertThatThrownBy(() -> media.stop(store, id, 3L)).isInstanceOf(ConflictException.class);
-    assertThat(media.stop(store, id, 0L)).returns(MediumStatus.STOPPED, Medium::getStatus);
-    assertThatThrownBy(() -> media.stop(store, id, 1L)).isInstanceOf(ConflictException.class);
-    assertThat(media.resume(store, id, 1L))
+    assertThatThrownBy(() -> media.resume(store, actorId, id, 0L))
+        .isInstanceOf(ConflictException.class);
+    assertThatThrownBy(() -> media.stop(store, actorId, id, 3L))
+        .isInstanceOf(ConflictException.class);
+    assertThat(media.stop(store, actorId, id, 0L)).returns(MediumStatus.STOPPED, Medium::getStatus);
+    assertThatThrownBy(() -> media.stop(store, actorId, id, 1L))
+        .isInstanceOf(ConflictException.class);
+    assertThat(media.resume(store, actorId, id, 1L))
         .returns(MediumStatus.ACTIVE, Medium::getStatus)
         .returns(2L, Medium::getVersion);
 
@@ -212,10 +203,11 @@ class MediumIntegrationTest {
   @Test
   void deleteChecksVersionRemovesTheRowAndIsAudited() {
     long store = store();
-    String id = media.create(store, "誤登録");
+    String id = media.create(store, actorId, "誤登録");
 
-    assertThatThrownBy(() -> media.delete(store, id, 5L)).isInstanceOf(ConflictException.class);
-    media.delete(store, id, 0L);
+    assertThatThrownBy(() -> media.delete(store, actorId, id, 5L))
+        .isInstanceOf(ConflictException.class);
+    media.delete(store, actorId, id, 0L);
 
     assertThat(media.list(store, null)).isEmpty();
     assertThat(audits(id)).containsExactly("MEDIUM_CREATED", "MEDIUM_DELETED");
@@ -225,14 +217,15 @@ class MediumIntegrationTest {
   void otherStoresMediumIsNotFoundForEveryOperationAndNeverListed() {
     long store = store();
     long other = store();
-    String foreign = media.create(other, "他店");
+    String foreign = media.create(other, actorId, "他店");
 
-    assertThatThrownBy(() -> media.rename(store, foreign, "奪取", 0L))
+    assertThatThrownBy(() -> media.rename(store, actorId, foreign, "奪取", 0L))
         .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> media.stop(store, foreign, 0L)).isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> media.resume(store, foreign, 0L))
+    assertThatThrownBy(() -> media.stop(store, actorId, foreign, 0L))
         .isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> media.delete(store, foreign, 0L))
+    assertThatThrownBy(() -> media.resume(store, actorId, foreign, 0L))
+        .isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> media.delete(store, actorId, foreign, 0L))
         .isInstanceOf(NotFoundException.class);
     assertThat(media.list(store, null)).isEmpty();
     assertThat(media.options(store)).isEmpty();
@@ -241,10 +234,10 @@ class MediumIntegrationTest {
   @Test
   void optionsListOnlyActiveMediaByNameAndListFiltersByStatus() {
     long store = store();
-    String b = media.create(store, "B媒体");
-    String a = media.create(store, "A媒体");
-    String stopped = media.create(store, "C媒体");
-    media.stop(store, stopped, 0L);
+    String b = media.create(store, actorId, "B媒体");
+    String a = media.create(store, actorId, "A媒体");
+    String stopped = media.create(store, actorId, "C媒体");
+    media.stop(store, actorId, stopped, 0L);
 
     assertThat(media.options(store))
         .extracting(Medium::getId, Medium::getName)
@@ -259,9 +252,9 @@ class MediumIntegrationTest {
   void lookupGivesTheCurrentNameAndStateOnlyWithinTheStore() {
     long store = store();
     long other = store();
-    String id = media.create(store, "参照前");
-    media.rename(store, id, "参照後", 0L);
-    media.stop(store, id, 1L);
+    String id = media.create(store, actorId, "参照前");
+    media.rename(store, actorId, id, "参照後", 0L);
+    media.stop(store, actorId, id, 1L);
     var lookup = context.getBean(MediumLookup.class);
 
     assertThat(lookup.find(store, id)).contains(new MediumReference(id, "参照後", false));

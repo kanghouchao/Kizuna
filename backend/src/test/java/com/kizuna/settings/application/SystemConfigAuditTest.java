@@ -3,7 +3,6 @@ package com.kizuna.settings.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -25,13 +24,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 class SystemConfigAuditTest {
   private final SystemConfigRepository configs = mock(SystemConfigRepository.class);
@@ -42,9 +38,6 @@ class SystemConfigAuditTest {
 
   @BeforeEach
   void setup() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken("operator@example.test", null, List.of()));
     service =
         new SystemConfigServiceImpl(
             configs, new BusinessAudit(users, new AuditWriter(events, Clock.systemUTC())));
@@ -57,7 +50,7 @@ class SystemConfigAuditTest {
             .roleIds(Set.of(1L))
             .build();
     actor.setId(9L);
-    when(users.findByEmail(anyString())).thenReturn(Optional.of(actor));
+    when(users.findById(9L)).thenReturn(Optional.of(actor));
     when(events.saveAndFlush(any()))
         .thenAnswer(
             call -> {
@@ -66,11 +59,6 @@ class SystemConfigAuditTest {
               return event;
             });
     when(configs.save(any())).thenAnswer(call -> call.getArgument(0));
-  }
-
-  @AfterEach
-  void clear() {
-    SecurityContextHolder.clearContext();
   }
 
   @ParameterizedTest
@@ -88,7 +76,7 @@ class SystemConfigAuditTest {
   void whitelistedKeysRecordBeforeAndAfter(String key) {
     stored(key, "10", false);
 
-    service.updateConfig(key, "20");
+    service.updateConfig(9L, key, "20");
 
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
@@ -105,7 +93,7 @@ class SystemConfigAuditTest {
   void secretAndUnknownKeysRecordChangedFlagOnly(String key) {
     stored(key, "old-secret-value", false);
 
-    service.updateConfig(key, "new-secret-value");
+    service.updateConfig(9L, key, "new-secret-value");
 
     assertThat(recorded).hasSize(1);
     var event = recorded.getFirst();
@@ -118,7 +106,7 @@ class SystemConfigAuditTest {
   void flaggedSecretNeverRecordsValueEvenIfKeyIsListed() {
     stored("smtp_host", "old-secret-value", true);
 
-    service.updateConfig("smtp_host", "new-secret-value");
+    service.updateConfig(9L, "smtp_host", "new-secret-value");
 
     var event = recorded.getFirst();
     assertThat(event.getAfterValues()).containsOnly(Map.entry("changed", "true"));
@@ -128,10 +116,10 @@ class SystemConfigAuditTest {
   @Test
   void identicalOrBlankToBlankUpdateLeavesNoAudit() {
     stored("smtp_host", "same", false);
-    service.updateConfig("smtp_host", "same");
-    service.updateConfig("smtp_host", null);
+    service.updateConfig(9L, "smtp_host", "same");
+    service.updateConfig(9L, "smtp_host", null);
     stored("smtp_from", null, false);
-    service.updateConfig("smtp_from", "");
+    service.updateConfig(9L, "smtp_from", "");
     assertThat(recorded).isEmpty();
   }
 
@@ -146,11 +134,11 @@ class SystemConfigAuditTest {
                     .configValue("25")
                     .valueType("NUMBER")
                     .build()));
-    assertThatThrownBy(() -> service.updateConfig("smtp_port", "leaky-abc"))
+    assertThatThrownBy(() -> service.updateConfig(9L, "smtp_port", "leaky-abc"))
         .isInstanceOf(ServiceException.class)
         .hasMessageNotContaining("leaky-abc");
     when(configs.findByConfigKey("missing")).thenReturn(Optional.empty());
-    assertThatThrownBy(() -> service.updateConfig("missing", "x"))
+    assertThatThrownBy(() -> service.updateConfig(9L, "missing", "x"))
         .isInstanceOf(NotFoundException.class);
     assertThat(recorded).isEmpty();
   }

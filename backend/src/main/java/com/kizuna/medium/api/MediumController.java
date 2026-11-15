@@ -10,7 +10,9 @@ import com.kizuna.medium.api.dto.MediumResponses.MediumSummary;
 import com.kizuna.medium.application.MediumService;
 import com.kizuna.medium.domain.MediumStatus;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import jakarta.validation.Valid;
+import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
@@ -61,8 +63,9 @@ public class MediumController {
   @ResponseStatus(HttpStatus.CREATED)
   @PreAuthorize("hasAuthority('PERM_ADVERTISING_COST_MANAGE')")
   public MediumCreatedResponse create(
-      @CurrentStore Long storeId, @Valid @RequestBody CreateRequest request) {
-    return new MediumCreatedResponse(service.create(storeId, request.name()));
+      @CurrentStore Long storeId, @Valid @RequestBody CreateRequest request, Principal principal) {
+    return new MediumCreatedResponse(
+        service.create(storeId, JwtClaims.userIdOf(principal), request.name()));
   }
 
   @PutMapping("/{id}")
@@ -70,8 +73,11 @@ public class MediumController {
   public MediumSummary rename(
       @CurrentStore Long storeId,
       @PathVariable String id,
-      @Valid @RequestBody RenameRequest request) {
-    return MediumSummary.of(service.rename(storeId, id, request.name(), request.version()));
+      @Valid @RequestBody RenameRequest request,
+      Principal principal) {
+    return MediumSummary.of(
+        service.rename(
+            storeId, JwtClaims.userIdOf(principal), id, request.name(), request.version()));
   }
 
   @PostMapping("/{id}/stop")
@@ -79,8 +85,10 @@ public class MediumController {
   public MediumSummary stop(
       @CurrentStore Long storeId,
       @PathVariable String id,
-      @Valid @RequestBody VersionRequest request) {
-    return MediumSummary.of(service.stop(storeId, id, request.version()));
+      @Valid @RequestBody VersionRequest request,
+      Principal principal) {
+    return MediumSummary.of(
+        service.stop(storeId, JwtClaims.userIdOf(principal), id, request.version()));
   }
 
   @PostMapping("/{id}/resume")
@@ -88,15 +96,20 @@ public class MediumController {
   public MediumSummary resume(
       @CurrentStore Long storeId,
       @PathVariable String id,
-      @Valid @RequestBody VersionRequest request) {
-    return MediumSummary.of(service.resume(storeId, id, request.version()));
+      @Valid @RequestBody VersionRequest request,
+      Principal principal) {
+    return MediumSummary.of(
+        service.resume(storeId, JwtClaims.userIdOf(principal), id, request.version()));
   }
 
   @DeleteMapping("/{id}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
   @PreAuthorize("hasAuthority('PERM_ADVERTISING_COST_MANAGE')")
   public void delete(
-      @CurrentStore Long storeId, @PathVariable String id, @RequestParam long version) {
-    service.delete(storeId, id, version);
+      @CurrentStore Long storeId,
+      @PathVariable String id,
+      @RequestParam long version,
+      Principal principal) {
+    service.delete(storeId, JwtClaims.userIdOf(principal), id, version);
   }
 }

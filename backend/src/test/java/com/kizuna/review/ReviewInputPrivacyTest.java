@@ -1,6 +1,8 @@
 package com.kizuna.review;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -12,10 +14,12 @@ import com.kizuna.review.application.ReviewService;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.Logger;
@@ -26,10 +30,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.test.context.TestSecurityContextHolder;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -49,15 +50,8 @@ class ReviewInputPrivacyTest {
   @Test
   void rejectedPrivateReviewInputNeverEntersLogsOrResponses() throws Exception {
     when(stores.exists(anyLong())).thenReturn(true);
-    var auth =
-        new UsernamePasswordAuthenticationToken(
-            "actor",
-            "unused",
-            List.of(
-                new SimpleGrantedAuthority("PERM_REVIEW_VIEW"),
-                new SimpleGrantedAuthority("PERM_REVIEW_MANAGE"),
-                new SimpleGrantedAuthority("PERM_ORDER_MANAGE")));
-    TestSecurityContextHolder.setAuthentication(auth);
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(1L)));
+    var auth = jwtUser(9L, "PERM_REVIEW_VIEW", "PERM_REVIEW_MANAGE", "PERM_ORDER_MANAGE");
     String secret = "review-private@example.invalid 非公開本文";
     String valid =
         """
@@ -80,11 +74,7 @@ class ReviewInputPrivacyTest {
             mvc.perform(
                     post("/reviews")
                         .header("X-Store-ID", "1")
-                        .with(
-                            request -> {
-                              request.setUserPrincipal(auth);
-                              return request;
-                            })
+                        .with(auth)
                         .contentType("application/json")
                         .content(payload))
                 .andExpect(status().isBadRequest())
@@ -96,11 +86,7 @@ class ReviewInputPrivacyTest {
           mvc.perform(
                   post("/reviews/1/permissions")
                       .header("X-Store-ID", "1")
-                      .with(
-                          request -> {
-                            request.setUserPrincipal(auth);
-                            return request;
-                          })
+                      .with(auth)
                       .contentType("application/json")
                       .content("{\"reason\":\"" + secret + "\"}"))
               .andExpect(status().isBadRequest())
@@ -115,7 +101,6 @@ class ReviewInputPrivacyTest {
     } finally {
       logger.removeAppender(capture);
       capture.stop();
-      TestSecurityContextHolder.clearContext();
     }
   }
 

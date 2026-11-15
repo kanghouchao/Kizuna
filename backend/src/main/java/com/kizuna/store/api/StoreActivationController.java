@@ -1,7 +1,9 @@
 package com.kizuna.store.api;
 
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.store.application.StoreActivationService;
+import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -19,8 +21,8 @@ public class StoreActivationController {
 
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_STORE_PROFILE_MANAGE')")
-  public ResponseEntity<Void> activate(@CurrentStore Long storeId) {
-    storeActivationService.activate(storeId);
+  public ResponseEntity<Void> activate(@CurrentStore Long storeId, Principal principal) {
+    storeActivationService.activate(storeId, JwtClaims.userIdOf(principal));
     return ResponseEntity.noContent().build();
   }
 }

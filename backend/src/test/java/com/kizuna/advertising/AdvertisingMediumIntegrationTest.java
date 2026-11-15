@@ -97,8 +97,8 @@ class AdvertisingMediumIntegrationTest {
   void anotherStoresMediumIsRejectedByTheApiAndByTheCompositeForeignKey() {
     long store = store();
     long other = store();
-    String own = media.create(store, "自店");
-    String foreign = media.create(other, "他店");
+    String own = media.create(store, actorId, "自店");
+    String foreign = media.create(other, actorId, "他店");
     var cost = create(store, own);
 
     assertThatThrownBy(() -> create(store, foreign))
@@ -124,14 +124,14 @@ class AdvertisingMediumIntegrationTest {
   @Test
   void aMediumReferencedOnlyByADeletedCostCannotBeDeleted() {
     long store = store();
-    String id = media.create(store, "削除済みから参照");
+    String id = media.create(store, actorId, "削除済みから参照");
     var cost = create(store, id);
     costs.delete(
         store,
         new DeleteRequest(cost.version(), "誤入力", UUID.randomUUID()).command(cost.id()),
         actorId);
 
-    assertThatThrownBy(() -> media.delete(store, id, 0L))
+    assertThatThrownBy(() -> media.delete(store, actorId, id, 0L))
         .isInstanceOf(ConflictException.class)
         .hasMessage("記録から参照されている媒体は削除できません。使わない場合は停止してください");
     assertThat(media.list(store, null))
@@ -142,8 +142,8 @@ class AdvertisingMediumIntegrationTest {
   @Test
   void renamingAMediumChangesTheShownNameButNotTheGroupingOrTheRecordedHistory() {
     long store = store();
-    String id = media.create(store, "旧名");
-    String sibling = media.create(store, "別媒体");
+    String id = media.create(store, actorId, "旧名");
+    String sibling = media.create(store, actorId, "別媒体");
     var cost = create(store, id);
     create(store, id);
     create(store, sibling);
@@ -162,7 +162,7 @@ class AdvertisingMediumIntegrationTest {
             .command(cost.id()),
         actorId);
 
-    media.rename(store, id, "新名", 0L);
+    media.rename(store, actorId, id, "新名", 0L);
 
     assertThat(costs.list(store, "2026-09", PageRequest.of(0, 20)).getContent())
         .filteredOn(c -> c.medium().id().equals(id))

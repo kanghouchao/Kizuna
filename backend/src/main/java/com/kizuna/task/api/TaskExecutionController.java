@@ -3,6 +3,7 @@ package com.kizuna.task.api;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.task.api.dto.ExecutionReasonRequest;
 import com.kizuna.task.api.dto.ExecutionSummary;
 import com.kizuna.task.api.dto.TaskExecutionRequest;
@@ -15,6 +16,7 @@ import com.kizuna.task.execution.TaskExecutor;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.ServiceExecutionIdentityService;
 import jakarta.validation.Valid;
+import java.security.Principal;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.PessimisticLockingFailureException;
@@ -26,7 +28,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -71,8 +72,8 @@ public class TaskExecutionController {
 
   @GetMapping("/task-types")
   @PreAuthorize("hasAuthority('PERM_TASK_MANAGE')")
-  public List<TaskOptions.TaskType> taskTypes(Authentication auth) {
-    return options.taskTypes(auth.getName());
+  public List<TaskOptions.TaskType> taskTypes(Principal principal) {
+    return options.taskTypes(JwtClaims.userIdOf(principal));
   }
 
   @GetMapping("/uncovered-stores")
@@ -92,8 +93,8 @@ public class TaskExecutionController {
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_TASK_MANAGE')")
   public ResponseEntity<TaskExecutionResponse> execute(
-      Authentication auth, @Valid @RequestBody TaskExecutionRequest req) {
-    var actor = identities.requireActor(auth.getName());
+      Principal principal, @Valid @RequestBody TaskExecutionRequest req) {
+    var actor = identities.requireActor(JwtClaims.userIdOf(principal));
     var result = executor.execute(req.command(), actor);
     return ResponseEntity.status(result.created() ? HttpStatus.CREATED : HttpStatus.OK)
         .body(TaskExecutionResponse.of(result.execution()));
@@ -102,8 +103,8 @@ public class TaskExecutionController {
   @PostMapping("/{id}/retries")
   @PreAuthorize("hasAuthority('PERM_TASK_MANAGE')")
   public ResponseEntity<TaskExecutionResponse> retry(
-      Authentication auth, @PathVariable Long id, @Valid @RequestBody ExecutionReasonRequest req) {
-    var actor = identities.requireActor(auth.getName());
+      Principal principal, @PathVariable Long id, @Valid @RequestBody ExecutionReasonRequest req) {
+    var actor = identities.requireActor(JwtClaims.userIdOf(principal));
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(TaskExecutionResponse.of(executor.retry(id, req.reason(), actor)));
   }
@@ -111,8 +112,8 @@ public class TaskExecutionController {
   @PostMapping("/{id}/interruption")
   @PreAuthorize("hasAuthority('PERM_TASK_MANAGE')")
   public TaskExecutionResponse interrupt(
-      Authentication auth, @PathVariable Long id, @Valid @RequestBody ExecutionReasonRequest req) {
-    var actor = identities.requireActor(auth.getName());
+      Principal principal, @PathVariable Long id, @Valid @RequestBody ExecutionReasonRequest req) {
+    var actor = identities.requireActor(JwtClaims.userIdOf(principal));
     try {
       return TaskExecutionResponse.of(
           lifecycle.interrupt(

@@ -75,7 +75,7 @@ class MediumReferenceIntegrationTest {
   @Test
   void orderRouteAndMediumMustAgreeEvenWhenTheRouteIsNull() {
     long store = store();
-    String medium = media.create(store, "受注媒体");
+    String medium = media.create(store, actorId, "受注媒体");
     String order = order(store, AcquisitionSource.MEDIA, medium);
 
     for (var invalid :
@@ -100,7 +100,7 @@ class MediumReferenceIntegrationTest {
   @Test
   void anotherStoresMediumIsRejectedByTheCompositeForeignKeys() {
     long store = store();
-    String foreign = media.create(store(), "他店");
+    String foreign = media.create(store(), actorId, "他店");
     String order = order(store, null, null);
 
     assertThatThrownBy(
@@ -119,7 +119,7 @@ class MediumReferenceIntegrationTest {
   @Test
   void applicantMediumIsAllowedOnlyForMediaSources() {
     long store = store();
-    String medium = media.create(store, "応募媒体");
+    String medium = media.create(store, actorId, "応募媒体");
     String applicant = applicant(store, medium);
 
     assertThatThrownBy(
@@ -135,13 +135,13 @@ class MediumReferenceIntegrationTest {
   @Test
   void aMediumReferencedByAnOrderOrAnApplicantCannotBeDeleted() {
     long store = store();
-    String byOrder = media.create(store, "受注から参照");
-    String byApplicant = media.create(store, "応募者から参照");
+    String byOrder = media.create(store, actorId, "受注から参照");
+    String byApplicant = media.create(store, actorId, "応募者から参照");
     order(store, AcquisitionSource.MEDIA, byOrder);
     applicant(store, byApplicant);
 
     for (var id : List.of(byOrder, byApplicant))
-      assertThatThrownBy(() -> media.delete(store, id, 0L))
+      assertThatThrownBy(() -> media.delete(store, actorId, id, 0L))
           .isInstanceOf(ConflictException.class)
           .hasMessage("記録から参照されている媒体は削除できません。使わない場合は停止してください");
     assertThat(media.list(store, null)).hasSize(2);

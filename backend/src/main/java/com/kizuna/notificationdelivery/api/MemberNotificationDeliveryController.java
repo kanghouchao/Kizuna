@@ -8,8 +8,10 @@ import com.kizuna.notificationdelivery.api.dto.DeliveryResponse;
 import com.kizuna.notificationdelivery.api.dto.DeliverySummary;
 import com.kizuna.notificationdelivery.application.NotificationService;
 import com.kizuna.shared.exception.DbConstraint;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.shared.web.Replays;
 import jakarta.validation.Valid;
+import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -17,7 +19,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -36,12 +37,12 @@ public class MemberNotificationDeliveryController {
   @PreAuthorize(
       "hasAuthority('PERM_MEMBER_NOTIFICATION_VIEW') and hasAuthority('PERM_MEMBER_NOTIFICATION_MANAGE')")
   public ResponseEntity<DeliveryResponse> create(
-      Authentication auth, @Valid @RequestBody DeliveryRequest request) {
+      Principal principal, @Valid @RequestBody DeliveryRequest request) {
     var content = request.content();
     var created =
         Replays.write(
             DbConstraint.UQ_T_NOTIFICATION_DELIVERIES_KEY,
-            () -> notifications.create(null, auth.getName(), content),
+            () -> notifications.create(null, JwtClaims.userIdOf(principal), content),
             () -> notifications.replay(null, content));
     return ResponseEntity.status(created.created() ? 201 : 200)
         .body(DeliveryResponse.of(created.delivery()));
@@ -64,32 +65,38 @@ public class MemberNotificationDeliveryController {
   @PreAuthorize(
       "hasAuthority('PERM_MEMBER_NOTIFICATION_VIEW') and hasAuthority('PERM_MEMBER_NOTIFICATION_SEND')")
   public DeliveryResponse queue(
-      Authentication auth,
+      Principal principal,
       @PathVariable String id,
       @Valid @RequestBody DeliveryActionRequest request) {
     return DeliveryResponse.of(
-        notifications.queue(null, auth.getName(), id, request.version(), request.reason(), false));
+        notifications.queue(
+            null, JwtClaims.userIdOf(principal), id, request.version(), request.reason(), false));
   }
 
   @PostMapping("/{id}/retries")
   @PreAuthorize(
       "hasAuthority('PERM_MEMBER_NOTIFICATION_VIEW') and hasAuthority('PERM_MEMBER_NOTIFICATION_SEND')")
   public ResponseEntity<DeliveryResponse> retry(
-      Authentication auth,
+      Principal principal,
       @PathVariable String id,
       @Valid @RequestBody DeliveryActionRequest request) {
     return ResponseEntity.status(201)
         .body(
             DeliveryResponse.of(
                 notifications.queue(
-                    null, auth.getName(), id, request.version(), request.reason(), true)));
+                    null,
+                    JwtClaims.userIdOf(principal),
+                    id,
+                    request.version(),
+                    request.reason(),
+                    true)));
   }
 
   @PostMapping("/{id}/resolutions")
   @PreAuthorize(
       "hasAuthority('PERM_MEMBER_NOTIFICATION_VIEW') and hasAuthority('PERM_MEMBER_NOTIFICATION_SEND')")
   public ResponseEntity<DeliveryResponse> resolve(
-      Authentication auth,
+      Principal principal,
       @PathVariable String id,
       @Valid @RequestBody DeliveryResolutionRequest request) {
     return ResponseEntity.status(201)
@@ -97,7 +104,7 @@ public class MemberNotificationDeliveryController {
             DeliveryResponse.of(
                 notifications.resolve(
                     null,
-                    auth.getName(),
+                    JwtClaims.userIdOf(principal),
                     id,
                     request.version(),
                     request.outcome(),

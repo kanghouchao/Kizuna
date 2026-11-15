@@ -92,7 +92,7 @@ public class ServiceIdentityService {
   }
 
   @Transactional
-  public ServiceIdentityViews.Detail create(ServiceIdentityCommand.Create command) {
+  public ServiceIdentityViews.Detail create(long actorId, ServiceIdentityCommand.Create command) {
     Map<Long, String> roleNames = requireCustomRoles(command.roleIds());
     User user =
         User.builder()
@@ -103,11 +103,14 @@ public class ServiceIdentityService {
             .storeIds(command.storeIds())
             .build();
     user = save(user);
-    businessAudit.recordCurrent(
+    businessAudit.recordById(
+        actorId,
         null,
         "SERVICE_ID_CREATED",
         "SERVICE_ID",
         user.getId().toString(),
+        null,
+        null,
         Map.of(),
         BusinessAudit.grants(user));
     return toDetail(user, roleNames);
@@ -115,7 +118,8 @@ public class ServiceIdentityService {
 
   /** 授権（ロール×店舗集合）だけを更新する。停止・再開は専用端点の領分で、この面は enabled を受け取らない。 */
   @Transactional
-  public ServiceIdentityViews.Detail update(Long id, ServiceIdentityCommand.UpdateGrants command) {
+  public ServiceIdentityViews.Detail update(
+      long actorId, Long id, ServiceIdentityCommand.UpdateGrants command) {
     Map<Long, String> roleNames = requireCustomRoles(command.roleIds());
     User user = requireServiceIdentity(id);
     // 陳腐化した編集フォームの提出は JPA の @Version では捕まらない（再読込後の正当な更新に見える）
@@ -127,11 +131,14 @@ public class ServiceIdentityService {
     credentialOperations.reassignGrants(user, command.roleIds(), command.storeIds());
     user = save(user);
     if (!before.equals(BusinessAudit.grants(user)))
-      businessAudit.recordCurrent(
+      businessAudit.recordById(
+          actorId,
           null,
           "SERVICE_ID_GRANTS_CHANGED",
           "SERVICE_ID",
           user.getId().toString(),
+          null,
+          null,
           before,
           BusinessAudit.grants(user));
     return toDetail(user, roleNames);
@@ -142,18 +149,21 @@ public class ServiceIdentityService {
    * サービスIDは対話ログインできず、失効させるセッションが無く、最後の管理権限保持者の母集団（ログインできる STAFF）にも入らない。
    */
   @Transactional
-  public void suspend(Long id) {
+  public void suspend(long actorId, Long id) {
     User user = requireServiceIdentityForUpdate(id);
     var before = BusinessAudit.grants(user);
     boolean wasEnabled = user.getEnabled();
     credentialOperations.stop(user);
     if (wasEnabled) {
       repository.saveAndFlush(user);
-      businessAudit.recordCurrent(
+      businessAudit.recordById(
+          actorId,
           null,
           "SERVICE_ID_SUSPENDED",
           "SERVICE_ID",
           user.getId().toString(),
+          null,
+          null,
           before,
           BusinessAudit.grants(user));
     }
@@ -161,17 +171,20 @@ public class ServiceIdentityService {
 
   /** 再開する。既に有効でも 204 で受理する（冪等）。 */
   @Transactional
-  public void resume(Long id) {
+  public void resume(long actorId, Long id) {
     User user = requireServiceIdentityForUpdate(id);
     var before = BusinessAudit.grants(user);
     if (!user.getEnabled()) {
       user.resume();
       repository.saveAndFlush(user);
-      businessAudit.recordCurrent(
+      businessAudit.recordById(
+          actorId,
           null,
           "SERVICE_ID_RESUMED",
           "SERVICE_ID",
           user.getId().toString(),
+          null,
+          null,
           before,
           BusinessAudit.grants(user));
     }

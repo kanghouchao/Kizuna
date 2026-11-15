@@ -12,6 +12,7 @@ import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.storage.api.FileUploadController;
 import com.kizuna.storeprofile.api.dto.StoreProfileMapperImpl;
 import com.kizuna.storeprofile.api.dto.StoreProfileUpdateRequest;
@@ -59,9 +60,11 @@ import org.springframework.orm.jpa.SharedEntityManagerCreator;
 import org.springframework.orm.jpa.hibernate.SpringBeanContainer;
 import org.springframework.orm.jpa.vendor.HibernateJpaDialect;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -79,6 +82,7 @@ class StoreProfileFileAuditIntegrationTest {
   private StoreProfileService profiles;
   private TransactionTemplate transactions;
   private Long ordinaryId;
+  private Authentication staff;
   private final List<String> stored = new ArrayList<>();
   private boolean storeFails;
   private FileUploadController uploads;
@@ -135,10 +139,16 @@ class StoreProfileFileAuditIntegrationTest {
 
   @BeforeEach
   void authenticate() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken(
-                ORDINARY, null, List.of(new SimpleGrantedAuthority("PERM_STORE_PROFILE_MANAGE"))));
+    var jwt =
+        Jwt.withTokenValue("token")
+            .header("alg", "HS256")
+            .subject(ORDINARY)
+            .claim(JwtClaims.USER_ID, ordinaryId)
+            .build();
+    staff =
+        new JwtAuthenticationToken(
+            jwt, List.of(new SimpleGrantedAuthority("PERM_STORE_PROFILE_MANAGE")));
+    SecurityContextHolder.getContext().setAuthentication(staff);
     storeFails = false;
     stored.clear();
   }
@@ -156,8 +166,8 @@ class StoreProfileFileAuditIntegrationTest {
   @Test
   void profileUpdateCommitsWithRealVersionAndRollsBackOnAuditFailure() {
     long before = audits("STORE_PROFILE");
-    profiles.update(STORE_ID, profile("https://example.test/a.png", "秘密の紹介文"));
-    profiles.update(STORE_ID, profile("https://example.test/a.png", "秘密の紹介文"));
+    profiles.update(STORE_ID, ordinaryId, profile("https://example.test/a.png", "秘密の紹介文"));
+    profiles.update(STORE_ID, ordinaryId, profile("https://example.test/a.png", "秘密の紹介文"));
 
     var row =
         jdbc.queryForMap(
@@ -179,7 +189,8 @@ class StoreProfileFileAuditIntegrationTest {
     failAuditFor("STORE_PROFILE_UPDATED");
     try {
       assertThatThrownBy(
-              () -> profiles.update(STORE_ID, profile("https://example.test/b.png", "別")))
+              () ->
+                  profiles.update(STORE_ID, ordinaryId, profile("https://example.test/b.png", "別")))
           .isInstanceOf(DataIntegrityViolationException.class);
     } finally {
       dropAuditFailure();
@@ -193,11 +204,11 @@ class StoreProfileFileAuditIntegrationTest {
 
   @Test
   void uploadAuditsAfterStoreInIndependentTransaction() {
-    uploads.upload(STORE_ID, file("one.jpg"), "store-logo", "public");
+    uploads.upload(STORE_ID, file("one.jpg"), "store-logo", "public", staff);
     // 外側の業務取引が巻き戻っても、保存済みファイルの監査は独立取引で確定している。
     transactions.executeWithoutResult(
         status -> {
-          uploads.upload(STORE_ID, file("two.jpg"), "store-logo", "public");
+          uploads.upload(STORE_ID, file("two.jpg"), "store-logo", "public", staff);
           status.setRollbackOnly();
         });
 
@@ -224,7 +235,8 @@ class StoreProfileFileAuditIntegrationTest {
   void failedStoreWritesNoAudit() {
     storeFails = true;
 
-    assertThatThrownBy(() -> uploads.upload(STORE_ID, file("none.jpg"), "store-logo", "public"))
+    assertThatThrownBy(
+            () -> uploads.upload(STORE_ID, file("none.jpg"), "store-logo", "public", staff))
         .isInstanceOf(IllegalStateException.class);
 
     assertThat(auditedPaths()).doesNotContain("public/11/store-logo/none.jpg");
@@ -234,7 +246,7 @@ class StoreProfileFileAuditIntegrationTest {
   void auditFailureKeepsStoredFileAndResponse() {
     failAuditFor("FILE_UPLOADED");
     try {
-      var response = uploads.upload(STORE_ID, file("window.jpg"), "store-logo", "public");
+      var response = uploads.upload(STORE_ID, file("window.jpg"), "store-logo", "public", staff);
       assertThat(response.getStatusCode().value()).isEqualTo(201);
     } finally {
       dropAuditFailure();
@@ -258,7 +270,7 @@ class StoreProfileFileAuditIntegrationTest {
     // "public/11/store-logo/" (21) + UUID (36) + 拡張子（"." 込み）で key をちょうど 100 文字にする
     String name = "x." + "e".repeat(100 - 21 - 36 - 1);
 
-    controller.upload(STORE_ID, file(name), "store-logo", "public");
+    controller.upload(STORE_ID, file(name), "store-logo", "public", staff);
 
     assertThat(auditedPaths()).anyMatch(path -> path.length() == 100);
   }

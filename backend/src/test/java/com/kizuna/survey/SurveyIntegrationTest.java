@@ -13,7 +13,9 @@ import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
 import com.kizuna.shared.storescope.CurrentStoreArgumentResolver;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.shared.web.StrictScalarJsonModule;
 import com.kizuna.shared.web.WebBindingConfig;
 import com.kizuna.store.StoreShortNames;
@@ -24,8 +26,10 @@ import com.kizuna.user.application.BusinessAudit;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Clock;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CyclicBarrier;
@@ -51,11 +55,13 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
@@ -165,9 +171,7 @@ class SurveyIntegrationTest {
         roleId);
     jdbc.update("insert into t_user_roles(user_id,role_id) values (?,?)", actorId, roleId);
     auth =
-        new UsernamePasswordAuthenticationToken(
-            email,
-            "unused",
+        bearer(
             List.of(
                 new SimpleGrantedAuthority("PERM_SURVEY_VIEW"),
                     new SimpleGrantedAuthority("PERM_SURVEY_MANAGE"),
@@ -550,22 +554,41 @@ class SurveyIntegrationTest {
     }
   }
 
-  /** 本番と同じ引数解決器の並び（Pageable の検査・副キー補完と現在店舗）を standalone の MockMvc へ渡す。 */
-  private static HandlerMethodArgumentResolver[] argumentResolvers() {
+  /**
+   * 本番と同じ引数解決器の並び（Pageable の検査・副キー補完と現在店舗）を standalone の MockMvc へ渡す。 担当者は検証用の 2 店舗を授権されている扱いにする —
+   * 集合の照合そのものは店舗集合の試験が担う。
+   */
+  private HandlerMethodArgumentResolver[] argumentResolvers() {
     List<HandlerMethodArgumentResolver> resolvers = new ArrayList<>();
+    var scopes =
+        new StoreScopeHolder() {
+          @Override
+          public StoreScope current() {
+            return new StoreScope(Set.of(storeId, otherStore));
+          }
+        };
     new WebBindingConfig(
             new PageableHandlerMethodArgumentResolver(),
-            new CurrentStoreArgumentResolver(new StoreScopeHolder(), id -> true))
+            new CurrentStoreArgumentResolver(scopes, id -> true))
         .addArgumentResolvers(resolvers);
     return resolvers.toArray(HandlerMethodArgumentResolver[]::new);
+  }
+
+  /** handler は利用者 ID を検証済みの Bearer トークンから読むため、担当者をそのトークンとして載せる。 */
+  private Authentication bearer(Collection<? extends GrantedAuthority> authorities) {
+    var jwt =
+        Jwt.withTokenValue("token")
+            .header("alg", "HS256")
+            .subject(email)
+            .claim(JwtClaims.USER_ID, actorId)
+            .build();
+    return new JwtAuthenticationToken(jwt, authorities);
   }
 
   /** 以後の要求を、指定した権限を外した担当者として送る。 */
   private void without(String authority) {
     auth =
-        new UsernamePasswordAuthenticationToken(
-            auth.getName(),
-            "unused",
+        bearer(
             auth.getAuthorities().stream()
                 .filter(granted -> !authority.equals(granted.getAuthority()))
                 .toList());

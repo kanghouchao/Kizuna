@@ -3,7 +3,6 @@ package com.kizuna.storage.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,12 +21,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.SimpleTransactionStatus;
@@ -41,9 +37,6 @@ class StoredFileAuditTest {
 
   @BeforeEach
   void setup() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(
-            new UsernamePasswordAuthenticationToken("operator@example.test", null, List.of()));
     audit =
         new StoredFileAudit(
             new BusinessAudit(users, new AuditWriter(events, Clock.systemUTC())), transactions);
@@ -56,7 +49,7 @@ class StoredFileAuditTest {
             .roleIds(Set.of(1L))
             .build();
     actor.setId(9L);
-    when(users.findByEmail(anyString())).thenReturn(Optional.of(actor));
+    when(users.findById(9L)).thenReturn(Optional.of(actor));
     when(transactions.getTransaction(any())).thenReturn(new SimpleTransactionStatus());
     when(events.saveAndFlush(any()))
         .thenAnswer(
@@ -67,20 +60,16 @@ class StoredFileAuditTest {
             });
   }
 
-  @AfterEach
-  void clear() {
-    SecurityContextHolder.clearContext();
-  }
-
   @Test
   void recordsWhitelistInIndependentTransaction() {
-    audit.recordUpload(5L, "public/5/a.jpg", "public", 4L, "image/jpeg");
+    audit.recordUpload(5L, 9L, "public/5/a.jpg", "public", 4L, "image/jpeg");
 
     var definition = ArgumentCaptor.forClass(TransactionDefinition.class);
     verify(transactions).getTransaction(definition.capture());
     assertThat(definition.getValue().getPropagationBehavior())
         .isEqualTo(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     var event = recorded.getFirst();
+    assertThat(event.getActorId()).isEqualTo(9L);
     assertThat(event.getAction()).isEqualTo("FILE_UPLOADED");
     assertThat(event.getTargetType()).isEqualTo("STORED_FILE");
     assertThat(event.getTargetId()).isEqualTo("public/5/a.jpg");
@@ -94,7 +83,7 @@ class StoredFileAuditTest {
 
   @Test
   void requestWithoutContentTypeRecordsBlankType() {
-    audit.recordUpload(5L, "public/5/cast-photo/a.bin", "public", 0L, null);
+    audit.recordUpload(5L, 9L, "public/5/cast-photo/a.bin", "public", 0L, null);
 
     var event = recorded.getFirst();
     assertThat(event.getAfterValues()).containsEntry("content_type", "");
@@ -104,7 +93,7 @@ class StoredFileAuditTest {
   void auditFailureIsSwallowedAndRolledBack() {
     when(events.saveAndFlush(any())).thenThrow(new IllegalStateException("audit"));
 
-    assertThatCode(() -> audit.recordUpload(5L, "public/5/a.jpg", "public", 4L, "image/jpeg"))
+    assertThatCode(() -> audit.recordUpload(5L, 9L, "public/5/a.jpg", "public", 4L, "image/jpeg"))
         .doesNotThrowAnyException();
 
     verify(transactions).rollback(any());

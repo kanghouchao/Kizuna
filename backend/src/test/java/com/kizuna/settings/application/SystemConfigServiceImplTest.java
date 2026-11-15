@@ -87,7 +87,7 @@ class SystemConfigServiceImplTest {
     when(systemConfigRepository.save(existingConfig)).thenReturn(updatedConfig);
 
     // 実行
-    SystemConfigView result = systemConfigService.updateConfig(key, configValue);
+    SystemConfigView result = systemConfigService.updateConfig(9L, key, configValue);
 
     // 検証
     assertNotNull(result);
@@ -104,7 +104,8 @@ class SystemConfigServiceImplTest {
     when(systemConfigRepository.findByConfigKey("smtp_port")).thenReturn(Optional.of(config));
 
     assertThrows(
-        ServiceException.class, () -> systemConfigService.updateConfig("smtp_port", configValue));
+        ServiceException.class,
+        () -> systemConfigService.updateConfig(9L, "smtp_port", configValue));
   }
 
   @Test
@@ -118,7 +119,7 @@ class SystemConfigServiceImplTest {
 
     assertThrows(
         ServiceException.class,
-        () -> systemConfigService.updateConfig("point_usage_unit", configValue));
+        () -> systemConfigService.updateConfig(9L, "point_usage_unit", configValue));
   }
 
   @Test
@@ -133,7 +134,7 @@ class SystemConfigServiceImplTest {
     when(systemConfigRepository.save(config)).thenReturn(config);
 
     assertEquals(
-        value, systemConfigService.updateConfig("point_usage_unit", configValue).configValue());
+        value, systemConfigService.updateConfig(9L, "point_usage_unit", configValue).configValue());
   }
 
   @Test
@@ -148,7 +149,7 @@ class SystemConfigServiceImplTest {
 
     assertThrows(
         ServiceException.class,
-        () -> systemConfigService.updateConfig("business_date_change_time", configValue));
+        () -> systemConfigService.updateConfig(9L, "business_date_change_time", configValue));
   }
 
   @Test
@@ -162,7 +163,7 @@ class SystemConfigServiceImplTest {
 
     assertThrows(
         ServiceException.class,
-        () -> systemConfigService.updateConfig("business_date_change_time", configValue));
+        () -> systemConfigService.updateConfig(9L, "business_date_change_time", configValue));
   }
 
   @Test
@@ -176,7 +177,7 @@ class SystemConfigServiceImplTest {
 
     assertThrows(
         ServiceException.class,
-        () -> systemConfigService.updateConfig("business_date_change_time", configValue));
+        () -> systemConfigService.updateConfig(9L, "business_date_change_time", configValue));
   }
 
   @Test
@@ -191,7 +192,9 @@ class SystemConfigServiceImplTest {
 
     assertEquals(
         "05:00",
-        systemConfigService.updateConfig("business_date_change_time", configValue).configValue());
+        systemConfigService
+            .updateConfig(9L, "business_date_change_time", configValue)
+            .configValue());
   }
 
   @Test
@@ -239,7 +242,8 @@ class SystemConfigServiceImplTest {
     when(systemConfigRepository.findByConfigKey(key)).thenReturn(Optional.empty());
 
     // 実行・検証
-    assertThrows(NotFoundException.class, () -> systemConfigService.updateConfig(key, configValue));
+    assertThrows(
+        NotFoundException.class, () -> systemConfigService.updateConfig(9L, key, configValue));
   }
 
   @Test
@@ -388,7 +392,7 @@ class SystemConfigServiceImplTest {
 
     assertThrows(
         ServiceException.class,
-        () -> systemConfigService.updateConfig("applicant_retention_rejected_months", value));
+        () -> systemConfigService.updateConfig(9L, "applicant_retention_rejected_months", value));
   }
 
   @ParameterizedTest
@@ -405,7 +409,7 @@ class SystemConfigServiceImplTest {
 
     assertThrows(
         ServiceException.class,
-        () -> systemConfigService.updateConfig("applicant_retention_hired_months", value));
+        () -> systemConfigService.updateConfig(9L, "applicant_retention_hired_months", value));
   }
 
   @ParameterizedTest
@@ -424,7 +428,7 @@ class SystemConfigServiceImplTest {
     assertEquals(
         value,
         systemConfigService
-            .updateConfig("applicant_retention_withdrawn_months", value)
+            .updateConfig(9L, "applicant_retention_withdrawn_months", value)
             .configValue());
   }
 
@@ -482,7 +486,7 @@ class SystemConfigServiceImplTest {
 
     assertThrows(
         ServiceException.class,
-        () -> systemConfigService.updateConfig("point_expiry_notice_days", value));
+        () -> systemConfigService.updateConfig(9L, "point_expiry_notice_days", value));
   }
 
   private SystemConfig config(String key, String value) {

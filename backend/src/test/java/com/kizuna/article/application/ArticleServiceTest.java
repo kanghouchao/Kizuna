@@ -78,7 +78,7 @@ class ArticleServiceTest {
 
   @Test
   void createAuditsWithoutTheBody() {
-    var created = service.create(STORE, "新しい記事", "秘密の本文", null);
+    var created = service.create(STORE, 9L, "新しい記事", "秘密の本文", null);
 
     assertThat(created).isEqualTo("new");
     var after = captureAfter("ARTICLE_CREATED", "new");
@@ -88,7 +88,7 @@ class ArticleServiceTest {
 
   @Test
   void editMarksTheBodyAsChangedWithoutCopyingIt() {
-    var edited = service.edit(STORE, "a1", "改題", "差し替えた秘密", null, 0);
+    var edited = service.edit(STORE, 9L, "a1", "改題", "差し替えた秘密", null, 0);
 
     assertThat(edited.getBody()).isEqualTo("差し替えた秘密");
     var after = captureAfter("ARTICLE_UPDATED", "a1");
@@ -98,7 +98,7 @@ class ArticleServiceTest {
 
   @Test
   void editKeepingTheBodyDoesNotMarkIt() {
-    service.edit(STORE, "a1", "改題", "秘密の本文", null, 0);
+    service.edit(STORE, 9L, "a1", "改題", "秘密の本文", null, 0);
 
     assertThat(captureAfter("ARTICLE_UPDATED", "a1")).doesNotContainKey("redacted_fields_changed");
   }
@@ -107,7 +107,7 @@ class ArticleServiceTest {
   void publishReplacesThePublicationAndAuditsIt() {
     var next = new Publication(true, OffsetDateTime.parse("2026-06-01T00:00:00Z"), null, 3);
 
-    var published = service.publish(STORE, "a1", next, 0);
+    var published = service.publish(STORE, 9L, "a1", next, 0);
 
     assertThat(published.getPublication()).isEqualTo(next);
     assertThat(captureAfter("ARTICLE_PUBLICATION_CHANGED", "a1"))
@@ -117,7 +117,7 @@ class ArticleServiceTest {
 
   @Test
   void deleteRemovesAndAuditsAbsence() {
-    service.delete(STORE, "a1", 0);
+    service.delete(STORE, 9L, "a1", 0);
 
     verify(articles).delete(article);
     assertThat(captureAfter("ARTICLE_DELETED", "a1")).containsExactly(Map.entry("exists", "false"));
@@ -125,14 +125,16 @@ class ArticleServiceTest {
 
   @Test
   void staleVersionIsConflictAndNothingIsWritten() {
-    assertThatThrownBy(() -> service.edit(STORE, "a1", "t", "b", null, 1))
+    assertThatThrownBy(() -> service.edit(STORE, 9L, "a1", "t", "b", null, 1))
         .isInstanceOf(ConflictException.class);
-    assertThatThrownBy(() -> service.publish(STORE, "a1", Publication.HIDDEN, 1))
+    assertThatThrownBy(() -> service.publish(STORE, 9L, "a1", Publication.HIDDEN, 1))
         .isInstanceOf(ConflictException.class);
-    assertThatThrownBy(() -> service.delete(STORE, "a1", 1)).isInstanceOf(ConflictException.class);
+    assertThatThrownBy(() -> service.delete(STORE, 9L, "a1", 1))
+        .isInstanceOf(ConflictException.class);
     verify(articles, never()).delete(any(Article.class));
     verify(audit, never())
-        .recordCurrent(any(), anyString(), anyString(), anyString(), anyMap(), anyMap());
+        .recordById(
+            any(), any(), anyString(), anyString(), anyString(), any(), any(), anyMap(), anyMap());
   }
 
   @Test
@@ -146,7 +148,16 @@ class ArticleServiceTest {
   private Map<String, String> captureAfter(String action, String id) {
     ArgumentCaptor<Map<String, String>> after = ArgumentCaptor.forClass(Map.class);
     verify(audit)
-        .recordCurrent(eq(STORE), eq(action), eq("ARTICLE"), eq(id), anyMap(), after.capture());
+        .recordById(
+            eq(9L),
+            eq(STORE),
+            eq(action),
+            eq("ARTICLE"),
+            eq(id),
+            eq(null),
+            eq(null),
+            anyMap(),
+            after.capture());
     return after.getValue();
   }
 }

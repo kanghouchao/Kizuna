@@ -81,12 +81,12 @@ class OrderMediumNameIntegrationTest {
   @Test
   void detailNamesTheMediumByItsCurrentNameAfterARenameAndAStop() {
     long store = store();
-    String medium = media.create(store, "改名前");
+    String medium = media.create(store, actorId, "改名前");
     String order = order(store, "MEDIA", medium);
     String none = order(store, null, null);
 
-    media.rename(store, medium, "改名後", 0L);
-    media.stop(store, medium, 1L);
+    media.rename(store, actorId, medium, "改名後", 0L);
+    media.stop(store, actorId, medium, 1L);
 
     var response = new OrderMapperImpl().toResponse(orders.get(store, order));
     assertThat(response.getMedium()).isEqualTo(new OrderMediumResponse(medium, "改名後"));

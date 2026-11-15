@@ -63,7 +63,7 @@ public class RoleService {
   }
 
   @Transactional
-  public RoleViews.Detail create(RoleCommand.Create command) {
+  public RoleViews.Detail create(long actorId, RoleCommand.Create command) {
     Map<Long, String> codesById = requirePermissions(command.permissions());
     Role role =
         Role.builder()
@@ -72,13 +72,21 @@ public class RoleService {
             .permissionIds(codesById.keySet())
             .build();
     save(role);
-    businessAudit.recordCurrent(
-        null, "ROLE_CREATED", "ROLE", role.getId().toString(), Map.of(), snapshot(role));
+    businessAudit.recordById(
+        actorId,
+        null,
+        "ROLE_CREATED",
+        "ROLE",
+        role.getId().toString(),
+        null,
+        null,
+        Map.of(),
+        snapshot(role));
     return toDetail(role, codesById);
   }
 
   @Transactional
-  public RoleViews.Detail update(Long id, RoleCommand.Update command) {
+  public RoleViews.Detail update(long actorId, Long id, RoleCommand.Update command) {
     Map<Long, String> codesById = requirePermissions(command.permissions());
     // ロックはロール行から取る（順序は RoleRepository#findByIdForUpdate）。
     Role role = roleRepository.findByIdForUpdate(id).orElseThrow(() -> notFound(id));
@@ -99,13 +107,21 @@ public class RoleService {
     role.rename(command.name());
     save(role);
     if (!before.equals(snapshot(role)))
-      businessAudit.recordCurrent(
-          null, "ROLE_CHANGED", "ROLE", role.getId().toString(), before, snapshot(role));
+      businessAudit.recordById(
+          actorId,
+          null,
+          "ROLE_CHANGED",
+          "ROLE",
+          role.getId().toString(),
+          null,
+          null,
+          before,
+          snapshot(role));
     return toDetail(role, codesById);
   }
 
   @Transactional
-  public void delete(Long id) {
+  public void delete(long actorId, Long id) {
     Role role = roleRepository.findById(id).orElseThrow(() -> notFound(id));
     if (Boolean.TRUE.equals(role.getSystemRole())) {
       throw new SystemRoleImmutableException("平台既定ロールは削除できません");
@@ -118,8 +134,16 @@ public class RoleService {
       // 遅らせると 500 になるため、ここで flush して事前検証と同じ 409 へ揃える。
       roleRepository.delete(role);
       roleRepository.flush();
-      businessAudit.recordCurrent(
-          null, "ROLE_DELETED", "ROLE", role.getId().toString(), snapshot(role), Map.of());
+      businessAudit.recordById(
+          actorId,
+          null,
+          "ROLE_DELETED",
+          "ROLE",
+          role.getId().toString(),
+          null,
+          null,
+          snapshot(role),
+          Map.of());
     } catch (DataIntegrityViolationException ex) {
       // 授与 FK 違反は全域ハンドラでは 409 にならない（一意違反のみが兜底の対象）ため、ここで写像する。
       // 授与 FK 以外の整合性違反は実装欠陥であり、握りつぶさず全域ハンドラの分類に委ねる。

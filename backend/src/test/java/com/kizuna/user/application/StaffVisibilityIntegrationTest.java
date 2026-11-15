@@ -53,7 +53,7 @@ class StaffVisibilityIntegrationTest {
   private long role;
   private long storeA;
   private long storeB;
-  private String actorA;
+  private long actorA;
   private long inA;
   private long inB;
   private long inBoth;
@@ -72,8 +72,7 @@ class StaffVisibilityIntegrationTest {
             UUID.randomUUID().toString());
     storeA = store();
     storeB = store();
-    actorA = UUID.randomUUID() + "@staff.test";
-    user(actorA, storeA);
+    actorA = user(UUID.randomUUID() + "@staff.test", storeA);
     inA = user(UUID.randomUUID() + "@staff.test", storeA);
     inB = user(UUID.randomUUID() + "@staff.test", storeB);
     inBoth = user(UUID.randomUUID() + "@staff.test", storeA, storeB);

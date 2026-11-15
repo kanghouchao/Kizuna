@@ -89,8 +89,8 @@ public class AdminStaffService {
   }
 
   @Transactional(readOnly = true)
-  public Page<StaffView> list(String search, Long storeId, Pageable pageable, String actorEmail) {
-    Actor actor = actor(actorEmail);
+  public Page<StaffView> list(String search, Long storeId, Pageable pageable, long actorId) {
+    Actor actor = actor(actorId);
     Page<User> staff = repository.findAll(staffSpec(search, storeId, actor.scope()), pageable);
     Map<Long, Role> roles =
         rolesOf(
@@ -143,16 +143,16 @@ public class AdminStaffService {
 
   /** 1 件取得。編集中に競合（409）が起きたとき、一覧の現在ページに対象が居なくても最新の版を取り直せるようにするための経路。 */
   @Transactional(readOnly = true)
-  public StaffView get(Long id, String actorEmail) {
-    Actor actor = actor(actorEmail);
+  public StaffView get(Long id, long actorId) {
+    Actor actor = actor(actorId);
     User user = requireVisible(id, actor);
     return toView(user, rolesOf(user.getRoleIds()), actor);
   }
 
   /** 行使者が付与できるロールの目録 — 権限集合が行使者の権限並集に収まるもの（ROLE_MANAGE 保持者は全ロール）。判定の単源をサーバに置く。 */
   @Transactional(readOnly = true)
-  public List<RoleViews.Grantable> grantableRoles(String actorEmail) {
-    Actor actor = actor(actorEmail);
+  public List<RoleViews.Grantable> grantableRoles(long actorId) {
+    Actor actor = actor(actorId);
     List<Role> roles =
         roleRepository.findAll().stream()
             .filter(role -> actor.covers(role.getPermissionIds()))
@@ -177,8 +177,8 @@ public class AdminStaffService {
   }
 
   @Transactional
-  public StaffView create(StaffCommand.Create command, String actorEmail) {
-    Actor actor = actor(actorEmail);
+  public StaffView create(StaffCommand.Create command, long actorId) {
+    Actor actor = actor(actorId);
     Map<Long, Role> roles = requireRoles(command.roleIds());
     requireGrantable(roles.values(), actor);
     requireStoresWithinActorScope(command.storeIds(), actor.scope());
@@ -196,11 +196,14 @@ public class AdminStaffService {
             .storeIds(command.storeIds())
             .build();
     user = save(user);
-    businessAudit.recordCurrent(
+    businessAudit.recordById(
+        actorId,
         null,
         "STAFF_CREATED",
         "USER_GRANTS",
         user.getId().toString(),
+        null,
+        null,
         Map.of(),
         BusinessAudit.grants(user));
     return toView(user, roles, actor);
@@ -208,8 +211,8 @@ public class AdminStaffService {
 
   /** 授権（ロール×店舗集合）だけを更新する。停止・再開は専用の操作で、この面は enabled を受け取らない。 */
   @Transactional
-  public StaffView update(Long id, StaffCommand.UpdateGrants command, String actorEmail) {
-    Actor actor = actor(actorEmail);
+  public StaffView update(Long id, StaffCommand.UpdateGrants command, long actorId) {
+    Actor actor = actor(actorId);
     User user = requireVisible(id, actor);
     // 陳腐化した編集フォームの提出は JPA の @Version では捕まらない（再読込後の正当な更新に見える）
     // ため、応答で往復させた version を明示比対して 409 で拒否する。
@@ -233,11 +236,14 @@ public class AdminStaffService {
     credentialOperations.reassignGrants(user, command.roleIds(), command.storeIds());
     user = save(user);
     if (!before.equals(BusinessAudit.grants(user)))
-      businessAudit.recordCurrent(
+      businessAudit.recordById(
+          actorId,
           null,
           "STAFF_GRANTS_CHANGED",
           "USER_GRANTS",
           user.getId().toString(),
+          null,
+          null,
           before,
           BusinessAudit.grants(user));
     return toView(user, roles, actor);
@@ -248,11 +254,11 @@ public class AdminStaffService {
    * （差分語義だと再送では何も起きず、再開してから止め直す以外に復旧手段が無くなる）。
    */
   @Transactional
-  public void suspend(Long id, String actorEmail) {
-    Actor actor = actor(actorEmail);
+  public void suspend(Long id, long actorId) {
+    Actor actor = actor(actorId);
     User visible = requireVisible(id, actor);
     // 自分自身を停止すると自らのセッションも即時失効し、以後の操作ができなくなる（サポート経路がない自己ロックアウト）ため拒否する。
-    if (visible.getEmail().equals(actorEmail)) {
+    if (visible.getId() == actorId) {
       throw new SelfStopNotAllowedException("自分自身を停止することはできません");
     }
     requireEditable(visible, actor);
@@ -261,8 +267,8 @@ public class AdminStaffService {
     credentialOperations.stop(target);
     if (wasEnabled) {
       repository.saveAndFlush(target);
-      businessAudit.record(
-          actorEmail,
+      businessAudit.recordById(
+          actorId,
           null,
           "STAFF_ACCOUNT_SUSPENDED",
           "USER_GRANTS",
@@ -276,18 +282,21 @@ public class AdminStaffService {
 
   /** 再開する。既に有効でも 204 で受理する（冪等）。停止で増えた版は戻らないため、停止前のセッションは復活せず再ログインを要する。 */
   @Transactional
-  public void resume(Long id, String actorEmail) {
-    Actor actor = actor(actorEmail);
+  public void resume(Long id, long actorId) {
+    Actor actor = actor(actorId);
     User target = requireVisible(id, actor);
     requireEditable(target, actor);
     if (!target.getEnabled()) {
       target.resume();
       repository.saveAndFlush(target);
-      businessAudit.recordCurrent(
+      businessAudit.recordById(
+          actorId,
           null,
           "STAFF_ACCOUNT_RESUMED",
           "USER_GRANTS",
           id.toString(),
+          null,
+          null,
           Map.of("enabled", "false"),
           Map.of("enabled", "true"));
     }
@@ -300,12 +309,12 @@ public class AdminStaffService {
    * 状態機械の遷移が無く、並行書込みは楽観ロック（@Version）が担う。
    */
   @Transactional
-  public String resetPassword(Long id, String actorEmail) {
-    Actor actor = actor(actorEmail);
+  public String resetPassword(Long id, long actorId) {
+    Actor actor = actor(actorId);
     User target = requireVisible(id, actor);
     // 自己再設定は名指しで拒む。JWT の権限は発行時の写しで降格後も失効まで残るため、降格済みの残存セッションが
     // 委譲守衛を素通りして口座を恒久奪取できてしまう。
-    if (target.getEmail().equals(actorEmail)) {
+    if (target.getId() == actorId) {
       throw new SelfPasswordResetNotAllowedException("自分自身のパスワードは再設定できません");
     }
     if (holdsAny(
@@ -317,8 +326,8 @@ public class AdminStaffService {
     String temporaryPassword = temporaryPassword();
     credentialOperations.changePassword(target, passwordEncoder.encode(temporaryPassword));
     repository.saveAndFlush(target);
-    businessAudit.record(
-        actorEmail,
+    businessAudit.recordById(
+        actorId,
         null,
         "STAFF_PASSWORD_RESET",
         "USER_GRANTS",
@@ -338,14 +347,14 @@ public class AdminStaffService {
   }
 
   /** 行使者の権限並集と店舗集合。作用域を解決できない要求は fail-closed に拒む（店舗境界の唯一の担保がこれである以上、既定で通してはならない）。 */
-  private Actor actor(String actorEmail) {
+  private Actor actor(long actorId) {
     StoreScope scope = storeScopeHolder.current();
     if (scope == null) {
       throw new AccessDeniedException("授権店舗集合を解決できません");
     }
     User user =
         repository
-            .findByEmail(actorEmail)
+            .findById(actorId)
             .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
     Set<Long> permissionIds =
         roleRepository.findAllById(user.getRoleIds()).stream()

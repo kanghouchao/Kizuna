@@ -49,8 +49,8 @@ public class ReviewService {
   private final Clock clock;
 
   @Transactional
-  public ReviewViews.Written write(Long storeId, String email, ReviewCommand command) {
-    var actor = identities.requireActor(email);
+  public ReviewViews.Written write(Long storeId, long actorId, ReviewCommand command) {
+    var actor = identities.requireActor(actorId);
     return receipts.once(
         key(storeId, actor, command),
         command.fingerprint(),
@@ -58,13 +58,13 @@ public class ReviewService {
           var target = lock(storeId, command);
           var result =
               switch (command) {
-                case ReviewCommand.Receive c -> receive(storeId, email, actor, c);
-                case ReviewCommand.Decide c -> decide(email, actor, target, c);
-                case ReviewCommand.Withdraw c -> withdraw(email, actor, target, c);
-                case ReviewCommand.Grant c -> grant(email, actor, target, c);
-                case ReviewCommand.Revoke c -> revoke(storeId, email, actor, target, c);
-                case ReviewCommand.Publish c -> publish(email, actor, target, c);
-                case ReviewCommand.Correct c -> correct(storeId, email, actor, target, c);
+                case ReviewCommand.Receive c -> receive(storeId, actor, c);
+                case ReviewCommand.Decide c -> decide(actor, target, c);
+                case ReviewCommand.Withdraw c -> withdraw(actor, target, c);
+                case ReviewCommand.Grant c -> grant(actor, target, c);
+                case ReviewCommand.Revoke c -> revoke(storeId, actor, target, c);
+                case ReviewCommand.Publish c -> publish(actor, target, c);
+                case ReviewCommand.Correct c -> correct(storeId, actor, target, c);
               };
           return new Committed(
               result.type().receiptName(),
@@ -75,8 +75,8 @@ public class ReviewService {
   }
 
   @Transactional(readOnly = true)
-  public ReviewViews.Written replayOnly(Long storeId, String email, ReviewCommand command) {
-    var actor = identities.requireActor(email);
+  public ReviewViews.Written replayOnly(Long storeId, long actorId, ReviewCommand command) {
+    var actor = identities.requireActor(actorId);
     return receipts.replayOnly(
         key(storeId, actor, command), command.fingerprint(), receipt -> respond(storeId, receipt));
   }
@@ -144,7 +144,7 @@ public class ReviewService {
 
   private record Result(ReviewRecord row, Operation type) {}
 
-  private Result receive(Long storeId, String email, AuditActor actor, ReviewCommand.Receive c) {
+  private Result receive(Long storeId, AuditActor actor, ReviewCommand.Receive c) {
     ReviewInput.requirePast(c.input().receivedAt(), now());
     var origin = origin(storeId, c.input());
     var row =
@@ -156,25 +156,24 @@ public class ReviewService {
                 actor.name(),
                 origin.checkedAt(),
                 origin.version()));
-    record(email, actor, row, Operation.RECEIVED, null, null, null, null);
+    record(actor, row, Operation.RECEIVED, null, null, null, null);
     return new Result(row, Operation.RECEIVED);
   }
 
-  private Result decide(String email, AuditActor actor, ReviewRecord row, ReviewCommand.Decide c) {
+  private Result decide(AuditActor actor, ReviewRecord row, ReviewCommand.Decide c) {
     var before = before(row, c.version());
     if (c.type() == Operation.APPROVED) row.approve();
     else row.reject();
-    return changed(email, actor, row, c.type(), before, c.reason(), null);
+    return changed(actor, row, c.type(), before, c.reason(), null);
   }
 
-  private Result withdraw(
-      String email, AuditActor actor, ReviewRecord row, ReviewCommand.Withdraw c) {
+  private Result withdraw(AuditActor actor, ReviewRecord row, ReviewCommand.Withdraw c) {
     var before = before(row, c.version());
     row.withdraw();
-    return changed(email, actor, row, Operation.WITHDRAWN, before, c.reason(), null);
+    return changed(actor, row, Operation.WITHDRAWN, before, c.reason(), null);
   }
 
-  private Result grant(String email, AuditActor actor, ReviewRecord row, ReviewCommand.Grant c) {
+  private Result grant(AuditActor actor, ReviewRecord row, ReviewCommand.Grant c) {
     var before = before(row, c.version());
     ReviewInput.requirePast(c.grantedAt(), now());
     row.grantPermission();
@@ -182,12 +181,10 @@ public class ReviewService {
         permissions.saveAndFlush(
             ReviewPermission.grant(
                 row, c.basis(), c.grantedAt(), c.evidence(), actor.id(), actor.name()));
-    return changed(
-        email, actor, row, Operation.PERMISSION_GRANTED, before, null, permission.getId());
+    return changed(actor, row, Operation.PERMISSION_GRANTED, before, null, permission.getId());
   }
 
-  private Result revoke(
-      Long storeId, String email, AuditActor actor, ReviewRecord row, ReviewCommand.Revoke c) {
+  private Result revoke(Long storeId, AuditActor actor, ReviewRecord row, ReviewCommand.Revoke c) {
     var before = before(row, c.version());
     ReviewInput.requirePast(c.receivedAt(), now());
     row.revokePermission();
@@ -198,18 +195,17 @@ public class ReviewService {
     permission.revoke(
         c.receivedAt(), c.reason(), actor.id(), actor.name(), ReviewInput.time(now()));
     return changed(
-        email, actor, row, Operation.PERMISSION_REVOKED, before, c.reason(), permission.getId());
+        actor, row, Operation.PERMISSION_REVOKED, before, c.reason(), permission.getId());
   }
 
-  private Result publish(
-      String email, AuditActor actor, ReviewRecord row, ReviewCommand.Publish c) {
+  private Result publish(AuditActor actor, ReviewRecord row, ReviewCommand.Publish c) {
     var before = before(row, c.version());
     row.changePublication(c.publication());
-    return changed(email, actor, row, Operation.PUBLICATION_CHANGED, before, null, null);
+    return changed(actor, row, Operation.PUBLICATION_CHANGED, before, null, null);
   }
 
   private Result correct(
-      Long storeId, String email, AuditActor actor, ReviewRecord old, ReviewCommand.Correct c) {
+      Long storeId, AuditActor actor, ReviewRecord old, ReviewCommand.Correct c) {
     var before = before(old, c.version());
     ReviewInput.requirePast(c.input().receivedAt(), now());
     var origin = origin(storeId, c.input());
@@ -219,8 +215,8 @@ public class ReviewService {
                 old, c.input(), actor.id(), actor.name(), origin.checkedAt(), origin.version()));
     old.linkCorrection(row.getId());
     reviews.flush();
-    record(email, actor, old, Operation.CORRECTION_LINKED, before, c.reason(), row.getId(), null);
-    record(email, actor, row, Operation.CORRECTION_RECEIVED, null, c.reason(), old.getId(), null);
+    record(actor, old, Operation.CORRECTION_LINKED, before, c.reason(), row.getId(), null);
+    record(actor, row, Operation.CORRECTION_RECEIVED, null, c.reason(), old.getId(), null);
     return new Result(row, Operation.CORRECTION_RECEIVED);
   }
 
@@ -247,7 +243,6 @@ public class ReviewService {
   }
 
   private Result changed(
-      String email,
       AuditActor actor,
       ReviewRecord row,
       Operation type,
@@ -255,12 +250,11 @@ public class ReviewService {
       String reason,
       String permissionId) {
     reviews.flush();
-    record(email, actor, row, type, before, reason, null, permissionId);
+    record(actor, row, type, before, reason, null, permissionId);
     return new Result(row, type);
   }
 
   private void record(
-      String email,
       AuditActor actor,
       ReviewRecord row,
       Operation type,
@@ -271,8 +265,8 @@ public class ReviewService {
     history.save(
         ReviewHistory.record(
             row, type, actor.id(), actor.name(), before, reason, related, permissionId));
-    audit.record(
-        email,
+    audit.recordById(
+        actor.id(),
         row.getStoreId(),
         "REVIEW_" + type.name(),
         "REVIEW",

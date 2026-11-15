@@ -1,5 +1,6 @@
 package com.kizuna.review.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -25,14 +26,16 @@ import com.kizuna.review.domain.ReviewSearch;
 import com.kizuna.review.domain.ReviewValues.Operation;
 import com.kizuna.review.domain.ReviewValues.ReceivedVia;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.hibernate.exception.ConstraintViolationException;
-import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -47,13 +50,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.projection.SpelAwareProxyProjectionFactory;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.test.context.support.WithAnonymousUser;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
@@ -81,14 +79,13 @@ class ReviewControllerTest {
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
   @MockitoBean StoreScopeResolver storeScopeResolver;
 
-  /** handler は Authentication を要求の principal から受けるため、模擬利用者を principal にも載せる。 */
-  private static Authentication currentUser() {
-    return SecurityContextHolder.getContext().getAuthentication();
+  @BeforeEach
+  void installStoreScope() {
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(STORE_ID)));
   }
 
   @Test
   @DisplayName("口コミ詳細は名乗られた店舗の id で service を呼ぶこと")
-  @WithMockUser(authorities = "PERM_REVIEW_VIEW")
   void detailPassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(reviews.detail(STORE_ID, "00000000-0000-7000-8000-000000000101")).thenReturn(detail());
@@ -97,7 +94,7 @@ class ReviewControllerTest {
         .perform(
             get("/reviews/00000000-0000-7000-8000-000000000101")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(currentUser()))
+                .with(jwtUser(42L, "PERM_REVIEW_VIEW")))
         .andExpect(status().isOk());
 
     verify(reviews).detail(STORE_ID, "00000000-0000-7000-8000-000000000101");
@@ -105,10 +102,9 @@ class ReviewControllerTest {
 
   @Test
   @DisplayName("口コミの審査は名乗られた店舗の id で service を呼ぶこと")
-  @WithMockUser(authorities = {"PERM_REVIEW_VIEW", "PERM_REVIEW_MODERATE"})
   void decisionPassesTheCurrentStore() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(reviews.write(eq(STORE_ID), eq("user"), any(ReviewCommand.Decide.class)))
+    when(reviews.write(eq(STORE_ID), eq(42L), any(ReviewCommand.Decide.class)))
         .thenReturn(
             new ReviewViews.Written(
                 detail(),
@@ -123,18 +119,17 @@ class ReviewControllerTest {
         .perform(
             post("/reviews/00000000-0000-7000-8000-000000000101/decisions")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(currentUser())
                 .contentType("application/json")
                 .content(
-                    "{\"version\":0,\"decision\":\"APPROVE\",\"reason\":\"確認\",\"dedupe_key\":\"k\"}"))
+                    "{\"version\":0,\"decision\":\"APPROVE\",\"reason\":\"確認\",\"dedupe_key\":\"k\"}")
+                .with(jwtUser(42L, "PERM_REVIEW_VIEW", "PERM_REVIEW_MODERATE")))
         .andExpect(status().isOk());
 
-    verify(reviews).write(eq(STORE_ID), eq("user"), any(ReviewCommand.Decide.class));
+    verify(reviews).write(eq(STORE_ID), eq(42L), any(ReviewCommand.Decide.class));
   }
 
   @Test
   @DisplayName("版を文字列で送った審査は全体の厳格な型照合で 400 になり service に届かないこと")
-  @WithMockUser(authorities = {"PERM_REVIEW_VIEW", "PERM_REVIEW_MODERATE"})
   void decisionRejectsVersionSentAsString() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
@@ -142,10 +137,10 @@ class ReviewControllerTest {
         .perform(
             post("/reviews/00000000-0000-7000-8000-000000000101/decisions")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(currentUser())
                 .contentType("application/json")
                 .content(
-                    "{\"version\":\"0\",\"decision\":\"APPROVE\",\"reason\":\"確認\",\"dedupe_key\":\"k\"}"))
+                    "{\"version\":\"0\",\"decision\":\"APPROVE\",\"reason\":\"確認\",\"dedupe_key\":\"k\"}")
+                .with(jwtUser(42L, "PERM_REVIEW_VIEW", "PERM_REVIEW_MODERATE")))
         .andExpect(status().isBadRequest());
 
     verifyNoInteractions(reviews);
@@ -153,7 +148,6 @@ class ReviewControllerTest {
 
   @Test
   @DisplayName("口コミの履歴は新しい順の Page で返すこと")
-  @WithMockUser(authorities = "PERM_REVIEW_VIEW")
   void historyIsAPageNewestFirst() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
@@ -165,7 +159,7 @@ class ReviewControllerTest {
         .perform(
             get("/reviews/00000000-0000-7000-8000-000000000101/history")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(currentUser()))
+                .with(jwtUser(42L, "PERM_REVIEW_VIEW")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 
@@ -175,7 +169,6 @@ class ReviewControllerTest {
 
   @Test
   @DisplayName("口コミ一覧は order の並びで Page を返し、sort 引数を問い合わせに渡さないこと")
-  @WithMockUser(authorities = "PERM_REVIEW_VIEW")
   void listOrdersByTheOrderParameterNotTheRequestSort() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<ReviewSearch> search = ArgumentCaptor.forClass(ReviewSearch.class);
@@ -188,7 +181,7 @@ class ReviewControllerTest {
                 .param("page", "1")
                 .param("size", "0")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(currentUser()))
+                .with(jwtUser(42L, "PERM_REVIEW_VIEW")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 
@@ -205,7 +198,7 @@ class ReviewControllerTest {
                 .param("page", "99999999")
                 .param("size", "100")
                 .header("X-Store-ID", STORE_ID.toString())
-                .principal(currentUser()))
+                .with(jwtUser(42L, "PERM_REVIEW_VIEW")))
         .andExpect(status().isBadRequest());
   }
 
@@ -313,7 +306,7 @@ class ReviewControllerTest {
   @DisplayName("関連受注を持つ受付・訂正は、受注の管理権限があれば service に届くこと")
   void intakeWithAnOriginOrderPassesWithOrderManage() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(reviews.write(eq(STORE_ID), eq("user"), any())).thenReturn(written(false));
+    when(reviews.write(eq(STORE_ID), eq(42L), any())).thenReturn(written(false));
 
     for (var request : intakes(ORIGIN))
       mockMvc
@@ -325,19 +318,19 @@ class ReviewControllerTest {
                   .header("X-Store-ID", STORE_ID.toString()))
           .andExpect(status().isCreated());
 
-    verify(reviews).write(eq(STORE_ID), eq("user"), any(ReviewCommand.Receive.class));
-    verify(reviews).write(eq(STORE_ID), eq("user"), any(ReviewCommand.Correct.class));
+    verify(reviews).write(eq(STORE_ID), eq(42L), any(ReviewCommand.Receive.class));
+    verify(reviews).write(eq(STORE_ID), eq(42L), any(ReviewCommand.Correct.class));
   }
 
   @Test
   @DisplayName("関連受注を持たない受付・訂正は、受注の管理権限が無くても初回・再送とも通ること")
   void intakeWithoutAnOriginOrderNeedsNoOrderManage() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(reviews.write(eq(STORE_ID), eq("user"), any()))
+    when(reviews.write(eq(STORE_ID), eq(42L), any()))
         .thenReturn(written(false))
         .thenReturn(written(false))
         .thenThrow(duplicateReceipt());
-    when(reviews.replayOnly(eq(STORE_ID), eq("user"), any())).thenReturn(written(true));
+    when(reviews.replayOnly(eq(STORE_ID), eq(42L), any())).thenReturn(written(true));
 
     for (var expected : List.of(201, 200))
       for (var request : intakes(null))
@@ -348,8 +341,8 @@ class ReviewControllerTest {
                     .header("X-Store-ID", STORE_ID.toString()))
             .andExpect(status().is(expected));
 
-    verify(reviews).replayOnly(eq(STORE_ID), eq("user"), any(ReviewCommand.Receive.class));
-    verify(reviews).replayOnly(eq(STORE_ID), eq("user"), any(ReviewCommand.Correct.class));
+    verify(reviews).replayOnly(eq(STORE_ID), eq(42L), any(ReviewCommand.Receive.class));
+    verify(reviews).replayOnly(eq(STORE_ID), eq(42L), any(ReviewCommand.Correct.class));
   }
 
   private static DataIntegrityViolationException duplicateReceipt() {
@@ -361,21 +354,8 @@ class ReviewControllerTest {
             "uq_t_operation_receipts_key"));
   }
 
-  /** 権限の判定だけを見るため、店舗集合の照合が掛からない Bearer 以外の主体を文脈と principal の両方に載せる。 */
   private static RequestPostProcessor holding(List<String> permissions) {
-    var token =
-        new UsernamePasswordAuthenticationToken(
-            "user", "unused", permissions.stream().map(SimpleGrantedAuthority::new).toList());
-    SecurityContextHolder.getContext().setAuthentication(token);
-    return request -> {
-      request.setUserPrincipal(token);
-      return request;
-    };
-  }
-
-  @AfterEach
-  void clearAuthentication() {
-    SecurityContextHolder.clearContext();
+    return jwtUser(42L, permissions.toArray(String[]::new));
   }
 
   private static ReviewViews.Detail detail() {

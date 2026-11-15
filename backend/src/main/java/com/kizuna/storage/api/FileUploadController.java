@@ -2,9 +2,11 @@ package com.kizuna.storage.api;
 
 import com.kizuna.shared.config.AppProperties;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.storage.api.dto.FileUploadResponse;
 import com.kizuna.storage.application.FileStorageService;
 import com.kizuna.storage.application.StoredFileAudit;
+import java.security.Principal;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -31,10 +33,12 @@ public class FileUploadController {
       @CurrentStore Long storeId,
       @RequestParam("file") MultipartFile file,
       @RequestParam("purpose") String purpose,
-      @RequestParam(value = "bucket", defaultValue = "public") String bucket) {
+      @RequestParam(value = "bucket", defaultValue = "public") String bucket,
+      Principal principal) {
+    long actorId = JwtClaims.userIdOf(principal);
     String relativePath = fileStorageService.store(storeId, bucket, purpose, file);
     storedFileAudit.recordUpload(
-        storeId, relativePath, bucket, file.getSize(), file.getContentType());
+        storeId, actorId, relativePath, bucket, file.getSize(), file.getContentType());
 
     FileUploadResponse response =
         FileUploadResponse.builder()

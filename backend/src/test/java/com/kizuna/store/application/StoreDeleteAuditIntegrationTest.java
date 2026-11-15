@@ -25,15 +25,12 @@ import com.kizuna.user.domain.UserType;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import java.time.Clock;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
@@ -53,8 +50,6 @@ import org.springframework.orm.jpa.SharedEntityManagerCreator;
 import org.springframework.orm.jpa.hibernate.SpringBeanContainer;
 import org.springframework.orm.jpa.vendor.HibernateJpaDialect;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -102,17 +97,6 @@ class StoreDeleteAuditIntegrationTest {
         "alter table t_audit_events add constraint fk_test_audit_actor foreign key(actor_id) references t_users(id)");
   }
 
-  @BeforeEach
-  void authenticate() {
-    SecurityContextHolder.getContext()
-        .setAuthentication(new UsernamePasswordAuthenticationToken(ORDINARY, null, List.of()));
-  }
-
-  @AfterEach
-  void clear() {
-    SecurityContextHolder.clearContext();
-  }
-
   @AfterAll
   void close() {
     if (jdbc != null) jdbc.execute("drop table if exists t_cascade_child, t_services");
@@ -124,10 +108,10 @@ class StoreDeleteAuditIntegrationTest {
     long id = create();
     jdbc.update("insert into t_cascade_child(store_id) values (?), (?)", id, id);
     var rename = new StorePatch("改名後", StoreShortNames.next());
-    stores.update(only(id), String.valueOf(id), rename);
-    stores.update(only(id), String.valueOf(id), rename);
+    stores.update(ordinaryId, only(id), String.valueOf(id), rename);
+    stores.update(ordinaryId, only(id), String.valueOf(id), rename);
 
-    stores.delete(only(id), String.valueOf(id));
+    stores.delete(ordinaryId, only(id), String.valueOf(id));
 
     assertThat(count("select count(*) from t_stores where id=?", id)).isZero();
     assertThat(count("select count(*) from t_cascade_child where store_id=?", id)).isZero();
@@ -164,7 +148,7 @@ class StoreDeleteAuditIntegrationTest {
     jdbc.update("insert into t_services(store_id) values (?)", id);
     long audits = deleteAudits(id);
 
-    assertThatThrownBy(() -> stores.delete(only(id), String.valueOf(id)))
+    assertThatThrownBy(() -> stores.delete(ordinaryId, only(id), String.valueOf(id)))
         .isInstanceOf(ServiceException.class)
         .hasMessage("サービス設定が存在する店舗は削除できません");
 
@@ -179,7 +163,7 @@ class StoreDeleteAuditIntegrationTest {
     jdbc.execute(
         "alter table t_audit_events add constraint ck_store_delete_audit_test check(action <> 'STORE_DELETED') not valid");
     try {
-      assertThatThrownBy(() -> stores.delete(only(id), String.valueOf(id)))
+      assertThatThrownBy(() -> stores.delete(ordinaryId, only(id), String.valueOf(id)))
           .isInstanceOf(DataIntegrityViolationException.class);
     } finally {
       jdbc.execute("alter table t_audit_events drop constraint ck_store_delete_audit_test");
@@ -192,7 +176,7 @@ class StoreDeleteAuditIntegrationTest {
   private long create() {
     var command =
         new StoreCreateCommand("検証店", StoreShortNames.next(), UUID.randomUUID() + ".example.test");
-    return stores.create(command);
+    return stores.create(ordinaryId, command);
   }
 
   private long count(String sql, long id) {

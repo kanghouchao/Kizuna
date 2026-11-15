@@ -23,17 +23,17 @@ public class TaskOptions {
 
   public record UncoveredStore(Long id, String name) {}
 
-  public List<TaskType> taskTypes(String email) {
+  public List<TaskType> taskTypes(long userId) {
     return registry.registered().stream()
-        .map(handler -> new TaskType(handler.name(), allowed(email, handler)))
+        .map(handler -> new TaskType(handler.name(), allowed(userId, handler)))
         .toList();
   }
 
-  private boolean allowed(String email, TaskHandler handler) {
+  private boolean allowed(long userId, TaskHandler handler) {
     try {
       handler
           .manualPermission()
-          .ifPresent(permission -> identities.requireOperator(email, permission));
+          .ifPresent(permission -> identities.requireOperator(userId, permission));
       return true;
     } catch (AccessDeniedException denied) {
       return false;

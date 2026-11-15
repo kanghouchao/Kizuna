@@ -34,7 +34,7 @@ class MediumServiceTest {
         .when(media)
         .flush();
 
-    assertThatThrownBy(() -> service.delete(7L, "m1", 0L))
+    assertThatThrownBy(() -> service.delete(7L, 9L, "m1", 0L))
         .isInstanceOf(ConflictException.class)
         .hasMessage("記録から参照されている媒体は削除できません。使わない場合は停止してください");
     verifyNoInteractions(audit);

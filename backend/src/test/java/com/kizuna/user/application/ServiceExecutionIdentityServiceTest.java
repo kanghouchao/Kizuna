@@ -45,13 +45,12 @@ class ServiceExecutionIdentityServiceTest {
     var users = mock(UserRepository.class);
     var roles = mock(RoleRepository.class);
     var staff = user(41L, UserType.STAFF, Set.of(1L));
-    when(users.findByEmail("op@kizuna.test")).thenReturn(Optional.of(staff));
+    when(users.findById(41L)).thenReturn(Optional.of(staff));
     when(roles.findIdsByPermissionCode("TASK_MANAGE")).thenReturn(Set.of(7L));
     var service = new ServiceExecutionIdentityService(users, roles);
 
-    assertThat(service.requireOperator("op@kizuna.test", PermissionCode.TASK_MANAGE).id())
-        .isEqualTo(41L);
-    assertThatThrownBy(() -> service.requireOperator("op@kizuna.test", PermissionCode.AUDIT_VIEW))
+    assertThat(service.requireOperator(41L, PermissionCode.TASK_MANAGE).id()).isEqualTo(41L);
+    assertThatThrownBy(() -> service.requireOperator(41L, PermissionCode.AUDIT_VIEW))
         .isInstanceOf(AccessDeniedException.class);
   }
 

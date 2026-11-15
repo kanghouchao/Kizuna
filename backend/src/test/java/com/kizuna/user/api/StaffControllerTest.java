@@ -1,9 +1,13 @@
 package com.kizuna.user.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -26,7 +30,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -40,9 +43,6 @@ class StaffControllerTest {
   @EnableMethodSecurity
   static class MethodSecurityConfig {}
 
-  /** Principal 引数の解決は servlet の userPrincipal を読むため、要求へ直接載せる。 */
-  private static final java.security.Principal ACTOR = () -> "actor@kizuna.test";
-
   @Autowired private MockMvc mockMvc;
 
   @MockitoBean private AdminStaffService adminStaffService;
@@ -54,55 +54,58 @@ class StaffControllerTest {
 
   @Test
   @DisplayName("GET /staff?sort=displayName でも id が副キーとして補われること")
-  @WithMockUser(authorities = "PERM_STAFF_MANAGE")
   void listAppendsIdTiebreakerWhenCallerOverridesSort() throws Exception {
     ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
     Page<StaffView> empty = new PageImpl<>(List.of());
-    when(adminStaffService.list(any(), any(), pageableCaptor.capture(), any())).thenReturn(empty);
+    when(adminStaffService.list(any(), any(), pageableCaptor.capture(), eq(42L))).thenReturn(empty);
 
-    mockMvc.perform(get("/staff?sort=displayName").principal(ACTOR)).andExpect(status().isOk());
+    mockMvc
+        .perform(get("/staff?sort=displayName").with(jwtUser(42L, "PERM_STAFF_MANAGE")))
+        .andExpect(status().isOk());
 
     assertThat(pageableCaptor.getValue().getSort().getOrderFor("id")).isNotNull();
   }
 
   @Test
   @DisplayName("GET /staff?storeId= が店舗絞り込みとしてサービスへ渡ること")
-  @WithMockUser(authorities = "PERM_STAFF_MANAGE")
   void listPassesStoreIdFilterToService() throws Exception {
     ArgumentCaptor<Long> storeIdCaptor = ArgumentCaptor.forClass(Long.class);
     Page<StaffView> empty = new PageImpl<>(List.of());
-    when(adminStaffService.list(any(), storeIdCaptor.capture(), any(), any())).thenReturn(empty);
+    when(adminStaffService.list(any(), storeIdCaptor.capture(), any(), eq(42L))).thenReturn(empty);
 
-    mockMvc.perform(get("/staff?storeId=7").principal(ACTOR)).andExpect(status().isOk());
+    mockMvc
+        .perform(get("/staff?storeId=7").with(jwtUser(42L, "PERM_STAFF_MANAGE")))
+        .andExpect(status().isOk());
 
     assertThat(storeIdCaptor.getValue()).isEqualTo(7L);
   }
 
   @Test
   @DisplayName("storeId 未指定なら絞り込みなし（null）でサービスへ渡ること")
-  @WithMockUser(authorities = "PERM_STAFF_MANAGE")
   void listPassesNullStoreIdWhenParamAbsent() throws Exception {
     ArgumentCaptor<Long> storeIdCaptor = ArgumentCaptor.forClass(Long.class);
     Page<StaffView> empty = new PageImpl<>(List.of());
-    when(adminStaffService.list(any(), storeIdCaptor.capture(), any(), any())).thenReturn(empty);
+    when(adminStaffService.list(any(), storeIdCaptor.capture(), any(), eq(42L))).thenReturn(empty);
 
-    mockMvc.perform(get("/staff").principal(ACTOR)).andExpect(status().isOk());
+    mockMvc
+        .perform(get("/staff").with(jwtUser(42L, "PERM_STAFF_MANAGE")))
+        .andExpect(status().isOk());
 
     assertThat(storeIdCaptor.getValue()).isNull();
   }
 
   @Test
   @DisplayName("STAFF_CREDENTIAL_MANAGE のみ保持では GET /staff が 403（授権の閲覧・編集は STAFF_MANAGE 門）")
-  @WithMockUser(authorities = "PERM_STAFF_CREDENTIAL_MANAGE")
   void accountManageAloneCannotReadGrants() throws Exception {
-    mockMvc.perform(get("/staff").principal(ACTOR)).andExpect(status().isForbidden());
+    mockMvc
+        .perform(get("/staff").with(jwtUser(42L, "PERM_STAFF_CREDENTIAL_MANAGE")))
+        .andExpect(status().isForbidden());
   }
 
   @Test
   @DisplayName("GET /staff/grantable-roles は各ロールの権限をコードと表示名で返し、件数は持たないこと")
-  @WithMockUser(authorities = "PERM_STAFF_MANAGE")
   void grantableRolesCarryPermissionCodesAndLabels() throws Exception {
-    when(adminStaffService.grantableRoles(any()))
+    when(adminStaffService.grantableRoles(42L))
         .thenReturn(
             List.of(
                 new RoleViews.Grantable(
@@ -112,7 +115,7 @@ class StaffControllerTest {
                     List.of(PermissionCode.ORDER_MANAGE, PermissionCode.ORDER_CORRECT))));
 
     mockMvc
-        .perform(get("/staff/grantable-roles").principal(ACTOR))
+        .perform(get("/staff/grantable-roles").with(jwtUser(42L, "PERM_STAFF_MANAGE")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$[0].id").value(2))
         .andExpect(jsonPath("$[0].name").value("店長"))
@@ -122,5 +125,15 @@ class StaffControllerTest {
             jsonPath("$[0].permissions[0].label").value(PermissionCode.ORDER_MANAGE.getLabel()))
         .andExpect(jsonPath("$[0].permissions[1].code").value("ORDER_CORRECT"))
         .andExpect(jsonPath("$[0].permission_count").doesNotExist());
+  }
+
+  @Test
+  @DisplayName("停止の行使者はトークンの利用者 ID としてサービスへ渡ること")
+  void suspendPassesTokenUserIdAsActor() throws Exception {
+    mockMvc
+        .perform(post("/staff/7/suspension").with(jwtUser(42L, "PERM_STAFF_CREDENTIAL_MANAGE")))
+        .andExpect(status().isNoContent());
+
+    verify(adminStaffService).suspend(7L, 42L);
   }
 }

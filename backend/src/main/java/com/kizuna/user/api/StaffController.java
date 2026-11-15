@@ -1,5 +1,6 @@
 package com.kizuna.user.api;
 
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.user.api.dto.AdminStaffCreateRequest;
 import com.kizuna.user.api.dto.AdminStaffResponse;
 import com.kizuna.user.api.dto.AdminStaffUpdateRequest;
@@ -46,7 +47,7 @@ public class StaffController {
       Principal principal) {
     return ResponseEntity.ok(
         adminStaffService
-            .list(search, storeId, pageable, principal.getName())
+            .list(search, storeId, pageable, JwtClaims.userIdOf(principal))
             .map(AdminStaffResponse::of));
   }
 
@@ -55,7 +56,7 @@ public class StaffController {
   @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
   public ResponseEntity<List<GrantableRoleResponse>> grantableRoles(Principal principal) {
     return ResponseEntity.ok(
-        adminStaffService.grantableRoles(principal.getName()).stream()
+        adminStaffService.grantableRoles(JwtClaims.userIdOf(principal)).stream()
             .map(GrantableRoleResponse::of)
             .toList());
   }
@@ -63,7 +64,8 @@ public class StaffController {
   @GetMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_STAFF_MANAGE')")
   public ResponseEntity<AdminStaffResponse> get(@PathVariable Long id, Principal principal) {
-    return ResponseEntity.ok(AdminStaffResponse.of(adminStaffService.get(id, principal.getName())));
+    return ResponseEntity.ok(
+        AdminStaffResponse.of(adminStaffService.get(id, JwtClaims.userIdOf(principal))));
   }
 
   @PostMapping
@@ -71,7 +73,9 @@ public class StaffController {
   public ResponseEntity<AdminStaffResponse> create(
       @Valid @RequestBody AdminStaffCreateRequest req, Principal principal) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(AdminStaffResponse.of(adminStaffService.create(req.command(), principal.getName())));
+        .body(
+            AdminStaffResponse.of(
+                adminStaffService.create(req.command(), JwtClaims.userIdOf(principal))));
   }
 
   @PutMapping("/{id}")
@@ -79,20 +83,21 @@ public class StaffController {
   public ResponseEntity<AdminStaffResponse> update(
       @PathVariable Long id, @Valid @RequestBody AdminStaffUpdateRequest req, Principal principal) {
     return ResponseEntity.ok(
-        AdminStaffResponse.of(adminStaffService.update(id, req.command(), principal.getName())));
+        AdminStaffResponse.of(
+            adminStaffService.update(id, req.command(), JwtClaims.userIdOf(principal))));
   }
 
   @PostMapping("/{id}/suspension")
   @PreAuthorize("hasAuthority('PERM_STAFF_CREDENTIAL_MANAGE')")
   public ResponseEntity<Void> suspend(@PathVariable Long id, Principal principal) {
-    adminStaffService.suspend(id, principal.getName());
+    adminStaffService.suspend(id, JwtClaims.userIdOf(principal));
     return ResponseEntity.noContent().build();
   }
 
   @PostMapping("/{id}/resumption")
   @PreAuthorize("hasAuthority('PERM_STAFF_CREDENTIAL_MANAGE')")
   public ResponseEntity<Void> resume(@PathVariable Long id, Principal principal) {
-    adminStaffService.resume(id, principal.getName());
+    adminStaffService.resume(id, JwtClaims.userIdOf(principal));
     return ResponseEntity.noContent().build();
   }
 
@@ -103,6 +108,6 @@ public class StaffController {
       @PathVariable Long id, Principal principal) {
     return ResponseEntity.ok(
         new StaffAccountPasswordResetResponse(
-            adminStaffService.resetPassword(id, principal.getName())));
+            adminStaffService.resetPassword(id, JwtClaims.userIdOf(principal))));
   }
 }

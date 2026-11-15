@@ -24,7 +24,6 @@ import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
@@ -85,18 +84,18 @@ class MemberEmailVerificationControllerTest {
 
   @Test
   @DisplayName("職員は 403 で拒まれ、再送に到達しないこと")
-  @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
   void staffIsForbidden() throws Exception {
-    mockMvc.perform(post(PATH)).andExpect(status().isForbidden());
+    mockMvc
+        .perform(post(PATH).with(jwtUser(11L, "PERM_CUSTOMER_MANAGE")))
+        .andExpect(status().isForbidden());
 
     verify(memberEmailVerificationService, never()).resend(anyLong());
   }
 
   @Test
   @DisplayName("キャストは 403 で拒まれ、再送に到達しないこと")
-  @WithMockUser(roles = "CAST")
   void castIsForbidden() throws Exception {
-    mockMvc.perform(post(PATH)).andExpect(status().isForbidden());
+    mockMvc.perform(post(PATH).with(jwtUser(11L, "ROLE_CAST"))).andExpect(status().isForbidden());
 
     verify(memberEmailVerificationService, never()).resend(anyLong());
   }

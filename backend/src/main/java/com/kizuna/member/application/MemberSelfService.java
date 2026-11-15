@@ -8,7 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 本人（会員）ポータルのホーム解決ユースケース。認証主体の email から本人の会員コードのみを返す（他人のデータへの到達経路を持たない）。 */
+/** 本人（会員）ポータルのホーム解決ユースケース。認証主体の利用者 ID から本人の会員コードのみを返す（他人のデータへの到達経路を持たない）。 */
 @Service
 @RequiredArgsConstructor
 public class MemberSelfService {
@@ -17,10 +17,10 @@ public class MemberSelfService {
   private final MemberRepository memberRepository;
 
   @Transactional(readOnly = true)
-  public MemberHome home(String email) {
+  public MemberHome home(long userId) {
     User user =
         userRepository
-            .findByEmail(email)
+            .findById(userId)
             .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
     return memberRepository
         .findByUserId(user.getId())

@@ -155,16 +155,16 @@ public class AuthService {
 
   /** 本人資料を返す（GET /me）。ユーザー不在は空を返し、HTTP 表現は呼び出し側が決める。 */
   @Transactional(readOnly = true)
-  public Optional<MeView> me(String email) {
-    return userRepository.findByEmail(email).map(this::toMeView);
+  public Optional<MeView> me(long userId) {
+    return userRepository.findById(userId).map(this::toMeView);
   }
 
   /** 自己プロフィール（表示名）を更新し、更新後の本人資料を返す。 */
   @Transactional
-  public MeView updateMe(String email, String displayName) {
+  public MeView updateMe(long userId, String displayName) {
     User user =
         userRepository
-            .findByEmail(email)
+            .findById(userId)
             .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
     user.updateDisplayName(displayName);
     userRepository.save(user);
@@ -173,10 +173,10 @@ public class AuthService {
 
   /** パスワード変更。版の増分により当該トークンを含む全端末のセッションが失効する（要再ログイン、ADR 0022）。 */
   @Transactional
-  public void changePassword(String email, String currentPassword, String newPassword) {
+  public void changePassword(long userId, String currentPassword, String newPassword) {
     User user =
         userRepository
-            .findByEmail(email)
+            .findById(userId)
             .orElseThrow(() -> new StaleSessionException("認証セッションの主体が存在しません"));
     if (!passwordEncoder.matches(currentPassword, user.getPassword())) {
       throw new ServiceException("現在のパスワードが正しくありません");

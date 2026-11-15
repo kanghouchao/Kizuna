@@ -76,7 +76,7 @@ class NotificationApplicationTest {
 
   @BeforeEach
   void setup() {
-    when(identities.requireActor("actor")).thenReturn(STAFF);
+    when(identities.requireActor(1L)).thenReturn(STAFF);
     when(contacts.resolve(eq(STORE_ID), any()))
         .thenReturn(new DeliveryRecipient("permitted@example.invalid", ContactDecision.ALLOWED));
   }
@@ -102,7 +102,7 @@ class NotificationApplicationTest {
   @Test
   void createLooksUpTheKeyAndDraftsTheRowInTheGivenStore() {
     when(deliveries.saveAndFlush(any())).thenAnswer(call -> call.getArgument(0));
-    assertThat(service.create(STORE_ID, "actor", content()).created()).isTrue();
+    assertThat(service.create(STORE_ID, 1L, content()).created()).isTrue();
     verify(deliveries).findByAttributedStoreIdAndDedupeKey(STORE_ID, "key");
     var saved = ArgumentCaptor.forClass(NotificationDelivery.class);
     verify(deliveries).saveAndFlush(saved.capture());
@@ -116,7 +116,7 @@ class NotificationApplicationTest {
     when(deliveries.findByIdAndAttributedStoreIdForUpdate("101", STORE_ID))
         .thenReturn(Optional.of(row));
     assertThat(service.get(STORE_ID, "101").row().getId()).isEqualTo("101");
-    assertThat(service.queue(STORE_ID, "actor", "101", null, "確認済み", false).row().getStatus())
+    assertThat(service.queue(STORE_ID, 1L, "101", null, "確認済み", false).row().getStatus())
         .isEqualTo(DeliveryStatus.QUEUED);
     var pageable = PageRequest.of(0, 10);
     when(attempts.findByDeliveryId("101", pageable)).thenReturn(new PageImpl<>(List.of()));
@@ -133,7 +133,7 @@ class NotificationApplicationTest {
     var other = STORE_ID + 1;
     when(deliveries.findByIdAndAttributedStoreId("101", STORE_ID)).thenReturn(Optional.of(row()));
     assertThatThrownBy(() -> service.get(other, "101")).isInstanceOf(NotFoundException.class);
-    assertThatThrownBy(() -> service.queue(other, "actor", "101", null, "確認済み", false))
+    assertThatThrownBy(() -> service.queue(other, 1L, "101", null, "確認済み", false))
         .isInstanceOf(NotFoundException.class);
   }
 

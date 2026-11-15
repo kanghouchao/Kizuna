@@ -1,11 +1,13 @@
 package com.kizuna.user.api;
 
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.user.api.dto.RoleCreateRequest;
 import com.kizuna.user.api.dto.RoleResponse;
 import com.kizuna.user.api.dto.RoleSummaryResponse;
 import com.kizuna.user.api.dto.RoleUpdateRequest;
 import com.kizuna.user.application.RoleService;
 import jakarta.validation.Valid;
+import java.security.Principal;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -43,22 +45,24 @@ public class RoleController {
 
   @PostMapping
   @PreAuthorize("hasAuthority('PERM_ROLE_MANAGE')")
-  public ResponseEntity<RoleResponse> create(@Valid @RequestBody RoleCreateRequest req) {
+  public ResponseEntity<RoleResponse> create(
+      @Valid @RequestBody RoleCreateRequest req, Principal principal) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(RoleResponse.of(roleService.create(req.command())));
+        .body(RoleResponse.of(roleService.create(JwtClaims.userIdOf(principal), req.command())));
   }
 
   @PutMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_ROLE_MANAGE')")
   public ResponseEntity<RoleResponse> update(
-      @PathVariable Long id, @Valid @RequestBody RoleUpdateRequest req) {
-    return ResponseEntity.ok(RoleResponse.of(roleService.update(id, req.command())));
+      @PathVariable Long id, @Valid @RequestBody RoleUpdateRequest req, Principal principal) {
+    return ResponseEntity.ok(
+        RoleResponse.of(roleService.update(JwtClaims.userIdOf(principal), id, req.command())));
   }
 
   @DeleteMapping("/{id}")
   @PreAuthorize("hasAuthority('PERM_ROLE_MANAGE')")
-  public ResponseEntity<Void> delete(@PathVariable Long id) {
-    roleService.delete(id);
+  public ResponseEntity<Void> delete(@PathVariable Long id, Principal principal) {
+    roleService.delete(JwtClaims.userIdOf(principal), id);
     return ResponseEntity.noContent().build();
   }
 }

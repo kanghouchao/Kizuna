@@ -22,7 +22,7 @@ public class StoreActivationService {
 
   /** 稼働中へ遷移させる。既に稼働中なら集約が 400 で拒む。 */
   @Transactional
-  public void activate(long storeId) {
+  public void activate(long storeId, long actorId) {
     Store store =
         storeRepository
             .findById(storeId)
@@ -31,11 +31,14 @@ public class StoreActivationService {
         Map.of("status", store.getStatus().name(), "version", String.valueOf(store.getVersion()));
     store.activate();
     storeRepository.saveAndFlush(store);
-    businessAudit.recordCurrent(
+    businessAudit.recordById(
+        actorId,
         storeId,
         "STORE_ACTIVATED",
         "STORE",
         String.valueOf(storeId),
+        null,
+        null,
         before,
         Map.of("status", store.getStatus().name(), "version", String.valueOf(store.getVersion())));
     evictDomainLookup(store.getDomain());

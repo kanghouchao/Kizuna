@@ -9,7 +9,7 @@ public interface SystemConfigService {
   List<SystemConfigView> getConfigsByCategory(String category);
 
   /** 値が null の更新は値を変えない（空文字は値を消す）。 */
-  SystemConfigView updateConfig(String configKey, String configValue);
+  SystemConfigView updateConfig(long actorId, String configKey, String configValue);
 
   /** 設定値を取得する（キャッシュされる。バックエンド内部からの設定参照はこのメソッドを使うこと） */
   Optional<String> getConfigValue(String configKey);
