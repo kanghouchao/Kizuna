@@ -7,7 +7,6 @@ import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import java.util.List;
 import java.util.Map;
@@ -35,7 +34,6 @@ public class OrderAttributionCorrectionService {
   private final OrderRepository orderRepository;
   private final OrderAttributionRepository orderAttributionRepository;
   private final PointLedgerService pointLedgerService;
-  private final ActorIdentityService actorIdentityService;
   private final BusinessAudit businessAudit;
 
   /** 訂正の進み具合。画面が差し引く既定値（付与の全額）と引き残しを示すための読み口。 */
@@ -104,7 +102,7 @@ public class OrderAttributionCorrectionService {
    */
   @Transactional
   public OrderAttributionCorrectionProgress correct(
-      Long storeId, String orderId, OrderAttributionCorrectionCommand command, String actorEmail) {
+      Long storeId, String orderId, OrderAttributionCorrectionCommand command, long actorId) {
     // 上限を数えてから記帳し終えるまで、同じ受注に対する並行の訂正と直列化する。押さえないと双方が同じ
     // 「まだ引かれていない」を観測し、合計が付与額を超えて通る。
     orderRepository
@@ -132,7 +130,6 @@ public class OrderAttributionCorrectionService {
           "差し引ける上限を超えています（この受注の付与は " + granted + " ポイント、うち訂正済みは " + already + " ポイントです）");
     }
 
-    Long actorUserId = actorIdentityService.requireUserId(actorEmail);
     // 再送で何も書かなかったときは空が返る。利用者操作は初回で記録済みなので監査も足さない。
     pointLedgerService
         .correctForAttribution(
@@ -140,13 +137,13 @@ public class OrderAttributionCorrectionService {
             storeId,
             -command.points(),
             command.reason(),
-            actorUserId,
+            actorId,
             command.idempotencyKey(),
             attribution.getId())
         .ifPresent(
             entryId ->
                 businessAudit.recordById(
-                    actorUserId,
+                    actorId,
                     storeId,
                     "ORDER_ATTRIBUTION_CORRECTED",
                     "ORDER_ATTRIBUTION",
@@ -178,7 +175,7 @@ public class OrderAttributionCorrectionService {
    */
   @Transactional(readOnly = true)
   public OrderAttributionCorrectionProgress replayCorrect(
-      Long storeId, String orderId, OrderAttributionCorrectionCommand command, String actorEmail) {
+      Long storeId, String orderId, OrderAttributionCorrectionCommand command, long actorId) {
     requireScopedOrder(storeId, orderId);
     List<OrderAttribution> attributions =
         orderAttributionRepository.findByStoreIdAndOrderIdOrderByIdDesc(storeId, orderId);
@@ -195,7 +192,7 @@ public class OrderAttributionCorrectionService {
         storeId,
         -command.points(),
         command.reason(),
-        actorIdentityService.requireUserId(actorEmail),
+        actorId,
         command.idempotencyKey(),
         attribution.getId());
     return new OrderAttributionCorrectionProgress(granted, already + command.points());

@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
@@ -26,15 +25,10 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.exception.StaleSessionException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
-import com.kizuna.user.application.ActorIdentityService;
-import com.kizuna.user.domain.User;
-import com.kizuna.user.domain.UserRepository;
-import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -45,7 +39,6 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -59,17 +52,12 @@ class MemberOrderApplicationServiceTest {
   private static final long OTHER_STORE_ID = 2L;
   private static final long MEMBER_ID = 100L;
   private static final long USER_ID = 50L;
-  private static final String EMAIL = "member@kizuna.test";
   private static final String MEMBER_CODE = "123456789012";
   private static final String DECLARED_NAME = "名乗り太郎";
   private static final String TIMEZONE = "Asia/Tokyo";
 
   @Mock OrderApplicationRepository orderApplicationRepository;
   @Mock OrderApplicationIntake orderApplicationIntake;
-  private final UserRepository userRepository = Mockito.mock(UserRepository.class);
-
-  @Spy private ActorIdentityService actorIdentityService = new ActorIdentityService(userRepository);
-
   @Mock MemberLookupService memberLookupService;
   @Mock StoreExistenceCheck storeExistenceCheck;
   @Mock BusinessDateService businessDateService;
@@ -83,18 +71,6 @@ class MemberOrderApplicationServiceTest {
     lenient()
         .when(businessDateService.currentBusinessDate())
         .thenReturn(LocalDate.now(ZoneId.of(TIMEZONE)));
-    User user =
-        User.builder()
-            .email(EMAIL)
-            .password("pw")
-            .displayName("会員")
-            .enabled(true)
-            .userType(UserType.MEMBER)
-            .roleIds(Set.of())
-            .storeIds(Set.of())
-            .build();
-    user.setId(USER_ID);
-    lenient().when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(user));
     lenient()
         .when(memberLookupService.findByUserId(USER_ID))
         .thenReturn(Optional.of(new MemberLookup(MEMBER_ID, MEMBER_CODE)));
@@ -125,7 +101,7 @@ class MemberOrderApplicationServiceTest {
     when(storeExistenceCheck.exists(STORE_ID)).thenReturn(true);
     stubSavedView();
 
-    service.request(EMAIL, requestFor(today(), null));
+    service.request(USER_ID, requestFor(today(), null));
 
     verify(orderApplicationRepository).save(applicationCaptor.capture());
     OrderApplication saved = applicationCaptor.getValue();
@@ -145,7 +121,7 @@ class MemberOrderApplicationServiceTest {
   void requestRejectsWithdrawnMember() {
     when(memberLookupService.isWithdrawn(MEMBER_ID)).thenReturn(true);
 
-    assertThatThrownBy(() -> service.request(EMAIL, requestFor(today(), null)))
+    assertThatThrownBy(() -> service.request(USER_ID, requestFor(today(), null)))
         .isInstanceOf(StaleSessionException.class);
 
     InOrder order = Mockito.inOrder(memberLookupService);
@@ -159,7 +135,7 @@ class MemberOrderApplicationServiceTest {
   void requestRejectsUnknownStore() {
     when(storeExistenceCheck.exists(STORE_ID)).thenReturn(false);
 
-    assertThatThrownBy(() -> service.request(EMAIL, requestFor(today(), null)))
+    assertThatThrownBy(() -> service.request(USER_ID, requestFor(today(), null)))
         .isInstanceOf(ServiceException.class);
     verify(orderApplicationRepository, never()).save(any(OrderApplication.class));
   }
@@ -172,7 +148,7 @@ class MemberOrderApplicationServiceTest {
     when(storeExistenceCheck.exists(OTHER_STORE_ID)).thenReturn(true);
     stubSavedView();
 
-    service.request(EMAIL, requestFor(OTHER_STORE_ID, today().plusDays(3), "cast-1"));
+    service.request(USER_ID, requestFor(OTHER_STORE_ID, today().plusDays(3), "cast-1"));
 
     verify(orderApplicationIntake)
         .validateRequestedVisit(OTHER_STORE_ID, today().plusDays(3), "cast-1");
@@ -186,7 +162,7 @@ class MemberOrderApplicationServiceTest {
         .when(orderApplicationIntake)
         .validateRequestedVisit(anyLong(), any(), any());
 
-    assertThatThrownBy(() -> service.request(EMAIL, requestFor(today(), null)))
+    assertThatThrownBy(() -> service.request(USER_ID, requestFor(today(), null)))
         .isInstanceOf(ServiceException.class);
     verify(orderApplicationRepository, never()).save(any(OrderApplication.class));
   }
@@ -198,7 +174,7 @@ class MemberOrderApplicationServiceTest {
     when(orderApplicationRepository.findMemberViews(MEMBER_ID, pageable))
         .thenReturn(Page.empty(pageable));
 
-    service.list(EMAIL, pageable);
+    service.list(USER_ID, pageable);
 
     verify(orderApplicationRepository).findMemberViews(MEMBER_ID, pageable);
   }
@@ -215,7 +191,7 @@ class MemberOrderApplicationServiceTest {
     when(orderApplicationRepository.findMemberViews(anyLong(), any(Pageable.class)))
         .thenReturn(new PageImpl<>(List.of(stale, fresh, declined)));
 
-    Page<MemberOrderApplicationResult> page = service.list(EMAIL, PageRequest.of(0, 20));
+    Page<MemberOrderApplicationResult> page = service.list(USER_ID, PageRequest.of(0, 20));
 
     assertThat(page.getContent())
         .extracting(MemberOrderApplicationResult::expired)
@@ -245,7 +221,7 @@ class MemberOrderApplicationServiceTest {
     when(orderApplicationRepository.findMemberView(MEMBER_ID, "a1"))
         .thenReturn(Optional.of(mock(MemberOrderApplicationView.class)));
 
-    service.withdraw(EMAIL, "a1");
+    service.withdraw(USER_ID, "a1");
 
     assertThat(own.getStatus()).isEqualTo(OrderApplicationStatus.WITHDRAWN);
     assertThat(own.getProcessedBy()).isEqualTo(USER_ID);
@@ -263,7 +239,7 @@ class MemberOrderApplicationServiceTest {
     when(orderApplicationRepository.findByIdAndRequesterMemberId("a1", MEMBER_ID))
         .thenReturn(Optional.of(own));
 
-    assertThatThrownBy(() -> service.withdraw(EMAIL, "a1"))
+    assertThatThrownBy(() -> service.withdraw(USER_ID, "a1"))
         .isInstanceOf(InvalidOrderApplicationOperationException.class);
     assertThat(own.getStatus()).isEqualTo(OrderApplicationStatus.CONFIRMED);
     verify(orderApplicationRepository, never()).save(any(OrderApplication.class));
@@ -283,7 +259,7 @@ class MemberOrderApplicationServiceTest {
         .when(orderApplicationRepository.findByIdAndRequesterMemberId("a1", 999L))
         .thenReturn(Optional.of(others));
 
-    assertThatThrownBy(() -> service.withdraw(EMAIL, "a1")).isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> service.withdraw(USER_ID, "a1")).isInstanceOf(NotFoundException.class);
     verify(orderApplicationRepository).findByIdAndRequesterMemberId("a1", MEMBER_ID);
     assertThat(others.getStatus()).isEqualTo(OrderApplicationStatus.PENDING);
     verify(orderApplicationRepository, never()).save(any(OrderApplication.class));
@@ -301,7 +277,7 @@ class MemberOrderApplicationServiceTest {
         .when(orderApplicationRepository.findByIdAndRequesterMemberId(eq("a1"), isNull()))
         .thenReturn(Optional.of(detached));
 
-    assertThatThrownBy(() -> service.withdraw(EMAIL, "a1")).isInstanceOf(NotFoundException.class);
+    assertThatThrownBy(() -> service.withdraw(USER_ID, "a1")).isInstanceOf(NotFoundException.class);
     verify(orderApplicationRepository, never()).save(any(OrderApplication.class));
   }
 
@@ -310,17 +286,8 @@ class MemberOrderApplicationServiceTest {
   void rejectsNonMemberPrincipal() {
     when(memberLookupService.findByUserId(USER_ID)).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.list(EMAIL, PageRequest.of(0, 20)))
+    assertThatThrownBy(() -> service.list(USER_ID, PageRequest.of(0, 20)))
         .isInstanceOf(StaleSessionException.class);
     verify(orderApplicationRepository, never()).findMemberViews(anyLong(), any(Pageable.class));
-  }
-
-  @Test
-  @DisplayName("認証主体が実在しない場合は失効セッションとして扱うこと")
-  void rejectsUnknownPrincipal() {
-    when(userRepository.findByEmail(anyString())).thenReturn(Optional.empty());
-
-    assertThatThrownBy(() -> service.list("ghost@kizuna.test", PageRequest.of(0, 20)))
-        .isInstanceOf(StaleSessionException.class);
   }
 }

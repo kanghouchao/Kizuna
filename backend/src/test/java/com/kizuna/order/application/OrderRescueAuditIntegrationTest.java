@@ -26,7 +26,6 @@ import com.kizuna.point.application.PointLedgerService.PointRollbackPreview;
 import com.kizuna.point.application.PointLedgerService.PointRollbackResult;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import com.kizuna.user.domain.User;
 import com.kizuna.user.domain.UserRepository;
@@ -70,7 +69,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class OrderRescueAuditIntegrationTest {
   private static final long STORE_ID = 1L;
-  private static final String ACTOR = "operator@example.test";
+  private static final long ACTOR = 9L;
   private AnnotationConfigApplicationContext context;
   private JdbcTemplate jdbc;
   private TransactionTemplate transactions;
@@ -286,16 +285,15 @@ class OrderRescueAuditIntegrationTest {
       var users = mock(UserRepository.class);
       var actor =
           User.builder()
-              .email(ACTOR)
+              .email("operator@example.test")
               .password(UUID.randomUUID().toString())
               .displayName("受注担当")
               .enabled(true)
               .userType(UserType.STAFF)
               .roleIds(Set.of(1L))
               .build();
-      actor.setId(9L);
-      when(users.findByEmail(ACTOR)).thenReturn(Optional.of(actor));
-      when(users.findById(9L)).thenReturn(Optional.of(actor));
+      actor.setId(ACTOR);
+      when(users.findById(ACTOR)).thenReturn(Optional.of(actor));
       return users;
     }
 
@@ -339,8 +337,7 @@ class OrderRescueAuditIntegrationTest {
               call ->
                   new ReceiptTokenGenerator.GeneratedToken(
                       "raw", UUID.randomUUID().toString().replace("-", "")));
-      return new OrderAttributionService(
-          orders, rows, tokens, generator, new ActorIdentityService(users()), audit);
+      return new OrderAttributionService(orders, rows, tokens, generator, audit);
     }
 
     @Bean
@@ -368,14 +365,13 @@ class OrderRescueAuditIntegrationTest {
       when(ledger.rollbackHistory(anyString()))
           .thenReturn(
               Optional.of(
-                  new PointRollbackHistory("77", "理由", 9L, OffsetDateTime.now(), 0, 0, 0, 0)));
+                  new PointRollbackHistory("77", "理由", ACTOR, OffsetDateTime.now(), 0, 0, 0, 0)));
       return new OrderPointRollbackService(
           orders,
           attributionService,
           attributions(em),
           mock(OrderReceiptTokenRepository.class),
           ledger,
-          new ActorIdentityService(users()),
           audit);
     }
 

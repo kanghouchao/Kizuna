@@ -7,7 +7,6 @@ import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.order.domain.SelfRemunerationView;
 import com.kizuna.shared.exception.NotFoundException;
-import com.kizuna.user.application.ActorIdentityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -18,15 +17,14 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class SelfRemunerationService {
-  private final ActorIdentityService actors;
   private final CastRepository people;
   private final CastEnrollmentRepository enrollments;
   private final OrderRepository orders;
   private final OrderCorrectionHistory history;
 
   @Transactional(readOnly = true)
-  public Page<SelfRemunerationEnrollment> enrollments(String actor, Pageable pageable) {
-    var person = people.findByUserId(actors.requireUserId(actor));
+  public Page<SelfRemunerationEnrollment> enrollments(long userId, Pageable pageable) {
+    var person = people.findByUserId(userId);
     if (person.isEmpty()) return Page.empty(pageable);
     return enrollments
         .findPersonEnrollments(person.get().getId(), pageable)
@@ -37,8 +35,7 @@ public class SelfRemunerationService {
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public Page<SelfRemunerationOrder> list(String actor, String enrollmentId, Pageable pageable) {
-    Long userId = actors.requireUserId(actor);
+  public Page<SelfRemunerationOrder> list(long userId, String enrollmentId, Pageable pageable) {
     if (enrollmentId == null)
       return orders.findSelfRemunerations(userId, pageable).map(this::summary);
     var person = people.findByUserId(userId).orElseThrow(() -> new NotFoundException("在籍が見つかりません"));
@@ -50,8 +47,7 @@ public class SelfRemunerationService {
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public SelfRemunerationDetail detail(String actor, String id) {
-    Long userId = actors.requireUserId(actor);
+  public SelfRemunerationDetail detail(long userId, String id) {
     var view =
         orders
             .findSelfRemuneration(userId, id)
@@ -65,9 +61,9 @@ public class SelfRemunerationService {
   }
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public Page<SelfRemunerationChange> changes(String actor, String id, Pageable pageable) {
+  public Page<SelfRemunerationChange> changes(long userId, String id, Pageable pageable) {
     return history
-        .self(actors.requireUserId(actor), id, pageable)
+        .self(userId, id, pageable)
         .map(
             c ->
                 new SelfRemunerationChange(

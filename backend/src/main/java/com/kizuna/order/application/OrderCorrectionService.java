@@ -10,7 +10,6 @@ import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.result.OrderCorrectionResult;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.persistence.Timestamps;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
@@ -32,14 +31,13 @@ public class OrderCorrectionService {
   private final OrderRepository orderRepository;
   private final OrderReceiptTokenRepository orderReceiptTokenRepository;
   private final OrderCorrectionRepository orderCorrectionRepository;
-  private final ActorIdentityService actorIdentityService;
   private final OrderCalculation calculation;
   private final OrderSpecialServices specialServices;
 
   /** 訂正前の快照と更新を同じトランザクションに保存する。受注行をロックしてから要求の版を照合し、 同時訂正による上書きを防ぐ。快照は管理下の集約を書き換える前に作成する。 */
   @Transactional
   public OrderCorrectionOutcome correct(
-      Long storeId, String id, OrderCorrectionInput input, String actorEmail) {
+      Long storeId, String id, OrderCorrectionInput input, long actorId) {
     specialServices.lock(storeId);
     Order order =
         orderRepository
@@ -67,7 +65,7 @@ public class OrderCorrectionService {
             specialServices.historical(storeId, order, input.specialServiceRevisionIds()),
             true);
     calculation.verify(
-        input.confirmationToken(), storeId, "CORRECT", id, actorEmail, input, calculated, null);
+        input.confirmationToken(), storeId, "CORRECT", id, actorId, input, calculated, null);
     long beforeVersion = order.getVersion();
     var before = OrderCorrectionSnapshot.of(order);
     // 子明細だけの同額訂正でも、親の受注版を進めて履歴順と競合検出を確定する。
@@ -85,15 +83,10 @@ public class OrderCorrectionService {
     var correction =
         orderCorrectionRepository.save(
             OrderCorrection.recorded(
-                order,
-                beforeVersion,
-                before,
-                input.reason(),
-                actorIdentityService.requireUserId(actorEmail),
-                Timestamps.now()));
+                order, beforeVersion, before, input.reason(), actorId, Timestamps.now()));
 
-    businessAudit.record(
-        actorEmail,
+    businessAudit.recordById(
+        actorId,
         order.getStoreId(),
         "ORDER_CORRECTED",
         "ORDER",
@@ -126,7 +119,7 @@ public class OrderCorrectionService {
 
   @Transactional
   public OrderCorrectionResult invalidateCompletion(
-      Long storeId, String id, Long expectedVersion, String reason, String actorEmail) {
+      Long storeId, String id, Long expectedVersion, String reason, long actorId) {
     var order =
         orderRepository
             .findByIdAndStoreIdForUpdate(id, storeId)
@@ -142,14 +135,9 @@ public class OrderCorrectionService {
     var correction =
         orderCorrectionRepository.saveAndFlush(
             OrderCorrection.recorded(
-                order,
-                beforeVersion,
-                before,
-                reason.trim(),
-                actorIdentityService.requireUserId(actorEmail),
-                Timestamps.now()));
-    businessAudit.record(
-        actorEmail,
+                order, beforeVersion, before, reason.trim(), actorId, Timestamps.now()));
+    businessAudit.recordById(
+        actorId,
         order.getStoreId(),
         "ORDER_COMPLETION_INVALIDATED",
         "ORDER",
@@ -162,8 +150,7 @@ public class OrderCorrectionService {
   }
 
   @Transactional
-  public OrderPreview preview(
-      Long storeId, String id, OrderCorrectionInput input, String actorEmail) {
+  public OrderPreview preview(Long storeId, String id, OrderCorrectionInput input, long actorId) {
     specialServices.lock(storeId);
     calculation.requirePreviewInput(input.confirmationToken());
     var order =
@@ -180,7 +167,7 @@ public class OrderCorrectionService {
         storeId,
         "CORRECT",
         id,
-        actorEmail,
+        actorId,
         input,
         calculation.calculate(
             storeId,

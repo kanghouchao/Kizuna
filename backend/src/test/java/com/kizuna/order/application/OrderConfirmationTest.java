@@ -28,7 +28,7 @@ import tools.jackson.databind.PropertyNamingStrategies;
 import tools.jackson.databind.json.JsonMapper;
 
 class OrderConfirmationTest {
-  private static final String ACTOR = "staff@kizuna.test";
+  private static final long ACTOR = 42L;
 
   private OrderConfirmation confirmation;
   private AppProperties properties;
@@ -179,16 +179,13 @@ class OrderConfirmationTest {
     var consent = consent(calculatedAt(OffsetDateTime.now()), 130, 800L);
     String token = confirmation.sign(7L, "COMPLETE", "o1", ACTOR, command(300, null), consent);
 
-    assertThat(
-            confirmation.wasPreviewed(
-                7L, "COMPLETE", "o1", "other@kizuna.test", command(300, token), token))
+    assertThat(confirmation.wasPreviewed(7L, "COMPLETE", "o1", 8L, command(300, token), token))
         .isFalse();
     assertThatThrownBy(
             () ->
                 confirmation.verify(
                     token,
-                    confirmation.sign(
-                        7L, "COMPLETE", "o1", "other@kizuna.test", command(300, token), consent)))
+                    confirmation.sign(7L, "COMPLETE", "o1", 8L, command(300, token), consent)))
         .isInstanceOf(OrderConfirmationConflict.class);
   }
 

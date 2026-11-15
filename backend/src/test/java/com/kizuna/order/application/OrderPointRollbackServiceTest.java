@@ -15,18 +15,11 @@ import com.kizuna.point.application.PointLedgerService.PointRollbackPreview;
 import com.kizuna.point.application.PointLedgerService.PointRollbackResult;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.User;
-import com.kizuna.user.domain.UserRepository;
-import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,7 +29,6 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
@@ -48,7 +40,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class OrderPointRollbackServiceTest {
 
   private static final String ORDER_ID = "o1";
-  private static final String ACTOR_EMAIL = "manager@kizuna.test";
   private static final long ACTOR_ID = 42L;
   private static final long STORE_ID = 1L;
   private static final long MEMBER_ID = 7L;
@@ -62,27 +53,8 @@ class OrderPointRollbackServiceTest {
   @Mock private OrderReceiptTokenRepository orderReceiptTokenRepository;
   @Mock private PointLedgerService pointLedgerService;
   @Mock private BusinessAudit businessAudit;
-  private final UserRepository userRepository = Mockito.mock(UserRepository.class);
-
-  @Spy private ActorIdentityService actorIdentityService = new ActorIdentityService(userRepository);
 
   @InjectMocks private OrderPointRollbackService service;
-
-  @BeforeEach
-  void resolveActor() {
-    User actor =
-        User.builder()
-            .email(ACTOR_EMAIL)
-            .password("encoded")
-            .displayName("店長 花子")
-            .enabled(true)
-            .userType(UserType.STAFF)
-            .storeIds(Set.of(STORE_ID))
-            .roleIds(Set.of(1L))
-            .build();
-    actor.setId(ACTOR_ID);
-    Mockito.lenient().when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
-  }
 
   @Test
   @DisplayName("完了した受注の巻き戻しは、実行者を解いて台帳へ受注 ID と理由をそのまま渡すこと")
@@ -95,7 +67,7 @@ class OrderPointRollbackServiceTest {
     Mockito.when(pointLedgerService.rollbackForOrder(ORDER_ID, REASON, ACTOR_ID, 0))
         .thenReturn(new PointRollbackResult(120, 0));
 
-    PointRollbackHistory response = service.rollback(STORE_ID, ORDER_ID, command(), ACTOR_EMAIL);
+    PointRollbackHistory response = service.rollback(STORE_ID, ORDER_ID, command(), ACTOR_ID);
 
     assertThat(response).isEqualTo(history(120, 0));
   }
@@ -113,7 +85,7 @@ class OrderPointRollbackServiceTest {
     Mockito.when(pointLedgerService.rollbackForOrder(ORDER_ID, REASON, ACTOR_ID, 0))
         .thenReturn(new PointRollbackResult(0, 0));
 
-    service.rollback(STORE_ID, ORDER_ID, command(), ACTOR_EMAIL);
+    service.rollback(STORE_ID, ORDER_ID, command(), ACTOR_ID);
 
     InOrder inOrder =
         Mockito.inOrder(orderRepository, orderReceiptTokenRepository, pointLedgerService);
@@ -135,7 +107,7 @@ class OrderPointRollbackServiceTest {
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("完了した受注の利用だけを");
 
-    assertThatThrownBy(() -> service.rollback(STORE_ID, ORDER_ID, command(), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.rollback(STORE_ID, ORDER_ID, command(), ACTOR_ID))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("完了した受注の利用だけを");
     Mockito.verifyNoInteractions(pointLedgerService);
@@ -147,20 +119,9 @@ class OrderPointRollbackServiceTest {
     Mockito.when(orderRepository.findByIdAndStoreIdForUpdate(ORDER_ID, STORE_ID))
         .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.rollback(STORE_ID, ORDER_ID, command(), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.rollback(STORE_ID, ORDER_ID, command(), ACTOR_ID))
         .isInstanceOf(NotFoundException.class);
     Mockito.verifyNoInteractions(pointLedgerService);
-  }
-
-  @Test
-  @DisplayName("認証主体が解決できなければ実行者 null で記帳せず失敗すること")
-  void refusesAStalePrincipal() {
-    // 台帳では実行者 null が「機構が起こした仕訳」の形であり、人手の操作と区別できなくなる。
-    givenOrder(OrderStatus.COMPLETED);
-    Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.empty());
-
-    assertThatThrownBy(() -> service.rollback(STORE_ID, ORDER_ID, command(), ACTOR_EMAIL))
-        .isInstanceOf(StaleSessionException.class);
   }
 
   @Test
@@ -171,7 +132,7 @@ class OrderPointRollbackServiceTest {
     Mockito.when(pointLedgerService.isRolledBack(ORDER_ID)).thenReturn(true);
 
     assertThatThrownBy(
-            () -> service.reissueReceiptTokenUnlessRolledBack(STORE_ID, ORDER_ID, ACTOR_EMAIL))
+            () -> service.reissueReceiptTokenUnlessRolledBack(STORE_ID, ORDER_ID, ACTOR_ID))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("巻き戻した受注には伝票を再発行できません");
 
@@ -187,10 +148,10 @@ class OrderPointRollbackServiceTest {
     givenOrder(OrderStatus.COMPLETED);
     Mockito.when(pointLedgerService.isRolledBack(ORDER_ID)).thenReturn(false);
     String issued = "raw";
-    Mockito.when(orderAttributionService.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_EMAIL))
+    Mockito.when(orderAttributionService.reissueReceiptToken(STORE_ID, ORDER_ID, ACTOR_ID))
         .thenReturn(issued);
 
-    assertThat(service.reissueReceiptTokenUnlessRolledBack(STORE_ID, ORDER_ID, ACTOR_EMAIL))
+    assertThat(service.reissueReceiptTokenUnlessRolledBack(STORE_ID, ORDER_ID, ACTOR_ID))
         .isEqualTo(issued);
   }
 

@@ -1,5 +1,6 @@
 package com.kizuna.order.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -16,9 +17,11 @@ import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.settings.application.SystemConfigService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -30,7 +33,6 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -43,8 +45,10 @@ import org.springframework.transaction.PlatformTransactionManager;
   OrderMapperImpl.class,
   StoreScopeHolder.class
 })
-@WithMockUser(authorities = "PERM_ORDER_MANAGE")
 class DailyRemunerationControllerTest {
+
+  private static final long USER_ID = 42L;
+
   @TestConfiguration
   @EnableMethodSecurity
   static class Security {}
@@ -54,6 +58,12 @@ class DailyRemunerationControllerTest {
   @MockitoBean private SystemConfigService settings;
   @MockitoBean private StoreExistenceCheck storeExistence;
   @MockitoBean StoreScopeResolver storeScopeResolver;
+
+  @BeforeEach
+  void storeScope() {
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(1L, 7L)));
+  }
+
   @MockitoBean private PlatformTransactionManager transactions;
 
   @BeforeEach
@@ -81,7 +91,8 @@ class DailyRemunerationControllerTest {
 
   @Test
   void returnsFullTotalAndSafePagedRows() throws Exception {
-    mvc.perform(request("2026-09-30").param("size", "1"))
+    mvc.perform(
+            request("2026-09-30").param("size", "1").with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.business_date").value("2026-09-30"))
         .andExpect(jsonPath("$.total_remuneration").value(14000))
@@ -104,7 +115,8 @@ class DailyRemunerationControllerTest {
             get("/daily-remunerations")
                 .header("X-Store-ID", "7")
                 .param("person_id", "34")
-                .param("business_date", "2026-09-30"))
+                .param("business_date", "2026-09-30")
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_remuneration").value(7000));
 
@@ -115,16 +127,21 @@ class DailyRemunerationControllerTest {
   @ParameterizedTest
   @ValueSource(strings = {"2026-02-30", "2026-2-01", "0000-01-01", "2026-13-01", "bad", ""})
   void invalidDayIs400(String day) throws Exception {
-    mvc.perform(request(day))
+    mvc.perform(request(day).with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.error").isString());
   }
 
   @Test
   void offsetBeyondIntIs400AndNegativePageIsNormalized() throws Exception {
-    mvc.perform(request("2026-09-30").param("page", "2147483647").param("size", "20"))
+    mvc.perform(
+            request("2026-09-30")
+                .param("page", "2147483647")
+                .param("size", "20")
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isBadRequest());
-    mvc.perform(request("2026-09-30").param("page", "-1"))
+    mvc.perform(
+            request("2026-09-30").param("page", "-1").with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.orders.number").value(0));
   }
@@ -136,14 +153,15 @@ class DailyRemunerationControllerTest {
             get("/daily-remunerations")
                 .header("X-Store-ID", "1")
                 .param("person_id", id)
-                .param("business_date", "2026-09-30"))
+                .param("business_date", "2026-09-30")
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isBadRequest());
   }
 
   @ParameterizedTest
   @ValueSource(strings = {"0001-01-01", "2024-02-29", "9999-12-31"})
   void validDateBounds(String day) throws Exception {
-    mvc.perform(request(day))
+    mvc.perform(request(day).with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.business_date").value(day));
   }
@@ -151,7 +169,10 @@ class DailyRemunerationControllerTest {
   @ParameterizedTest
   @CsvSource({"0,20", "-2,20", "101,100"})
   void normalizesPageSize(int requested, int expected) throws Exception {
-    mvc.perform(request("2026-09-30").param("size", Integer.toString(requested)))
+    mvc.perform(
+            request("2026-09-30")
+                .param("size", Integer.toString(requested))
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.orders.size").value(expected));
   }
@@ -159,12 +180,13 @@ class DailyRemunerationControllerTest {
   @Test
   void invisibleHistoryIs404() throws Exception {
     when(query.personName(1L, 34L)).thenThrow(new NotFoundException("キャスト本人が見つかりません"));
-    mvc.perform(request("2026-09-30")).andExpect(status().isNotFound());
+    mvc.perform(request("2026-09-30").with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
+        .andExpect(status().isNotFound());
   }
 
   @Test
-  @WithMockUser(authorities = "PERM_CAST_MANAGE")
   void unrelatedPermissionDoesNotGrantRead() throws Exception {
-    mvc.perform(request("2026-09-30")).andExpect(status().isForbidden());
+    mvc.perform(request("2026-09-30").with(jwtUser(USER_ID, "PERM_CAST_MANAGE")))
+        .andExpect(status().isForbidden());
   }
 }

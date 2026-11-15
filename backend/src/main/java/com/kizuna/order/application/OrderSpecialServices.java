@@ -15,7 +15,6 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.Timestamps;
 import com.kizuna.store.domain.StoreRepository;
-import com.kizuna.user.application.ActorIdentityService;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Objects;
@@ -33,7 +32,6 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
   private final OrderSpecialServiceEventRepository events;
   private final OrderRepository orders;
   private final StoreRepository stores;
-  private final ActorIdentityService actors;
 
   @Transactional(propagation = Propagation.MANDATORY)
   public void lock(Long storeId) {
@@ -180,7 +178,7 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
       List<SpecialServiceSnapshot> previous,
       int previousTotal,
       String previousCast,
-      String actorEmail,
+      long actorId,
       OffsetDateTime now) {
     var unresolved = events.unresolved(storeId, order.getId());
     var before = historySnapshots(previous, unresolved);
@@ -201,14 +199,7 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
                   ? "RESELECTED"
                   : "REMOVED";
       events.save(
-          rejection.resolved(
-              order,
-              before,
-              after,
-              previousTotal,
-              resolution,
-              actors.requireUserId(actorEmail),
-              now));
+          rejection.resolved(order, before, after, previousTotal, resolution, actorId, now));
     }
   }
 

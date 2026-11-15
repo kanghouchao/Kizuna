@@ -6,7 +6,6 @@ import com.kizuna.order.infrastructure.RemunerationQuery;
 import com.kizuna.order.infrastructure.SelfMonthlyRemunerationQuery;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.user.application.ActorIdentityService;
 import java.time.YearMonth;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -18,14 +17,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class SelfMonthlyRemunerationService {
-  private final ActorIdentityService actors;
   private final CastRepository people;
   private final SelfMonthlyRemunerationQuery selfQuery;
   private final RemunerationQuery monthlyQuery;
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public Page<RemunerationStoreRow> stores(String actor, Pageable pageable) {
-    var person = people.findByUserId(actors.requireUserId(actor));
+  public Page<RemunerationStoreRow> stores(long userId, Pageable pageable) {
+    var person = people.findByUserId(userId);
     return person
         .map(p -> selfQuery.stores(p.getId(), pageable))
         .orElseGet(() -> Page.empty(pageable));
@@ -33,15 +31,13 @@ public class SelfMonthlyRemunerationService {
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
   public SelfMonthlyRemuneration monthly(
-      String actor, Long storeId, String month, Pageable pageable) {
+      long userId, Long storeId, String month, Pageable pageable) {
     if (storeId <= 0) throw new ServiceException("店舗の指定が不正です");
     if (!month.matches("[0-9]{4}-(0[1-9]|1[0-2])") || month.startsWith("0000"))
       throw new ServiceException("対象月は YYYY-MM 形式で指定してください");
     var target = YearMonth.parse(month);
     var person =
-        people
-            .findByUserId(actors.requireUserId(actor))
-            .orElseThrow(() -> new NotFoundException("報酬明細の店舗が見つかりません"));
+        people.findByUserId(userId).orElseThrow(() -> new NotFoundException("報酬明細の店舗が見つかりません"));
     Long personId = person.getId();
     String name = selfQuery.storeName(personId, storeId);
     return new SelfMonthlyRemuneration(

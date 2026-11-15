@@ -1,5 +1,6 @@
 package com.kizuna.order.api.me;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -28,7 +29,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -39,6 +39,9 @@ import org.springframework.test.web.servlet.MockMvc;
   OrderMapperImpl.class
 })
 class MemberPagedHistoryControllerTest {
+
+  private static final long USER_ID = 7L;
+
   @TestConfiguration
   @EnableMethodSecurity
   static class MethodSecurityConfig {}
@@ -50,13 +53,11 @@ class MemberPagedHistoryControllerTest {
   @MockitoBean StoreScopeResolver storeScopeResolver;
 
   @Test
-  @WithMockUser(username = "member@kizuna.test", roles = "MEMBER")
   void visitsAreANewestFirstPage() throws Exception {
     var pageable = ArgumentCaptor.forClass(Pageable.class);
-    when(visits.list(eq("member@kizuna.test"), pageable.capture()))
-        .thenReturn(new PageImpl<>(List.of()));
+    when(visits.list(eq(USER_ID), pageable.capture())).thenReturn(new PageImpl<>(List.of()));
 
-    mvc.perform(get("/me/visits").principal(() -> "member@kizuna.test"))
+    mvc.perform(get("/me/visits").with(jwtUser(USER_ID, "ROLE_MEMBER")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 
@@ -66,13 +67,12 @@ class MemberPagedHistoryControllerTest {
   }
 
   @Test
-  @WithMockUser(username = "cast@kizuna.test", roles = "CAST")
   void remunerationChangesAreANewestFirstPage() throws Exception {
     var pageable = ArgumentCaptor.forClass(Pageable.class);
-    when(remunerations.changes(eq("cast@kizuna.test"), eq("o1"), pageable.capture()))
+    when(remunerations.changes(eq(USER_ID), eq("o1"), pageable.capture()))
         .thenReturn(new PageImpl<>(List.of()));
 
-    mvc.perform(get("/me/remunerations/o1/changes").principal(() -> "cast@kizuna.test"))
+    mvc.perform(get("/me/remunerations/o1/changes").with(jwtUser(USER_ID, "ROLE_CAST")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 
@@ -82,19 +82,18 @@ class MemberPagedHistoryControllerTest {
   }
 
   @Test
-  @WithMockUser(username = "cast@kizuna.test", roles = "CAST")
   void remunerationEnrollmentsAndOrdersAreNewestFirstPages() throws Exception {
     var enrollments = ArgumentCaptor.forClass(Pageable.class);
-    when(remunerations.enrollments(eq("cast@kizuna.test"), enrollments.capture()))
+    when(remunerations.enrollments(eq(USER_ID), enrollments.capture()))
         .thenReturn(new PageImpl<>(List.of()));
     var orders = ArgumentCaptor.forClass(Pageable.class);
-    when(remunerations.list(eq("cast@kizuna.test"), eq(null), orders.capture()))
+    when(remunerations.list(eq(USER_ID), eq(null), orders.capture()))
         .thenReturn(new PageImpl<>(List.of()));
 
-    mvc.perform(get("/me/remuneration-enrollments").principal(() -> "cast@kizuna.test"))
+    mvc.perform(get("/me/remuneration-enrollments").with(jwtUser(USER_ID, "ROLE_CAST")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
-    mvc.perform(get("/me/remunerations").principal(() -> "cast@kizuna.test"))
+    mvc.perform(get("/me/remunerations").with(jwtUser(USER_ID, "ROLE_CAST")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 

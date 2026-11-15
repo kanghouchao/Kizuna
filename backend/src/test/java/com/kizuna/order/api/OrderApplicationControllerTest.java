@@ -1,5 +1,6 @@
 package com.kizuna.order.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -34,12 +35,14 @@ import com.kizuna.order.domain.OrderCourses;
 import com.kizuna.order.domain.OrderView;
 import com.kizuna.order.infrastructure.GuestApplicationRateLimiter;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
+import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.Set;
 import org.hibernate.exception.ConstraintViolationException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -52,11 +55,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
-import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -69,6 +68,8 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
   OrderMapperImpl.class
 })
 class OrderApplicationControllerTest {
+
+  private static final long USER_ID = 42L;
 
   /** テスト用にメソッドセキュリティ（@PreAuthorize）を有効化する設定 */
   @TestConfiguration
@@ -93,9 +94,13 @@ class OrderApplicationControllerTest {
   @MockitoBean private StoreExistenceCheck storeExistenceCheck;
   @MockitoBean StoreScopeResolver storeScopeResolver;
 
+  @BeforeEach
+  void storeScope() {
+    when(storeScopeResolver.resolve(any())).thenReturn(new StoreScope(Set.of(1L, 7L)));
+  }
+
   @Test
   @DisplayName("受付箱が要求された群と希望日の早い順のページを読み口へ渡すこと")
-  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void listForwardsTheRequestedStatusesAndPage() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     ArgumentCaptor<Set<OrderApplicationStatus>> statusesCaptor = ArgumentCaptor.captor();
@@ -105,7 +110,9 @@ class OrderApplicationControllerTest {
         .thenReturn(new PageImpl<>(List.of()));
 
     mockMvc
-        .perform(storeGet("/order-applications?statuses=PENDING&page=1&size=5"))
+        .perform(
+            storeGet("/order-applications?statuses=PENDING&page=1&size=5")
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.total_elements").value(0));
 
@@ -118,181 +125,202 @@ class OrderApplicationControllerTest {
 
   @Test
   @DisplayName("受注管理権限があれば申請を確定・謝絶でき、確定は生成した受注を 201 で返すこと")
-  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void confirmAndDeclineAreAllowedForOrderManage() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.confirmApplication(any(), any(), any(), any(), anyBoolean()))
+    when(orderService.confirmApplication(any(), any(), any(), anyLong(), anyBoolean()))
         .thenReturn(confirmedOrder());
 
     mockMvc
-        .perform(storePost("/order-applications/a1/confirmation", CONFIRMATION_BODY))
+        .perform(
+            storePost("/order-applications/a1/confirmation", CONFIRMATION_BODY)
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isCreated());
     // 謝絶は結果を読まれない操作なので 204（本体なし）で返る。
     mockMvc
-        .perform(storePost("/order-applications/a1/refusal", "{\"reason\": \"満席\"}"))
+        .perform(
+            storePost("/order-applications/a1/refusal", "{\"reason\": \"満席\"}")
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isNoContent());
   }
 
   @Test
   @DisplayName("受注管理権限が無ければ受付箱の一覧・確定・謝絶がいずれも拒否されること")
-  @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
   void everyRouteIsRejectedWithoutOrderManage() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
-        .perform(storeGet("/order-applications?statuses=PENDING"))
+        .perform(
+            storeGet("/order-applications?statuses=PENDING")
+                .with(jwtUser(USER_ID, "PERM_CUSTOMER_MANAGE")))
         .andExpect(status().isForbidden());
     mockMvc
-        .perform(storePost("/order-applications/a1/confirmation", CONFIRMATION_BODY))
+        .perform(
+            storePost("/order-applications/a1/confirmation", CONFIRMATION_BODY)
+                .with(jwtUser(USER_ID, "PERM_CUSTOMER_MANAGE")))
         .andExpect(status().isForbidden());
     mockMvc
-        .perform(storePost("/order-applications/a1/refusal", "{\"reason\": \"満席\"}"))
+        .perform(
+            storePost("/order-applications/a1/refusal", "{\"reason\": \"満席\"}")
+                .with(jwtUser(USER_ID, "PERM_CUSTOMER_MANAGE")))
         .andExpect(status().isForbidden());
     verifyNoInteractions(orderService);
   }
 
   @Test
   @DisplayName("営業日を伴わない確定は契約で撥ねられること")
-  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void confirmationRequiresTheBusinessDate() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     mockMvc
-        .perform(storePost("/order-applications/a1/confirmation", "{\"pax\": 2}"))
+        .perform(
+            storePost("/order-applications/a1/confirmation", "{\"pax\": 2}")
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isBadRequest());
     verifyNoInteractions(orderService);
   }
 
   @Test
   @DisplayName("理由の無い謝絶は契約で撥ねられること")
-  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void refusalRequiresAReason() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
     // 空白だけの理由も「書いていない」と同じに扱う
     mockMvc
-        .perform(storePost("/order-applications/a1/refusal", "{\"reason\": \"   \"}"))
+        .perform(
+            storePost("/order-applications/a1/refusal", "{\"reason\": \"   \"}")
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isBadRequest());
     mockMvc
-        .perform(storePost("/order-applications/a1/refusal", "{}"))
+        .perform(
+            storePost("/order-applications/a1/refusal", "{}")
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isBadRequest());
     verifyNoInteractions(orderService);
   }
 
   @Test
   @DisplayName("列長を超える謝絶の理由は 400 で撥ねられること（DB のエラーにしない）")
-  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void refusalWithAnOverlongReasonIsRejected() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     String body = "{\"reason\": \"" + "あ".repeat(501) + "\"}";
 
     mockMvc
-        .perform(storePost("/order-applications/a1/refusal", body))
+        .perform(
+            storePost("/order-applications/a1/refusal", body)
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isBadRequest());
     verifyNoInteractions(orderService);
 
     // 正向対照: 上限ちょうどは通る（謝絶は結果を読まれない操作なので 204）
     mockMvc
         .perform(
-            storePost(
-                "/order-applications/a1/refusal", "{\"reason\": \"" + "あ".repeat(500) + "\"}"))
+            storePost("/order-applications/a1/refusal", "{\"reason\": \"" + "あ".repeat(500) + "\"}")
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isNoContent());
   }
 
   @Test
   @DisplayName("顧客管理権限が無い実行者の確定・試算は、顧客管理権限なしとして service へ渡ること")
-  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void confirmationAndPreviewPassNoCustomerManagementWithoutThePermission() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.confirmApplication(any(), any(), any(), any(), anyBoolean()))
+    when(orderService.confirmApplication(any(), any(), any(), anyLong(), anyBoolean()))
         .thenReturn(confirmedOrder());
 
-    when(orderService.previewConfirmation(any(), any(), any(), any(), anyBoolean()))
+    when(orderService.previewConfirmation(any(), any(), any(), anyLong(), anyBoolean()))
         .thenReturn(emptyPreview());
 
     mockMvc
-        .perform(storePost("/order-applications/a1/confirmation", CONFIRMATION_BODY))
+        .perform(
+            storePost("/order-applications/a1/confirmation", CONFIRMATION_BODY)
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isCreated());
     mockMvc
-        .perform(storePost("/order-applications/a1/confirmation-preview", CONFIRMATION_BODY))
+        .perform(
+            storePost("/order-applications/a1/confirmation-preview", CONFIRMATION_BODY)
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isOk());
 
-    verify(orderService).confirmApplication(any(), eq("a1"), any(), any(), eq(false));
-    verify(orderService).previewConfirmation(any(), eq("a1"), any(), any(), eq(false));
+    verify(orderService).confirmApplication(any(), eq("a1"), any(), anyLong(), eq(false));
+    verify(orderService).previewConfirmation(any(), eq("a1"), any(), anyLong(), eq(false));
   }
 
   @Test
   @DisplayName("顧客管理権限がある実行者の確定・試算は、顧客管理権限ありとして service へ渡ること")
-  @WithMockUser(authorities = {"PERM_ORDER_MANAGE", "PERM_CUSTOMER_MANAGE"})
   void confirmationAndPreviewPassCustomerManagementWithThePermission() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.confirmApplication(any(), any(), any(), any(), anyBoolean()))
+    when(orderService.confirmApplication(any(), any(), any(), anyLong(), anyBoolean()))
         .thenReturn(confirmedOrder());
 
-    when(orderService.previewConfirmation(any(), any(), any(), any(), anyBoolean()))
+    when(orderService.previewConfirmation(any(), any(), any(), anyLong(), anyBoolean()))
         .thenReturn(emptyPreview());
 
     mockMvc
-        .perform(storePost("/order-applications/a1/confirmation", CONFIRMATION_BODY))
+        .perform(
+            storePost("/order-applications/a1/confirmation", CONFIRMATION_BODY)
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE", "PERM_CUSTOMER_MANAGE")))
         .andExpect(status().isCreated());
     mockMvc
-        .perform(storePost("/order-applications/a1/confirmation-preview", CONFIRMATION_BODY))
+        .perform(
+            storePost("/order-applications/a1/confirmation-preview", CONFIRMATION_BODY)
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE", "PERM_CUSTOMER_MANAGE")))
         .andExpect(status().isOk());
 
-    verify(orderService).confirmApplication(any(), eq("a1"), any(), any(), eq(true));
-    verify(orderService).previewConfirmation(any(), eq("a1"), any(), any(), eq(true));
+    verify(orderService).confirmApplication(any(), eq("a1"), any(), anyLong(), eq(true));
+    verify(orderService).previewConfirmation(any(), eq("a1"), any(), anyLong(), eq(true));
   }
 
   @Test
   @DisplayName("関連の並行成立に敗れた確定は取り直され、成功応答になること")
-  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void confirmationLosingTheLinkRaceIsRetried() throws Exception {
     // 敗者の収束をここで固定する。統合テストの並行確定は「2 つの確定が実際に競った」ことを
     // 保証できない（勝者が先に commit すれば敗者は素直に再利用の枝へ落ちる）ため、取り直しの
     // 配線そのものは決定的なこの単体テストが受け持つ。
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.confirmApplication(any(), any(), any(), any(), anyBoolean()))
+    when(orderService.confirmApplication(any(), any(), any(), anyLong(), anyBoolean()))
         .thenThrow(new MemberCustomerConflictException())
         .thenReturn(confirmedOrder());
 
     mockMvc
-        .perform(storePost("/order-applications/a1/confirmation", CONFIRMATION_BODY))
+        .perform(
+            storePost("/order-applications/a1/confirmation", CONFIRMATION_BODY)
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isCreated());
 
-    verify(orderService, times(2)).confirmApplication(any(), any(), any(), any(), anyBoolean());
+    verify(orderService, times(2)).confirmApplication(any(), any(), any(), anyLong(), anyBoolean());
   }
 
   @Test
-  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void confirmationReturnsConflictAfterOneRetry() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.confirmApplication(any(), any(), any(), any(), anyBoolean()))
+    when(orderService.confirmApplication(any(), any(), any(), anyLong(), anyBoolean()))
         .thenThrow(new MemberCustomerConflictException());
     mockMvc
-        .perform(storePost("/order-applications/a1/confirmation", CONFIRMATION_BODY))
+        .perform(
+            storePost("/order-applications/a1/confirmation", CONFIRMATION_BODY)
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isConflict());
-    verify(orderService, times(2)).confirmApplication(any(), any(), any(), any(), anyBoolean());
+    verify(orderService, times(2)).confirmApplication(any(), any(), any(), anyLong(), anyBoolean());
   }
 
   @Test
   @DisplayName("関連以外の整合性違反では確定を取り直さないこと")
-  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void confirmationDoesNotRetryOnOtherIntegrityViolations() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
-    when(orderService.confirmApplication(any(), any(), any(), any(), anyBoolean()))
+    when(orderService.confirmApplication(any(), any(), any(), anyLong(), anyBoolean()))
         .thenThrow(integrityViolation("uq_t_users_email"));
 
     // 写像を持たない違反は実装欠陥として全域ハンドラの分類（一意違反 = 409）へ落とす
     mockMvc
-        .perform(storePost("/order-applications/a1/confirmation", CONFIRMATION_BODY))
+        .perform(
+            storePost("/order-applications/a1/confirmation", CONFIRMATION_BODY)
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isConflict());
 
-    verify(orderService, times(1)).confirmApplication(any(), any(), any(), any(), anyBoolean());
+    verify(orderService, times(1)).confirmApplication(any(), any(), any(), anyLong(), anyBoolean());
   }
 
   @Test
   @DisplayName("列長を超える新規顧客の氏名・電話番号は 400 で撥ねられること（DB のエラーにしない）")
-  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void confirmationWithAnOverlongNewCustomerIsRejected() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
 
@@ -301,7 +329,9 @@ class OrderApplicationControllerTest {
             + "あ".repeat(256)
             + "\"}}";
     mockMvc
-        .perform(storePost("/order-applications/a1/confirmation", overlongName))
+        .perform(
+            storePost("/order-applications/a1/confirmation", overlongName)
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isBadRequest());
 
     String overlongPhone =
@@ -310,21 +340,24 @@ class OrderApplicationControllerTest {
             + "1".repeat(51)
             + "\"}}";
     mockMvc
-        .perform(storePost("/order-applications/a1/confirmation", overlongPhone))
+        .perform(
+            storePost("/order-applications/a1/confirmation", overlongPhone)
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isBadRequest());
     verifyNoInteractions(orderService);
   }
 
   @Test
   @DisplayName("受付箱の行に台帳・会計の項目が存在しないこと（申請は受注の前室に閉じる）")
-  @WithMockUser(authorities = "PERM_ORDER_MANAGE")
   void applicationRowCarriesOnlyApplicationFields() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(orderQueryService.listApplications(any(), any(), any()))
         .thenReturn(new PageImpl<>(List.of(pendingApplication())));
 
     mockMvc
-        .perform(storeGet("/order-applications?statuses=PENDING"))
+        .perform(
+            storeGet("/order-applications?statuses=PENDING")
+                .with(jwtUser(USER_ID, "PERM_ORDER_MANAGE")))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.content[0].id").value("a1"))
         .andExpect(jsonPath("$.content[0].total_fee").doesNotExist());
@@ -413,7 +446,7 @@ class OrderApplicationControllerTest {
   void guestRequestCountsTheProxyAppendedHop() throws Exception {
     when(storeExistenceCheck.exists(anyLong())).thenReturn(true);
     when(guestApplicationRateLimiter.tryConsume(any(), any())).thenReturn(true);
-    when(guestOrderApplicationService.request(any(), any(GuestOrderApplicationCommand.class)))
+    when(guestOrderApplicationService.request(anyLong(), any(GuestOrderApplicationCommand.class)))
         .thenReturn(new GuestOrderApplicationReceipt("app-1"));
 
     mockMvc
@@ -467,24 +500,14 @@ class OrderApplicationControllerTest {
     return new OrderApplicationItem(view, false);
   }
 
-  /** 本番の認証済み主体は Authentication で、権限は文脈に載った {@code @WithMockUser} のものと同じ。 */
-  private static Authentication staff() {
-    return new TestingAuthenticationToken(
-        "staff@kizuna.test",
-        null,
-        List.copyOf(SecurityContextHolder.getContext().getAuthentication().getAuthorities()));
-  }
-
-  // 本番では認証済み主体をサーブレットコンテナが載せるが、@WebMvcTest の最小チェーンでは載らないため明示する。
   private MockHttpServletRequestBuilder storePost(String path, String body) {
     return post(path)
         .header("X-Store-ID", STORE_ID.toString())
-        .principal(staff())
         .contentType(MediaType.APPLICATION_JSON)
         .content(body);
   }
 
   private MockHttpServletRequestBuilder storeGet(String path) {
-    return get(path).header("X-Store-ID", STORE_ID.toString()).principal(staff());
+    return get(path).header("X-Store-ID", STORE_ID.toString());
   }
 }

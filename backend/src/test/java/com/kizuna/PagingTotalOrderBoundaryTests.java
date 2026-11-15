@@ -26,7 +26,7 @@ class PagingTotalOrderBoundaryTests {
           // 一括走査の窓。照会文が o.businessDate desc, o.id desc で並べる
           "com.kizuna.order.application.MonthlyPdfSnapshotService.store(java.lang.Long,"
               + " java.lang.Long, java.lang.String, com.kizuna.order.application.MonthlyPdfBudget)",
-          "com.kizuna.order.application.MonthlyPdfSnapshotService.self(java.lang.String,"
+          "com.kizuna.order.application.MonthlyPdfSnapshotService.self(long,"
               + " java.lang.Long, java.lang.String, com.kizuna.order.application.MonthlyPdfBudget)",
           "com.kizuna.order.application.MonthlyPdfSnapshotService.collect(java.lang.Long,"
               + " java.lang.Long, java.lang.String, java.lang.String, java.lang.String, long, long,"

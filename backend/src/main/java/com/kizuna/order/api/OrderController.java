@@ -42,6 +42,7 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.IntegrityViolations;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.shared.web.Replays;
 import jakarta.validation.Valid;
 import java.security.Principal;
@@ -230,7 +231,7 @@ public class OrderController {
                 orderService.create(
                     storeId,
                     orderMapper.toCommand(request),
-                    authentication.getName(),
+                    JwtClaims.userIdOf(authentication),
                     CustomerManagementAuthority.held(authentication))));
   }
 
@@ -243,7 +244,8 @@ public class OrderController {
       @Valid @RequestBody OrderCompletionRequest request,
       Principal principal) {
     var result =
-        orderService.complete(storeId, id, orderMapper.toCommand(request), principal.getName());
+        orderService.complete(
+            storeId, id, orderMapper.toCommand(request), JwtClaims.userIdOf(principal));
     return ResponseEntity.ok(new OrderCompletionResponse(result.receiptToken()));
   }
 
@@ -301,7 +303,7 @@ public class OrderController {
                     id,
                     request.getAttributionId(),
                     request.getReason(),
-                    principal.getName()))));
+                    JwtClaims.userIdOf(principal)))));
   }
 
   /**
@@ -319,7 +321,7 @@ public class OrderController {
         .body(
             orderMapper.toReceiptTokenResponse(
                 orderPointRollbackService.reissueReceiptTokenUnlessRolledBack(
-                    storeId, id, principal.getName())));
+                    storeId, id, JwtClaims.userIdOf(principal))));
   }
 
   /** 誤帰属の訂正の進み具合（この受注がその会員へ与えた付与の合計と、既に差し引いた合計）。画面の既定値はここから取る。 */
@@ -349,10 +351,10 @@ public class OrderController {
                 DbConstraint.UQ_T_POINT_ENTRIES_IDEMPOTENCY_KEY,
                 () ->
                     orderAttributionCorrectionService.correct(
-                        storeId, id, command, principal.getName()),
+                        storeId, id, command, JwtClaims.userIdOf(principal)),
                 () ->
                     orderAttributionCorrectionService.replayCorrect(
-                        storeId, id, command, principal.getName()))));
+                        storeId, id, command, JwtClaims.userIdOf(principal)))));
   }
 
   /** ポイント巻き戻しの下見（実行前に動く量を示す）。既に巻き戻し済みなら、その旨だけが真で量は 0 になる。 */
@@ -384,7 +386,7 @@ public class OrderController {
           .body(
               orderMapper.toResponse(
                   orderPointRollbackService.rollback(
-                      storeId, id, orderMapper.toCommand(request), principal.getName())));
+                      storeId, id, orderMapper.toCommand(request), JwtClaims.userIdOf(principal))));
     } catch (DataIntegrityViolationException ex) {
       if (!IntegrityViolations.violates(ex, DbConstraint.UQ_T_POINT_ROLLBACKS_ORDER)) {
         throw ex;
@@ -404,7 +406,7 @@ public class OrderController {
     return ResponseEntity.ok(
         orderMapper.toPreviewResponse(
             orderService.completionPreview(
-                storeId, id, orderMapper.toCommand(request), principal.getName())));
+                storeId, id, orderMapper.toCommand(request), JwtClaims.userIdOf(principal))));
   }
 
   /** 未完了（CONFIRMED / IN_SERVICE）の受注を理由付きで取消す。二度目の取消は状態違反（400）として拒否する。 */
@@ -415,7 +417,7 @@ public class OrderController {
       @PathVariable String id,
       @Valid @RequestBody OrderCancellationRequest request,
       Principal principal) {
-    orderService.cancel(storeId, id, request.getReason(), principal.getName());
+    orderService.cancel(storeId, id, request.getReason(), JwtClaims.userIdOf(principal));
     return ResponseEntity.noContent().build();
   }
 
@@ -429,7 +431,11 @@ public class OrderController {
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(
             orderCorrectionService.invalidateCompletion(
-                storeId, id, request.expectedVersion(), request.reason(), principal.getName()));
+                storeId,
+                id,
+                request.expectedVersion(),
+                request.reason(),
+                JwtClaims.userIdOf(principal)));
   }
 
   /** 完了受注の明細・実績時刻・コース・特殊サービスを理由付きで訂正する。 状態・ポイントを変えず、訂正前後の採用条件・金額・分数・報酬を返す。 */
@@ -444,7 +450,7 @@ public class OrderController {
         .body(
             orderMapper.toResponse(
                 orderCorrectionService.correct(
-                    storeId, id, orderMapper.toInput(request), principal.getName())));
+                    storeId, id, orderMapper.toInput(request), JwtClaims.userIdOf(principal))));
   }
 
   /**
@@ -465,7 +471,7 @@ public class OrderController {
                 storeId,
                 id,
                 orderMapper.toCommand(request),
-                authentication.getName(),
+                JwtClaims.userIdOf(authentication),
                 CustomerManagementAuthority.held(authentication))));
   }
 
@@ -479,7 +485,7 @@ public class OrderController {
         orderService.previewCreate(
             storeId,
             orderMapper.toCommand(request),
-            authentication.getName(),
+            JwtClaims.userIdOf(authentication),
             CustomerManagementAuthority.held(authentication)));
   }
 
@@ -495,7 +501,7 @@ public class OrderController {
             storeId,
             id,
             orderMapper.toCommand(request),
-            authentication.getName(),
+            JwtClaims.userIdOf(authentication),
             CustomerManagementAuthority.held(authentication)));
   }
 
@@ -508,7 +514,7 @@ public class OrderController {
       Principal principal) {
     return orderMapper.toPreviewResponse(
         orderCorrectionService.preview(
-            storeId, id, orderMapper.toInput(request), principal.getName()));
+            storeId, id, orderMapper.toInput(request), JwtClaims.userIdOf(principal)));
   }
 
   /** 訂正履歴。 */

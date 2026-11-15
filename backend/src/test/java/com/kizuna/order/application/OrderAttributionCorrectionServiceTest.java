@@ -11,26 +11,18 @@ import com.kizuna.order.domain.OrderStatus;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
-import com.kizuna.user.domain.User;
-import com.kizuna.user.domain.UserRepository;
-import com.kizuna.user.domain.UserType;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
@@ -42,7 +34,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class OrderAttributionCorrectionServiceTest {
 
   private static final String ORDER_ID = "o1";
-  private static final String ACTOR_EMAIL = "manager@kizuna.test";
   private static final long ACTOR_ID = 42L;
   private static final long STORE_ID = 1L;
   private static final long ATTRIBUTED_MEMBER_ID = 7L;
@@ -58,27 +49,8 @@ class OrderAttributionCorrectionServiceTest {
   @Mock private OrderAttributionRepository orderAttributionRepository;
   @Mock private PointLedgerService pointLedgerService;
   @Mock private BusinessAudit businessAudit;
-  private final UserRepository userRepository = Mockito.mock(UserRepository.class);
-
-  @Spy private ActorIdentityService actorIdentityService = new ActorIdentityService(userRepository);
 
   @InjectMocks private OrderAttributionCorrectionService service;
-
-  @BeforeEach
-  void resolveActor() {
-    User actor =
-        User.builder()
-            .email(ACTOR_EMAIL)
-            .password("encoded")
-            .displayName("店長 花子")
-            .enabled(true)
-            .userType(UserType.STAFF)
-            .storeIds(Set.of(STORE_ID))
-            .roleIds(Set.of(1L))
-            .build();
-    actor.setId(ACTOR_ID);
-    Mockito.lenient().when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.of(actor));
-  }
 
   @Test
   @DisplayName("差し引く相手は帰属記録が持つ会員であって、顧客に今紐づく会員ではないこと")
@@ -88,7 +60,7 @@ class OrderAttributionCorrectionServiceTest {
     givenGranted(100L);
     givenCorrected(0L, ATTRIBUTION_ID);
 
-    service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_EMAIL);
+    service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_ID);
 
     // 顧客経路を一切読まないことが、関連の解除・張り替えがあっても宛先がぶれない理由そのものである。
     Mockito.verify(pointLedgerService)
@@ -105,7 +77,7 @@ class OrderAttributionCorrectionServiceTest {
     active.setId(ATTRIBUTION_ID);
     givenAttribution(active);
 
-    assertThatThrownBy(() -> service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_ID))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("無効化");
 
@@ -124,7 +96,7 @@ class OrderAttributionCorrectionServiceTest {
     own.invalidate(REASON, ACTOR_ID, NOW);
     givenAttributions(own);
 
-    assertThatThrownBy(() -> service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_ID))
         .isInstanceOf(NotFoundException.class);
 
     Mockito.verifyNoInteractions(pointLedgerService);
@@ -141,7 +113,7 @@ class OrderAttributionCorrectionServiceTest {
     givenGranted(200L);
     givenCorrected(100L, ATTRIBUTION_ID, OTHER_ATTRIBUTION_ID);
 
-    assertThatThrownBy(() -> service.correct(STORE_ID, ORDER_ID, request(200), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.correct(STORE_ID, ORDER_ID, request(200), ACTOR_ID))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("上限");
 
@@ -159,7 +131,7 @@ class OrderAttributionCorrectionServiceTest {
     active.setId(OTHER_ATTRIBUTION_ID);
     givenAttributions(active, invalidatedAttribution());
 
-    assertThatThrownBy(() -> service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_ID))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("現に帰属している");
 
@@ -176,7 +148,7 @@ class OrderAttributionCorrectionServiceTest {
     givenGranted(100L);
     givenCorrected(0L, ATTRIBUTION_ID);
 
-    service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_EMAIL);
+    service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_ID);
 
     Mockito.verify(pointLedgerService)
         .correctForAttribution(
@@ -235,7 +207,7 @@ class OrderAttributionCorrectionServiceTest {
     givenGranted(200L);
     givenCorrected(0L, ATTRIBUTION_ID);
 
-    service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_EMAIL);
+    service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_ID);
 
     Mockito.verify(pointLedgerService)
         .correctForAttribution(
@@ -271,7 +243,7 @@ class OrderAttributionCorrectionServiceTest {
     Mockito.when(orderRepository.findByIdAndStoreIdForUpdate(ORDER_ID, STORE_ID))
         .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_ID))
         .isInstanceOf(NotFoundException.class);
 
     Mockito.verifyNoInteractions(orderAttributionRepository);
@@ -286,7 +258,7 @@ class OrderAttributionCorrectionServiceTest {
     givenGranted(100L);
     givenCorrected(70L, ATTRIBUTION_ID);
 
-    assertThatThrownBy(() -> service.correct(STORE_ID, ORDER_ID, request(31), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.correct(STORE_ID, ORDER_ID, request(31), ACTOR_ID))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("上限");
 
@@ -302,7 +274,7 @@ class OrderAttributionCorrectionServiceTest {
     givenCorrected(70L, ATTRIBUTION_ID);
 
     OrderAttributionCorrectionProgress response =
-        service.correct(STORE_ID, ORDER_ID, request(30), ACTOR_EMAIL);
+        service.correct(STORE_ID, ORDER_ID, request(30), ACTOR_ID);
 
     assertThat(response.grantedPoints()).isEqualTo(100L);
     assertThat(response.correctedPoints()).isEqualTo(100L);
@@ -322,7 +294,7 @@ class OrderAttributionCorrectionServiceTest {
         .when(pointLedgerService.correctedPointsFor(List.of(ATTRIBUTION_ID)))
         .thenReturn(100L);
 
-    service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_EMAIL);
+    service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_ID);
 
     Mockito.verify(pointLedgerService)
         .correctForAttribution(
@@ -373,27 +345,11 @@ class OrderAttributionCorrectionServiceTest {
     ReflectionMemberId.clear(orphaned);
     givenAttribution(orphaned);
 
-    assertThatThrownBy(() -> service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_EMAIL))
+    assertThatThrownBy(() -> service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_ID))
         .isInstanceOf(ServiceException.class)
         .hasMessageContaining("削除");
 
     Mockito.verifyNoInteractions(pointLedgerService);
-  }
-
-  @Test
-  @DisplayName("失効した認証セッションの訂正は実行者不明のまま通らないこと")
-  void refusesAnUnresolvableActor() {
-    givenOrder();
-    givenAttribution(invalidatedAttribution());
-    givenGranted(100L);
-    givenCorrected(0L, ATTRIBUTION_ID);
-    Mockito.when(userRepository.findByEmail(ACTOR_EMAIL)).thenReturn(Optional.empty());
-
-    assertThatThrownBy(() -> service.correct(STORE_ID, ORDER_ID, request(100), ACTOR_EMAIL))
-        .isInstanceOf(StaleSessionException.class);
-
-    // 上限を判じるために台帳を読むところまでは進むので、見るべきは「記帳していない」ことである。
-    verifyNoLedgerWrite();
   }
 
   // ==================== 補助 ====================

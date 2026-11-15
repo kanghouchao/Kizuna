@@ -3,6 +3,7 @@ package com.kizuna.order.api.me;
 import com.kizuna.order.api.MonthlyPdfResponse;
 import com.kizuna.order.application.MonthlyPdfService;
 import com.kizuna.order.application.MonthlyPdfSnapshotService;
+import com.kizuna.shared.web.JwtClaims;
 import java.io.IOException;
 import java.security.Principal;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,8 @@ public class SelfMonthlyPdfController {
       @RequestParam String month)
       throws IOException {
     return MonthlyPdfResponse.create(
-        month, pdf.generate(budget -> snapshots.self(principal.getName(), storeId, month, budget)));
+        month,
+        pdf.generate(
+            budget -> snapshots.self(JwtClaims.userIdOf(principal), storeId, month, budget)));
   }
 }

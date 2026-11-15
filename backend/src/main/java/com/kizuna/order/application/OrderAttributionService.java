@@ -12,7 +12,6 @@ import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import com.kizuna.shared.persistence.Timestamps;
-import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
 import java.util.List;
 import java.util.Map;
@@ -43,7 +42,6 @@ public class OrderAttributionService {
   private final OrderAttributionRepository orderAttributionRepository;
   private final OrderReceiptTokenRepository orderReceiptTokenRepository;
   private final ReceiptTokenGenerator receiptTokenGenerator;
-  private final ActorIdentityService actorIdentityService;
   private final BusinessAudit businessAudit;
 
   /** 受注 1 件の帰属の現況。無効化・再発行のどちらを提示するかを店舗側の画面が判じるための読み口。 */
@@ -66,7 +64,7 @@ public class OrderAttributionService {
    */
   @Transactional
   public OrderAttributionState invalidate(
-      Long storeId, String orderId, Long attributionId, String reason, String actorEmail) {
+      Long storeId, String orderId, Long attributionId, String reason, long actorId) {
     requireScopedOrder(storeId, orderId);
     OrderAttribution attribution =
         latestAttribution(storeId, orderId)
@@ -76,13 +74,12 @@ public class OrderAttributionService {
       throw new ConflictException("この受注の帰属は別の操作で変わりました。最新の状態を確認してからやり直してください");
     }
 
-    Long actorUserId = actorIdentityService.requireUserId(actorEmail);
     String beforeVersion = String.valueOf(attribution.getVersion());
-    attribution.invalidate(reason, actorUserId, Timestamps.now());
+    attribution.invalidate(reason, actorId, Timestamps.now());
     // 実 version を記録するため flush する。理由は自由文なので共通監査へは写さない。
     OrderAttribution saved = orderAttributionRepository.saveAndFlush(attribution);
     businessAudit.recordById(
-        actorUserId,
+        actorId,
         storeId,
         "ORDER_ATTRIBUTION_INVALIDATED",
         "ORDER_ATTRIBUTION",
@@ -128,7 +125,7 @@ public class OrderAttributionService {
    * <p>有効な帰属記録がある間はトークンが生きていることは無いので、無効化の側にトークンを止める処理は要らない。
    */
   @Transactional
-  public String reissueReceiptToken(Long storeId, String orderId, String actorEmail) {
+  public String reissueReceiptToken(Long storeId, String orderId, long actorId) {
     // 受注を押さえて並行する再発行と直列化する。トークンが 1 本も無い受注（完了時に会員へ帰属した受注）は
     // 押さえる行が下に無いため、ここだけが直列化点になる。
     Order order =
@@ -165,8 +162,8 @@ public class OrderAttributionService {
         OrderReceiptToken.issueFor(orderId, generated.digest(), plannedPoints, Timestamps.now());
     orderReceiptTokenRepository.save(issued);
     // トークンの生値と digest は写さず、旧トークンの失効は件数で示す。
-    businessAudit.record(
-        actorEmail,
+    businessAudit.recordById(
+        actorId,
         storeId,
         "ORDER_RECEIPT_TOKEN_REISSUED",
         "ORDER",

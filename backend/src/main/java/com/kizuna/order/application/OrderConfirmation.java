@@ -24,24 +24,24 @@ public class OrderConfirmation {
    * 実行者を含めるのは、他の操作者の試算を流用して確定させないため。
    */
   public String sign(
-      Long storeId, String operation, String id, String actor, Object input, OrderConsent consent) {
-    String inputProof = inputProof(storeId, operation, id, actor, input);
+      Long storeId, String operation, String id, long actorId, Object input, OrderConsent consent) {
+    String inputProof = inputProof(storeId, operation, id, actorId, input);
     return inputProof + "." + mac(List.of("order-confirmation-result-v3", inputProof, consent));
   }
 
   public boolean wasPreviewed(
-      Long storeId, String operation, String id, String actor, Object input, String token) {
+      Long storeId, String operation, String id, long actorId, Object input, String token) {
     if (token == null) return false;
     String[] parts = token.split("\\.", -1);
     return parts.length == 2
         && MessageDigest.isEqual(
             parts[0].getBytes(StandardCharsets.UTF_8),
-            inputProof(storeId, operation, id, actor, input).getBytes(StandardCharsets.UTF_8));
+            inputProof(storeId, operation, id, actorId, input).getBytes(StandardCharsets.UTF_8));
   }
 
   // 確認値そのものは入力に含めない（試算は確認値なし、確定は確認値つきで同じ入力を送る）。各コマンドは確認値の成分を @JsonIgnore にしている。
-  private String inputProof(Long storeId, String operation, String id, String actor, Object input) {
-    return mac(List.of("order-confirmation-input-v3", operation, id, storeId, actor, input));
+  private String inputProof(Long storeId, String operation, String id, long actorId, Object input) {
+    return mac(List.of("order-confirmation-input-v3", operation, id, storeId, actorId, input));
   }
 
   private String mac(Object payload) {

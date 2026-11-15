@@ -180,8 +180,7 @@ class ServiceAuditTest {
             new OrderSpecialServiceCatalog(items, revisions, consents, consentEvents, enrollments),
             mock(OrderSpecialServiceEventRepository.class),
             mock(OrderRepository.class),
-            stores,
-            actors);
+            stores);
     var own =
         new OwnServiceConditionService(
             items, revisions, consents, consentEvents, enrollments, stores, rejection, audit);

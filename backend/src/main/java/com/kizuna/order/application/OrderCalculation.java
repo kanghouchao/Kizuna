@@ -91,18 +91,18 @@ public class OrderCalculation {
       Long storeId,
       String operation,
       String id,
-      String actor,
+      long actorId,
       Object input,
       OrderQuote calculated,
       OrderPoints points) {
-    return preview(storeId, operation, id, actor, input, calculated, points, List.of());
+    return preview(storeId, operation, id, actorId, input, calculated, points, List.of());
   }
 
   public OrderPreview preview(
       Long storeId,
       String operation,
       String id,
-      String actor,
+      long actorId,
       Object input,
       OrderQuote calculated,
       OrderPoints points,
@@ -110,7 +110,7 @@ public class OrderCalculation {
     var specials = specialServices.describe(storeId, calculated);
     var consent = OrderConsent.of(calculated, points, specials, contactImports);
     return new OrderPreview(
-        confirmation.sign(storeId, operation, id, actor, input, consent),
+        confirmation.sign(storeId, operation, id, actorId, input, consent),
         calculated,
         points,
         specials,
@@ -122,8 +122,8 @@ public class OrderCalculation {
   }
 
   public boolean wasPreviewed(
-      Long storeId, String operation, String id, String actor, Object input, String token) {
-    return confirmation.wasPreviewed(storeId, operation, id, actor, input, token);
+      Long storeId, String operation, String id, long actorId, Object input, String token) {
+    return confirmation.wasPreviewed(storeId, operation, id, actorId, input, token);
   }
 
   public void verify(
@@ -131,11 +131,11 @@ public class OrderCalculation {
       Long storeId,
       String operation,
       String id,
-      String actor,
+      long actorId,
       Object input,
       OrderQuote calculated,
       OrderPoints points) {
-    verify(token, storeId, operation, id, actor, input, calculated, points, List.of());
+    verify(token, storeId, operation, id, actorId, input, calculated, points, List.of());
   }
 
   /** 確定の照合。表示だけの値は組み立てず、同意した内容を計算し直して試算の確認値と突き合わせる。 */
@@ -144,7 +144,7 @@ public class OrderCalculation {
       Long storeId,
       String operation,
       String id,
-      String actor,
+      long actorId,
       Object input,
       OrderQuote calculated,
       OrderPoints points,
@@ -152,6 +152,6 @@ public class OrderCalculation {
     var consent =
         OrderConsent.of(
             calculated, points, specialServices.attention(storeId, calculated), contactImports);
-    confirmation.verify(token, confirmation.sign(storeId, operation, id, actor, input, consent));
+    confirmation.verify(token, confirmation.sign(storeId, operation, id, actorId, input, consent));
   }
 }

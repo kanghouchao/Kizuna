@@ -29,7 +29,7 @@ import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScope;
 import com.kizuna.shared.storescope.StoreScopeHolder;
-import com.kizuna.user.application.ActorIdentityService;
+import com.kizuna.shared.web.JwtClaims;
 import com.kizuna.user.application.StoreScopeResolver;
 import java.time.Clock;
 import java.time.Instant;
@@ -97,7 +97,6 @@ class MonthlyPdfControllerTest {
   @MockitoBean RemunerationQuery query;
   @MockitoBean StoreNames stores;
   @MockitoBean SelfMonthlyRemunerationQuery self;
-  @MockitoBean ActorIdentityService actors;
   @MockitoBean CastRepository people;
   @MockitoBean SystemConfigService systemConfigService;
   @MockitoBean StoreExistenceCheck storeExistenceCheck;
@@ -112,7 +111,6 @@ class MonthlyPdfControllerTest {
     when(stores.name(1L)).thenReturn("日本語店舗");
     when(query.personName(1L, 34L)).thenReturn("源氏名さくら");
     when(self.storeName(34L, 1L)).thenReturn("日本語店舗");
-    when(actors.requireUserId("actor")).thenReturn(12L);
     var person = Cast.builder().userId(12L).realName("印刷禁止の本名").build();
     person.setId(34L);
     when(people.findByUserId(12L)).thenReturn(Optional.of(person));
@@ -156,7 +154,7 @@ class MonthlyPdfControllerTest {
         get(prefix + "/monthly-remunerations/pdf")
             .with(
                 jwt()
-                    .jwt(j -> j.subject("actor"))
+                    .jwt(j -> j.subject("actor").claim(JwtClaims.USER_ID, 12L))
                     .authorities(new SimpleGrantedAuthority(authority)))
             .param("store_id", "1")
             .param("person_id", "34")

@@ -19,6 +19,7 @@ import com.kizuna.order.domain.OrderApplicationStatus;
 import com.kizuna.order.infrastructure.GuestApplicationRateLimiter;
 import com.kizuna.shared.exception.TooManyRequestsException;
 import com.kizuna.shared.storescope.CurrentStore;
+import com.kizuna.shared.web.JwtClaims;
 import jakarta.annotation.security.PermitAll;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -141,13 +142,21 @@ public class OrderApplicationController {
           .body(
               orderMapper.toResponse(
                   orderService.confirmApplication(
-                      storeId, id, command, authentication.getName(), canManageCustomers)));
+                      storeId,
+                      id,
+                      command,
+                      JwtClaims.userIdOf(authentication),
+                      canManageCustomers)));
     } catch (MemberCustomerConflictException ex) {
       return ResponseEntity.status(HttpStatus.CREATED)
           .body(
               orderMapper.toResponse(
                   orderService.confirmApplication(
-                      storeId, id, command, authentication.getName(), canManageCustomers)));
+                      storeId,
+                      id,
+                      command,
+                      JwtClaims.userIdOf(authentication),
+                      canManageCustomers)));
     }
   }
 
@@ -159,7 +168,8 @@ public class OrderApplicationController {
       @PathVariable String id,
       @Valid @RequestBody OrderApplicationDeclineRequest request,
       Principal principal) {
-    orderService.declineApplication(storeId, id, request.getReason(), principal.getName());
+    orderService.declineApplication(
+        storeId, id, request.getReason(), JwtClaims.userIdOf(principal));
     return ResponseEntity.noContent().build();
   }
 
@@ -175,7 +185,7 @@ public class OrderApplicationController {
             storeId,
             id,
             orderMapper.toCommand(request),
-            authentication.getName(),
+            JwtClaims.userIdOf(authentication),
             CustomerManagementAuthority.held(authentication)));
   }
 }

@@ -21,16 +21,10 @@ import com.kizuna.order.domain.Order;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
-import com.kizuna.user.application.ActorIdentityService;
-import com.kizuna.user.domain.User;
-import com.kizuna.user.domain.UserRepository;
-import com.kizuna.user.domain.UserType;
 import java.time.OffsetDateTime;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
-import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -40,12 +34,11 @@ class OrderBusinessContactTest {
   private final BusinessContactHistoryRepository histories =
       mock(BusinessContactHistoryRepository.class);
   private final OrderRepository orders = mock(OrderRepository.class);
-  private final UserRepository users = mock(UserRepository.class);
   private static final Long STORE_ID = 7L;
   private final BusinessContactPolicy policy =
       new BusinessContactPolicy(new BusinessContactRestrictions(contacts));
   private final BusinessContactPermissions permissions =
-      new BusinessContactPermissions(new ActorIdentityService(users), histories, orders, policy);
+      new BusinessContactPermissions(histories, orders, policy);
   private final OrderBusinessContact boundary = new OrderBusinessContact(orders, permissions);
 
   @ParameterizedTest
@@ -154,15 +147,6 @@ class OrderBusinessContactTest {
     var order = Order.builder().build();
     order.setId("o1");
     order.setStoreId(STORE_ID);
-    var actor =
-        User.builder()
-            .email("actor@kizuna.test")
-            .password(UUID.randomUUID().toString())
-            .userType(UserType.STAFF)
-            .roleIds(Set.of(1L))
-            .build();
-    actor.setId(1L);
-    when(users.findByEmail("actor@kizuna.test")).thenReturn(Optional.of(actor));
     when(orders.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
     var stored = new EnumMap<ContactType, BusinessContactHistory>(ContactType.class);
     when(histories.save(any()))
@@ -182,20 +166,20 @@ class OrderBusinessContactTest {
         List.of(
             new BusinessContactPermissionInput(
                 ContactType.EMAIL, ContactPermissionStatus.ALLOWED, "本人申告", "今回の連絡を希望")),
-        "actor@kizuna.test",
+        1L,
         OffsetDateTime.now());
     assertThat(stored.get(ContactType.EMAIL).getStoreId()).isEqualTo(STORE_ID);
     assertThat(boundary.decide(STORE_ID, "o1", ContactType.EMAIL).decision())
         .isEqualTo(BusinessContactDecision.ALLOWED);
     var changed = ContactSnapshot.normalize(null, null, "second@example.com", null);
     order.replaceContact(changed);
-    permissions.record(order, original, List.of(), "actor@kizuna.test", OffsetDateTime.now());
+    permissions.record(order, original, List.of(), 1L, OffsetDateTime.now());
     assertThat(boundary.decide(STORE_ID, "o1", ContactType.EMAIL))
         .isEqualTo(
             new OrderBusinessContact.Decision(
                 "second@example.com", BusinessContactDecision.NOT_ALLOWED));
     order.replaceContact(original);
-    permissions.record(order, changed, null, "actor@kizuna.test", OffsetDateTime.now());
+    permissions.record(order, changed, null, 1L, OffsetDateTime.now());
     assertThat(boundary.decide(STORE_ID, "o1", ContactType.EMAIL).decision())
         .isEqualTo(BusinessContactDecision.NOT_ALLOWED);
   }

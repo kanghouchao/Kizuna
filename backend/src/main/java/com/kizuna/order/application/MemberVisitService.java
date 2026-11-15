@@ -6,7 +6,6 @@ import com.kizuna.order.domain.MemberVisitView;
 import com.kizuna.order.domain.OrderAttributionRepository;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.shared.exception.StaleSessionException;
-import com.kizuna.user.application.ActorIdentityService;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -29,15 +28,14 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MemberVisitService {
 
-  private final ActorIdentityService actorIdentityService;
   private final MemberLookupService memberLookupService;
   private final OrderAttributionRepository orderAttributionRepository;
   private final PointLedgerService pointLedgerService;
 
   /** 本人の来店履歴（跨店集約）。 */
   @Transactional(readOnly = true)
-  public Page<MemberVisitSummary> list(String email, Pageable pageable) {
-    Long memberId = resolveMemberId(email);
+  public Page<MemberVisitSummary> list(long userId, Pageable pageable) {
+    Long memberId = resolveMemberId(userId);
     Page<MemberVisitView> page =
         orderAttributionRepository.findMemberVisitViews(memberId, pageable);
     // 獲得ポイントは台帳にしか無いので、返す行の分だけをまとめて引く（行ごとに引くと問い合わせが線形に増える）。
@@ -49,8 +47,7 @@ public class MemberVisitService {
     return page.map(view -> toSummary(view, grantedPoints));
   }
 
-  private Long resolveMemberId(String email) {
-    Long userId = actorIdentityService.requireUserId(email);
+  private Long resolveMemberId(long userId) {
     return memberLookupService
         .findByUserId(userId)
         .map(MemberLookup::memberId)
