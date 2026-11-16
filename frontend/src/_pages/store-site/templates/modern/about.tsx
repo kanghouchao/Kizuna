@@ -1,29 +1,64 @@
+import { ClockIcon, FootprintsIcon, MapPinIcon, PhoneIcon, type LucideIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
 import type { StoreSitePageProps } from '../../model/types';
-import AgeGate from '../_sections/AgeVerification';
-import Footer from '../_sections/Footer';
-import Header from '../_sections/Header';
-import PageHero from '../_sections/PageHero';
-import StoreInfoSection from '../_sections/StoreInfoSection';
-import './theme.css';
+import Frame from './Frame';
+import { Notice, PageHead, ReserveBand } from './pageParts';
 
-/** 店舗情報・アクセスページ（modern テンプレート）。 */
+type Row = { label: string; Icon: LucideIcon; tone: string; node: ReactNode; wide?: boolean };
+
+/** 店舗情報・アクセスページ（modern テンプレート）。設定された項目だけを色面の札のタイルで出す。 */
 export default function ModernAboutPage({ store, siteConfig }: StoreSitePageProps<'about'>) {
+  const { address, phone, business_hours, access_note } = siteConfig;
+  const rows: Row[] = [];
+  if (address) rows.push({ label: '住所', Icon: MapPinIcon, tone: 'm-bg-peach', node: address });
+  if (phone)
+    rows.push({
+      label: '電話',
+      Icon: PhoneIcon,
+      tone: 'm-bg-mint',
+      node: (
+        <a href={`tel:${phone}`} className="m-marker">
+          {phone}
+        </a>
+      ),
+    });
+  if (business_hours)
+    rows.push({ label: '営業時間', Icon: ClockIcon, tone: 'm-bg-yellow', node: business_hours });
+  if (access_note)
+    rows.push({
+      label: 'アクセス',
+      Icon: FootprintsIcon,
+      tone: 'm-bg-sky',
+      node: access_note,
+      wide: true,
+    });
+
   return (
-    <div
-      className="storefront-modern min-h-screen flex flex-col"
-      style={{ background: 'var(--storefront-bg)' }}
-    >
-      <AgeGate storeName={store.name} />
-      <Header storeName={store.name} logoUrl={siteConfig.logo_url} />
-      <main className="grow">
-        <PageHero title="店舗情報・アクセス" />
-        <StoreInfoSection siteConfig={siteConfig} />
-      </main>
-      <Footer
-        storeName={store.name}
-        snsLinks={siteConfig.sns_links}
-        partnerLinks={siteConfig.partner_links}
-      />
-    </div>
+    <Frame store={store} siteConfig={siteConfig}>
+      <PageHead en="ACCESS" title="店舗情報・アクセス" />
+      {rows.length === 0 ? (
+        <Notice title="店舗情報は準備中です" />
+      ) : (
+        <dl className="flex flex-wrap gap-4">
+          {rows.map(({ label, Icon, tone, node, wide }) => (
+            <div
+              key={label}
+              className={`m-bg-card m-sticker min-w-0 grow rounded-[24px] p-5 ${wide ? 'basis-full' : 'basis-64'}`}
+            >
+              <dt className="flex items-center gap-2 text-sm font-bold">
+                <span className={`${tone} m-border grid size-9 place-items-center rounded-full`}>
+                  <Icon className="size-4" aria-hidden />
+                </span>
+                {label}
+              </dt>
+              <dd className="mt-3 text-lg leading-8 font-bold break-words whitespace-pre-line">
+                {node}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      <ReserveBand lead={`${store.name} へのご予約`} />
+    </Frame>
   );
 }
