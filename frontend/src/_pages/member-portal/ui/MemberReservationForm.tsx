@@ -1,12 +1,12 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { notify } from '@/shared/notify';
 import { memberOrderApplicationApi } from '@/entities/order';
 import { ConfirmedShiftCast, shiftApi } from '@/entities/shift';
-import { formatTime, integerRule, useResource } from '@/shared/lib';
+import { formatTime, integerRule, useResource, useWrite } from '@/shared/lib';
 import {
   Button,
   Form,
@@ -53,7 +53,7 @@ export function MemberReservationForm({
   onChangeStore?: () => void;
 }) {
   const router = useRouter();
-  const [submitting, setSubmitting] = useState(false);
+  const { busy, write } = useWrite();
 
   const form = useForm<ReservationFormValues>({
     defaultValues: {
@@ -99,26 +99,24 @@ export function MemberReservationForm({
     setValue('cast_id', '');
   }, [businessDate, setValue]);
 
-  const submit = async (values: ReservationFormValues) => {
-    setSubmitting(true);
-    try {
-      await memberOrderApplicationApi.create({
-        store_id: storeId,
-        declared_name: values.declared_name,
-        business_date: values.business_date,
-        pax: Number(values.pax),
-        arrival_scheduled_start_time: values.arrival_scheduled_start_time || undefined,
-        cast_id: values.cast_id || undefined,
-        remarks: values.remarks || undefined,
-      });
-      notify.success('予約を申請しました');
-      // 成功時は送信中のまま残す。遷移が終わるまでフォームは見えていて、戻すと同じ申請を二度送れる
-      router.push('/member/reservations/');
-    } catch {
-      notify.error('予約の申請に失敗しました');
-      setSubmitting(false);
-    }
-  };
+  const submit = (values: ReservationFormValues) =>
+    write(
+      () =>
+        memberOrderApplicationApi.create({
+          store_id: storeId,
+          declared_name: values.declared_name,
+          business_date: values.business_date,
+          pax: Number(values.pax),
+          arrival_scheduled_start_time: values.arrival_scheduled_start_time || undefined,
+          cast_id: values.cast_id || undefined,
+          remarks: values.remarks || undefined,
+        }),
+      {
+        success: '予約を申請しました',
+        failure: () => notify.error('予約の申請に失敗しました'),
+        onSuccess: () => router.push('/member/reservations/'),
+      }
+    );
 
   return (
     <section aria-labelledby="reservation-store" className="space-y-4">
@@ -135,7 +133,7 @@ export function MemberReservationForm({
             className="min-h-12 text-lg"
             onClick={onChangeStore}
             // 送信中に捨てさせると、届いた応答が選び直した先の入力を遷移で消す
-            disabled={submitting}
+            disabled={busy}
           >
             店舗を選び直す
           </Button>
@@ -302,7 +300,7 @@ export function MemberReservationForm({
           <Button
             type="submit"
             className="min-h-12 w-full text-lg"
-            disabled={submitting || castsLoading || castsFailure !== null}
+            disabled={busy || castsLoading || castsFailure !== null}
           >
             この内容で申請する
           </Button>

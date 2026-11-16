@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemberWithdrawalPage } from '../MemberWithdrawalPage';
 import { memberApi } from '@/entities/member';
 import { notify } from '@/shared/notify';
@@ -68,6 +68,8 @@ describe('MemberWithdrawalPage', () => {
 
   it('成功したら理由だけを送り、通知は出さずに理由コード付きでログアウトする', async () => {
     mockedWithdraw.mockResolvedValue(undefined);
+    let leave: () => void = () => {};
+    mockLogout.mockReturnValue(new Promise<void>(resolve => (leave = resolve)));
     render(<MemberWithdrawalPage />);
     typeReason('引っ越しのため');
     acknowledge();
@@ -79,6 +81,8 @@ describe('MemberWithdrawalPage', () => {
     expect(notify.success).not.toHaveBeenCalled();
     // ログアウトの遷移中は再び押せない
     expect(screen.getByRole('button', { name: '手続き中...' })).toBeDisabled();
+    // 終わらない transition を残すと、同じファイルの後続のテストの busy まで戻らなくなる
+    await act(async () => leave());
   });
 
   it('失敗したらサーバの文言で知らせ、ログアウトせず画面に入力を残す', async () => {
@@ -94,6 +98,6 @@ describe('MemberWithdrawalPage', () => {
     await waitFor(() => expect(notify.error).toHaveBeenCalledWith('この会員は既に退会しています'));
     expect(mockLogout).not.toHaveBeenCalled();
     expect(screen.getByLabelText('退会理由')).toHaveValue('やめる');
-    expect(submitButton()).toBeEnabled();
+    await waitFor(() => expect(submitButton()).toBeEnabled());
   });
 });

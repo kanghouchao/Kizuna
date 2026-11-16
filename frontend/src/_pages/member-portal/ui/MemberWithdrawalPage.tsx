@@ -1,11 +1,9 @@
 'use client';
 
-import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
-import { notify } from '@/shared/notify';
 import { memberApi } from '@/entities/member';
 import { useAuth } from '@/entities/user';
-import { getApiErrorMessage, useResource } from '@/shared/lib';
+import { useResource, useWrite } from '@/shared/lib';
 import {
   Button,
   Card,
@@ -45,25 +43,15 @@ export function MemberWithdrawalPage() {
   const form = useForm<WithdrawalFormValues>({
     defaultValues: { reason: '', understood: false },
   });
-  const {
-    control,
-    handleSubmit,
-    formState: { isSubmitting },
-  } = form;
-  // 成功後はログアウトの遷移が進行中でこの画面はまだ立っている。isSubmitting だけでは遷移の間だけ再び押せてしまう。
-  const [withdrawn, setWithdrawn] = useState(false);
+  const { control, handleSubmit } = form;
+  const { busy, write } = useWrite();
   const understood = useWatch({ control, name: 'understood' });
-  const pending = isSubmitting || withdrawn;
 
-  const submit = async (values: WithdrawalFormValues) => {
-    try {
-      await memberApi.withdraw({ reason: values.reason });
-      setWithdrawn(true);
-      logout('member-withdrawn');
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, '退会の手続きに失敗しました'));
-    }
-  };
+  const submit = (values: WithdrawalFormValues) =>
+    write(() => memberApi.withdraw({ reason: values.reason }), {
+      failure: '退会の手続きに失敗しました',
+      onSuccess: () => logout('member-withdrawn'),
+    });
 
   return (
     <div>
@@ -129,9 +117,9 @@ export function MemberWithdrawalPage() {
                 type="submit"
                 variant="destructive"
                 className="h-12 w-full text-lg"
-                disabled={!understood || pending}
+                disabled={!understood || busy}
               >
-                {pending ? '手続き中...' : '退会する'}
+                {busy ? '手続き中...' : '退会する'}
               </Button>
             </CardContent>
           </Card>

@@ -1,3 +1,4 @@
+import { startTransition } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import { useVersionedWrite } from '@/shared/lib';
@@ -156,6 +157,30 @@ describe('useVersionedWrite', () => {
       await reloads[order[1]];
     });
     expect(result.current.conflict).toBe(false);
+  });
+
+  it('onSuccess で遷移する場合は、遷移が反映されるまで busy を残す', async () => {
+    const { result } = setup();
+    let arrive: () => void = () => {};
+    const navigating = new Promise<void>(resolve => (arrive = resolve));
+    // router.push と同じく何も返さず、自分の transition の中で画面を進める
+    const push = () => {
+      startTransition(async () => {
+        await navigating;
+      });
+    };
+
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.write(async () => null, { ...messages, onSuccess: push });
+    });
+    expect(outcome).toBe('success');
+    expect(result.current.busy).toBe(true);
+
+    await act(async () => {
+      arrive();
+    });
+    expect(result.current.busy).toBe(false);
   });
 
   it('送信中の二度目は同じ描画の中でも送らない', async () => {

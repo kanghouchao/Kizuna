@@ -2,8 +2,7 @@
 
 import { useEffect, useId } from 'react';
 import { useForm } from 'react-hook-form';
-import { notify } from '@/shared/notify';
-import { formatDate, formatTimeRange, getApiErrorMessage, tokyoDate } from '@/shared/lib';
+import { formatDate, formatTimeRange, tokyoDate, useWrite } from '@/shared/lib';
 import { CastScheduleItem, ShiftChangeRequestCreateRequest, shiftApi } from '@/entities/shift';
 import {
   BottomSheet,
@@ -45,12 +44,8 @@ export function ShiftChangeRequestSheet({ open, item, onClose }: ShiftChangeRequ
   const form = useForm<ChangeFormValues>({
     defaultValues: { work_date: '', start_time: '', end_time: '', note: '' },
   });
-  const {
-    control,
-    handleSubmit,
-    reset,
-    formState: { isSubmitting },
-  } = form;
+  const { control, handleSubmit, reset } = form;
+  const { busy, write } = useWrite();
 
   useEffect(() => {
     if (!open || !item) return;
@@ -62,7 +57,7 @@ export function ShiftChangeRequestSheet({ open, item, onClose }: ShiftChangeRequ
     });
   }, [open, item, reset]);
 
-  const submit = async (values: ChangeFormValues) => {
+  const submit = (values: ChangeFormValues) => {
     if (!item?.id) return;
     const payload: ShiftChangeRequestCreateRequest = {
       shift_id: item.id,
@@ -71,16 +66,14 @@ export function ShiftChangeRequestSheet({ open, item, onClose }: ShiftChangeRequ
       end_time: `${values.end_time}:00`,
       note: values.note || undefined,
     };
-    try {
-      await shiftApi.submitShiftChangeRequest(payload);
-      notify.success('変更申請を提出しました');
-      onClose();
-    } catch (e) {
+    return write(() => shiftApi.submitShiftChangeRequest(payload), {
+      success: '変更申請を提出しました',
       // 受理できる日付の下限は営業日で決まり、その境界（日付変更時刻・業務のタイムゾーン）を知るのは
       // サーバだけ。client 側で暦日から下限を組むと深夜帯や時差でサーバと食い違うため、日付の可否は
       // サーバの文言をそのまま見せる。
-      notify.error(getApiErrorMessage(e, '変更申請の提出に失敗しました'));
-    }
+      failure: '変更申請の提出に失敗しました',
+      onSuccess: onClose,
+    });
   };
 
   return (
@@ -94,8 +87,8 @@ export function ShiftChangeRequestSheet({ open, item, onClose }: ShiftChangeRequ
       footer={
         <>
           {/* 操作帯は form の外に描かれるため、form 属性で本文の form を送信する */}
-          <Button type="submit" form={formId} disabled={isSubmitting}>
-            {isSubmitting ? '提出中...' : '変更を申請する'}
+          <Button type="submit" form={formId} disabled={busy}>
+            {busy ? '提出中...' : '変更を申請する'}
           </Button>
           <BottomSheetClose render={<Button type="button" variant="outline" />}>
             やめる

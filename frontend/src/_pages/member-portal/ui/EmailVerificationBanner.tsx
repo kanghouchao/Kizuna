@@ -1,11 +1,9 @@
 'use client';
 
-import { useState } from 'react';
 import { MailIcon } from 'lucide-react';
 import { memberApi } from '@/entities/member';
 import { useMe } from '@/entities/user';
-import { getApiErrorMessage } from '@/shared/lib';
-import { notify } from '@/shared/notify';
+import { useWrite } from '@/shared/lib';
 import { Button } from '@/shared/ui';
 
 /**
@@ -15,22 +13,16 @@ import { Button } from '@/shared/ui';
  */
 export function EmailVerificationBanner() {
   const { me } = useMe();
-  const [sending, setSending] = useState(false);
+  const { busy, write } = useWrite();
   if (me === null || me.user_type !== 'MEMBER' || me.email_verified) {
     return null;
   }
 
-  const resend = async () => {
-    setSending(true);
-    try {
-      await memberApi.resendEmailVerification();
-      notify.success(`${me.email}に確認メールを送りました`);
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, '確認メールを送れませんでした'));
-    } finally {
-      setSending(false);
-    }
-  };
+  const resend = () =>
+    void write(() => memberApi.resendEmailVerification(), {
+      success: `${me.email}に確認メールを送りました`,
+      failure: '確認メールを送れませんでした',
+    });
 
   return (
     <div className="px-4 pt-4">
@@ -48,7 +40,7 @@ export function EmailVerificationBanner() {
           variant="outline"
           size="sm"
           className="mt-2 ml-7"
-          disabled={sending}
+          disabled={busy}
           onClick={resend}
         >
           確認メールを再送する

@@ -2,15 +2,14 @@
 
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { notify } from '@/shared/notify';
 import { ShiftRequestStatus, ShiftRequestCreateRequest, shiftApi } from '@/entities/shift';
 import {
   formatDate,
   formatTimeRange,
-  getApiErrorMessage,
   tokyoDate,
   useListPage,
   useResource,
+  useWrite,
 } from '@/shared/lib';
 import {
   Badge,
@@ -99,14 +98,10 @@ export function CastRequestsPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const form = useForm<RequestFormValues>({ defaultValues: defaultValues() });
-  const {
-    handleSubmit,
-    reset,
-    control,
-    formState: { isSubmitting },
-  } = form;
+  const { handleSubmit, reset, control } = form;
+  const { busy, write } = useWrite();
 
-  const submit = async (values: RequestFormValues) => {
+  const submit = (values: RequestFormValues) => {
     if (!store) return;
     const payload: ShiftRequestCreateRequest = {
       store_id: Number(store.id),
@@ -115,19 +110,20 @@ export function CastRequestsPage() {
       end_time: `${values.end_time}:00`,
       note: values.note || undefined,
     };
-    try {
-      await shiftApi.submitShiftRequest(payload);
-      notify.success('出勤希望を提出しました');
-      reset(defaultValues());
-      setSheetOpen(false);
-      // 提出した希望は先頭ページの最上段に載るので、先頭ページへ戻して見せる
-      void changeHistoryPage(0);
-    } catch (e) {
+    return write(() => shiftApi.submitShiftRequest(payload), {
+      success: '出勤希望を提出しました',
       // 受理できる日付の下限は営業日で決まり、その境界（日付変更時刻・業務のタイムゾーン）を知るのは
       // サーバだけ。client 側で暦日から下限を組むと深夜帯や時差でサーバと食い違うため、日付の可否は
       // サーバの文言をそのまま見せる。
-      notify.error(getApiErrorMessage(e, '出勤希望の提出に失敗しました'));
-    }
+      failure: '出勤希望の提出に失敗しました',
+      onSuccess: () => {
+        reset(defaultValues());
+        setSheetOpen(false);
+        // 提出した希望は先頭ページの最上段に載るので、先頭ページへ戻して見せる。
+        // 取り直しは待たない。待つと、シートを閉じる更新が取り直しの完了まで描かれない
+        void changeHistoryPage(0);
+      },
+    });
   };
 
   return (
@@ -159,8 +155,8 @@ export function CastRequestsPage() {
         footer={
           <>
             {/* 操作帯は本文の外に固定されるので、form 属性で本文のフォームへ結ぶ */}
-            <Button type="submit" form={FORM_ID} disabled={isSubmitting}>
-              {isSubmitting ? '提出中...' : '提出する'}
+            <Button type="submit" form={FORM_ID} disabled={busy}>
+              {busy ? '提出中...' : '提出する'}
             </Button>
             <BottomSheetClose render={<Button variant="outline" />}>やめる</BottomSheetClose>
           </>

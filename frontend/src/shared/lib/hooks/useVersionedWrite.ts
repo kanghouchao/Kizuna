@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { notify } from '@/shared/notify';
 import { getApiErrorMessage, isConflict, isNotFound } from '../apiError';
+import { useWrite } from './useWrite';
 
 /** 書き込みの結末。表示（案内・ダイアログ・行の取り直し）は呼び出し側がこれで選ぶ。 */
 export type WriteOutcome = 'success' | 'conflict' | 'notFound' | 'failed' | 'refused';
@@ -11,8 +12,8 @@ interface WriteMessages<R> {
   success: string;
   /** サーバが理由を返さなかったときの文言 */
   failure: string;
-  /** 成功応答の反映（setData・行の差し替え・遷移等） */
-  onSuccess?: (result: R) => void;
+  /** 成功応答の反映（setData・行の差し替え・遷移等）。busy の残り方は useWrite に従う */
+  onSuccess?: (result: R) => unknown;
 }
 
 /**
@@ -22,11 +23,9 @@ interface WriteMessages<R> {
  * 取り直す。useOperation の 409（受領内容の不一致）は確定した結果で取り直さない。別物として扱う。
  */
 export function useVersionedWrite(reloadTarget: () => void | Promise<void>) {
-  // state だけでは同じ描画内の二度目の呼び出しを止められないため、送信中は ref でも持つ
-  const inFlight = useRef(false);
   const conflictRef = useRef(false);
   const latestReload = useRef(0);
-  const [busy, setBusy] = useState(false);
+  const { busy, write: send } = useWrite();
   const [conflict, setConflict] = useState(false);
 
   const markConflict = (value: boolean) => {
@@ -35,35 +34,27 @@ export function useVersionedWrite(reloadTarget: () => void | Promise<void>) {
   };
 
   const write = async <R>(
-    send: () => Promise<R>,
+    request: () => Promise<R>,
     { success, failure, onSuccess }: WriteMessages<R>
   ): Promise<WriteOutcome> => {
-    if (inFlight.current || conflictRef.current) return 'refused';
-    inFlight.current = true;
-    setBusy(true);
-    let result: R;
-    try {
-      result = await send();
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, failure));
-      if (isConflict(error)) {
-        markConflict(true);
-        return 'conflict';
-      }
-      if (isNotFound(error)) {
-        // 取り直しが終わるまで送信中のまま。終わる前に次を受けると古い版で送る
-        await reloadTarget();
-        return 'notFound';
-      }
-      return 'failed';
-    } finally {
-      inFlight.current = false;
-      setBusy(false);
-    }
-    // 反映は catch の外で行う。反映側の例外を書き込みの失敗として報告しない（サーバでは確定している）
-    notify.success(success);
-    onSuccess?.(result);
-    return 'success';
+    if (conflictRef.current) return 'refused';
+    let failed: WriteOutcome = 'failed';
+    const outcome = await send(request, {
+      success,
+      failure: async error => {
+        notify.error(getApiErrorMessage(error, failure));
+        if (isConflict(error)) {
+          markConflict(true);
+          failed = 'conflict';
+        } else if (isNotFound(error)) {
+          failed = 'notFound';
+          // 取り直しが終わるまで送信中のまま。終わる前に次を受けると古い版で送る
+          await reloadTarget();
+        }
+      },
+      onSuccess,
+    });
+    return outcome === 'failed' ? failed : outcome;
   };
 
   /**
