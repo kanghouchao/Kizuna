@@ -1,6 +1,9 @@
 package com.kizuna.menu.api;
 
 import static com.kizuna.shared.web.JwtRequests.jwtUser;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -9,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.kizuna.menu.application.MenuNode;
 import com.kizuna.menu.application.MenuService;
 import com.kizuna.menu.application.MenuTree;
+import com.kizuna.shared.exception.CommonExceptionHandler;
 import com.kizuna.shared.storescope.StoreExistenceCheck;
 import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
@@ -18,15 +22,25 @@ import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(MenuController.class)
-@Import(StoreScopeHolder.class)
+@Import({
+  MenuControllerTest.MethodSecurityConfig.class,
+  CommonExceptionHandler.class,
+  StoreScopeHolder.class
+})
 class MenuControllerTest {
+
+  @TestConfiguration
+  @EnableMethodSecurity
+  static class MethodSecurityConfig {}
 
   @Autowired private MockMvc mockMvc;
 
@@ -61,5 +75,13 @@ class MenuControllerTest {
                       {"name":"顧客","path":"/customers","icon":"user","items":[]}]}]}]
                     """,
                     JsonCompareMode.STRICT));
+  }
+
+  @Test
+  @DisplayName("未認証は 401 で拒まれ、メニューの組み立てには到達しないこと")
+  void anonymousIsUnauthorized() throws Exception {
+    mockMvc.perform(get("/menus/me")).andExpect(status().isUnauthorized());
+
+    verify(menuService, never()).getMyMenus(any());
   }
 }
