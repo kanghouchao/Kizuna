@@ -208,6 +208,10 @@ describe('編集', () => {
         version: 3,
       })
     );
+    // 保存の反映が終わるまで公開設定は操作できない
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: '公開設定を保存' })).toBeEnabled()
+    );
     fireEvent.click(screen.getByRole('switch', { name: '公式サイトで公開する' }));
     fireEvent.change(screen.getByLabelText(/公開開始/), { target: { value: '2026-11-01T20:00' } });
     fireEvent.click(screen.getByRole('button', { name: '公開設定を保存' }));

@@ -2,15 +2,8 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { notify } from '@/shared/notify';
 import { MemberOrderApplication, memberOrderApplicationApi } from '@/entities/order';
-import {
-  formatDate,
-  formatDateTime,
-  getApiErrorMessage,
-  tokyoDate,
-  useListPage,
-} from '@/shared/lib';
+import { formatDate, formatDateTime, tokyoDate, useListPage, useWrite } from '@/shared/lib';
 import {
   Button,
   ConfirmDialog,
@@ -61,25 +54,19 @@ function NewReservationButton() {
 
 /** 会員ポータルの予約申請一覧。全店舗を集約し、未処理のものは本人が確認のうえ取り下げられる。 */
 export function MemberReservationsPage() {
-  const [processingId, setProcessingId] = useState<string | null>(null);
+  const { busy, write } = useWrite();
   const [withdrawTarget, setWithdrawTarget] = useState<MemberOrderApplication | null>(null);
   const list = useListPage<MemberOrderApplication>(page => memberOrderApplicationApi.list(page));
   const { rows: reservations, isLoading: loading, failed } = list;
   const today = tokyoDate(new Date());
   const empty = !failed && !loading && reservations.length === 0;
 
-  const withdraw = async (reservation: MemberOrderApplication) => {
-    setProcessingId(reservation.id ?? null);
-    try {
-      await memberOrderApplicationApi.withdraw(reservation.id);
-      notify.success('予約を取り下げました');
-      await list.reload();
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, '取り下げに失敗しました'));
-    } finally {
-      setProcessingId(null);
-    }
-  };
+  const withdraw = (reservation: MemberOrderApplication) =>
+    write(() => memberOrderApplicationApi.withdraw(reservation.id), {
+      success: '予約を取り下げました',
+      failure: '取り下げに失敗しました',
+      onSuccess: () => list.reload(),
+    });
 
   return (
     <div className="space-y-4">
@@ -115,8 +102,8 @@ export function MemberReservationsPage() {
                         variant="outline"
                         className="mt-2 min-h-12 w-full text-lg text-foreground"
                         onClick={() => setWithdrawTarget(reservation)}
-                        // 結果が返るまで同じ行を押せると、済んだ取り下げをもう一度投げてしまう
-                        disabled={loading || processingId === reservation.id}
+                        // 取り下げは一度に一件。送信中はどの行も押せない
+                        disabled={loading || busy}
                       >
                         取り下げる
                       </Button>

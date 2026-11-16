@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { notify } from '@/shared/notify';
 import {
   memberApi,
@@ -8,7 +7,7 @@ import {
   MemberNotificationSettings,
   MemberNotificationStatus,
 } from '@/entities/member';
-import { getApiErrorMessage, useResource } from '@/shared/lib';
+import { getApiErrorMessage, useResource, useWrite } from '@/shared/lib';
 import {
   Card,
   CardContent,
@@ -57,19 +56,15 @@ export function MemberNotificationSettingsPage() {
   const { data, setData, isLoading, failure, reload } = useResource(() =>
     memberApi.notificationSettings()
   );
-  const [saving, setSaving] = useState(false);
+  const { busy, write } = useWrite();
 
-  const choose = async (purpose: MemberNotificationPurpose, status: Choice) => {
-    setSaving(true);
-    try {
-      setData(await memberApi.chooseNotification(purpose, status));
-      notify.success('通知の設定を保存しました');
-    } catch (error) {
-      notify.warning(getApiErrorMessage(error, '通知の設定を保存できませんでした'));
-    } finally {
-      setSaving(false);
-    }
-  };
+  const choose = (purpose: MemberNotificationPurpose, status: Choice) =>
+    write(() => memberApi.chooseNotification(purpose, status), {
+      success: '通知の設定を保存しました',
+      failure: error =>
+        notify.warning(getApiErrorMessage(error, '通知の設定を保存できませんでした')),
+      onSuccess: setData,
+    });
 
   return (
     <div>
@@ -106,7 +101,7 @@ export function MemberNotificationSettingsPage() {
                   aria-labelledby={titleId}
                   value={current === 'UNKNOWN' ? '' : current}
                   onValueChange={value => void choose(purpose, value as Choice)}
-                  disabled={saving}
+                  disabled={busy}
                   className="gap-0"
                 >
                   {CHOICES.map(({ value, label }) => (

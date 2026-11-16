@@ -14,7 +14,7 @@ interface AuthContextType {
    * 既定の行き先は動かさない — 利用者が自分で押したログアウトが身に覚えのない説明の
    * 画面に着地しないよう、理由は呼び出し側が明示したときだけ載る。
    */
-  logout: (reason?: string) => void;
+  logout: (reason?: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);

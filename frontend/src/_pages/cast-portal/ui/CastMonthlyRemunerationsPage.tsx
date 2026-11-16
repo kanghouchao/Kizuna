@@ -4,7 +4,14 @@ import { Suspense, useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { selfMonthlyRemunerationApi } from '@/entities/order';
 import { MonthlyPdfActions } from '@/features/monthly-remuneration-pdf';
-import { formatDate, getApiErrorMessage, isConflict, tokyoDate, useResource } from '@/shared/lib';
+import {
+  formatDate,
+  getApiErrorMessage,
+  isConflict,
+  tokyoDate,
+  useResource,
+  useWrite,
+} from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import {
   EmptyState,
@@ -149,7 +156,7 @@ function MonthlyStatement({
   const [filter, setFilter] = useState<Filter>('all');
   // 未操作の間は承諾待ちの日を開く。承諾で取り直しても開閉が変わらないよう、操作の時点で固定する。
   const [opened, setOpened] = useState<ReadonlySet<string> | null>(null);
-  const [sending, setSending] = useState(false);
+  const { busy, write } = useWrite();
 
   if (result.failure)
     return (
@@ -175,28 +182,30 @@ function MonthlyStatement({
     setOpened(next);
   };
   // 409 は見ていた内容が古いことを示す。どの結果でも明細を取り直し、今の状態を見せる。
-  const accept = async (day: Day) => {
-    if (day.content_digest === undefined) return;
+  const accept = (day: Day) => {
+    const digest = day.content_digest;
+    if (digest === undefined) return;
     setOpened(open);
-    setSending(true);
-    try {
-      await remunerationApi.accept({
-        store_id: storeId,
-        business_date: day.business_date,
-        content_digest: day.content_digest,
-      });
-      notify.success(`${formatDate(day.business_date, today)}の明細を承諾しました`);
-    } catch (error) {
-      if (isConflict(error))
-        notify.warning(
-          '明細の内容が変わっていたため、最新の明細を表示しました。内容を確かめてから承諾してください'
-        );
-      else notify.error(getApiErrorMessage(error, '明細を承諾できませんでした'));
-    } finally {
-      // 取り直す間は古い明細のボタンが残るので、押せないままにして同じ要約の再送を防ぐ
-      await result.reload();
-      setSending(false);
-    }
+    void write(
+      () =>
+        remunerationApi.accept({
+          store_id: storeId,
+          business_date: day.business_date,
+          content_digest: digest,
+        }),
+      {
+        success: `${formatDate(day.business_date, today)}の明細を承諾しました`,
+        failure: error => {
+          if (isConflict(error))
+            notify.warning(
+              '明細の内容が変わっていたため、最新の明細を表示しました。内容を確かめてから承諾してください'
+            );
+          else notify.error(getApiErrorMessage(error, '明細を承諾できませんでした'));
+          return result.reload();
+        },
+        onSuccess: () => result.reload(),
+      }
+    );
   };
 
   return (
@@ -230,7 +239,7 @@ function MonthlyStatement({
                     open={open.has(entry.day.business_date)}
                     onToggle={() => toggle(entry.day.business_date)}
                     onAccept={accept}
-                    sending={sending}
+                    sending={busy}
                   />
                 </li>
               ))}
