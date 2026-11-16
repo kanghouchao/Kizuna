@@ -23,7 +23,8 @@ export default function ModernSchedulePage({
       <PageHead
         en="SCHEDULE"
         title="出勤表"
-        chip={shifts.length > 0 ? `本日 ${shifts.length}人` : undefined}
+        // 一人が同じ日に複数の出勤を持つことがあるので、人数は出勤の件数ではなくキャストで数える
+        chip={shifts.length > 0 ? `本日 ${new Set(shifts.map(s => s.cast_id)).size}人` : undefined}
       />
       {shifts.length === 0 ? (
         <Notice
@@ -48,7 +49,7 @@ export default function ModernSchedulePage({
                     />
                   </span>
                   <div className="px-3 pt-2 pb-3">
-                    <h2 className="m-display truncate text-base sm:text-lg">{shift.cast_name}</h2>
+                    <h2 className="m-display text-base sm:text-lg">{shift.cast_name}</h2>
                     <p className="m-bg-yellow mt-1.5 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold sm:text-sm">
                       <ClockIcon className="size-3.5 shrink-0" aria-hidden />
                       <span>{timeRange(shift)}</span>
