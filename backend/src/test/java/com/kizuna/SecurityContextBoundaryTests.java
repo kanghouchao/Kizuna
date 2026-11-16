@@ -8,8 +8,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
- * 認証文脈を読むのは入口（api）と web の差し込み（infrastructure）、認証そのものを扱う auth と shared だけにする。 それ以外は実行者や権限を引数で受ける —
- * 文脈を読む service は、要求の外（定期処理・イベント）から呼ぶと実行者を失う。
+ * 認証文脈を読むのは、要求を受ける側（api、web の差し込みを置く infrastructure と shared）と、認証を扱う auth だけにする。 それ以外は実行者や権限を引数で受ける
+ * — 文脈を読む service は、要求の外（定期処理・イベント）から呼ぶと実行者を失う。
  */
 class SecurityContextBoundaryTests {
   @Test
