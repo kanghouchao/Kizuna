@@ -1,5 +1,3 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { guestOrderApplicationApi } from '@/entities/order';
 import type { Page } from '@/shared/api';
@@ -34,17 +32,6 @@ describe('classic テンプレートの後半のページ', () => {
   });
   afterEach(() => {
     localStorage.clear();
-  });
-
-  it('旧い共有の部品と共通の色トークンを参照するファイルが無い', () => {
-    const dir = join(__dirname, '../templates/classic');
-    const offenders = readdirSync(dir).filter(file =>
-      /_sections|--storefront-|storefront-classic|theme\.css/.test(
-        readFileSync(join(dir, file), 'utf8')
-      )
-    );
-
-    expect(offenders).toEqual([]);
   });
 
   describe('出勤表', () => {

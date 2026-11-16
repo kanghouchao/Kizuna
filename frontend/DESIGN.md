@@ -101,7 +101,23 @@ AuthLayout の利用で認証画面を判定する。password-change は認証�
 - 文字の対比（通常 4.5:1、意味を持つ図形 3:1）はテンプレートごとに計測し、計測値を PR に記録する。色の変数の名前と数はテンプレートが決める。
 - 画像は `next/image` を使い、外部 CSS を読み込まない。375px・768px・1440px で横スクロールを出さない。
 
-旧い共有の部品 `templates/_sections/` と全テンプレート共通の `--storefront-*` 契約は、各テンプレートの作り直しが済むまで残る。作り直したテンプレートはどちらも使わない。作り直す前のテンプレートは、未設定の区画・書体・動きの規則をまだ満たしていない（書体は CSS に名前を書いただけで読み込んでおらず、Banner は未設定でも区画を出す）。
+#### テンプレートを足すとき
+
+- `templates/<key>/` を作り、10 ページ（page / casts / cast-detail / schedule / menu / about / reservation / reviews / news / news-detail）を default export で書く。props は `StoreSitePageProps<ページ名>` で受け取る。
+- 共有から使うのは上の表の「共有」だけである。年齢確認は `model/useAgeCheck`、予約フォームは `model/useGuestReservationForm`、会員ポータルの予約入口は `model/useMemberReservationUrl`、ナビゲーションの項目は `model/navigation`、ページ送りは `lib/paging` を呼び、その周りの画面を自分で描く。
+- 自分で書くのは表の「固有」のすべてである。他のテンプレートの部品・様式・書体の読み込みを写して始めてもよいが、import はしない。
+- `entities/store-profile` の `templateMeta.ts` に標識・名前・説明・サムネイルを足し、下の手順でサムネイルを撮る。backend は標識を検証しないので、ほかに登録する場所は無い。
+- e2e の `public-site.feature` の中核のシナリオの例（`template` の表）に標識を足す。
+
+#### サムネイルの撮り直し
+
+設定画面のテンプレートの選択に出す画像（`public/templates/<key>.png`）は、各テンプレートのトップを同じ内容で写したものである。テンプレートのトップの外観を大きく変えたとき、またはテンプレートを足したときに、全テンプレートを同じ手順で撮り直す。
+
+1. `task demo` で目視用スタックを立てる（`e2e/README.md`「目視用スタック」）。内容は全項目を設定した店舗 `store1.kizuna.test` で揃える。
+2. 管理画面の店舗 1 の設定でテンプレートを切り替える。公開側はサイト設定を 60 秒保持するので、最も外側の `data-storefront-template` が切り替えた標識になるまで読み込み直す。
+3. ブラウザの表示領域を 1280×800（倍率 1）にしてトップを開き、年齢確認を通す。書体・画像の読み込みと出現の動きが終わってから、スクロールせずに表示領域だけを PNG で撮る。開発モードの Next.js の印は写さない。
+4. 640×400 に縮めて `public/templates/<key>.png` へ置く（macOS なら `sips -Z 640 <撮った画像> --out public/templates/<key>.png`）。
+5. 設定画面で、並んだサムネイルが互いに区別できることを確かめ、`task demo:down` で破棄する。
 
 ## 文字・アイコン・余白
 
