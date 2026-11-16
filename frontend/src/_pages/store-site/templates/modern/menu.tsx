@@ -4,17 +4,17 @@ import { Notice, PageHead, ReserveBand } from './pageParts';
 
 type Block = { rows: [string, string][] } | { text: string };
 
-// 行末の語が金額（数字と通貨の印）なら「項目 | 金額」の行、それ以外は書いたままの文章として扱う
-const PRICE_ROW = /^(.*\S)[ \t\u3000]+(\S*[0-9０-９]\S*)$/;
-const CURRENCY = /[円¥￥]/;
+// 行末の語が金額（通貨の印の付いた数字・割合・「無料」）なら「項目 | 金額」の行、それ以外は書いたままの文章として扱う
+const LAST_WORD = /^(.*\S)[ \t\u3000]+(\S+)$/;
+const AMOUNT = /[0-9０-９].*[円%％]|[¥￥].*[0-9０-９]|無料/;
 
 /** 料金の説明文を、順序を保ったまま表と文章の塊に分ける。どの行も落とさない。 */
 function blocksOf(description: string): Block[] {
   const blocks: Block[] = [];
   for (const line of description.split(/\r?\n/)) {
-    const match = PRICE_ROW.exec(line.trim());
+    const match = LAST_WORD.exec(line.trim());
     const last = blocks.at(-1);
-    if (match && CURRENCY.test(match[2])) {
+    if (match && AMOUNT.test(match[2])) {
       if (last && 'rows' in last) last.rows.push([match[1], match[2]]);
       else blocks.push({ rows: [[match[1], match[2]]] });
     } else if (last && 'text' in last) {

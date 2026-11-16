@@ -157,6 +157,7 @@ describe('modern テンプレート', () => {
         shifts={[
           { cast_id: '42', cast_name: 'B子', start_time: '20:00:00', end_time: '00:00:00' },
           { cast_id: '7', cast_name: 'A子', start_time: '18:00', end_time: '02:00' },
+          { cast_id: '42', cast_name: 'B子', start_time: '03:00', end_time: '05:00' },
         ]}
       />
     );
@@ -165,10 +166,12 @@ describe('modern テンプレート', () => {
     expect(screen.getAllByRole('heading', { level: 2 }).map(h => h.textContent)).toEqual([
       'B子',
       'A子',
+      'B子',
     ]);
+    expect(screen.getByText('本日 2人')).toBeInTheDocument();
     expect(screen.getByText('20:00–24:00')).toBeInTheDocument();
     expect(screen.getByText('18:00–02:00')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /B子/ })).toHaveAttribute('href', '/casts/42');
+    expect(hrefsOf('B子 20:00–24:00')).toEqual(['/casts/42']);
   });
 
   it('出勤が 0 件なら案内だけを出す', () => {
@@ -208,6 +211,25 @@ describe('modern テンプレート', () => {
     ].map(text => main.indexOf(text));
     expect(positions).toEqual([...positions].sort((a, b) => a - b));
     expect(positions).not.toContain(-1);
+  });
+
+  it('料金は「無料」と割合で終わる行も表の行にし、表を途中で割らない', () => {
+    render(
+      <ModernMenuPage
+        store={store}
+        siteConfig={{
+          pricing_description: 'セット 60分 10,000円\n入会金 無料\n深夜料金 20%増\n指名料 3,000円',
+        }}
+      />
+    );
+
+    expect(screen.getAllByRole('table')).toHaveLength(1);
+    expect(screen.getAllByRole('rowheader').map(cell => cell.textContent)).toEqual([
+      'セット 60分',
+      '入会金',
+      '深夜料金',
+      '指名料',
+    ]);
   });
 
   it('料金が金額を含まない文章だけなら、表を作らず書いたとおりに出す', () => {
@@ -440,6 +462,7 @@ describe('modern テンプレート', () => {
       const nameError = await screen.findByText('お名前をご入力ください');
       const name = screen.getByLabelText('お名前');
       expect(name).toHaveAttribute('aria-invalid', 'true');
+      expect(name).toBeRequired();
       expect(name).toHaveAccessibleDescription(nameError.textContent ?? '');
       expect(screen.getByLabelText('お電話番号')).toHaveAccessibleDescription(
         '電話・メール・LINEのいずれかをご入力ください'
@@ -467,6 +490,7 @@ describe('modern テンプレート', () => {
       submit();
 
       expect(await screen.findByText('受付番号: app-9')).toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveFocus();
       expect(screen.getByText(/この時点ではまだ予約は確定しておりません/)).toBeInTheDocument();
       expect(mockedApi.request).toHaveBeenCalledWith('7', {
         contact_consent: { version: 'v1', business_allowed: true, marketing_allowed: false },

@@ -52,7 +52,13 @@ export default function ReservationForm({ storeId }: { storeId: string }) {
 
   if (acceptedId !== null) {
     return (
-      <div className={`${card} m-pop p-8 text-center`}>
+      // 送信ボタンが消えるので、受付の案内へフォーカスを移して読み上げさせる
+      <div
+        role="status"
+        tabIndex={-1}
+        ref={el => el?.focus()}
+        className={`${card} m-pop p-8 text-center outline-none`}
+      >
         <span className="m-bg-mint m-border mx-auto grid size-14 place-items-center rounded-full">
           <PartyPopperIcon className="size-7" aria-hidden />
         </span>
@@ -82,6 +88,7 @@ export default function ReservationForm({ storeId }: { storeId: string }) {
         <Field id="guest-contact-name" label="お名前" required error={errors.contact_name?.message}>
           <input
             id="guest-contact-name"
+            aria-required="true"
             type="text"
             autoComplete="name"
             className="m-field"
@@ -143,6 +150,7 @@ export default function ReservationForm({ storeId }: { storeId: string }) {
           >
             <input
               id="guest-business-date"
+              aria-required="true"
               type="date"
               className="m-field"
               aria-invalid={!!errors.business_date}
@@ -163,6 +171,7 @@ export default function ReservationForm({ storeId }: { storeId: string }) {
         <Field id="guest-pax" label="ご人数" required error={errors.pax?.message}>
           <input
             id="guest-pax"
+            aria-required="true"
             type="number"
             min={1}
             inputMode="numeric"
