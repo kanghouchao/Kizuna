@@ -155,7 +155,7 @@ class ApplicantServiceTest {
     assertThat(response.address()).isEqualTo("住所");
     assertThat(response.modifiedBy()).isEqualTo(9L);
     verify(audit)
-        .recordById(
+        .record(
             ACTOR_ID,
             STORE_ID,
             "APPLICANT_RECEIVED",
@@ -186,7 +186,7 @@ class ApplicantServiceTest {
     assertThat(applicant.getInterview().notes()).isEqualTo("私用メモ");
     var safe = Map.of("status", "RECEIVED", "version", "0");
     verify(audit)
-        .recordById(
+        .record(
             ACTOR_ID,
             STORE_ID,
             "APPLICANT_INTAKE_UPDATED",
@@ -197,7 +197,7 @@ class ApplicantServiceTest {
             safe,
             safe);
     verify(audit)
-        .recordById(
+        .record(
             ACTOR_ID,
             STORE_ID,
             "APPLICANT_INTERVIEW_UPDATED",
@@ -226,7 +226,7 @@ class ApplicantServiceTest {
     assertThat(history.getActorId()).isEqualTo(9L);
     assertThat(history.getStoreId()).isEqualTo(STORE_ID);
     verify(audit)
-        .recordById(
+        .record(
             ACTOR_ID,
             STORE_ID,
             "APPLICANT_STATUS_CHANGED",
@@ -273,7 +273,7 @@ class ApplicantServiceTest {
     assertThat(history.getActorId()).isEqualTo(9L);
     assertThat(history.getStoreId()).isEqualTo(STORE_ID);
     verify(audit)
-        .recordById(
+        .record(
             ACTOR_ID,
             STORE_ID,
             "APPLICANT_DECIDED",
@@ -354,7 +354,7 @@ class ApplicantServiceTest {
     assertThat(command.getValue()).isEqualTo(CAST);
     verify(histories, never()).save(any());
     verify(audit)
-        .recordById(
+        .record(
             ACTOR_ID,
             STORE_ID,
             "APPLICANT_ENROLLED",
@@ -411,7 +411,7 @@ class ApplicantServiceTest {
     lock();
     doThrow(new IllegalStateException("監査を保存できません"))
         .when(audit)
-        .recordById(anyLong(), eq(STORE_ID), any(), any(), any(), any(), any(), any(), any());
+        .record(anyLong(), eq(STORE_ID), any(), any(), any(), any(), any(), any(), any());
     assertThatThrownBy(
             () ->
                 service.update(

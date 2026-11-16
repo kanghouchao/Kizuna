@@ -103,7 +103,7 @@ public class ServiceIdentityService {
             .storeIds(command.storeIds())
             .build();
     user = save(user);
-    businessAudit.recordById(
+    businessAudit.record(
         actorId,
         null,
         "SERVICE_ID_CREATED",
@@ -131,7 +131,7 @@ public class ServiceIdentityService {
     credentialOperations.reassignGrants(user, command.roleIds(), command.storeIds());
     user = save(user);
     if (!before.equals(BusinessAudit.grants(user)))
-      businessAudit.recordById(
+      businessAudit.record(
           actorId,
           null,
           "SERVICE_ID_GRANTS_CHANGED",
@@ -156,7 +156,7 @@ public class ServiceIdentityService {
     credentialOperations.stop(user);
     if (wasEnabled) {
       repository.saveAndFlush(user);
-      businessAudit.recordById(
+      businessAudit.record(
           actorId,
           null,
           "SERVICE_ID_SUSPENDED",
@@ -177,7 +177,7 @@ public class ServiceIdentityService {
     if (!user.getEnabled()) {
       user.resume();
       repository.saveAndFlush(user);
-      businessAudit.recordById(
+      businessAudit.record(
           actorId,
           null,
           "SERVICE_ID_RESUMED",

@@ -40,7 +40,7 @@ public class StoreProfileService {
     var saved = storeProfileRepository.saveAndFlush(config);
     var changed = changedFields(before, snapshot(saved));
     if (!changed.isEmpty()) {
-      businessAudit.recordById(
+      businessAudit.record(
           actorId,
           storeId,
           "STORE_PROFILE_UPDATED",

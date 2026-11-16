@@ -31,7 +31,7 @@ public class StoreActivationService {
         Map.of("status", store.getStatus().name(), "version", String.valueOf(store.getVersion()));
     store.activate();
     storeRepository.saveAndFlush(store);
-    businessAudit.recordById(
+    businessAudit.record(
         actorId,
         storeId,
         "STORE_ACTIVATED",

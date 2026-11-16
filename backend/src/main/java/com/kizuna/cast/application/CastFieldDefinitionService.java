@@ -60,7 +60,7 @@ public class CastFieldDefinitionService {
             .build();
     definition.setStoreId(storeId);
     repository.saveAndFlush(definition);
-    audit.recordById(
+    audit.record(
         actorId,
         definition.getStoreId(),
         "CAST_FIELD_DEFINITION_CREATED",
@@ -102,7 +102,7 @@ public class CastFieldDefinitionService {
       repository.flush();
       var after = new HashMap<>(snapshot(definition));
       if (labelChanged) after.put("redacted_fields_changed", "label");
-      audit.recordById(
+      audit.record(
           actorId,
           definition.getStoreId(),
           "CAST_FIELD_DEFINITION_UPDATED",
@@ -145,7 +145,7 @@ public class CastFieldDefinitionService {
         });
     repository.delete(definition);
     repository.flush();
-    audit.recordById(
+    audit.record(
         actorId,
         definition.getStoreId(),
         "CAST_FIELD_DEFINITION_DELETED",
@@ -161,7 +161,7 @@ public class CastFieldDefinitionService {
       var after = new HashMap<>(snapshot(enrollment));
       after.put("snapshot_id", snapshotIds.get(enrollment.getId()));
       after.put("redacted_fields_changed", "internal_custom_fields");
-      audit.recordById(
+      audit.record(
           actorId,
           enrollment.getStoreId(),
           "CAST_INTERNAL_FIELD_REMOVED",
@@ -175,7 +175,7 @@ public class CastFieldDefinitionService {
     for (CastProfile profile : affectedProfiles) {
       var after = new HashMap<>(snapshot(profile));
       after.put("redacted_fields_changed", "public_custom_fields");
-      audit.recordById(
+      audit.record(
           actorId,
           profile.getStoreId(),
           "CAST_PROFILE_FIELD_REMOVED",

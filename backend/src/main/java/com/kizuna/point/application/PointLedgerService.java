@@ -283,7 +283,7 @@ public class PointLedgerService {
 
   private void saveAdjustment(PointEntry entry) {
     pointEntryRepository.save(entry);
-    businessAudit.recordById(
+    businessAudit.record(
         entry.getActorUserId(),
         entry.getOriginatingStoreId(),
         "POINT_MANUALLY_ADJUSTED",

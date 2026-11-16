@@ -30,7 +30,7 @@ public class CreatedStoreGrant {
     storeIds.add(storeId);
     creator.reassignStores(storeIds);
     users.save(creator);
-    businessAudit.recordById(
+    businessAudit.record(
         creatorId,
         null,
         "STAFF_GRANTS_CHANGED",

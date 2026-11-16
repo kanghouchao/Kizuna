@@ -100,7 +100,7 @@ public class BenefitRuleService {
   /** 特典規則はどの店舗にも属さないグループ共通の設定なので、監査の店舗は常に null。 */
   private void audit(
       long actorId, String action, Long id, Map<String, String> before, Map<String, String> after) {
-    businessAudit.recordById(
+    businessAudit.record(
         actorId, null, action, "BENEFIT_RULE", String.valueOf(id), null, null, before, after);
   }
 

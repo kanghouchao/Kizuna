@@ -112,7 +112,7 @@ public class CustomerMergeService {
                 preview.movedContactCount(),
                 command.operationReason().strip(),
                 evidence));
-    businessAudit.recordById(
+    businessAudit.record(
         actorId,
         storeId,
         "CUSTOMER_MERGED",

@@ -161,7 +161,7 @@ public class CastEnrollmentService {
           case ENROLLED -> "CAST_ENROLLMENT_RESUMED";
           case WITHDRAWN -> "CAST_ENROLLMENT_WITHDRAWN";
         };
-    audit.recordById(
+    audit.record(
         actorId,
         enrollment.getStoreId(),
         action,

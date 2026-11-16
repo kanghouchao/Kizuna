@@ -158,7 +158,7 @@ class ApplicantEnrollmentIntegrationTest {
     long audits = count("t_audit_events where originating_store_id=?", storeId);
     doThrow(new IllegalStateException("監査失敗"))
         .when(audit)
-        .recordById(
+        .record(
             eq(actorId),
             eq(storeId),
             eq("APPLICANT_ENROLLED"),

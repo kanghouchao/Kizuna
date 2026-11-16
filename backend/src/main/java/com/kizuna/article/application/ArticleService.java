@@ -120,8 +120,7 @@ public class ArticleService {
       Article article,
       Map<String, String> before,
       Map<String, String> after) {
-    audit.recordById(
-        actorId, storeId, action, "ARTICLE", article.getId(), null, null, before, after);
+    audit.record(actorId, storeId, action, "ARTICLE", article.getId(), null, null, before, after);
   }
 
   /** 本文は監査に複製しない。変わったことは更新の redacted_fields_changed で表す。 */

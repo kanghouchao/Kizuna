@@ -372,7 +372,7 @@ public class SurveyService {
       SurveyHistory.Before before,
       String reason) {
     history.save(SurveyHistory.revision(row, type, actor.id(), actor.name(), before, reason));
-    audit.recordById(
+    audit.record(
         actor.id(),
         row.getStoreId(),
         "SURVEY_" + type,
@@ -393,7 +393,7 @@ public class SurveyService {
       String related) {
     history.save(
         SurveyHistory.answer(row, type, actor.id(), actor.name(), before, reason, related));
-    audit.recordById(
+    audit.record(
         actor.id(),
         row.getStoreId(),
         "SURVEY_" + type,

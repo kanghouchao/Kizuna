@@ -45,7 +45,7 @@ class CreatedStoreGrantTest {
     assertThat(creator.getStoreIds()).containsExactlyInAnyOrder(3L, 7L);
     verify(users).save(creator);
     verify(audit)
-        .recordById(
+        .record(
             eq(42L),
             eq(null),
             eq("STAFF_GRANTS_CHANGED"),

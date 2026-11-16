@@ -2,10 +2,13 @@ package com.kizuna.user.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.kizuna.audit.recording.AuditActor;
 import com.kizuna.audit.recording.AuditChange;
 import com.kizuna.audit.recording.AuditWriter;
 import com.kizuna.shared.exception.StaleSessionException;
@@ -17,27 +20,22 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.LongStream;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 class BusinessAuditTest {
-  @AfterEach
-  void clear() {
-    SecurityContextHolder.clearContext();
-  }
-
   @Test
-  void requiresAuthenticatedActorAndNeverCopiesCredentialClaims() {
+  void recordsTheActorResolvedFromTheUserIdAndRejectsAnUnknownId() {
     var users = mock(UserRepository.class);
     var writer = mock(AuditWriter.class);
     var audit = new BusinessAudit(users, writer);
+    when(users.findById(404L)).thenReturn(Optional.empty());
     assertThatThrownBy(
-            () -> audit.recordCurrent(null, "ROLE_CHANGED", "ROLE", "1", Map.of(), Map.of()))
+            () ->
+                audit.record(
+                    404L, null, "ROLE_CHANGED", "ROLE", "1", null, null, Map.of(), Map.of()))
         .isInstanceOf(StaleSessionException.class);
+    verify(writer, never()).append(any());
     var actor =
         User.builder()
             .email("operator@kizuna.test")
@@ -49,20 +47,20 @@ class BusinessAuditTest {
             .storeIds(Set.of())
             .build();
     actor.setId(10L);
-    when(users.findByEmail("operator@kizuna.test")).thenReturn(Optional.of(actor));
-    var jwt =
-        Jwt.withTokenValue("opaque")
-            .header("alg", "RS256")
-            .subject("operator@kizuna.test")
-            .claim("password", "must-not-copy")
-            .build();
-    SecurityContextHolder.getContext()
-        .setAuthentication(new JwtAuthenticationToken(jwt, java.util.List.of()));
-    audit.recordCurrent(
-        null, "ROLE_CHANGED", "ROLE", "1", Map.of("role_ids", "1"), Map.of("role_ids", "2"));
+    when(users.findById(10L)).thenReturn(Optional.of(actor));
+    audit.record(
+        10L,
+        null,
+        "ROLE_CHANGED",
+        "ROLE",
+        "1",
+        null,
+        null,
+        Map.of("role_ids", "1"),
+        Map.of("role_ids", "2"));
     var event = ArgumentCaptor.forClass(AuditChange.class);
     verify(writer).append(event.capture());
-    assertThat(event.getValue().actor().id()).isEqualTo(10L);
+    assertThat(event.getValue().actor()).isEqualTo(new AuditActor(10L, "STAFF", "監査担当"));
     assertThat(event.getValue().afterValues())
         .containsExactlyInAnyOrderEntriesOf(Map.of("role_ids", "2"));
   }
@@ -78,7 +76,7 @@ class BusinessAuditTest {
             .roleIds(Set.of(1L))
             .storeIds(stores)
             .build();
-    var actor = new com.kizuna.audit.recording.AuditActor(1L, "STAFF", "監査担当");
+    var actor = new AuditActor(1L, "STAFF", "監査担当");
     var event =
         new AuditChange(
             actor,

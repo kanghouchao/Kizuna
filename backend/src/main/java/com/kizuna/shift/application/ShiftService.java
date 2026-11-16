@@ -103,7 +103,7 @@ public class ShiftService {
     shift.setStoreId(storeId);
     shiftRepository.save(shift);
     shiftRepository.flush();
-    audit.recordById(
+    audit.record(
         shift.getCreatedBy(),
         shift.getStoreId(),
         "SHIFT_CREATED",
@@ -149,7 +149,7 @@ public class ShiftService {
     shiftRepository.save(shift);
     shiftRepository.flush();
     if (changed)
-      audit.recordById(
+      audit.record(
           shift.getUpdatedBy(),
           shift.getStoreId(),
           "SHIFT_UPDATED",
@@ -193,7 +193,7 @@ public class ShiftService {
     shiftRepository.save(shift);
     shiftRepository.flush();
     if (changed)
-      audit.recordById(
+      audit.record(
           shift.getUpdatedBy(),
           shift.getStoreId(),
           "SHIFT_PUBLICATION_CHANGED",
@@ -218,7 +218,7 @@ public class ShiftService {
     recordUnlinkedRequests(storeId, id, actorId);
     shiftRepository.delete(shift);
     shiftRepository.flush();
-    audit.recordById(
+    audit.record(
         actorId,
         shift.getStoreId(),
         "SHIFT_DELETED",
@@ -240,7 +240,7 @@ public class ShiftService {
         var after = new HashMap<>(before);
         after.put("shift_id", "");
         // FKのSET NULLはversionを増やさない。削除が失敗すればこの監査も同じ取引で取り消される。
-        audit.recordById(
+        audit.record(
             actorId,
             request.getStoreId(),
             "SHIFT_REQUEST_UNLINKED",

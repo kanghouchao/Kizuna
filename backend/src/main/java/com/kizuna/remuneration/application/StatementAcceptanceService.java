@@ -46,7 +46,7 @@ public class StatementAcceptanceService {
     if (existing.isPresent()) return new Acceptance(AcceptanceSummary.of(existing.get()), false);
     var row = StatementAcceptance.accept(store, person, day, content, Timestamps.now());
     acceptances.saveAndFlush(row);
-    audit.recordById(
+    audit.record(
         actorId,
         store,
         "STATEMENT_ACCEPTED",

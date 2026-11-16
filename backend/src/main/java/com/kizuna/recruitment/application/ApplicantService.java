@@ -164,7 +164,7 @@ public class ApplicantService {
     applicant.recordEnrollment(casts.create(storeId, command.cast(), actorId).enrollment().getId());
     applicant.recordEditor(actorId);
     applicants.flush();
-    audit.recordById(
+    audit.record(
         actorId,
         storeId,
         "APPLICANT_ENROLLED",
@@ -185,7 +185,7 @@ public class ApplicantService {
 
   private void recordAudit(
       Applicant applicant, String action, Map<String, String> before, long actorId) {
-    audit.recordById(
+    audit.record(
         actorId,
         applicant.getStoreId(),
         action,

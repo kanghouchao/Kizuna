@@ -403,7 +403,7 @@ public class AdvertisingService {
     c.setStoreId(storeId);
     records.persist(c);
     records.flush();
-    audit.recordById(
+    audit.record(
         actorId,
         storeId,
         "ADVERTISING_COST_" + action,

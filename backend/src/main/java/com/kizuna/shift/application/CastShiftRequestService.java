@@ -67,7 +67,7 @@ public class CastShiftRequestService {
     entity.setStoreId(command.storeId());
     shiftRequestRepository.save(entity);
     shiftRequestRepository.flush();
-    audit.recordById(
+    audit.record(
         userId,
         entity.getStoreId(),
         "SHIFT_REQUEST_SUBMITTED",
@@ -120,7 +120,7 @@ public class CastShiftRequestService {
     entity.setStoreId(shift.getStoreId());
     shiftRequestRepository.save(entity);
     shiftRequestRepository.flush();
-    audit.recordById(
+    audit.record(
         userId,
         entity.getStoreId(),
         "SHIFT_CHANGE_REQUEST_SUBMITTED",

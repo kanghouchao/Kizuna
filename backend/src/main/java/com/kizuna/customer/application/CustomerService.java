@@ -327,7 +327,7 @@ public class CustomerService {
     customerRepository.saveAndFlush(customer);
     for (var contact : command.contacts())
       customerContactService.create(storeId, customer.getId(), contact, actorId);
-    audit.recordById(
+    audit.record(
         actorId,
         customer.getStoreId(),
         "CUSTOMER_CREATED",
@@ -356,7 +356,7 @@ public class CustomerService {
     customerRepository.flush();
     var after = CustomerAuditSnapshot.of(customer).after(before);
     if (after.containsKey("redacted_fields_changed"))
-      audit.recordById(
+      audit.record(
           actorId,
           customer.getStoreId(),
           "CUSTOMER_UPDATED",
@@ -424,7 +424,7 @@ public class CustomerService {
               DbConstraint.FK_T_ORDERS_CUSTOMER_ALIVE,
                   () -> new ConflictException(ORDERED_CUSTOMER_UNDELETABLE)));
     }
-    audit.recordById(
+    audit.record(
         actorId,
         customer.getStoreId(),
         "CUSTOMER_DELETED",

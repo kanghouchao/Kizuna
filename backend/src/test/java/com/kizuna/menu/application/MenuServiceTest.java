@@ -8,14 +8,12 @@ import com.kizuna.menu.domain.MenuRepository;
 import com.kizuna.user.domain.PermissionTree;
 import java.util.Arrays;
 import java.util.List;
-import org.junit.jupiter.api.AfterEach;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.security.authentication.TestingAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
@@ -24,16 +22,6 @@ class MenuServiceTest {
   @Mock private MenuRepository menuRepository;
 
   @InjectMocks private MenuService menuService;
-
-  @AfterEach
-  void tearDown() {
-    SecurityContextHolder.clearContext();
-  }
-
-  private static void authenticate(String... authorities) {
-    SecurityContextHolder.getContext()
-        .setAuthentication(new TestingAuthenticationToken("staff", null, authorities));
-  }
 
   private static Menu leaf(String label, String permission) {
     Menu menu = new Menu();
@@ -76,10 +64,9 @@ class MenuServiceTest {
 
   @Test
   void 店舗の木の権限だけを持つ者には店舗の木だけを返す() {
-    authenticate("PERM_CAST_MANAGE");
     seed(bothTrees().toArray(Menu[]::new));
 
-    List<MenuTree> result = menuService.getMyMenus();
+    List<MenuTree> result = menuService.getMyMenus(Set.of("PERM_CAST_MANAGE"));
 
     assertThat(result).extracting(MenuTree::tree).containsExactly(PermissionTree.STORE);
     assertThat(result.getFirst().items())
@@ -92,30 +79,27 @@ class MenuServiceTest {
 
   @Test
   void グループの木の権限だけを持つ者にはグループの木だけを返す() {
-    authenticate("PERM_STAFF_MANAGE");
     seed(bothTrees().toArray(Menu[]::new));
 
-    assertThat(menuService.getMyMenus())
+    assertThat(menuService.getMyMenus(Set.of("PERM_STAFF_MANAGE")))
         .extracting(MenuTree::tree)
         .containsExactly(PermissionTree.GROUP);
   }
 
   @Test
   void 両方の木の権限を持つ者にはグループ店舗の順で両方を返す() {
-    authenticate("PERM_SHIFT_MANAGE", "PERM_STAFF_MANAGE");
     seed(bothTrees().toArray(Menu[]::new));
 
-    assertThat(menuService.getMyMenus())
+    assertThat(menuService.getMyMenus(Set.of("PERM_SHIFT_MANAGE", "PERM_STAFF_MANAGE")))
         .extracting(MenuTree::tree)
         .containsExactly(PermissionTree.GROUP, PermissionTree.STORE);
   }
 
   @Test
   void メニュー項目の無い権限でもその木は出てダッシュボードだけが並ぶ() {
-    authenticate("PERM_MEMBER_WITHDRAW");
     seed(bothTrees().toArray(Menu[]::new));
 
-    List<MenuTree> result = menuService.getMyMenus();
+    List<MenuTree> result = menuService.getMyMenus(Set.of("PERM_MEMBER_WITHDRAW"));
 
     assertThat(result).extracting(MenuTree::tree).containsExactly(PermissionTree.GROUP);
     assertThat(result.getFirst().items()).extracting(MenuNode::name).containsExactly("ダッシュボード");
@@ -123,27 +107,25 @@ class MenuServiceTest {
 
   @Test
   void どの木の権限も持たない者には何も返さない() {
-    authenticate("ROLE_USER", "PERM_NOT_A_PERMISSION_CODE");
     seed(bothTrees().toArray(Menu[]::new));
 
-    assertThat(menuService.getMyMenus()).isEmpty();
+    assertThat(menuService.getMyMenus(Set.of("ROLE_USER", "PERM_NOT_A_PERMISSION_CODE"))).isEmpty();
   }
 
   @Test
-  void 認証が無ければ何も返さない() {
+  void 権限を一つも持たない者には何も返さない() {
     seed(bothTrees().toArray(Menu[]::new));
 
-    assertThat(menuService.getMyMenus()).isEmpty();
+    assertThat(menuService.getMyMenus(Set.of())).isEmpty();
   }
 
   @Test
   void 見出しの権限は見ず可視な子があれば出し子が全て落ちた見出しは出さない() {
-    authenticate("PERM_CAST_MANAGE");
     Menu heading = section(PermissionTree.STORE, "キャスト", leaf("キャスト管理", "CAST_MANAGE"));
     heading.setPermission("SOMETHING_NOBODY_HOLDS");
     seed(heading, section(PermissionTree.STORE, "顧客", leaf("顧客一覧", "CUSTOMER_MANAGE")));
 
-    assertThat(menuService.getMyMenus().getFirst().items())
+    assertThat(menuService.getMyMenus(Set.of("PERM_CAST_MANAGE")).getFirst().items())
         .extracting(MenuNode::name)
         .containsExactly("キャスト");
   }

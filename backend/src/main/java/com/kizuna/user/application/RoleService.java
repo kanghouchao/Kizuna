@@ -72,7 +72,7 @@ public class RoleService {
             .permissionIds(codesById.keySet())
             .build();
     save(role);
-    businessAudit.recordById(
+    businessAudit.record(
         actorId,
         null,
         "ROLE_CREATED",
@@ -107,7 +107,7 @@ public class RoleService {
     role.rename(command.name());
     save(role);
     if (!before.equals(snapshot(role)))
-      businessAudit.recordById(
+      businessAudit.record(
           actorId,
           null,
           "ROLE_CHANGED",
@@ -134,7 +134,7 @@ public class RoleService {
       // 遅らせると 500 になるため、ここで flush して事前検証と同じ 409 へ揃える。
       roleRepository.delete(role);
       roleRepository.flush();
-      businessAudit.recordById(
+      businessAudit.record(
           actorId,
           null,
           "ROLE_DELETED",

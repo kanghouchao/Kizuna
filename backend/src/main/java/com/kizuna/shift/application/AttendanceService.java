@@ -86,7 +86,7 @@ public class AttendanceService {
             command.waitingPlace(),
             actorId);
     saveWithinUniqueness(attendance);
-    audit.recordById(
+    audit.record(
         actorId,
         attendance.getStoreId(),
         "ATTENDANCE_RECORDED",
@@ -116,7 +116,7 @@ public class AttendanceService {
         command.waitingPlace(),
         actorId);
     saveWithinUniqueness(attendance);
-    audit.recordById(
+    audit.record(
         actorId,
         attendance.getStoreId(),
         "ATTENDANCE_CORRECTED",
@@ -137,7 +137,7 @@ public class AttendanceService {
     attendance.cancel(reason, actorId, Timestamps.now());
     attendanceRepository.save(attendance);
     attendanceRepository.flush();
-    audit.recordById(
+    audit.record(
         actorId,
         attendance.getStoreId(),
         "ATTENDANCE_CANCELLED",

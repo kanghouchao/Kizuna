@@ -85,7 +85,7 @@ public class OrderCorrectionService {
             OrderCorrection.recorded(
                 order, beforeVersion, before, input.reason(), actorId, Timestamps.now()));
 
-    businessAudit.recordById(
+    businessAudit.record(
         actorId,
         order.getStoreId(),
         "ORDER_CORRECTED",
@@ -136,7 +136,7 @@ public class OrderCorrectionService {
         orderCorrectionRepository.saveAndFlush(
             OrderCorrection.recorded(
                 order, beforeVersion, before, reason.trim(), actorId, Timestamps.now()));
-    businessAudit.recordById(
+    businessAudit.record(
         actorId,
         order.getStoreId(),
         "ORDER_COMPLETION_INVALIDATED",

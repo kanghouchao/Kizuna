@@ -142,7 +142,7 @@ public class OrderAttributionCorrectionService {
             attribution.getId())
         .ifPresent(
             entryId ->
-                businessAudit.recordById(
+                businessAudit.record(
                     actorId,
                     storeId,
                     "ORDER_ATTRIBUTION_CORRECTED",

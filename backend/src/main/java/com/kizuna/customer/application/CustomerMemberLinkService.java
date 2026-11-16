@@ -82,7 +82,7 @@ public class CustomerMemberLinkService {
       var before = snapshot(current);
       current.release(actorId, normalizedReason, operatedAt);
       customerMemberLinkRepository.saveAndFlush(current);
-      audit.recordById(
+      audit.record(
           actorId,
           current.getStoreId(),
           "CUSTOMER_MEMBER_LINK_RELEASED",
@@ -110,7 +110,7 @@ public class CustomerMemberLinkService {
     // CommonExceptionHandler が SQLSTATE で一意違反だけを 409 へ写像し、FK 等の他の整合性違反は
     // 実装欠陥として 500 のまま大きく失敗させる分類を持っているため、そこへ委ねる。
     CustomerMemberLink saved = customerMemberLinkRepository.saveAndFlush(link);
-    audit.recordById(
+    audit.record(
         actorId,
         saved.getStoreId(),
         "CUSTOMER_MEMBER_LINK_CREATED",
@@ -140,7 +140,7 @@ public class CustomerMemberLinkService {
     current.release(actorId, operationReason, Timestamps.now());
     customerMemberLinkRepository.save(current);
     customerMemberLinkRepository.flush();
-    audit.recordById(
+    audit.record(
         actorId,
         current.getStoreId(),
         "CUSTOMER_MEMBER_LINK_RELEASED",

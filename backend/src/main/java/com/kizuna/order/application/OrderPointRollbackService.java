@@ -116,7 +116,7 @@ public class OrderPointRollbackService {
     order.offsetPointRedemption(result.restoredPoints());
     orderRepository.flush();
     PointRollbackHistory history = pointLedgerService.rollbackHistory(orderId).orElseThrow();
-    businessAudit.recordById(
+    businessAudit.record(
         actorId,
         storeId,
         "ORDER_POINTS_ROLLED_BACK",

@@ -96,7 +96,7 @@ public class MemberReceiptClaimService {
             new AttributionMaterializer.ReceiptClaim(token.getPlannedPoints()));
     long bookedPoints = (long) result.grantedPoints() + result.benefitPoints();
     OrderAttribution attribution = result.attribution();
-    businessAudit.recordById(
+    businessAudit.record(
         userId,
         order.getStoreId(),
         "RECEIPT_CLAIMED",

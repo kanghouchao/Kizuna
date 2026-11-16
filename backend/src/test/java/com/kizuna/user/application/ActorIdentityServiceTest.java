@@ -24,27 +24,6 @@ class ActorIdentityServiceTest {
   @InjectMocks private ActorIdentityService service;
 
   @Test
-  void resolvesAuthenticatedEmailToUserId() {
-    User user = mock(User.class);
-    when(user.getId()).thenReturn(42L);
-    when(userRepository.findByEmail("actor@kizuna.test")).thenReturn(Optional.of(user));
-
-    assertThat(service.requireUserId("actor@kizuna.test")).isEqualTo(42L);
-  }
-
-  @Test
-  void resolvesTheActorWithTheTypeAndNameOfTheUserRow() {
-    User user = mock(User.class);
-    when(user.getId()).thenReturn(42L);
-    when(user.getUserType()).thenReturn(UserType.SERVICE);
-    when(user.getDisplayName()).thenReturn("実行主体");
-    when(userRepository.findByEmail("actor@kizuna.test")).thenReturn(Optional.of(user));
-
-    assertThat(service.requireActor("actor@kizuna.test"))
-        .isEqualTo(new AuditActor(42L, "SERVICE", "実行主体"));
-  }
-
-  @Test
   void resolvesTheActorFromTheUserId() {
     User user = mock(User.class);
     when(user.getId()).thenReturn(42L);
@@ -60,24 +39,6 @@ class ActorIdentityServiceTest {
     when(userRepository.findById(404L)).thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.requireActor(404L))
-        .isInstanceOf(StaleSessionException.class)
-        .hasMessage("認証セッションの主体が存在しません");
-  }
-
-  @Test
-  void rejectsMissingActor() {
-    when(userRepository.findByEmail("missing@kizuna.test")).thenReturn(Optional.empty());
-
-    assertThatThrownBy(() -> service.requireActor("missing@kizuna.test"))
-        .isInstanceOf(StaleSessionException.class)
-        .hasMessage("認証セッションの主体が存在しません");
-  }
-
-  @Test
-  void rejectsMissingPrincipal() {
-    when(userRepository.findByEmail("missing@kizuna.test")).thenReturn(Optional.empty());
-
-    assertThatThrownBy(() -> service.requireUserId("missing@kizuna.test"))
         .isInstanceOf(StaleSessionException.class)
         .hasMessage("認証セッションの主体が存在しません");
   }

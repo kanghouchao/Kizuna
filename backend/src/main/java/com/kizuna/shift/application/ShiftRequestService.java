@@ -205,7 +205,7 @@ public class ShiftRequestService {
       shiftRepository.save(target);
       shiftRepository.flush();
       if (changed)
-        audit.recordById(
+        audit.record(
             actorId,
             target.getStoreId(),
             "SHIFT_UPDATED",
@@ -230,7 +230,7 @@ public class ShiftRequestService {
       // 生成したシフトを申請行へ結び、希望→確定の一跳を辿れるようにする（系列の背骨）。
       request.linkShift(shiftRepository.save(shift).getId());
       shiftRepository.flush();
-      audit.recordById(
+      audit.record(
           actorId,
           shift.getStoreId(),
           "SHIFT_CREATED",
@@ -244,7 +244,7 @@ public class ShiftRequestService {
 
     shiftRequestRepository.save(request);
     shiftRequestRepository.flush();
-    audit.recordById(
+    audit.record(
         request.getProcessedBy(),
         request.getStoreId(),
         "SHIFT_REQUEST_APPROVED",
@@ -264,7 +264,7 @@ public class ShiftRequestService {
     request.decline(actorId, Timestamps.now());
     shiftRequestRepository.save(request);
     shiftRequestRepository.flush();
-    audit.recordById(
+    audit.record(
         request.getProcessedBy(),
         request.getStoreId(),
         "SHIFT_REQUEST_DECLINED",

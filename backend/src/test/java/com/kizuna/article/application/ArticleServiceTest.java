@@ -133,7 +133,7 @@ class ArticleServiceTest {
         .isInstanceOf(ConflictException.class);
     verify(articles, never()).delete(any(Article.class));
     verify(audit, never())
-        .recordById(
+        .record(
             any(), any(), anyString(), anyString(), anyString(), any(), any(), anyMap(), anyMap());
   }
 
@@ -148,7 +148,7 @@ class ArticleServiceTest {
   private Map<String, String> captureAfter(String action, String id) {
     ArgumentCaptor<Map<String, String>> after = ArgumentCaptor.forClass(Map.class);
     verify(audit)
-        .recordById(
+        .record(
             eq(9L),
             eq(STORE),
             eq(action),

@@ -148,7 +148,7 @@ class ReviewWriteTest {
     verify(identities).requireActor(1L);
     verify(history).save(any());
     verify(audit)
-        .recordById(
+        .record(
             1L,
             STORE_ID,
             "REVIEW_APPROVED",
