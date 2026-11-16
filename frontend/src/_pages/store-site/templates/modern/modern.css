@@ -1,0 +1,247 @@
+/* modern テンプレートの様式（明るい・ポップ）。色面の上の文字は必ず墨色（--m-ink）で、白は墨色の面の上だけに置く。
+   明るい色面は白地との対比が 3:1 に届かないので、意味を持つ形は墨色の線で囲む。 */
+.sf-modern {
+  --m-bg: #fff8ef;
+  --m-card: #ffffff;
+  --m-ink: #1f1a3a;
+  --m-sub: #5a5470;
+  --m-label: #c2185b;
+  --m-line: #efe4d6;
+  --m-pink: #ff5c93;
+  --m-yellow: #ffd84d;
+  --m-mint: #7be0b4;
+  --m-sky: #9cc3ff;
+  --m-lilac: #cdb6ff;
+  --m-peach: #ffb39a;
+  --m-radius: 28px;
+  /* 下部のタブバーが覆う高さ。追従する要素と本文の下端の余白が使う */
+  --m-tabbar-space: 112px;
+
+  min-height: 100vh;
+  overflow-x: clip;
+  background:
+    radial-gradient(circle at 12% 0%, #ffe3ee 0, transparent 38%),
+    radial-gradient(circle at 100% 18%, #fff0bf 0, transparent 32%), var(--m-bg);
+  color: var(--m-ink);
+  font-family:
+    'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', 'Yu Gothic', system-ui, sans-serif;
+  line-height: 1.75;
+}
+
+.sf-modern .m-page {
+  padding-bottom: var(--m-tabbar-space);
+}
+
+@media (min-width: 1024px) {
+  .sf-modern .m-page {
+    padding-bottom: 72px;
+  }
+}
+
+.sf-modern .m-display {
+  font-family: var(--m-font-display), 'Hiragino Maru Gothic ProN', system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  word-break: auto-phrase;
+}
+
+.sf-modern .m-sub {
+  color: var(--m-sub);
+}
+.sf-modern .m-label {
+  color: var(--m-label);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+}
+.sf-modern .m-bg-card {
+  background: var(--m-card);
+}
+.sf-modern .m-bg-ink {
+  background: var(--m-ink);
+  color: #fff;
+}
+.sf-modern .m-bg-pink {
+  background: var(--m-pink);
+  color: var(--m-ink);
+}
+.sf-modern .m-bg-yellow {
+  background: var(--m-yellow);
+  color: var(--m-ink);
+}
+.sf-modern .m-bg-mint {
+  background: var(--m-mint);
+  color: var(--m-ink);
+}
+.sf-modern .m-bg-sky {
+  background: var(--m-sky);
+  color: var(--m-ink);
+}
+.sf-modern .m-bg-lilac {
+  background: var(--m-lilac);
+  color: var(--m-ink);
+}
+.sf-modern .m-bg-peach {
+  background: var(--m-peach);
+  color: var(--m-ink);
+}
+.sf-modern .m-border {
+  border: 2px solid var(--m-ink);
+}
+
+.sf-modern .m-sticker {
+  border: 2px solid var(--m-ink);
+  box-shadow: 4px 4px 0 var(--m-ink);
+}
+
+.sf-modern .m-lift {
+  transition:
+    transform 180ms cubic-bezier(0.3, 1.6, 0.5, 1),
+    box-shadow 180ms ease;
+}
+.sf-modern .m-lift:hover,
+.sf-modern .m-lift:focus-visible {
+  transform: translate(-2px, -4px);
+  box-shadow: 6px 8px 0 var(--m-ink);
+}
+
+.sf-modern .m-marker {
+  background: linear-gradient(
+    transparent 60%,
+    color-mix(in srgb, var(--m-pink) 40%, transparent) 60%
+  );
+}
+
+.sf-modern .m-squircle {
+  border-radius: 38% 42% 40% 44% / 42% 38% 44% 40%;
+}
+
+.sf-modern .m-snap {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: 16px;
+  padding: 6px 16px 14px;
+  scrollbar-width: none;
+}
+.sf-modern .m-snap::-webkit-scrollbar {
+  display: none;
+}
+.sf-modern .m-snap > * {
+  scroll-snap-align: start;
+  flex: none;
+}
+
+.sf-modern .m-avatar-ring {
+  background: conic-gradient(
+    var(--m-pink),
+    var(--m-yellow),
+    var(--m-mint),
+    var(--m-sky),
+    var(--m-lilac),
+    var(--m-pink)
+  );
+  transition: transform 200ms cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+.sf-modern a:hover .m-avatar-ring,
+.sf-modern a:focus-visible .m-avatar-ring {
+  transform: translateY(-4px) rotate(-4deg);
+}
+
+.sf-modern .m-pop {
+  animation: m-pop 520ms cubic-bezier(0.3, 1.5, 0.5, 1) both;
+}
+.sf-modern .m-pop-2 {
+  animation-delay: 90ms;
+}
+.sf-modern .m-pop-3 {
+  animation-delay: 180ms;
+}
+@keyframes m-pop {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.sf-modern .m-float {
+  animation: m-float 5s ease-in-out infinite;
+}
+@keyframes m-float {
+  50% {
+    transform: translateY(-8px) rotate(3deg);
+  }
+}
+
+/* 「その他」のシート。閉じている間は dialog の既定の display: none のままにするため、display を指定しない */
+.sf-modern .m-sheet {
+  position: fixed;
+  inset: auto 0 0 0;
+  width: 100%;
+  max-width: none;
+  max-height: 85dvh;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  border: 2px solid var(--m-ink);
+  border-bottom: 0;
+  border-radius: 32px 32px 0 0;
+  background: var(--m-card);
+  color: var(--m-ink);
+}
+.sf-modern .m-sheet[open] {
+  animation: m-sheet 260ms cubic-bezier(0.2, 1.2, 0.4, 1) both;
+}
+.sf-modern .m-sheet::backdrop {
+  background: rgb(31 26 58 / 0.45);
+}
+@keyframes m-sheet {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+.sf-modern .m-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  overflow-y: auto;
+  background:
+    radial-gradient(circle at 15% 10%, #ffe3ee 0, transparent 40%),
+    radial-gradient(circle at 90% 85%, #fff0bf 0, transparent 40%), var(--m-bg);
+}
+
+.sf-modern a:focus-visible,
+.sf-modern button:focus-visible {
+  outline: 3px solid var(--m-ink);
+  outline-offset: 3px;
+}
+.sf-modern .m-bg-ink a:focus-visible {
+  outline-color: var(--m-yellow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sf-modern *,
+  .sf-modern *::before,
+  .sf-modern *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  .sf-modern .m-lift:hover,
+  .sf-modern .m-lift:focus-visible,
+  .sf-modern a:hover .m-avatar-ring,
+  .sf-modern a:focus-visible .m-avatar-ring {
+    transform: none;
+  }
+}

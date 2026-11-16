@@ -1,29 +1,25 @@
 import type { StoreSitePageProps } from '../../model/types';
-import AgeGate from '../_sections/AgeVerification';
-import CastGrid from '../_sections/CastGrid';
-import Footer from '../_sections/Footer';
-import Header from '../_sections/Header';
-import PageHero from '../_sections/PageHero';
-import './theme.css';
+import { CastGrid, EmptyCasts } from './castParts';
+import Frame from './Frame';
 
-/** キャスト一覧ページ（modern テンプレート）。 */
+/** キャスト一覧ページ（modern テンプレート）。角丸カードの密な格子。 */
 export default function ModernCastsPage({ store, siteConfig, casts }: StoreSitePageProps<'casts'>) {
   return (
-    <div
-      className="storefront-modern min-h-screen flex flex-col"
-      style={{ background: 'var(--storefront-bg)' }}
-    >
-      <AgeGate storeName={store.name} />
-      <Header storeName={store.name} logoUrl={siteConfig.logo_url} />
-      <main className="grow">
-        <PageHero title="キャスト一覧" />
-        <CastGrid casts={casts} />
-      </main>
-      <Footer
-        storeName={store.name}
-        snsLinks={siteConfig.sns_links}
-        partnerLinks={siteConfig.partner_links}
-      />
-    </div>
+    <Frame store={store} siteConfig={siteConfig}>
+      <header className="m-pop flex flex-wrap items-end justify-between gap-3 pt-2 pb-6">
+        <div>
+          <p className="m-label" aria-hidden>
+            CAST
+          </p>
+          <h1 className="m-display mt-1 text-4xl sm:text-5xl">キャスト一覧</h1>
+        </div>
+        {casts.length > 0 && (
+          <p className="m-bg-yellow m-border rounded-full px-4 py-1 text-sm font-bold">
+            在籍 {casts.length}人
+          </p>
+        )}
+      </header>
+      {casts.length > 0 ? <CastGrid casts={casts} /> : <EmptyCasts />}
+    </Frame>
   );
 }
