@@ -84,7 +84,7 @@ class MemberNotificationSettingServiceTest {
             new MemberNotificationSettings(
                 ContactPermissionStatus.DENIED, ContactPermissionStatus.UNKNOWN));
     verify(audit)
-        .recordById(
+        .record(
             10L,
             null,
             "MEMBER_NOTIFICATION_SETTING_CHANGED",
@@ -110,7 +110,7 @@ class MemberNotificationSettingServiceTest {
     order.verify(settings).findByMemberIdAndPurpose(3L, ContactPurpose.BUSINESS);
     order.verify(settings).save(any(MemberNotificationSetting.class));
     verify(audit)
-        .recordById(
+        .record(
             10L,
             null,
             "MEMBER_NOTIFICATION_SETTING_CHANGED",
@@ -138,7 +138,7 @@ class MemberNotificationSettingServiceTest {
     assertThat(result.business()).isEqualTo(ContactPermissionStatus.ALLOWED);
     verify(settings, never()).save(any());
     verify(audit, never())
-        .recordById(
+        .record(
             any(), any(), anyString(), anyString(), anyString(), any(), any(), anyMap(), anyMap());
   }
 

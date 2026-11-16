@@ -97,7 +97,7 @@ public class SystemConfigServiceImpl implements SystemConfigService {
     Map<String, String> before = valueAudited ? Map.of("config_value", oldValue) : Map.of();
     Map<String, String> after =
         valueAudited ? Map.of("config_value", newValue) : Map.of("changed", "true");
-    businessAudit.recordById(
+    businessAudit.record(
         actorId,
         null,
         "SYSTEM_CONFIG_UPDATED",

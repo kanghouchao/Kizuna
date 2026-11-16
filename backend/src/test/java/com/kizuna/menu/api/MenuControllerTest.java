@@ -1,5 +1,6 @@
 package com.kizuna.menu.api;
 
+import static com.kizuna.shared.web.JwtRequests.jwtUser;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -13,12 +14,12 @@ import com.kizuna.shared.storescope.StoreScopeHolder;
 import com.kizuna.user.application.StoreScopeResolver;
 import com.kizuna.user.domain.PermissionTree;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.json.JsonCompareMode;
 import org.springframework.test.web.servlet.MockMvc;
@@ -36,9 +37,8 @@ class MenuControllerTest {
   // 見出し節は path を持たない。応答は null の項目を書かないため、節の JSON に path が現れないことまで固定する。
   @Test
   @DisplayName("GET /menus/me は木ごとに tree と、name・path・icon・items の入れ子の節を返すこと")
-  @WithMockUser
   void returnsMenuTree() throws Exception {
-    when(menuService.getMyMenus())
+    when(menuService.getMyMenus(Set.of("PERM_CUSTOMER_VIEW", "ROLE_CAST")))
         .thenReturn(
             List.of(
                 new MenuTree(
@@ -51,7 +51,7 @@ class MenuControllerTest {
                             List.of(new MenuNode("顧客", "/customers", "user", List.of())))))));
 
     mockMvc
-        .perform(get("/menus/me"))
+        .perform(get("/menus/me").with(jwtUser(7L, "PERM_CUSTOMER_VIEW", "ROLE_CAST")))
         .andExpect(status().isOk())
         .andExpect(
             content()

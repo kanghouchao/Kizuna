@@ -29,7 +29,6 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -122,11 +121,10 @@ class MemberNotificationSettingControllerTest {
 
   @Test
   @DisplayName("職員の権限では照会も変更も 403 で拒まれること")
-  @WithMockUser(authorities = {"PERM_CUSTOMER_MANAGE", "PERM_NOTIFICATION_MANAGE"})
   void staffIsForbidden() throws Exception {
-    mockMvc.perform(get(PATH)).andExpect(status().isForbidden());
+    mockMvc.perform(get(PATH).with(staff())).andExpect(status().isForbidden());
     mockMvc
-        .perform(choose("BUSINESS", "{\"status\":\"ALLOWED\"}"))
+        .perform(choose("BUSINESS", "{\"status\":\"ALLOWED\"}").with(staff()))
         .andExpect(status().isForbidden());
 
     verify(service, never()).view(anyLong());
@@ -139,6 +137,10 @@ class MemberNotificationSettingControllerTest {
     mockMvc.perform(get(PATH)).andExpect(status().isUnauthorized());
 
     verify(service, never()).view(anyLong());
+  }
+
+  private static RequestPostProcessor staff() {
+    return jwtUser(20L, "PERM_CUSTOMER_MANAGE", "PERM_NOTIFICATION_MANAGE");
   }
 
   private static RequestPostProcessor member() {

@@ -262,7 +262,7 @@ public class ApplicantAttachmentStore {
     requireEditable(lockApplicant(storeId, applicantId).getStatus());
     upload.complete(actorId, OffsetDateTime.now(clock));
     uploads.flush();
-    audit.recordById(
+    audit.record(
         actorId,
         storeId,
         "APPLICANT_ATTACHMENT_STORED",

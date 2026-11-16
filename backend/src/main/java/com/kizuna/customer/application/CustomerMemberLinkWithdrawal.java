@@ -38,7 +38,7 @@ public class CustomerMemberLinkWithdrawal {
       var before = CustomerMemberLinkAudit.snapshot(link);
       link.release(actorId, REASON, releasedAt);
       customerMemberLinkRepository.save(link);
-      audit.recordById(
+      audit.record(
           actorId,
           link.getStoreId(),
           CustomerMemberLinkAudit.RELEASED,

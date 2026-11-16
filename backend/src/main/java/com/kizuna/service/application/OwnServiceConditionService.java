@@ -88,7 +88,7 @@ public class OwnServiceConditionService {
         rejectionHandler.applyRejection(
             new SpecialServiceRejection(
                 storeId, enrollment, id, event.getId(), actorId, event.getOccurredAt()));
-      audit.recordById(
+      audit.record(
           actorId,
           consent.getStoreId(),
           "SERVICE_CONSENT_CHANGED",

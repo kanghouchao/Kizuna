@@ -55,7 +55,7 @@ public class MemberWithdrawalService {
             withdrawn.memberId(), actorUserId, withdrawn.withdrawnAt());
     // 理由の原文は写さない。関連解除は解除側が行ごとに記録済みなので、ここでは数えない。
     // 消去仕訳が分かれたときの source は先頭の仕訳。合計は cleared_points に載る。
-    audit.recordById(
+    audit.record(
         actorUserId,
         null,
         "MEMBER_WITHDRAWN",

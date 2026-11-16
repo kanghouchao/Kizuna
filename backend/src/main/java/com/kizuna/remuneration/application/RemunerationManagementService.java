@@ -380,7 +380,7 @@ public class RemunerationManagementService {
     change.setStoreId(storeId);
     records.persist(change);
     records.flush();
-    audit.recordById(
+    audit.record(
         actorId,
         storeId,
         "REMUNERATION_" + type + "_" + action,

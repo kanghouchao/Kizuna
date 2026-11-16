@@ -36,7 +36,7 @@ public class StoredFileAudit {
     try {
       independent.executeWithoutResult(
           status ->
-              businessAudit.recordById(
+              businessAudit.record(
                   actorId,
                   storeId,
                   "FILE_UPLOADED",

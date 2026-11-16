@@ -60,7 +60,7 @@ public class ServiceSettingsService {
                 command.remuneration()));
     items.saveAndFlush(item);
     var revision = revisions.save(ServiceRevision.record(item, null, actorId));
-    audit.recordById(
+    audit.record(
         actorId,
         item.getStoreId(),
         "SERVICE_CREATED",
@@ -93,7 +93,7 @@ public class ServiceSettingsService {
       items.flush();
       var after = new HashMap<>(auditValues(item));
       after.put("redacted_fields_changed", changedFields(before, next));
-      audit.recordById(
+      audit.record(
           actorId,
           item.getStoreId(),
           "SERVICE_UPDATED",
@@ -117,7 +117,7 @@ public class ServiceSettingsService {
     item.delete(expectedVersion);
     var revision = revisions.save(ServiceRevision.record(item, before, actorId));
     items.flush();
-    audit.recordById(
+    audit.record(
         actorId,
         item.getStoreId(),
         "SERVICE_DELETED",

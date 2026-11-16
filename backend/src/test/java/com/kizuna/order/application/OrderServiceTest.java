@@ -2588,7 +2588,7 @@ class OrderServiceTest {
 
   private void captureAudit(String action) {
     verify(businessAudit)
-        .recordById(
+        .record(
             eq(ACTOR_ID),
             nullable(Long.class),
             eq(action),

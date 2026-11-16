@@ -265,7 +265,7 @@ public class ReviewService {
     history.save(
         ReviewHistory.record(
             row, type, actor.id(), actor.name(), before, reason, related, permissionId));
-    audit.recordById(
+    audit.record(
         actor.id(),
         row.getStoreId(),
         "REVIEW_" + type.name(),

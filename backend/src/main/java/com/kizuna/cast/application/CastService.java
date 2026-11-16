@@ -165,7 +165,7 @@ public class CastService {
     newProfile.setStoreId(storeId);
     CastProfile profile = profileRepository.save(newProfile);
     profileRepository.flush();
-    audit.recordById(
+    audit.record(
         actorId,
         enrollment.getStoreId(),
         "CAST_ENROLLMENT_CREATED",
@@ -231,7 +231,7 @@ public class CastService {
       var after = new HashMap<>(snapshot(enrollment, profile));
       if (!changedFields.isEmpty())
         after.put("redacted_fields_changed", String.join(",", changedFields));
-      audit.recordById(
+      audit.record(
           actorId,
           enrollment.getStoreId(),
           "CAST_ENROLLMENT_UPDATED",
@@ -272,7 +272,7 @@ public class CastService {
     boolean changed = !before.equals(profileSnapshot(profile));
     profileRepository.flush();
     if (changed) {
-      audit.recordById(
+      audit.record(
           actorId,
           profile.getStoreId(),
           "CAST_PROFILE_PUBLICATION_CHANGED",
@@ -348,7 +348,7 @@ public class CastService {
               () -> new ConflictException("応募者から在籍登録されたキャストは削除できません。退店操作を利用してください")));
     }
     // 件数は行ロック下で数えた連鎖先。公開プロフィールは在籍と 1 対 1（一意制約）なので常に 1 件。
-    audit.recordById(
+    audit.record(
         actorId,
         enrollment.getStoreId(),
         "CAST_ENROLLMENT_DELETED",

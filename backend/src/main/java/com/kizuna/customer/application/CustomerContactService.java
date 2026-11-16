@@ -235,7 +235,7 @@ public class CustomerContactService {
     contacts.flush();
     histories.flush();
     var after = ContactAuditSnapshot.of(contact).after(before, history);
-    businessAudit.recordById(
+    businessAudit.record(
         history.getActorId(),
         contact.getStoreId(),
         switch (history.getAction()) {

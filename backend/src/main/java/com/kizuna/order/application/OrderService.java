@@ -924,7 +924,7 @@ public class OrderService {
       String sourceId) {
     orderRepository.flush();
     var after = OrderAuditSnapshot.of(order);
-    businessAudit.recordById(
+    businessAudit.record(
         actorId,
         order.getStoreId(),
         action,
@@ -939,7 +939,7 @@ public class OrderService {
   private void auditApplication(
       OrderApplication application, String action, long actorId, Map<String, String> before) {
     orderApplicationRepository.flush();
-    businessAudit.recordById(
+    businessAudit.record(
         actorId,
         application.getStoreId(),
         action,

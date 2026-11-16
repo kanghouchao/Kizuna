@@ -102,7 +102,7 @@ class InitialSetupServiceTest {
     assertThat(user.getRoleIds()).containsExactly(ADMIN_ROLE);
     assertThat(user.getStoreIds()).isEmpty();
     verify(businessAudit)
-        .recordById(
+        .record(
             eq(42L),
             isNull(),
             eq("STAFF_CREATED"),

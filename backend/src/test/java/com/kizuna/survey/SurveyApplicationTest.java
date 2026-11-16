@@ -299,7 +299,7 @@ class SurveyApplicationTest {
                         original.answer().getId(), 0L, "再訂正", input("別回答"), "other-correction")))
         .isInstanceOf(ConflictException.class);
     verify(audit)
-        .recordById(
+        .record(
             eq(1L),
             eq(STORE_ID),
             eq("SURVEY_CORRECTION_LINKED"),

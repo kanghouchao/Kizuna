@@ -97,7 +97,7 @@ public class CastInvitationService {
             Map.of(
                 DbConstraint.FK_T_CAST_INVITATIONS_CAST,
                 () -> new NotFoundException("キャストが見つかりません: " + castId)));
-    audit.recordById(
+    audit.record(
         actorId,
         saved.getStoreId(),
         "CAST_INVITATION_ISSUED",

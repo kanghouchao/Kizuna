@@ -11,7 +11,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.modulith.NamedInterface;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,33 +23,7 @@ public class BusinessAudit {
   private final UserRepository users;
   private final AuditWriter writer;
 
-  public void recordCurrent(
-      Long storeId,
-      String action,
-      String targetType,
-      String targetId,
-      Map<String, String> before,
-      Map<String, String> after) {
-    var auth = SecurityContextHolder.getContext().getAuthentication();
-    if (auth == null || !auth.isAuthenticated()) throw missingActor();
-    record(auth.getName(), storeId, action, targetType, targetId, null, null, before, after);
-  }
-
   public void record(
-      String actorEmail,
-      Long storeId,
-      String action,
-      String targetType,
-      String targetId,
-      String sourceType,
-      String sourceId,
-      Map<String, String> before,
-      Map<String, String> after) {
-    var actor = users.findByEmail(actorEmail).orElseThrow(BusinessAudit::missingActor);
-    append(actor, storeId, action, targetType, targetId, sourceType, sourceId, before, after);
-  }
-
-  public void recordById(
       Long actorId,
       Long storeId,
       String action,

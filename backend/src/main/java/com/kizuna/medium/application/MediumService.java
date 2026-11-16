@@ -41,7 +41,7 @@ public class MediumService {
     var medium = Medium.builder().name(normalized).build();
     medium.setStoreId(storeId);
     flushUnique(() -> media.saveAndFlush(medium));
-    audit.recordById(
+    audit.record(
         actorId,
         storeId,
         "MEDIUM_CREATED",
@@ -65,7 +65,7 @@ public class MediumService {
     flushUnique(media::flush);
     var after = new HashMap<>(snapshot(medium));
     after.put("redacted_fields_changed", "name");
-    audit.recordById(actorId, storeId, "MEDIUM_RENAMED", TARGET, id, null, null, before, after);
+    audit.record(actorId, storeId, "MEDIUM_RENAMED", TARGET, id, null, null, before, after);
     return medium;
   }
 
@@ -75,7 +75,7 @@ public class MediumService {
     var before = snapshot(medium);
     medium.stop();
     media.flush();
-    audit.recordById(
+    audit.record(
         actorId, storeId, "MEDIUM_STOPPED", TARGET, id, null, null, before, snapshot(medium));
     return medium;
   }
@@ -86,7 +86,7 @@ public class MediumService {
     var before = snapshot(medium);
     medium.resume();
     media.flush();
-    audit.recordById(
+    audit.record(
         actorId, storeId, "MEDIUM_RESUMED", TARGET, id, null, null, before, snapshot(medium));
     return medium;
   }
@@ -105,7 +105,7 @@ public class MediumService {
             DbConstraint.FK_T_ADVERTISING_COSTS_MEDIUM, MediumService::referenced,
             DbConstraint.FK_T_ORDERS_MEDIUM, MediumService::referenced,
             DbConstraint.FK_T_APPLICANTS_MEDIUM, MediumService::referenced));
-    audit.recordById(
+    audit.record(
         actorId,
         storeId,
         "MEDIUM_DELETED",

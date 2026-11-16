@@ -24,7 +24,6 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
-import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -84,9 +83,10 @@ class MemberWithdrawalControllerTest {
 
   @Test
   @DisplayName("会員以外（職員）は 403 で拒まれること")
-  @WithMockUser(authorities = "PERM_CUSTOMER_MANAGE")
   void staffIsForbidden() throws Exception {
-    mockMvc.perform(request("{\"reason\":\"理由\"}")).andExpect(status().isForbidden());
+    mockMvc
+        .perform(request("{\"reason\":\"理由\"}").with(jwtUser(20L, "PERM_CUSTOMER_MANAGE")))
+        .andExpect(status().isForbidden());
   }
 
   private static RequestPostProcessor member() {

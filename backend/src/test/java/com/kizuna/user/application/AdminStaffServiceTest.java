@@ -420,7 +420,7 @@ class AdminStaffServiceTest {
     assertThat(target.getCredentialVersion()).as("ロール集合の変更で再ログインさせる").isEqualTo(1L);
     assertThat(events).containsExactly(new UserCredentialsChanged(2L, 1L));
     verify(businessAudit)
-        .recordById(
+        .record(
             eq(ACTOR),
             eq(null),
             eq("STAFF_GRANTS_CHANGED"),
@@ -479,7 +479,7 @@ class AdminStaffServiceTest {
 
     verify(credentialOperations).stop(target);
     verify(businessAudit)
-        .recordById(
+        .record(
             eq(ACTOR),
             eq(null),
             eq("STAFF_ACCOUNT_SUSPENDED"),

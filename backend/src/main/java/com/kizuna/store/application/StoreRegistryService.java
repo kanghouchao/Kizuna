@@ -226,7 +226,7 @@ public class StoreRegistryService {
       String action,
       Map<String, String> before,
       Map<String, String> after) {
-    businessAudit.recordById(
+    businessAudit.record(
         actorId, storeId, action, "STORE", String.valueOf(storeId), null, null, before, after);
   }
 

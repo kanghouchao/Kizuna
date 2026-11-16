@@ -284,7 +284,7 @@ class AdvertisingIntegrationTest {
   void auditFailureRollsBackCostMonthHistoryAndReceipt() {
     doThrow(new IllegalStateException("監査失敗"))
         .when((BusinessAudit) AopTestUtils.getTargetObject(context.getBean(BusinessAudit.class)))
-        .recordById(any(), any(), any(), any(), any(), any(), any(), any(), any());
+        .record(any(), any(), any(), any(), any(), any(), any(), any(), any());
     assertThatThrownBy(
             () -> service.create(1L, create("2026-09", 0, 100, UUID.randomUUID()).command(), 42L))
         .isInstanceOf(IllegalStateException.class);
@@ -471,7 +471,7 @@ class AdvertisingIntegrationTest {
               return null;
             })
         .when(audits)
-        .recordById(any(), any(), any(), any(), any(), any(), any(), any(), any());
+        .record(any(), any(), any(), any(), any(), any(), any(), any(), any());
     var request = new CopyRequest(2L, 0L, "引継ぎ", UUID.randomUUID());
     assertThatThrownBy(() -> service.copy(1L, request.command("2026-10"), 42L))
         .isInstanceOf(IllegalStateException.class);

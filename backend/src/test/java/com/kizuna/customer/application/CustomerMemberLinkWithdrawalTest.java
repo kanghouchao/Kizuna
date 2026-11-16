@@ -69,7 +69,7 @@ class CustomerMemberLinkWithdrawalTest {
     @SuppressWarnings("unchecked")
     ArgumentCaptor<java.util.Map<String, String>> after = ArgumentCaptor.forClass(Map.class);
     verify(audit, times(2))
-        .recordById(
+        .record(
             eq(10L),
             any(),
             eq("CUSTOMER_MEMBER_LINK_RELEASED"),

@@ -78,7 +78,7 @@ public class OrderAttributionService {
     attribution.invalidate(reason, actorId, Timestamps.now());
     // 実 version を記録するため flush する。理由は自由文なので共通監査へは写さない。
     OrderAttribution saved = orderAttributionRepository.saveAndFlush(attribution);
-    businessAudit.recordById(
+    businessAudit.record(
         actorId,
         storeId,
         "ORDER_ATTRIBUTION_INVALIDATED",
@@ -162,7 +162,7 @@ public class OrderAttributionService {
         OrderReceiptToken.issueFor(orderId, generated.digest(), plannedPoints, Timestamps.now());
     orderReceiptTokenRepository.save(issued);
     // トークンの生値と digest は写さず、旧トークンの失効は件数で示す。
-    businessAudit.recordById(
+    businessAudit.record(
         actorId,
         storeId,
         "ORDER_RECEIPT_TOKEN_REISSUED",

@@ -52,7 +52,7 @@ public class MemberNotificationSettingService {
         row -> row.choose(status),
         () -> settings.save(MemberNotificationSetting.chosen(memberId, purpose, status)));
     if (before != status) {
-      audit.recordById(
+      audit.record(
           userId,
           null,
           "MEMBER_NOTIFICATION_SETTING_CHANGED",

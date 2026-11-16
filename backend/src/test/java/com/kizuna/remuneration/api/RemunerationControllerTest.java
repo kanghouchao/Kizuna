@@ -346,7 +346,7 @@ class RemunerationControllerTest {
     accept(digest).andExpect(status().isOk()).andExpect(jsonPath("$.id").value("acc"));
     verify(acceptances, times(1)).saveAndFlush(any());
     verify(audit, times(1))
-        .recordById(
+        .record(
             eq(USER_ID),
             eq(1L),
             eq("STATEMENT_ACCEPTED"),

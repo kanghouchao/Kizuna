@@ -183,7 +183,7 @@ public class CastInvitationAcceptanceService {
     if (membershipAdded != null) {
       after.put("store_membership_added", String.valueOf(membershipAdded));
     }
-    audit.recordById(
+    audit.record(
         user.getId(),
         invitation.getStoreId(),
         "CAST_INVITATION_ACCEPTED",

@@ -153,7 +153,7 @@ class AdvertisingServiceTest {
     assertThat(persisted.getAllValues())
         .allSatisfy(row -> assertThat(((StoreScopedEntity) row).getStoreId()).isEqualTo(STORE_ID));
     verify(audit)
-        .recordById(
+        .record(
             eq(42L),
             eq(STORE_ID),
             eq("ADVERTISING_COST_CREATED"),

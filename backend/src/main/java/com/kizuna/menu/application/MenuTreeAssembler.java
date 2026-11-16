@@ -9,9 +9,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.context.SecurityContextHolder;
 
 /**
  * メニューの組み立て。木（グループ / 店舗）はその木の権限を一つでも持つ者にだけ返し、レールの文脈の有無はこれで決まる。木の中は項目の permission
@@ -21,8 +18,8 @@ final class MenuTreeAssembler {
 
   private MenuTreeAssembler() {}
 
-  static List<MenuTree> assemble(List<Menu> roots) {
-    Viewer viewer = new Viewer(currentUserAuthorities());
+  static List<MenuTree> assemble(List<Menu> roots, Set<String> authorities) {
+    Viewer viewer = new Viewer(authorities);
     return Arrays.stream(PermissionTree.values())
         .filter(tree -> holdsAny(tree, viewer))
         .map(
@@ -79,15 +76,5 @@ final class MenuTreeAssembler {
       return true;
     }
     return viewer.authorities().contains(Authorities.permission(menu.getPermission()));
-  }
-
-  private static Set<String> currentUserAuthorities() {
-    Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-    if (auth == null) {
-      return Collections.emptySet();
-    }
-    return auth.getAuthorities().stream()
-        .map(GrantedAuthority::getAuthority)
-        .collect(Collectors.toSet());
   }
 }

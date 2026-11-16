@@ -7,7 +7,6 @@ import com.kizuna.user.domain.UserRepository;
 import com.kizuna.user.domain.UserType;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.modulith.NamedInterface;
@@ -31,14 +30,6 @@ public class ReceptionistEligibilityService {
         .filter(user -> isEligible(user, storeId, roleIds))
         .map(user -> new ReceptionistCandidate(user.getId(), user.getDisplayName()))
         .toList();
-  }
-
-  public Optional<Long> findEligibleIdByEmail(String email, Long storeId) {
-    Set<Long> roleIds = roleRepository.findIdsByPermissionCode(PermissionCode.ORDER_MANAGE.name());
-    return userRepository
-        .findByEmail(email)
-        .filter(user -> isEligible(user, storeId, roleIds))
-        .map(User::getId);
   }
 
   public boolean isEligible(Long userId, Long storeId) {

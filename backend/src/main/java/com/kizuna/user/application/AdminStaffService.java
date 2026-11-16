@@ -196,7 +196,7 @@ public class AdminStaffService {
             .storeIds(command.storeIds())
             .build();
     user = save(user);
-    businessAudit.recordById(
+    businessAudit.record(
         actorId,
         null,
         "STAFF_CREATED",
@@ -236,7 +236,7 @@ public class AdminStaffService {
     credentialOperations.reassignGrants(user, command.roleIds(), command.storeIds());
     user = save(user);
     if (!before.equals(BusinessAudit.grants(user)))
-      businessAudit.recordById(
+      businessAudit.record(
           actorId,
           null,
           "STAFF_GRANTS_CHANGED",
@@ -267,7 +267,7 @@ public class AdminStaffService {
     credentialOperations.stop(target);
     if (wasEnabled) {
       repository.saveAndFlush(target);
-      businessAudit.recordById(
+      businessAudit.record(
           actorId,
           null,
           "STAFF_ACCOUNT_SUSPENDED",
@@ -289,7 +289,7 @@ public class AdminStaffService {
     if (!target.getEnabled()) {
       target.resume();
       repository.saveAndFlush(target);
-      businessAudit.recordById(
+      businessAudit.record(
           actorId,
           null,
           "STAFF_ACCOUNT_RESUMED",
@@ -326,7 +326,7 @@ public class AdminStaffService {
     String temporaryPassword = temporaryPassword();
     credentialOperations.changePassword(target, passwordEncoder.encode(temporaryPassword));
     repository.saveAndFlush(target);
-    businessAudit.recordById(
+    businessAudit.record(
         actorId,
         null,
         "STAFF_PASSWORD_RESET",

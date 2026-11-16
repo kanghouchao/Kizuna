@@ -59,7 +59,7 @@ public class InitialSetupService {
                 .roleIds(Set.of(admin.getId()))
                 .storeIds(Set.of())
                 .build());
-    businessAudit.recordById(
+    businessAudit.record(
         user.getId(),
         null,
         "STAFF_CREATED",
