@@ -13,7 +13,6 @@ When('年齢確認で「いいえ」を選択する', async ({ page }) => {
 });
 
 Then('アクセス制限画面が表示される', async ({ page }) => {
-  // AgeVerification.tsx の拒否状態は見出し要素ではなく <p> で描画されるため text で断言する。
   await expect(page.getByText('アクセス制限', { exact: true })).toBeVisible();
   await expect(page.getByText('18歳未満の方はご利用いただけません', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'ウィンドウを閉じる', exact: true })).toBeVisible();
@@ -32,5 +31,5 @@ When('年齢確認で「はい」を選択する', async ({ page }) => {
 });
 
 Then('公開サイトに入場できている', async ({ page }) => {
-  await expect(page.getByRole('link', { name: 'キャストを見る', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'ご予約へ進む', exact: true })).toBeVisible();
 });
