@@ -1,33 +1,51 @@
+import Image from 'next/image';
+import Link from 'next/link';
 import type { StoreSitePageProps } from '../../model/types';
-import AgeGate from '../_sections/AgeVerification';
-import ArticleSection from '../_sections/ArticleSection';
-import Footer from '../_sections/Footer';
-import Header from '../_sections/Header';
-import PageHero from '../_sections/PageHero';
-import './theme.css';
+import { publishedOn } from './format';
+import Frame from './Frame';
 
-/** 記事ページ（default テンプレート）。 */
+/** 記事ページ（default テンプレート）。本文は文字として出し、書いたとおりの改行を保つ。 */
 export default function DefaultNewsDetailPage({
   store,
   siteConfig,
   article,
 }: StoreSitePageProps<'news-detail'>) {
   return (
-    <div
-      className="storefront-default min-h-screen flex flex-col"
-      style={{ background: 'var(--storefront-bg)' }}
-    >
-      <AgeGate storeName={store.name} />
-      <Header storeName={store.name} logoUrl={siteConfig.logo_url} />
-      <main className="grow">
-        <PageHero title={article.title} />
-        <ArticleSection article={article} />
-      </main>
-      <Footer
-        storeName={store.name}
-        snsLinks={siteConfig.sns_links}
-        partnerLinks={siteConfig.partner_links}
-      />
-    </div>
+    <Frame store={store} siteConfig={siteConfig}>
+      <article className="sfd-article">
+        <header className="sfd-article-head">
+          <Link href="/news" className="sfd-textlink sfd-back">
+            ← お知らせ一覧
+          </Link>
+          <p className="sfd-label">News</p>
+          <h1 className="sfd-article-title">{article.title}</h1>
+          {article.publish_from && (
+            <time dateTime={article.publish_from} className="sfd-date">
+              {publishedOn(article.publish_from)}
+            </time>
+          )}
+        </header>
+
+        {/* 表題が見出しにあるので、表紙は飾りとして読み上げない */}
+        {article.cover_image_url && (
+          <div className="sfd-article-cover">
+            <Image
+              src={article.cover_image_url}
+              alt=""
+              fill
+              preload
+              sizes="(min-width: 1024px) 880px, 100vw"
+              className="sfd-cover"
+            />
+          </div>
+        )}
+
+        <p className="sfd-article-body">{article.body}</p>
+
+        <Link href="/news" className="sfd-textlink">
+          お知らせ一覧へ
+        </Link>
+      </article>
+    </Frame>
   );
 }

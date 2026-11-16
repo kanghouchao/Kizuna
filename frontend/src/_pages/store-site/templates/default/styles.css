@@ -1,4 +1,4 @@
-/* default テンプレート（高級・静）の様式。作り直したページだけが使う。 */
+/* default テンプレート（高級・静）の様式。 */
 .sfd {
   --sfd-ground: #0c0b0a;
   --sfd-raise: #16140f;
@@ -6,6 +6,8 @@
   --sfd-muted: #a8a196;
   --sfd-accent: #c8b48c;
   --sfd-hair: rgba(235, 230, 221, 0.14);
+  --sfd-edge: #7a746a;
+  --sfd-alert: #e6a595;
   --sfd-gutter: 20px;
   --sfd-dock: 56px;
   --sfd-display: var(--sfd-mincho), 'Hiragino Mincho ProN', 'Yu Mincho', serif;
@@ -971,6 +973,506 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 24px;
+}
+
+/* 下層ページの本文の列 */
+.sfd .sfd-page {
+  max-width: calc(880px + 2 * var(--sfd-gutter));
+  padding: 0 var(--sfd-gutter) clamp(96px, 12vw, 160px);
+}
+.sfd .sfd-rows-page {
+  margin-bottom: 0;
+}
+.sfd .sfd-rows-page dd {
+  white-space: pre-line;
+}
+.sfd .sfd-tel {
+  border-bottom: 1px solid var(--sfd-hair);
+}
+.sfd .sfd-tel:hover {
+  color: var(--sfd-accent);
+  border-color: var(--sfd-accent);
+}
+.sfd .sfd-date {
+  display: block;
+  font-family: var(--sfd-display);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  line-height: 1.8;
+  color: var(--sfd-muted);
+}
+
+/* 一覧の代わりの一文 */
+.sfd .sfd-notice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 40px 0 64px;
+  border-top: 1px solid var(--sfd-hair);
+}
+.sfd .sfd-notice-text {
+  font-family: var(--sfd-display);
+  font-size: 16px;
+  letter-spacing: 0.15em;
+  margin: 0;
+}
+.sfd .sfd-notice-note {
+  font-size: 13px;
+  color: var(--sfd-muted);
+  margin: 0;
+}
+
+/* 料金 */
+.sfd .sfd-price {
+  width: 100%;
+  border-collapse: collapse;
+  border-top: 1px solid var(--sfd-hair);
+}
+.sfd .sfd-price th,
+.sfd .sfd-price td {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--sfd-hair);
+  font-weight: 400;
+  line-height: 1.7;
+  vertical-align: baseline;
+  overflow-wrap: anywhere;
+}
+.sfd .sfd-price th {
+  text-align: left;
+  padding-right: 24px;
+  letter-spacing: 0.12em;
+}
+.sfd .sfd-price td {
+  text-align: right;
+  font-family: var(--sfd-display);
+  font-size: clamp(17px, 2.2vw, 22px);
+  letter-spacing: 0.1em;
+}
+.sfd .sfd-price-note {
+  margin: 28px 0;
+  font-size: 13px;
+  color: var(--sfd-muted);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+.sfd .sfd-price-note:first-child {
+  margin-top: 0;
+}
+.sfd .sfd-price-note:last-child {
+  margin-bottom: 0;
+}
+
+/* 出勤表 */
+.sfd .sfd-shifts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--sfd-hair);
+}
+.sfd .sfd-shift {
+  display: grid;
+  grid-template-columns: 24px 56px minmax(0, 1fr);
+  grid-template-areas:
+    'no photo name'
+    'no photo hours';
+  align-items: center;
+  column-gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--sfd-hair);
+}
+.sfd .sfd-shift .sfd-no {
+  grid-area: no;
+}
+.sfd .sfd-shift-photo {
+  grid-area: photo;
+  position: relative;
+  aspect-ratio: 2 / 3;
+  overflow: hidden;
+  background: var(--sfd-raise);
+}
+.sfd .sfd-shift-photo .sfd-nametile span {
+  font-size: 24px;
+}
+.sfd .sfd-shift-name {
+  grid-area: name;
+  align-self: end;
+  margin: 0;
+  font-family: var(--sfd-display);
+  font-weight: 400;
+  font-size: 17px;
+  letter-spacing: 0.22em;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.sfd .sfd-shift-hours {
+  grid-area: hours;
+  align-self: start;
+  margin: 0;
+  font-family: var(--sfd-display);
+  font-size: 15px;
+  letter-spacing: 0.14em;
+  line-height: 1.6;
+  color: var(--sfd-accent);
+  white-space: nowrap;
+}
+.sfd .sfd-shift:hover .sfd-shift-name {
+  color: var(--sfd-accent);
+}
+@media (min-width: 768px) {
+  .sfd .sfd-shift {
+    grid-template-columns: 32px 64px minmax(0, 1fr) auto;
+    grid-template-areas: 'no photo name hours';
+    column-gap: 28px;
+  }
+  .sfd .sfd-shift-name,
+  .sfd .sfd-shift-hours {
+    align-self: center;
+  }
+  .sfd .sfd-shift-name {
+    font-size: 20px;
+  }
+  .sfd .sfd-shift-hours {
+    font-size: 20px;
+  }
+}
+
+/* 口コミ */
+.sfd .sfd-reviews,
+.sfd .sfd-news {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--sfd-hair);
+}
+.sfd .sfd-review {
+  padding: 40px 0;
+  border-bottom: 1px solid var(--sfd-hair);
+}
+.sfd .sfd-review-body {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 2.1;
+}
+.sfd .sfd-review-by {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 20px;
+  margin: 20px 0 0;
+  font-family: var(--sfd-display);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  line-height: 1.8;
+  color: var(--sfd-muted);
+  overflow-wrap: anywhere;
+}
+.sfd .sfd-review-by span {
+  color: var(--sfd-accent);
+  min-width: 0;
+}
+
+/* お知らせ一覧 */
+.sfd .sfd-news-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+  padding: 28px 0;
+  border-bottom: 1px solid var(--sfd-hair);
+}
+.sfd .sfd-news-title {
+  margin: 6px 0 0;
+  font-family: var(--sfd-display);
+  font-weight: 400;
+  font-size: clamp(16px, 2vw, 20px);
+  letter-spacing: 0.14em;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.sfd .sfd-news-item:hover .sfd-news-title {
+  color: var(--sfd-accent);
+}
+.sfd .sfd-news-cover {
+  position: relative;
+  display: block;
+  width: 112px;
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+  background: var(--sfd-raise);
+}
+@media (min-width: 768px) {
+  .sfd .sfd-news-item {
+    gap: 40px;
+  }
+  .sfd .sfd-news-cover {
+    width: 200px;
+  }
+}
+
+/* 記事 */
+.sfd .sfd-article {
+  max-width: calc(880px + 2 * var(--sfd-gutter));
+  padding: 120px var(--sfd-gutter) clamp(96px, 12vw, 160px);
+}
+.sfd .sfd-article-head {
+  margin-bottom: 48px;
+}
+.sfd .sfd-article-title {
+  font-family: var(--sfd-display);
+  font-weight: 400;
+  font-size: clamp(24px, 3.6vw, 40px);
+  letter-spacing: 0.14em;
+  line-height: 1.6;
+  margin: 0 0 20px;
+  overflow-wrap: anywhere;
+}
+.sfd .sfd-article-cover {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  margin-bottom: 56px;
+  overflow: hidden;
+  background: var(--sfd-raise);
+}
+.sfd .sfd-article-body {
+  margin: 0 0 72px;
+  max-width: 40em;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 2.2;
+}
+
+/* ページ送り */
+.sfd .sfd-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 32px;
+  margin-top: 48px;
+  font-family: var(--sfd-display);
+  font-size: 13px;
+  letter-spacing: 0.15em;
+}
+.sfd .sfd-pager-range {
+  margin: 0;
+  color: var(--sfd-muted);
+}
+.sfd .sfd-pager-nav,
+.sfd .sfd-pager-pages {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.sfd .sfd-pager-pages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.sfd .sfd-pager-step,
+.sfd .sfd-pager-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  min-height: 44px;
+  border-bottom: 1px solid transparent;
+}
+.sfd .sfd-pager-step {
+  padding: 0 8px;
+}
+.sfd a.sfd-pager-step:hover,
+.sfd .sfd-pager-no:hover {
+  color: var(--sfd-accent);
+}
+.sfd .sfd-pager-step[aria-disabled='true'] {
+  color: var(--sfd-edge);
+}
+.sfd .sfd-pager-no[aria-current='page'] {
+  color: var(--sfd-accent);
+  border-color: var(--sfd-accent);
+}
+
+/* 予約フォーム */
+.sfd .sfd-form {
+  display: grid;
+  gap: 36px;
+  max-width: 640px;
+}
+.sfd .sfd-form-lead,
+.sfd .sfd-form-hint {
+  margin: 0;
+  font-size: 14px;
+}
+.sfd .sfd-form-hint {
+  color: var(--sfd-muted);
+  font-size: 13px;
+}
+.sfd .sfd-fieldset {
+  display: grid;
+  gap: 28px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.sfd .sfd-fieldset legend {
+  padding: 0;
+  margin-bottom: 4px;
+  font-family: var(--sfd-display);
+  font-size: 15px;
+  letter-spacing: 0.2em;
+}
+.sfd .sfd-field {
+  min-width: 0;
+}
+.sfd .sfd-field label {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  line-height: 1.8;
+  color: var(--sfd-muted);
+}
+.sfd .sfd-field input,
+.sfd .sfd-field textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  padding: 8px 0;
+  border: 0;
+  border-bottom: 1px solid var(--sfd-edge);
+  border-radius: 0;
+  background: none;
+  color: var(--sfd-fg);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.6;
+  letter-spacing: 0.06em;
+  transition: border-color 0.5s ease;
+}
+.sfd .sfd-field textarea {
+  padding: 12px;
+  border: 1px solid var(--sfd-edge);
+  resize: vertical;
+}
+.sfd .sfd-field input:focus-visible,
+.sfd .sfd-field textarea:focus-visible {
+  outline: 0;
+  border-color: var(--sfd-accent);
+  box-shadow: 0 1px 0 var(--sfd-accent);
+}
+.sfd .sfd-field textarea:focus-visible {
+  box-shadow: 0 0 0 1px var(--sfd-accent);
+}
+.sfd .sfd-field [aria-invalid='true'] {
+  border-color: var(--sfd-alert);
+}
+.sfd .sfd-field-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.sfd .sfd-error {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--sfd-alert);
+}
+.sfd .sfd-check {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 14px;
+  font-size: 14px;
+  line-height: 1.9;
+  cursor: pointer;
+}
+.sfd .sfd-check input {
+  appearance: none;
+  display: grid;
+  place-content: center;
+  width: 20px;
+  height: 20px;
+  margin: 4px 0 0;
+  border: 1px solid var(--sfd-edge);
+  border-radius: 0;
+  background: none;
+  cursor: pointer;
+  transition:
+    border-color 0.5s ease,
+    background-color 0.5s ease;
+}
+.sfd .sfd-check input::after {
+  content: '';
+  width: 10px;
+  height: 5px;
+  margin-top: -2px;
+  border-left: 2px solid var(--sfd-ground);
+  border-bottom: 2px solid var(--sfd-ground);
+  transform: rotate(-45deg);
+  opacity: 0;
+}
+.sfd .sfd-check input:checked {
+  border-color: var(--sfd-accent);
+  background: var(--sfd-accent);
+}
+.sfd .sfd-check input:checked::after {
+  opacity: 1;
+}
+.sfd .sfd-check input[aria-invalid='true'] {
+  border-color: var(--sfd-alert);
+}
+.sfd .sfd-consent .sfd-error {
+  margin-top: -16px;
+}
+.sfd .sfd-consent-failure {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+}
+.sfd .sfd-consent-failure .sfd-error {
+  margin: 0;
+}
+.sfd .sfd-form-submit {
+  width: 100%;
+  min-height: 60px;
+  padding: 0 16px;
+  letter-spacing: 0.2em;
+}
+.sfd .sfd-form-submit:disabled {
+  border-color: var(--sfd-edge);
+  color: var(--sfd-muted);
+  cursor: default;
+}
+.sfd .sfd-form-submit:disabled:hover {
+  background: none;
+}
+.sfd .sfd-accepted {
+  max-width: 640px;
+  padding: 56px 28px;
+  border-left: 1px solid var(--sfd-hair);
+  border-right: 1px solid var(--sfd-hair);
+  text-align: center;
+  font-size: 14px;
+}
+.sfd .sfd-accepted p {
+  margin: 0 0 24px;
+}
+.sfd .sfd-accepted .sfd-accepted-title {
+  font-family: var(--sfd-display);
+  font-size: clamp(18px, 2.6vw, 24px);
+  letter-spacing: 0.2em;
+  color: var(--sfd-accent);
+}
+.sfd .sfd-accepted .sfd-accepted-id {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--sfd-muted);
+  overflow-wrap: anywhere;
 }
 
 /* フッター */

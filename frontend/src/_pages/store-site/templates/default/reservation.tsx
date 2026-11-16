@@ -1,10 +1,6 @@
 import type { StoreSitePageProps } from '../../model/types';
-import AgeGate from '../_sections/AgeVerification';
-import Footer from '../_sections/Footer';
-import GuestReservationSection from '../_sections/GuestReservationSection';
-import Header from '../_sections/Header';
-import PageHero from '../_sections/PageHero';
-import './theme.css';
+import Frame from './Frame';
+import ReservationForm from './ReservationForm';
 
 /** ゲスト予約申請ページ（default テンプレート）。 */
 export default function DefaultReservationPage({
@@ -12,21 +8,15 @@ export default function DefaultReservationPage({
   siteConfig,
 }: StoreSitePageProps<'reservation'>) {
   return (
-    <div
-      className="storefront-default min-h-screen flex flex-col"
-      style={{ background: 'var(--storefront-bg)' }}
-    >
-      <AgeGate storeName={store.name} />
-      <Header storeName={store.name} logoUrl={siteConfig.logo_url} />
-      <main className="grow">
-        <PageHero title="ご予約" subtitle="RESERVATION" />
-        <GuestReservationSection storeId={store.id} />
-      </main>
-      <Footer
-        storeName={store.name}
-        snsLinks={siteConfig.sns_links}
-        partnerLinks={siteConfig.partner_links}
-      />
-    </div>
+    <Frame store={store} siteConfig={siteConfig}>
+      <header className="sfd-pagehead">
+        <p className="sfd-label">Reservation</p>
+        <h1 className="sfd-h1">ご予約</h1>
+      </header>
+
+      <div className="sfd-page">
+        <ReservationForm storeId={store.id} />
+      </div>
+    </Frame>
   );
 }
