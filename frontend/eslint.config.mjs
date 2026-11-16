@@ -26,12 +26,11 @@ const DIALOG_CONTENT_PATTERN = {
 
 // 公開サイトのテンプレートは外観をすべて自分で持ち、互いを参照しない（ADR 0043）。テンプレートは
 // templates/ 直下のディレクトリから数えるので、足したテンプレートにも同じ制限が掛かる。
-// _ で始まるディレクトリは作り直しが済むまで残す旧い共有の部品で、テンプレートからの参照だけを許す。
 const STORE_SITE = 'src/_pages/store-site';
 const STORE_SITE_TEMPLATE_KEYS = readdirSync(join(import.meta.dirname, STORE_SITE, 'templates'), {
   withFileTypes: true,
 })
-  .filter(entry => entry.isDirectory() && !entry.name.startsWith('_'))
+  .filter(entry => entry.isDirectory())
   .map(entry => entry.name);
 
 // 規則が見るのは import に書かれた文字列なので、相対パスと @/ 別名の両方の書き方を塞ぐ。
@@ -179,22 +178,6 @@ export default [
       ],
     },
   })),
-  {
-    files: [`${STORE_SITE}/templates/_*/**`],
-    rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          patterns: [
-            TOAST_PATTERN,
-            DIALOG_CONTENT_PATTERN,
-            templateImportPattern(STORE_SITE_TEMPLATE_KEYS),
-            STORE_SITE_FETCH_PATTERN,
-          ],
-        },
-      ],
-    },
-  },
   {
     files: [`${STORE_SITE}/{api,lib,model,ui}/**`],
     rules: {

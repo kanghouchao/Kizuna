@@ -7,7 +7,7 @@ export interface StoreTemplateMeta {
   name: string;
   /** カードに表示する風格説明。 */
   description: string;
-  /** サムネイル画像の public パス。 */
+  /** サムネイル画像の public パス。各テンプレートのトップを同じ内容で写したもの。 */
   thumbnail: string;
 }
 
@@ -15,20 +15,21 @@ const TEMPLATE_METAS: StoreTemplateMeta[] = [
   {
     key: 'default',
     name: 'デフォルト',
-    description: '黒×金のラグジュアリー系。セリフ体で高級感を演出',
-    thumbnail: '/templates/default.svg',
+    description:
+      '高級感のある静かな佇まい。画面いっぱいの Banner に店名を重ね、キャストを縦長の写真で見せる',
+    thumbnail: '/templates/default.png',
   },
   {
     key: 'modern',
     name: 'モダン',
-    description: '藍黒×薔薇紅のビビッド系。サンセリフ体でモダンな印象',
-    thumbnail: '/templates/modern.svg',
+    description: '明るくポップな印象。太い丸ゴシックと角丸のカードで、キャストを密に並べる',
+    thumbnail: '/templates/modern.png',
   },
   {
     key: 'classic',
     name: 'クラシック',
-    description: '暖白×松石藍の明るく清潔な印象。セリフ体で上品に',
-    thumbnail: '/templates/classic.svg',
+    description: '和風の落ち着いた佇まい。縦書きの店名と罫線で、冊子のように読ませる',
+    thumbnail: '/templates/classic.png',
   },
 ];
 
