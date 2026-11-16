@@ -31,7 +31,10 @@ export default function DefaultCastsPage({
                 <span className="sfd-tile-no" aria-hidden="true">
                   {castNo(i)}
                 </span>
-                <h2 className="sfd-tile-name">{cast.name ?? '—'}</h2>
+                <div className="sfd-tile-cap">
+                  <h2 className="sfd-tile-name">{cast.name ?? '—'}</h2>
+                  {!!cast.age && <p className="sfd-tile-meta">{cast.age}歳</p>}
+                </div>
               </Link>
             </li>
           ))}

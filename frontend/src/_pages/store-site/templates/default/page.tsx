@@ -88,6 +88,12 @@ export default function DefaultTemplate({ store, siteConfig, casts }: StoreSiteP
                       {castNo(i)}
                     </span>
                     <h3 className="sfd-strip-name">{cast.name ?? '—'}</h3>
+                    {!!(cast.age || cast.height) && (
+                      <p className="sfd-strip-meta">
+                        {!!cast.age && <span>{cast.age}歳</span>}
+                        {!!cast.height && <span>{cast.height}cm</span>}
+                      </p>
+                    )}
                   </div>
                 </Link>
               </li>
