@@ -221,8 +221,38 @@
     radial-gradient(circle at 90% 85%, #fff0bf 0, transparent 40%), var(--m-bg);
 }
 
+.sf-modern .m-field {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 48px;
+  border: 2px solid var(--m-ink);
+  border-radius: 16px;
+  background: var(--m-card);
+  padding: 9px 14px;
+  color: var(--m-ink);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+.sf-modern .m-field[aria-invalid='true'] {
+  border-color: var(--m-label);
+  box-shadow: 3px 3px 0 var(--m-label);
+}
+.sf-modern .m-check {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 3px;
+  accent-color: var(--m-ink);
+}
+.sf-modern .m-error {
+  color: var(--m-label);
+}
+
 .sf-modern a:focus-visible,
-.sf-modern button:focus-visible {
+.sf-modern button:focus-visible,
+.sf-modern .m-field:focus-visible,
+.sf-modern .m-check:focus-visible {
   outline: 3px solid var(--m-ink);
   outline-offset: 3px;
 }
