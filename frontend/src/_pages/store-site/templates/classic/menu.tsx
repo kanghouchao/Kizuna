@@ -1,29 +1,48 @@
+import Link from 'next/link';
 import type { StoreSitePageProps } from '../../model/types';
-import AgeGate from '../_sections/AgeVerification';
-import Footer from '../_sections/Footer';
-import Header from '../_sections/Header';
-import PageHero from '../_sections/PageHero';
-import PricingSection from '../_sections/PricingSection';
-import './theme.css';
+import Frame from './Frame';
+import Notice from './Notice';
+import PageSection from './PageSection';
+import { pricingRows } from './pricing';
 
-/** 料金ページ（classic テンプレート）。 */
+/** 料金ページ（classic テンプレート）。説明文の一行を品書きの一行にして、罫線の表で読ませる。 */
 export default function ClassicMenuPage({ store, siteConfig }: StoreSitePageProps<'menu'>) {
+  const rows = pricingRows(siteConfig.pricing_description ?? '');
+
   return (
-    <div
-      className="storefront-classic min-h-screen flex flex-col"
-      style={{ background: 'var(--storefront-bg)' }}
-    >
-      <AgeGate storeName={store.name} />
-      <Header storeName={store.name} logoUrl={siteConfig.logo_url} />
-      <main className="grow">
-        <PageHero title="料金" />
-        <PricingSection pricingDescription={siteConfig.pricing_description} />
-      </main>
-      <Footer
-        storeName={store.name}
-        snsLinks={siteConfig.sns_links}
-        partnerLinks={siteConfig.partner_links}
-      />
-    </div>
+    <Frame store={store} siteConfig={siteConfig} current="/menu">
+      <PageSection title="料金">
+        {rows.length === 0 ? (
+          <Notice message="料金情報は準備中です" />
+        ) : (
+          <>
+            <table className="c-spec c-price">
+              <caption>品書き</caption>
+              <tbody>
+                {rows.map((row, index) => (
+                  <tr key={index}>
+                    {row.price ? (
+                      <>
+                        <th scope="row">{row.item}</th>
+                        <td>{row.price}</td>
+                      </>
+                    ) : (
+                      <td colSpan={2} className="c-price-note">
+                        {row.item}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="c-after">
+              <Link href="/reservation" className="c-textlink">
+                ご予約はこちら
+              </Link>
+            </div>
+          </>
+        )}
+      </PageSection>
+    </Frame>
   );
 }

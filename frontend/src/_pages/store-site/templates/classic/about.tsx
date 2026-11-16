@@ -1,29 +1,44 @@
+import type { ReactNode } from 'react';
 import type { StoreSitePageProps } from '../../model/types';
-import AgeGate from '../_sections/AgeVerification';
-import Footer from '../_sections/Footer';
-import Header from '../_sections/Header';
-import PageHero from '../_sections/PageHero';
-import StoreInfoSection from '../_sections/StoreInfoSection';
-import './theme.css';
+import Frame from './Frame';
+import Notice from './Notice';
+import PageSection from './PageSection';
 
-/** 店舗情報・アクセスページ（classic テンプレート）。 */
+/** 店舗情報・アクセスページ（classic テンプレート）。設定のある項目だけを罫線の表に並べる。 */
 export default function ClassicAboutPage({ store, siteConfig }: StoreSitePageProps<'about'>) {
+  const rows: { label: string; node: ReactNode }[] = [];
+  if (siteConfig.address) rows.push({ label: '住所', node: siteConfig.address });
+  if (siteConfig.phone)
+    rows.push({
+      label: '電話',
+      node: (
+        <a href={`tel:${siteConfig.phone}`} className="c-textlink">
+          {siteConfig.phone}
+        </a>
+      ),
+    });
+  if (siteConfig.business_hours) rows.push({ label: '営業時間', node: siteConfig.business_hours });
+  if (siteConfig.access_note) rows.push({ label: 'アクセス', node: siteConfig.access_note });
+
   return (
-    <div
-      className="storefront-classic min-h-screen flex flex-col"
-      style={{ background: 'var(--storefront-bg)' }}
-    >
-      <AgeGate storeName={store.name} />
-      <Header storeName={store.name} logoUrl={siteConfig.logo_url} />
-      <main className="grow">
-        <PageHero title="店舗情報・アクセス" />
-        <StoreInfoSection siteConfig={siteConfig} />
-      </main>
-      <Footer
-        storeName={store.name}
-        snsLinks={siteConfig.sns_links}
-        partnerLinks={siteConfig.partner_links}
-      />
-    </div>
+    <Frame store={store} siteConfig={siteConfig} current="/about">
+      <PageSection title="店舗情報・アクセス">
+        {rows.length === 0 ? (
+          <Notice message="店舗情報は準備中です" />
+        ) : (
+          <table className="c-spec c-about">
+            <caption>{store.name}</caption>
+            <tbody>
+              {rows.map(({ label, node }) => (
+                <tr key={label}>
+                  <th scope="row">{label}</th>
+                  <td>{node}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </PageSection>
+    </Frame>
   );
 }
