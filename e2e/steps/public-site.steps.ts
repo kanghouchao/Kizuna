@@ -14,10 +14,9 @@ Given('店舗 {string} の公開サイトで年齢確認を通過する', async 
 });
 
 Then('トップページの主要セクションが表示される', async ({ page }) => {
-  // seed データに依存しない静的セクションで判定する（Banner の CTA と Advertisement 見出し）。
-  // exact 一致で CastSection の「全てのキャストを見る」等の部分一致衝突を避ける。
-  await expect(page.getByRole('link', { name: 'キャストを見る', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'キャンペーン情報', exact: true })).toBeVisible();
+  // データに依らず必ず出る区画（キャストと予約への入口）の見出しで判定する。
+  await expect(page.getByRole('heading', { name: 'キャスト', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'ご予約', exact: true })).toBeVisible();
 });
 
 Then(
