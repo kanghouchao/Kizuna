@@ -1,5 +1,5 @@
 /* classic テンプレートの様式（和風・落ち着き）: 紙の地、明朝、細い罫、縦書き。
-   規則はすべて .classic-site の下に閉じ、作り直す前のページ（theme.css）と互いに効かない。
+   規則はすべて .classic-site の下に閉じる。
    .classic-site はページの根（.c-page）と、body の直下へ描くダイアログの根に付く。 */
 .classic-site {
   --classic-paper: #f4efe4;
@@ -1184,6 +1184,491 @@
   gap: 24px;
   padding-top: 32px;
   border-top: 1px solid var(--classic-rule);
+}
+
+.classic-site .c-notice {
+  display: grid;
+  justify-items: start;
+  gap: 14px;
+  padding: 28px 0 12px;
+  border-top: 3px double var(--classic-rule);
+}
+
+.classic-site .c-notice-text {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  line-height: 1.8;
+}
+
+.classic-site .c-after {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  margin-top: 32px;
+}
+
+.classic-site .c-shift-hours {
+  margin: 4px 0 0;
+  font-size: clamp(19px, 2.4vw, 24px);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+/* 品書き: 品目は左、金額は右。金額と読めない行は幅いっぱいに置く */
+.classic-site .c-price,
+.classic-site .c-about {
+  max-width: 44em;
+}
+
+.classic-site .c-price th {
+  width: auto;
+  border-right: 0;
+  font-size: 15px;
+  letter-spacing: 0.12em;
+  color: var(--classic-ink);
+}
+
+.classic-site .c-price td {
+  font-size: 15.5px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.classic-site .c-price .c-price-note {
+  padding-left: 4px;
+  font-size: 14px;
+  text-align: left;
+  white-space: normal;
+  color: var(--classic-ink-2);
+}
+
+@media (max-width: 479px) {
+  .classic-site .c-price td {
+    white-space: normal;
+  }
+}
+
+.classic-site .c-about td {
+  white-space: pre-line;
+}
+
+.classic-site .c-voices,
+.classic-site .c-news {
+  max-width: 46em;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 3px double var(--classic-rule);
+}
+
+.classic-site .c-voices > li,
+.classic-site .c-news > li {
+  border-bottom: 1px solid var(--classic-rule-soft);
+}
+
+.classic-site .c-voice {
+  padding: 26px 0 22px;
+}
+
+.classic-site .c-voice-body,
+.classic-site .c-article-body {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 15.5px;
+  line-height: 2.15;
+}
+
+.classic-site .c-voice-by {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: 2px 16px;
+  margin: 14px 0 0;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  overflow-wrap: anywhere;
+  color: var(--classic-ink-2);
+}
+
+.classic-site .c-voice-by span::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 10px;
+  vertical-align: middle;
+  background-color: var(--classic-shu);
+}
+
+.classic-site .c-news-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 0;
+}
+
+.classic-site .c-news-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.classic-site .c-news-date {
+  display: block;
+  font-size: 12.5px;
+  letter-spacing: 0.2em;
+  color: var(--classic-ink-2);
+}
+
+.classic-site .c-news-title {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+  font-size: clamp(16px, 1.8vw, 19px);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  line-height: 1.75;
+  transition: color 0.3s ease;
+}
+
+.classic-site .c-news-item:hover .c-news-title {
+  color: var(--classic-shu);
+}
+
+.classic-site .c-news-cover {
+  flex: none;
+  width: 104px;
+  padding: 3px;
+}
+
+.classic-site .c-news-cover .c-frame-in,
+.classic-site .c-article-cover .c-frame-in {
+  aspect-ratio: 16 / 9;
+}
+
+@media (min-width: 768px) {
+  .classic-site .c-news-item {
+    gap: 28px;
+  }
+
+  .classic-site .c-news-cover {
+    width: 168px;
+  }
+}
+
+.classic-site .c-article {
+  max-width: 46em;
+  padding: 32px 0 56px;
+}
+
+.classic-site .c-article-head {
+  padding-left: clamp(14px, 2vw, 22px);
+  border-left: 1px solid var(--classic-ink);
+}
+
+.classic-site .c-article-kind {
+  margin: 0;
+  font-size: 12.5px;
+  letter-spacing: 0.4em;
+  color: var(--classic-ink-2);
+}
+
+.classic-site .c-article-head h1 {
+  margin: 6px 0 10px;
+  overflow-wrap: anywhere;
+  font-size: clamp(22px, 3vw, 32px);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  line-height: 1.6;
+}
+
+.classic-site .c-article-cover {
+  margin-top: 32px;
+}
+
+.classic-site .c-article-body {
+  margin-top: 32px;
+}
+
+.classic-site .c-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 24px;
+  max-width: 46em;
+  margin-top: 28px;
+}
+
+.classic-site .c-pager-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+}
+
+.classic-site .c-pager-nav ol {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.classic-site .c-pager-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 6px;
+  border: 1px solid var(--classic-rule);
+  font-size: 14px;
+  letter-spacing: 0;
+  transition: border-color 0.3s ease;
+}
+
+.classic-site .c-pager-no:hover {
+  border-color: var(--classic-ink);
+}
+
+.classic-site .c-pager-no[aria-current='page'] {
+  border-color: var(--classic-shu);
+  background-color: var(--classic-shu);
+  color: var(--classic-on-shu);
+}
+
+.classic-site .c-pager-step {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  font-size: 13.5px;
+  letter-spacing: 0.24em;
+}
+
+.classic-site a.c-pager-step {
+  border-bottom: 1px solid var(--classic-ink);
+}
+
+.classic-site .c-pager-step[aria-disabled='true'] {
+  color: var(--classic-ink-2);
+  text-decoration: line-through;
+}
+
+/* 予約の帳面: 項目名を左、記入欄を右に置き、行を細い罫で仕切る */
+.classic-site .c-form {
+  max-width: 40em;
+}
+
+.classic-site .c-form-lead {
+  margin: 0 0 24px;
+}
+
+.classic-site .c-form form {
+  border-top: 3px double var(--classic-rule);
+}
+
+.classic-site .c-form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--classic-rule-soft);
+}
+
+@media (min-width: 640px) {
+  .classic-site .c-form-row {
+    grid-template-columns: 9.5em minmax(0, 1fr);
+    column-gap: 20px;
+    align-items: start;
+  }
+
+  .classic-site .c-form-row > label {
+    padding-top: 9px;
+  }
+}
+
+.classic-site .c-form-row > label,
+.classic-site .c-form-consent legend {
+  font-size: 13px;
+  letter-spacing: 0.24em;
+  color: var(--classic-ink-2);
+}
+
+.classic-site .c-form-field {
+  min-width: 0;
+}
+
+.classic-site .c-form-field input,
+.classic-site .c-form-field textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--classic-ink-2);
+  border-radius: 0;
+  background-color: transparent;
+  color: var(--classic-ink);
+  font: inherit;
+  font-size: 16px;
+  letter-spacing: 0.04em;
+  line-height: 1.6;
+}
+
+.classic-site .c-form-field textarea {
+  resize: vertical;
+}
+
+.classic-site .c-form-field .c-form-short {
+  width: 7em;
+}
+
+.classic-site .c-form-field [aria-invalid='true'] {
+  border-color: var(--classic-shu);
+  box-shadow: inset 0 0 0 1px var(--classic-shu);
+}
+
+.classic-site .c-form-hint {
+  margin: 0;
+  padding: 14px 0 0;
+  font-size: 14px;
+}
+
+.classic-site .c-form-error {
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--classic-shu);
+}
+
+.classic-site .c-form-error::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 8px;
+  vertical-align: middle;
+  background-color: var(--classic-shu);
+}
+
+.classic-site .c-form-consent {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 16px 0;
+  border: 0;
+  border-bottom: 1px solid var(--classic-rule-soft);
+  font-size: 14.5px;
+  line-height: 1.85;
+}
+
+.classic-site .c-form-consent legend {
+  padding: 16px 0 0;
+}
+
+.classic-site .c-form-consent label {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.classic-site .c-form-consent input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin: 5px 0 0;
+  accent-color: var(--classic-shu);
+}
+
+.classic-site .c-form-consent-failure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 16px 0;
+}
+
+.classic-site .c-form-consent-failure p {
+  margin: 0;
+}
+
+.classic-site .c-form-retry {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--classic-ink);
+  background: transparent;
+  color: var(--classic-ink);
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 0.3em;
+  cursor: pointer;
+}
+
+.classic-site .c-form-failure {
+  margin-top: 16px;
+}
+
+.classic-site .c-form-submit {
+  display: block;
+  width: 100%;
+  min-height: 52px;
+  margin-top: 24px;
+  padding: 0 18px;
+  border: 0;
+  background-color: var(--classic-shu);
+  color: var(--classic-on-shu);
+  font: inherit;
+  font-size: 15px;
+  letter-spacing: 0.3em;
+  cursor: pointer;
+  box-shadow:
+    inset 0 0 0 2px var(--classic-shu),
+    inset 0 0 0 3px var(--classic-on-shu);
+  transition: opacity 0.3s ease;
+}
+
+.classic-site .c-form-submit:hover {
+  opacity: 0.88;
+}
+
+.classic-site .c-form-submit:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.classic-site .c-accepted {
+  display: grid;
+  gap: 16px;
+  max-width: 34em;
+  padding: clamp(22px, 5vw, 36px);
+  border: 3px double var(--classic-rule);
+}
+
+.classic-site .c-accepted p {
+  margin: 0;
+}
+
+.classic-site .c-accepted-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+}
+
+.classic-site .c-accepted-title::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 10px;
+  vertical-align: middle;
+  background-color: var(--classic-shu);
 }
 
 .classic-site .c-foot {

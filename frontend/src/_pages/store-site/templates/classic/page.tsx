@@ -5,6 +5,7 @@ import Frame from './Frame';
 import MemberReservationLink from './MemberReservationLink';
 import { nameScaleStyle } from './nameScale';
 import Portrait from './Portrait';
+import Tally from './Tally';
 
 /** 縦書きの題字に並べられるキャッチコピーの列数と、1 列に入る字数の目安。 */
 const CATCH_MAX_COLUMNS = 4;
@@ -24,7 +25,6 @@ export default function ClassicTemplate({ store, siteConfig, casts }: StoreSiteP
   const catchVertical = catchColumns <= CATCH_MAX_COLUMNS;
   const banner = siteConfig.banner_url;
   const bare = !banner && catchLines.length === 0;
-  const count = String(casts.length);
 
   return (
     <Frame store={store} siteConfig={siteConfig} current="/">
@@ -148,7 +148,7 @@ export default function ClassicTemplate({ store, siteConfig, casts }: StoreSiteP
                 <Link href="/casts" className="c-strip-more c-v">
                   <span>キャスト一覧へ</span>
                   <small>
-                    全{count.length <= 2 ? <span className="c-tcy">{count}</span> : count}名
+                    <Tally prefix="全" count={casts.length} />
                   </small>
                 </Link>
               </li>
