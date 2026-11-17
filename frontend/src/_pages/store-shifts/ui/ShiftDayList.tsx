@@ -11,6 +11,8 @@ interface ShiftDayListProps {
   shifts: ShiftResponse[];
   casts: CastResponse[];
   publishing: boolean;
+  /** 削除の送信から取り直しの完了まで true。その間はどの行の削除口も塞ぐ */
+  deleting: boolean;
   /**
    * 未取消の当日実績が付いているシフトの id。読み口に取消済みは現れないので、取消済みの実績
    * しか無い行はこの集合に居らず削除の口が戻る — 画面からは見分けられないためで、そこは
@@ -33,6 +35,7 @@ export function ShiftDayList({
   shifts,
   casts,
   publishing,
+  deleting,
   attendedShiftIds,
   attendanceLoading,
   onChangePublication,
@@ -67,6 +70,7 @@ export function ShiftDayList({
         variant="ghost"
         size="sm"
         className="text-destructive-strong"
+        disabled={deleting}
         onClick={() => onDelete(s)}
         aria-label={`${label(s)} を削除`}
       >

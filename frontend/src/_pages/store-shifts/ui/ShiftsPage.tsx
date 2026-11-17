@@ -186,7 +186,8 @@ export default function ShiftsPage() {
     deletion.write(() => shiftApi.delete(shift.id), {
       success: 'シフトを削除しました',
       failure: 'シフトの削除に失敗しました',
-      onSuccess: () => void reloadShifts(),
+      // 取り直しが終わるまで削除口を塞ぐ。消えた行をもう一度削除させない
+      onSuccess: () => reloadShifts(),
     });
 
   const openAdd = () => {
@@ -294,6 +295,7 @@ export default function ShiftsPage() {
               shifts={dayShifts}
               casts={casts}
               publishing={publication.busy}
+              deleting={deletion.busy}
               attendedShiftIds={attendedShiftIds}
               attendanceLoading={attendancesLoading}
               onChangePublication={(targets, published) =>
