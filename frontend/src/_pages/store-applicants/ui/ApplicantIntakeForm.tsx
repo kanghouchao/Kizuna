@@ -84,7 +84,7 @@ export function ApplicantIntakeForm({
         onSubmit={form.handleSubmit(onSave)}
         className="rounded-xl border bg-card p-6 space-y-6"
       >
-        <fieldset disabled={busy || form.formState.isSubmitting} className="space-y-6">
+        <fieldset disabled={busy} className="space-y-6">
           <p className="text-sm text-muted-foreground">
             担当者・紹介者は記録用の名前です。システムの権限やアカウントを割り当てるものではありません。
           </p>
@@ -197,7 +197,7 @@ export function ApplicantIntakeForm({
                 />
               ))}
           </div>
-          <Button type="submit" disabled={busy || form.formState.isSubmitting}>
+          <Button type="submit" disabled={busy}>
             受付情報を保存
           </Button>
         </fieldset>

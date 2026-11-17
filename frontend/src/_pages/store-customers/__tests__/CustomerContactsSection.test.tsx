@@ -87,6 +87,7 @@ test('優先指定を解除でき、削除は確認を経て実行する', async
   await waitFor(() =>
     expect(customerApi.setContactPreference).toHaveBeenCalledWith('customer1', 'PHONE', null)
   );
+  await waitFor(() => expect(screen.getByRole('button', { name: '削除' })).toBeEnabled());
   fireEvent.click(screen.getByRole('button', { name: '削除' }));
   expect(customerApi.deleteContact).not.toHaveBeenCalled();
   fireEvent.click(await screen.findByRole('button', { name: '削除する' }));
@@ -180,6 +181,7 @@ test('可否保存の失敗後に根拠を保持して再送し、全行を再�
   fireEvent.click(screen.getByRole('button', { name: '可否を保存' }));
   await waitFor(() => expect(notify.error).toHaveBeenCalled());
   expect(screen.getByLabelText('根拠')).toHaveValue('本人からの回答');
+  await waitFor(() => expect(screen.getByRole('button', { name: '可否を保存' })).toBeEnabled());
   fireEvent.click(screen.getByRole('button', { name: '可否を保存' }));
   expect(await screen.findByText('業務連絡: 許可／共同制約: 許可（連絡可）')).toBeInTheDocument();
   expect(customerApi.setContactPermission).toHaveBeenLastCalledWith(

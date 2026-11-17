@@ -2,9 +2,8 @@
 
 import { useEffect, useRef } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
-import { notify } from '@/shared/notify';
 import { CustomerPointBalanceResponse, customerApi } from '@/entities/customer';
-import { createUuid, getApiErrorMessage, integerRule } from '@/shared/lib';
+import { createUuid, integerRule, useWrite } from '@/shared/lib';
 import {
   Button,
   Dialog,
@@ -80,12 +79,8 @@ export function PointAdjustmentDialog({
   const form = useForm<PointAdjustmentFormValues>({
     defaultValues: { delta: NaN, reason_category: '', reason: '', expires_on: '' },
   });
-  const {
-    control,
-    handleSubmit,
-    reset,
-    formState: { isSubmitting },
-  } = form;
+  const { control, handleSubmit, reset } = form;
+  const { busy, write } = useWrite();
   // 有効期限は加算のときだけ意味を持つ。減算に添えるとサーバが 400 を返す
   const isGrant = useWatch({ control, name: 'delta' }) > 0;
 
@@ -99,24 +94,27 @@ export function PointAdjustmentDialog({
     reset({ delta: NaN, reason_category: '', reason: '', expires_on: '' });
   }, [open, reset]);
 
-  const submit = async (values: PointAdjustmentFormValues) => {
-    try {
-      const balance = await customerApi.adjustPoints(customerId, {
-        delta: values.delta,
-        reason: values.reason_category + CATEGORY_SEPARATOR + values.reason.trim(),
-        // 欄が消えても react-hook-form は値を保つ。減算へ切り替えた後の持ち越しを送らないよう、
-        // 送信可否は入力の有無ではなく今の増減で決める（undefined は JSON 化の段でキーごと消える）。
-        expires_on: isGrant && values.expires_on ? values.expires_on : undefined,
-        idempotency_key: idempotencyKeyRef.current,
-      });
-      notify.success('ポイントを調整しました');
-      onAdjusted(balance);
-      onClose();
-    } catch (error) {
-      // 残高不足・未紐づけは、サーバが対処できる文言を返す。汎用文言に潰さない。
-      notify.error(getApiErrorMessage(error, 'ポイントの調整に失敗しました'));
-    }
-  };
+  const submit = (values: PointAdjustmentFormValues) =>
+    write(
+      () =>
+        customerApi.adjustPoints(customerId, {
+          delta: values.delta,
+          reason: values.reason_category + CATEGORY_SEPARATOR + values.reason.trim(),
+          // 欄が消えても react-hook-form は値を保つ。減算へ切り替えた後の持ち越しを送らないよう、
+          // 送信可否は入力の有無ではなく今の増減で決める（undefined は JSON 化の段でキーごと消える）。
+          expires_on: isGrant && values.expires_on ? values.expires_on : undefined,
+          idempotency_key: idempotencyKeyRef.current,
+        }),
+      {
+        success: 'ポイントを調整しました',
+        // 残高不足・未紐づけは、サーバが対処できる文言を返す。汎用文言に潰さない。
+        failure: 'ポイントの調整に失敗しました',
+        onSuccess: balance => {
+          onAdjusted(balance);
+          onClose();
+        },
+      }
+    );
 
   const onSubmit = (event: React.SubmitEvent<HTMLFormElement>) => {
     void handleSubmit(submit)(event);
@@ -127,7 +125,7 @@ export function PointAdjustmentDialog({
       open={open}
       onOpenChange={next => {
         // 送信中に閉じると、台帳へ記帳されたか分からないまま古い残高が残る
-        if (!next && !isSubmitting) onClose();
+        if (!next && !busy) onClose();
       }}
     >
       <Form {...form}>
@@ -139,11 +137,11 @@ export function PointAdjustmentDialog({
           form={{ onSubmit, noValidate: true }}
           footer={
             <>
-              <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
+              <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
                 キャンセル
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? '調整中...' : '調整する'}
+              <Button type="submit" disabled={busy}>
+                {busy ? '調整中...' : '調整する'}
               </Button>
             </>
           }

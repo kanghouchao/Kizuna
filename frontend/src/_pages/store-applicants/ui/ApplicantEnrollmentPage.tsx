@@ -1,13 +1,11 @@
 'use client';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useState } from 'react';
 import { applicantApi, type ApplicantEnrollmentInput } from '@/entities/applicant';
 import type { CastCreateRequest } from '@/entities/cast';
 import { CastForm, type CastFormData, toCastCreateRequest } from '@/features/cast-form';
 import { useCurrentStoreId } from '@/entities/user';
-import { getApiErrorMessage, storePath, useResource } from '@/shared/lib';
-import { notify } from '@/shared/notify';
+import { storePath, useResource, useVersionedWrite } from '@/shared/lib';
 import { Button, RegionError } from '@/shared/ui';
 // 在籍登録とキャスト直接登録の本文は同じ項目を持つ（entities 同士は参照できないので、両方を使うここで型を突き合わせる）。
 type SameKeys<A, B> = [keyof A] extends [keyof B]
@@ -24,20 +22,19 @@ export default function ApplicantEnrollmentPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const resource = useResource(() => applicantApi.get(id), [id]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const writer = useVersionedWrite(resource.reload);
   const detailPath = storePath(storeId, `/applicants/${id}`);
   const applicant = resource.data;
-  const submit = async (data: CastFormData) => {
-    if (!applicant || isSubmitting) return;
-    setIsSubmitting(true);
-    try {
-      await applicantApi.enroll(id, applicant.version, toCastCreateRequest(data));
-      notify.success('在籍を登録しました');
-      router.push(detailPath);
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, '在籍の登録に失敗しました'));
-      setIsSubmitting(false);
-    }
+  const submit = (data: CastFormData) => {
+    if (!applicant) return;
+    return writer.write(
+      () => applicantApi.enroll(id, applicant.version, toCastCreateRequest(data)),
+      {
+        success: '在籍を登録しました',
+        failure: '在籍の登録に失敗しました',
+        onSuccess: () => router.push(detailPath),
+      }
+    );
   };
   const body = () => {
     if (resource.isLoading) return <p>読み込み中...</p>;
@@ -50,7 +47,7 @@ export default function ApplicantEnrollmentPage() {
       ) : (
         <RegionError
           message="応募者情報の取得に失敗しました"
-          onRetry={() => void resource.reload()}
+          onRetry={() => void writer.reload()}
         />
       );
     if (applicant.enrollment_id)
@@ -76,7 +73,20 @@ export default function ApplicantEnrollmentPage() {
           応募者「<span className="break-all">{applicant.name}</span>
           」の在籍と未公開のプロフィールを作ります。連絡先・面接記録・添付は写しません。招待は在籍の作成後にキャスト一覧から発行してください。
         </p>
-        <CastForm onSubmit={submit} isSubmitting={isSubmitting} />
+        {writer.conflict && (
+          <div role="alert" className="space-y-3 rounded-lg border p-4">
+            <p>
+              応募者情報が更新されています。最新の内容を読み込んでから、改めて操作してください。
+            </p>
+            <Button variant="outline" onClick={() => void writer.reload()}>
+              最新の内容を読み込む
+            </Button>
+          </div>
+        )}
+        {/* 競合中は取り直すまで送らせない。古い version の再送は同じ 409 を繰り返す */}
+        <fieldset disabled={writer.conflict} className="min-w-0">
+          <CastForm onSubmit={submit} isSubmitting={writer.busy} />
+        </fieldset>
       </>
     );
   };

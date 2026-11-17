@@ -2,13 +2,12 @@
 
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { notify } from '@/shared/notify';
 import {
   CastFieldDefinitionResponse,
   CastFieldDefinitionUpdateRequest,
   castFieldDefinitionApi,
 } from '@/entities/cast';
-import { getApiErrorMessage, integerRule } from '@/shared/lib';
+import { integerRule, useWrite } from '@/shared/lib';
 import {
   Button,
   Dialog,
@@ -46,12 +45,8 @@ export function CastFieldEditModal({
   onUpdated,
 }: CastFieldEditModalProps) {
   const form = useForm<CastFieldEditFormValues>();
-  const {
-    control,
-    handleSubmit,
-    reset,
-    formState: { isSubmitting },
-  } = form;
+  const { control, handleSubmit, reset } = form;
+  const { busy, write } = useWrite();
 
   useEffect(() => {
     if (!open || !definition) return;
@@ -61,20 +56,20 @@ export function CastFieldEditModal({
     });
   }, [open, definition, reset]);
 
-  const submit = async (values: CastFieldEditFormValues) => {
+  const submit = (values: CastFieldEditFormValues) => {
     if (!definition) return;
-    try {
-      const request: CastFieldDefinitionUpdateRequest = {
-        label: values.label,
-        display_order: values.display_order,
-      };
-      await castFieldDefinitionApi.update(definition.id, request);
-      notify.success('フィールドを更新しました');
-      onUpdated();
-      onClose();
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, 'フィールドの更新に失敗しました'));
-    }
+    const request: CastFieldDefinitionUpdateRequest = {
+      label: values.label,
+      display_order: values.display_order,
+    };
+    return write(() => castFieldDefinitionApi.update(definition.id, request), {
+      success: 'フィールドを更新しました',
+      failure: 'フィールドの更新に失敗しました',
+      onSuccess: () => {
+        onUpdated();
+        onClose();
+      },
+    });
   };
 
   return (
@@ -96,8 +91,8 @@ export function CastFieldEditModal({
               <Button type="button" variant="outline" onClick={onClose}>
                 キャンセル
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? '保存中...' : '保存する'}
+              <Button type="submit" disabled={busy}>
+                {busy ? '保存中...' : '保存する'}
               </Button>
             </>
           }

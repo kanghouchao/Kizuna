@@ -69,7 +69,7 @@ export function ApplicantInterviewForm({
         )}
         className="space-y-6"
       >
-        <fieldset disabled={busy || form.formState.isSubmitting} className="space-y-6">
+        <fieldset disabled={busy} className="space-y-6">
           <div className="grid gap-6 md:grid-cols-2">
             <FormField
               control={form.control}
@@ -187,7 +187,7 @@ export function ApplicantInterviewForm({
               確認項目を追加
             </Button>
           </fieldset>
-          <Button type="submit" disabled={busy || form.formState.isSubmitting}>
+          <Button type="submit" disabled={busy}>
             面接記録を保存
           </Button>
         </fieldset>

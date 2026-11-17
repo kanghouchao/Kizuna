@@ -1,12 +1,11 @@
 'use client';
 
-import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { CastForm, type CastFormData } from '@/features/cast-form';
 import { CastEnrollmentPanel } from './CastEnrollmentPanel';
 import { CastUpdateRequest, castApi } from '@/entities/cast';
 import { notify } from '@/shared/notify';
-import { storePath, useResource } from '@/shared/lib';
+import { storePath, useResource, useWrite } from '@/shared/lib';
 import { RegionError, Button } from '@/shared/ui';
 import { useCurrentStoreId } from '@/entities/user';
 
@@ -23,51 +22,46 @@ export default function CastEditPage() {
     failure,
     reload: reloadCast,
   } = useResource(() => castApi.get(id), [id]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isPublishing, setIsPublishing] = useState(false);
+  // 公開の切替と保存は別の操作で、互いを待たせない
+  const saving = useWrite();
+  const publishing = useWrite();
   const publication = cast?.publication_status;
-  const changePublication = async () => {
-    if (!cast || isPublishing) return;
-    setIsPublishing(true);
-    try {
-      const result = await castApi.changePublication(
-        id,
-        publication === 'PUBLISHED' ? 'UNPUBLISHED' : 'PUBLISHED'
-      );
-      setCast(current =>
-        current?.id === id ? { ...current, publication_status: result.publication_status } : current
-      );
-      notify.success('公開状態を更新しました');
-    } catch {
-      notify.error('公開状態の更新に失敗しました');
-    } finally {
-      setIsPublishing(false);
-    }
+  const changePublication = () => {
+    if (!cast) return;
+    return publishing.write(
+      () =>
+        castApi.changePublication(id, publication === 'PUBLISHED' ? 'UNPUBLISHED' : 'PUBLISHED'),
+      {
+        success: '公開状態を更新しました',
+        failure: () => notify.error('公開状態の更新に失敗しました'),
+        onSuccess: result =>
+          setCast(current =>
+            current?.id === id
+              ? { ...current, publication_status: result.publication_status }
+              : current
+          ),
+      }
+    );
   };
 
-  const handleSubmit = async (data: CastFormData) => {
-    try {
-      setIsSubmitting(true);
-      const requestData: CastUpdateRequest = {
-        name: data.name,
-        photo_url: data.photo_url,
-        introduction: data.introduction,
-        age: data.age ?? undefined,
-        height: data.height ?? undefined,
-        bust: data.bust ?? undefined,
-        waist: data.waist ?? undefined,
-        hip: data.hip ?? undefined,
-        display_order: data.display_order ?? undefined,
-        custom_fields: data.custom_fields,
-      };
-      await castApi.update(id, requestData);
-      notify.success('キャスト情報を更新しました');
-      router.push(storePath(storeId, '/casts'));
-    } catch {
-      notify.error('キャスト情報の更新に失敗しました');
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleSubmit = (data: CastFormData) => {
+    const requestData: CastUpdateRequest = {
+      name: data.name,
+      photo_url: data.photo_url,
+      introduction: data.introduction,
+      age: data.age ?? undefined,
+      height: data.height ?? undefined,
+      bust: data.bust ?? undefined,
+      waist: data.waist ?? undefined,
+      hip: data.hip ?? undefined,
+      display_order: data.display_order ?? undefined,
+      custom_fields: data.custom_fields,
+    };
+    return saving.write(() => castApi.update(id, requestData), {
+      success: 'キャスト情報を更新しました',
+      failure: () => notify.error('キャスト情報の更新に失敗しました'),
+      onSuccess: () => router.push(storePath(storeId, '/casts')),
+    });
   };
 
   if (isLoading) {
@@ -113,7 +107,7 @@ export default function CastEditPage() {
           <Button
             type="button"
             variant="outline"
-            disabled={isPublishing}
+            disabled={publishing.busy}
             onClick={() => void changePublication()}
           >
             {publication === 'PUBLISHED' ? '非公開にする' : '公開する'}
@@ -139,7 +133,7 @@ export default function CastEditPage() {
         }}
         existingCustomFields={cast.custom_fields}
         onSubmit={handleSubmit}
-        isSubmitting={isSubmitting}
+        isSubmitting={saving.busy}
       />
     </div>
   );

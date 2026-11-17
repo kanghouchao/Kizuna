@@ -1,9 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { notify } from '@/shared/notify';
 import { CastInvitationStatus, castApi } from '@/entities/cast';
-import { getApiErrorMessage } from '@/shared/lib';
+import { useWrite } from '@/shared/lib';
 import { Button } from '@/shared/ui';
 
 export interface IssuedInvitation {
@@ -24,21 +22,16 @@ interface InvitationButtonProps {
 
 /** キャスト一覧の行内招待発行ボタン。連携済み・招待不可の在籍では表示しない。 */
 export function InvitationButton({ castId, status, onIssued }: InvitationButtonProps) {
-  const [issuing, setIssuing] = useState(false);
+  const { busy, write } = useWrite();
 
   if (status === 'LINKED' || status === 'UNAVAILABLE') return null;
 
-  const handleIssue = async () => {
-    setIssuing(true);
-    try {
-      const response = await castApi.issueInvitation(castId);
-      onIssued({ token: response.token ?? '', expiresAt: response.expires_at ?? '' });
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, '招待の発行に失敗しました'));
-    } finally {
-      setIssuing(false);
-    }
-  };
+  const handleIssue = () =>
+    write(() => castApi.issueInvitation(castId), {
+      failure: '招待の発行に失敗しました',
+      onSuccess: response =>
+        onIssued({ token: response.token ?? '', expiresAt: response.expires_at ?? '' }),
+    });
 
   return (
     <Button
@@ -46,7 +39,7 @@ export function InvitationButton({ castId, status, onIssued }: InvitationButtonP
       variant="ghost"
       size="sm"
       onClick={handleIssue}
-      disabled={issuing}
+      disabled={busy}
       className="text-primary-strong"
     >
       {status === 'INVITED' ? '再発行' : '招待を発行'}

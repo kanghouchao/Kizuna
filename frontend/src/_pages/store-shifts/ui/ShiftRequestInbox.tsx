@@ -1,11 +1,9 @@
 'use client';
 
 import { EyeOffIcon } from 'lucide-react';
-import { useState } from 'react';
-import { notify } from '@/shared/notify';
 import { CastResponse } from '@/entities/cast';
 import { StoreShiftRequestItem, shiftApi } from '@/entities/shift';
-import { getApiErrorMessage, useResource } from '@/shared/lib';
+import { useResource, useWrite } from '@/shared/lib';
 import { Badge, Button, RegionError } from '@/shared/ui';
 
 interface ShiftRequestInboxProps {
@@ -25,41 +23,29 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
     reload: load,
   } = useResource(() => shiftApi.listShiftRequests({ status: 'PENDING' }));
   const requests = data ?? [];
-  const [processingId, setProcessingId] = useState<string | null>(null);
+  const { busy, write } = useWrite();
 
   // castId が未指定のとき、id を持たないキャストと undefined 同士で一致してしまうのを防ぐ
   const castName = (castId: string | undefined) =>
     (castId === undefined ? undefined : casts.find(c => c.id === castId)?.name) ?? castId;
 
   /** 承認する。published を渡すのは新規希望だけ — 変更申請の承認で指定すると後端が撥ねる。 */
-  const approve = async (request: StoreShiftRequestItem, published?: boolean) => {
-    setProcessingId(request.id ?? null);
-    try {
-      await shiftApi.approveShiftRequest(request.id, published);
-      notify.success(
-        published === false ? '出勤希望を非公開で承認しました' : '出勤希望を承認しました'
-      );
-      void load();
-      onApproved();
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, '承認に失敗しました'));
-    } finally {
-      setProcessingId(null);
-    }
-  };
+  const approve = (request: StoreShiftRequestItem, published?: boolean) =>
+    write(() => shiftApi.approveShiftRequest(request.id, published), {
+      success: published === false ? '出勤希望を非公開で承認しました' : '出勤希望を承認しました',
+      failure: '承認に失敗しました',
+      onSuccess: () => {
+        void load();
+        onApproved();
+      },
+    });
 
-  const decline = async (request: StoreShiftRequestItem) => {
-    setProcessingId(request.id ?? null);
-    try {
-      await shiftApi.declineShiftRequest(request.id);
-      notify.success('出勤希望を却下しました');
-      void load();
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, '却下に失敗しました'));
-    } finally {
-      setProcessingId(null);
-    }
-  };
+  const decline = (request: StoreShiftRequestItem) =>
+    write(() => shiftApi.declineShiftRequest(request.id), {
+      success: '出勤希望を却下しました',
+      failure: '却下に失敗しました',
+      onSuccess: () => void load(),
+    });
 
   if (loading) {
     return <p className="text-sm text-muted-foreground">読み込み中...</p>;
@@ -124,7 +110,7 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
                 variant="outline"
                 size="sm"
                 onClick={() => decline(request)}
-                disabled={processingId === request.id}
+                disabled={busy}
               >
                 {isChange ? '謝絶' : '辞退'}
               </Button>
@@ -136,19 +122,14 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
                   variant="outline"
                   size="sm"
                   onClick={() => approve(request, false)}
-                  disabled={processingId === request.id}
+                  disabled={busy}
                 >
                   <EyeOffIcon />
                   非公開で承認
                 </Button>
               )}
               {!unapprovable && (
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => approve(request)}
-                  disabled={processingId === request.id}
-                >
+                <Button type="button" size="sm" onClick={() => approve(request)} disabled={busy}>
                   {isChange ? '承認してシフト更新' : '承認'}
                 </Button>
               )}

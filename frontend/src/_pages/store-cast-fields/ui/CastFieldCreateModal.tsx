@@ -2,9 +2,8 @@
 
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { notify } from '@/shared/notify';
 import { CastFieldDefinitionCreateRequest, castFieldDefinitionApi } from '@/entities/cast';
-import { getApiErrorMessage } from '@/shared/lib';
+import { useWrite } from '@/shared/lib';
 import {
   Button,
   Dialog,
@@ -36,33 +35,28 @@ interface CastFieldCreateFormValues {
 /** カスタムフィールド定義の新規作成モーダル(key・label・公開設定)。 */
 export function CastFieldCreateModal({ open, onClose, onCreated }: CastFieldCreateModalProps) {
   const form = useForm<CastFieldCreateFormValues>();
-  const {
-    control,
-    register,
-    handleSubmit,
-    reset,
-    formState: { isSubmitting },
-  } = form;
+  const { control, register, handleSubmit, reset } = form;
+  const { busy, write } = useWrite();
 
   useEffect(() => {
     if (!open) return;
     reset({ key: '', label: '', is_public: false });
   }, [open, reset]);
 
-  const submit = async (values: CastFieldCreateFormValues) => {
-    try {
-      const request: CastFieldDefinitionCreateRequest = {
-        key: values.key,
-        label: values.label,
-        is_public: values.is_public,
-      };
-      await castFieldDefinitionApi.create(request);
-      notify.success('フィールドを追加しました');
-      onCreated();
-      onClose();
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, 'フィールドの追加に失敗しました'));
-    }
+  const submit = (values: CastFieldCreateFormValues) => {
+    const request: CastFieldDefinitionCreateRequest = {
+      key: values.key,
+      label: values.label,
+      is_public: values.is_public,
+    };
+    return write(() => castFieldDefinitionApi.create(request), {
+      success: 'フィールドを追加しました',
+      failure: 'フィールドの追加に失敗しました',
+      onSuccess: () => {
+        onCreated();
+        onClose();
+      },
+    });
   };
 
   return (
@@ -84,8 +78,8 @@ export function CastFieldCreateModal({ open, onClose, onCreated }: CastFieldCrea
               <Button type="button" variant="outline" onClick={onClose}>
                 キャンセル
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? '追加中...' : '追加する'}
+              <Button type="submit" disabled={busy}>
+                {busy ? '追加中...' : '追加する'}
               </Button>
             </>
           }

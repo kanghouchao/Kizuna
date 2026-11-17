@@ -111,7 +111,7 @@ export function ApplicantTransitionForm({
             <p className="text-sm text-muted-foreground">
               辞退は応募者による応募の撤回です。選考終了後は編集・再開できません。
             </p>
-            <Button type="submit" disabled={busy || form.formState.isSubmitting}>
+            <Button type="submit" disabled={busy}>
               選考状態を変更
             </Button>
           </fieldset>

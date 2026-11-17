@@ -7,7 +7,7 @@ import {
   CastResponse,
   castApi,
 } from '@/entities/cast';
-import { useListPage } from '@/shared/lib';
+import { useListPage, useWrite } from '@/shared/lib';
 import { Button, ConfirmDialog, Pager, RegionError } from '@/shared/ui';
 import { notify } from '@/shared/notify';
 
@@ -26,26 +26,24 @@ export function CastEnrollmentPanel({
 }) {
   const [status, setStatus] = useState(cast.status);
   const [endedAt, setEndedAt] = useState(cast.ended_at);
-  const [busy, setBusy] = useState(false);
+  const { busy, write } = useWrite();
   const [confirming, setConfirming] = useState(false);
   const history = useListPage(page => castApi.statusHistories(cast.id!, page));
   const snapshots = useListPage(page => castApi.snapshots(cast.id!, page));
 
-  async function change(action: 'suspend' | 'resume' | 'withdraw') {
-    if (busy || !cast.id) return;
-    setBusy(true);
-    try {
-      const result = await castApi[action](cast.id);
-      setStatus(result.status);
-      setEndedAt(result.ended_at);
-      void history.reload();
-      onChanged(result);
-      notify.success('在籍状態を更新しました');
-    } catch {
-      notify.error('在籍状態の更新に失敗しました');
-    } finally {
-      setBusy(false);
-    }
+  function change(action: 'suspend' | 'resume' | 'withdraw') {
+    const castId = cast.id;
+    if (!castId) return;
+    return write(() => castApi[action](castId), {
+      success: '在籍状態を更新しました',
+      failure: () => notify.error('在籍状態の更新に失敗しました'),
+      onSuccess: result => {
+        setStatus(result.status);
+        setEndedAt(result.ended_at);
+        void history.reload();
+        onChanged(result);
+      },
+    });
   }
 
   return (

@@ -65,17 +65,12 @@ interface CustomerFormProps {
   creating?: boolean;
   /** フォーム送信時のコールバック */
   onSubmit: (data: CustomerFormData) => void;
-  /** 送信中フラグ */
-  isSubmitting?: boolean;
+  /** 送信から反映の完了まで true。送信ボタンを塞ぐ */
+  busy?: boolean;
 }
 
 /** 顧客登録・編集フォームコンポーネント */
-export function CustomerForm({
-  initialData,
-  onSubmit,
-  isSubmitting,
-  creating = false,
-}: CustomerFormProps) {
+export function CustomerForm({ initialData, onSubmit, busy, creating = false }: CustomerFormProps) {
   const router = useRouter();
   const form = useForm<CustomerFormData>({
     defaultValues: {
@@ -313,8 +308,8 @@ export function CustomerForm({
           <Button type="button" variant="outline" onClick={() => router.back()}>
             キャンセル
           </Button>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? '保存中...' : '保存する'}
+          <Button type="submit" disabled={busy}>
+            {busy ? '保存中...' : '保存する'}
           </Button>
         </div>
       </form>

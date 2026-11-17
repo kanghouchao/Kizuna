@@ -2,9 +2,8 @@
 
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { notify } from '@/shared/notify';
 import { AttendanceResponse, attendanceApi } from '@/entities/shift';
-import { getApiErrorMessage } from '@/shared/lib';
+import { useWrite } from '@/shared/lib';
 import { ShiftDialogShell } from './ShiftDialogShell';
 import {
   Button,
@@ -40,27 +39,23 @@ export function AttendanceCancelDialog({
   onCancelled,
 }: AttendanceCancelDialogProps) {
   const form = useForm<CancelFormValues>({ defaultValues: { reason: '' } });
-  const {
-    handleSubmit,
-    reset,
-    control,
-    formState: { isSubmitting },
-  } = form;
+  const { handleSubmit, reset, control } = form;
+  const { busy, write } = useWrite();
 
   useEffect(() => {
     if (open) reset({ reason: '' });
   }, [open, reset]);
 
-  const submit = async (values: CancelFormValues) => {
+  const submit = (values: CancelFormValues) => {
     if (attendance === null) return;
-    try {
-      await attendanceApi.cancel(attendance.id, values.reason);
-      notify.success('当日実績を取り消しました');
-      onCancelled();
-      onClose();
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, '当日実績の取消に失敗しました'));
-    }
+    return write(() => attendanceApi.cancel(attendance.id, values.reason), {
+      success: '当日実績を取り消しました',
+      failure: '当日実績の取消に失敗しました',
+      onSuccess: () => {
+        onCancelled();
+        onClose();
+      },
+    });
   };
 
   return (
@@ -75,8 +70,8 @@ export function AttendanceCancelDialog({
             <Button type="button" variant="outline" onClick={onClose}>
               キャンセル
             </Button>
-            <Button type="submit" variant="destructive" disabled={isSubmitting}>
-              {isSubmitting ? '取消中...' : '取り消す'}
+            <Button type="submit" variant="destructive" disabled={busy}>
+              {busy ? '取消中...' : '取り消す'}
             </Button>
           </>
         }
