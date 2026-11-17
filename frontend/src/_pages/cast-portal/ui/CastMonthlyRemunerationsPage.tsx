@@ -201,9 +201,9 @@ function MonthlyStatement({
               '明細の内容が変わっていたため、最新の明細を表示しました。内容を確かめてから承諾してください'
             );
           else notify.error(getApiErrorMessage(error, '明細を承諾できませんでした'));
-          return result.reload();
         },
         onSuccess: () => result.reload(),
+        onFailure: () => result.reload(),
       }
     );
   };

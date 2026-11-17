@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 import { memberApi } from '@/entities/member';
 import { useAuth } from '@/entities/user';
@@ -45,12 +46,18 @@ export function MemberWithdrawalPage() {
   });
   const { control, handleSubmit } = form;
   const { busy, write } = useWrite();
+  // 退会は成立すると取り消せない。ログアウトに失敗して画面が残っても、同じ手続きを送り直させない
+  const [withdrawn, setWithdrawn] = useState(false);
   const understood = useWatch({ control, name: 'understood' });
+  const pending = busy || withdrawn;
 
   const submit = (values: WithdrawalFormValues) =>
     write(() => memberApi.withdraw({ reason: values.reason }), {
       failure: '退会の手続きに失敗しました',
-      onSuccess: () => logout('member-withdrawn'),
+      onSuccess: () => {
+        setWithdrawn(true);
+        return logout('member-withdrawn');
+      },
     });
 
   return (
@@ -117,9 +124,9 @@ export function MemberWithdrawalPage() {
                 type="submit"
                 variant="destructive"
                 className="h-12 w-full text-lg"
-                disabled={!understood || busy}
+                disabled={!understood || pending}
               >
-                {busy ? '手続き中...' : '退会する'}
+                {pending ? '手続き中...' : '退会する'}
               </Button>
             </CardContent>
           </Card>
