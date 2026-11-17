@@ -34,6 +34,7 @@ import {
   storePath,
   useKeyedResource,
   useResourceInitialization,
+  useWrite,
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { formatDateTime } from '../lib/formatDateTime';
@@ -187,6 +188,7 @@ export default function OrderEditPage() {
   });
   const seeded = current !== null && initialized && !isLoading;
   const startScope = resource.capture();
+  const { busy, write } = useWrite();
 
   const submit = async (values: OrderEditFormValues) => {
     if (current === null || current.version === undefined) {
@@ -236,14 +238,9 @@ export default function OrderEditPage() {
         : {}),
     };
     const operation = resource.capture();
-    try {
-      const token = await confirmation.confirm(() => orderApi.previewUpdate(orderId, request));
-      if (!token) return;
-      await orderApi.update(orderId, { ...request, confirmation_token: token });
-      if (!operation.isCurrent()) return;
-      notify.success('受注を更新しました');
-      router.push(storePath(storeId, '/orders'));
-    } catch (error) {
+    // 取り直しは反映（onFailure）に入れない。transition の中で始めると読み込み中の表示が出ず、
+    // 置き換わる前のフォームに入力を続けられる
+    const settleFailure = async (error: unknown) => {
       if (!operation.isCurrent()) return;
       if (orderConflictField(error) === 'confirmation_token') {
         notify.warning(
@@ -260,7 +257,23 @@ export default function OrderEditPage() {
       }
       // 終端状態の凍結など、サーバは対処の分かる文言を返す。汎用文言に潰さない
       notify.error(getApiErrorMessage(error, '受注の更新に失敗しました'));
+    };
+    let token: string | null;
+    try {
+      token = await confirmation.confirm(() => orderApi.previewUpdate(orderId, request));
+    } catch (error) {
+      await settleFailure(error);
+      return;
     }
+    if (!token) return;
+    await write(() => orderApi.update(orderId, { ...request, confirmation_token: token }), {
+      failure: settleFailure,
+      onSuccess: () => {
+        if (!operation.isCurrent()) return;
+        notify.success('受注を更新しました');
+        router.push(storePath(storeId, '/orders'));
+      },
+    });
   };
 
   return (
@@ -572,13 +585,13 @@ export default function OrderEditPage() {
                   <Button
                     type="button"
                     variant="outline"
-                    disabled={formState.isSubmitting}
+                    disabled={busy}
                     onClick={() => router.push(storePath(storeId, '/orders'))}
                   >
                     キャンセル
                   </Button>
-                  <Button type="submit" disabled={formState.isSubmitting}>
-                    {formState.isSubmitting ? '保存中...' : '保存'}
+                  <Button type="submit" disabled={busy}>
+                    {busy ? '保存中...' : '保存'}
                   </Button>
                 </div>
               </div>

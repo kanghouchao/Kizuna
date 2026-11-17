@@ -166,7 +166,7 @@ describe('ポイント巻き戻しのページ', () => {
     fireEvent.click(await screen.findByRole('button', { name: '実行する' }));
     expect(await screen.findByText('12,700 円')).toBeInTheDocument();
     expect(mockedRollback).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole('button', { name: '巻き戻す' }));
+    fireEvent.click(await screen.findByRole('button', { name: '巻き戻す' }));
     fireEvent.click(await screen.findByRole('button', { name: '実行する' }));
     await waitFor(() =>
       expect(mockedRollback).toHaveBeenLastCalledWith('o1', {

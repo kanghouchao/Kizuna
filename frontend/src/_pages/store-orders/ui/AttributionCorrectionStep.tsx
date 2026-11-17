@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode, useEffect, useId, useState } from 'react';
+import { type ReactNode, useId, useState } from 'react';
 import { useStoreContext } from '@/entities/user';
 import { useForm } from 'react-hook-form';
 import { notify } from '@/shared/notify';
@@ -12,6 +12,7 @@ import {
   useKeyedResource,
   useResourceInitialization,
   ResourceSuccess,
+  type useWrite,
 } from '@/shared/lib';
 import {
   Button,
@@ -40,8 +41,8 @@ interface AttributionCorrectionStepProps {
   /** 訂正の宛先を決める帰属記録。差し引く相手はこの記録が持つ会員で、顧客に今紐づく会員ではない。 */
   attributionId: number;
   memberCode?: string;
-  /** 送信中かどうかを親へ上げる。親はこれを見て画面の「戻る」を塞ぐ。 */
-  onBusyChange: (isBusy: boolean) => void;
+  /** 差し引きの書き。親が持ち、送信中は画面の「戻る」を塞ぐ。 */
+  correction: ReturnType<typeof useWrite>;
   onDone: () => void;
 }
 
@@ -56,7 +57,7 @@ export function AttributionCorrectionStep({
   orderId,
   attributionId,
   memberCode,
-  onBusyChange,
+  correction,
   onDone,
 }: AttributionCorrectionStepProps) {
   const storeId = useStoreContext().currentStoreId;
@@ -101,7 +102,7 @@ export function AttributionCorrectionStep({
       memberCode={memberCode}
       success={success}
       capture={resource.capture}
-      onBusyChange={onBusyChange}
+      correction={correction}
       onDone={onDone}
     />
   );
@@ -123,7 +124,7 @@ function CorrectionForm({
   memberCode,
   success,
   capture,
-  onBusyChange,
+  correction: { busy, write },
   onDone,
 }: CorrectionFormProps) {
   const status = success.data;
@@ -131,45 +132,40 @@ function CorrectionForm({
   const form = useForm<CorrectionFormValues>({
     defaultValues: { points: remaining, reason: '' },
   });
-  const {
-    control,
-    handleSubmit,
-    formState: { isSubmitting },
-  } = form;
+  const { control, handleSubmit } = form;
 
   const initialized = useResourceInitialization(success, value =>
     form.reset({ points: value.granted_points - value.corrected_points, reason: '' })
   );
-
-  // 送信中を親へ上げる。片付けで必ず false へ戻すのは、成功時に onDone がこの段を畳むため —
-  // 畳まれた瞬間の isSubmitting はまだ true で、通知だけでは親が送信中のまま固まる。
-  useEffect(() => {
-    onBusyChange(isSubmitting);
-    return () => onBusyChange(false);
-  }, [isSubmitting, onBusyChange]);
 
   // この段を開いた 1 回の人間の操作としてキーを発行する。失敗後の再送信でも変えない —
   // サーバはこのキーで「commit 済みの初回への再送」を見分けて二重記帳を遮断する（ADR 0007）。
   const [idempotencyKey] = useState(() => createUuid());
   const formId = useId();
 
-  const submit = async (values: CorrectionFormValues) => {
+  const submit = (values: CorrectionFormValues) => {
     const operation = capture();
-    try {
-      await orderApi.correctAttributionPoints(orderId, {
-        attribution_id: attributionId,
-        points: values.points,
-        reason: values.reason,
-        idempotency_key: idempotencyKey,
-      });
-      if (!operation.isCurrent()) return;
-      notify.success('誤って付与されたポイントを差し引きました');
-      onDone();
-    } catch (error) {
-      if (!operation.isCurrent()) return;
-      // 残高不足・上限超過は、サーバが対処できる文言（引ける額を含む）を返す。汎用文言に潰さない。
-      notify.error(getApiErrorMessage(error, 'ポイントの差し引きに失敗しました'));
-    }
+    return write(
+      () =>
+        orderApi.correctAttributionPoints(orderId, {
+          attribution_id: attributionId,
+          points: values.points,
+          reason: values.reason,
+          idempotency_key: idempotencyKey,
+        }),
+      {
+        failure: error => {
+          if (!operation.isCurrent()) return;
+          // 残高不足・上限超過は、サーバが対処できる文言（引ける額を含む）を返す。汎用文言に潰さない。
+          notify.error(getApiErrorMessage(error, 'ポイントの差し引きに失敗しました'));
+        },
+        onSuccess: () => {
+          if (!operation.isCurrent()) return;
+          notify.success('誤って付与されたポイントを差し引きました');
+          onDone();
+        },
+      }
+    );
   };
 
   if (!initialized) return <p>読み込み中...</p>;
@@ -272,11 +268,11 @@ function CorrectionForm({
         </form>
       </Form>
       <Actions>
-        <Button type="button" variant="outline" onClick={onDone} disabled={isSubmitting}>
+        <Button type="button" variant="outline" onClick={onDone} disabled={busy}>
           後で行う
         </Button>
-        <Button type="submit" form={formId} disabled={isSubmitting}>
-          {isSubmitting ? '処理中...' : '差し引く'}
+        <Button type="submit" form={formId} disabled={busy}>
+          {busy ? '処理中...' : '差し引く'}
         </Button>
       </Actions>
     </>

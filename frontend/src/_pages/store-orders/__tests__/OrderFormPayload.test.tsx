@@ -60,7 +60,7 @@ const mockedOrderApi = orderApi as jest.Mocked<typeof orderApi>;
 
 function renderForm() {
   const onSubmit = jest.fn<void, [OrderFormData]>();
-  const view = render(<OrderForm onSubmit={onSubmit} isSubmitting={false} />);
+  const view = render(<OrderForm onSubmit={onSubmit} busy={false} />);
   return { ...view, onSubmit };
 }
 
@@ -264,7 +264,7 @@ describe('オーダーフォームのキャスト候補リストの選択配線'
 
   it('候補を選ぶと cast_id がその id で送られること', async () => {
     const onSubmit = jest.fn<void, [OrderFormData]>();
-    render(<OrderForm onSubmit={onSubmit} isSubmitting={false} />);
+    render(<OrderForm onSubmit={onSubmit} busy={false} />);
 
     await openPicker();
     fireEvent.change(screen.getByPlaceholderText('名前で検索'), { target: { value: '花' } });
@@ -285,7 +285,7 @@ describe('オーダーフォームのキャスト候補リストの選択配線'
   it('候補を選ばないまま送ると、キャスト未選択として止められること', async () => {
     // キャストは @NotBlank。絞り込んだだけでは選択にならない
     const onSubmit = jest.fn<void, [OrderFormData]>();
-    render(<OrderForm onSubmit={onSubmit} isSubmitting={false} />);
+    render(<OrderForm onSubmit={onSubmit} busy={false} />);
 
     await openPicker();
     fireEvent.change(screen.getByPlaceholderText('名前で検索'), { target: { value: '花' } });

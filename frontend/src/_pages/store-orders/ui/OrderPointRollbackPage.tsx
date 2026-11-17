@@ -9,10 +9,17 @@ import {
   useMe,
   useStoreContext,
 } from '@/entities/user';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { OrderPointRollbackResult, orderApi } from '@/entities/order';
-import { getApiErrorMessage, isConflict, isForbidden, storePath, useResource } from '@/shared/lib';
+import {
+  getApiErrorMessage,
+  isConflict,
+  isForbidden,
+  storePath,
+  useResource,
+  useWrite,
+} from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import {
   Button,
@@ -67,13 +74,6 @@ function RollbackPage({ orderId }: { orderId: string }) {
   const storeId = useCurrentStoreId();
   // 開いた後に権限が外れた場合は、取得・送信の 403 で閉じる。
   const [allowed, setAllowed] = useState(true);
-  const active = useRef(true);
-  useEffect(() => {
-    active.current = true;
-    return () => {
-      active.current = false;
-    };
-  }, []);
   const { data, isLoading, failure, reload } = useResource(
     allowed
       ? async () => {
@@ -93,35 +93,36 @@ function RollbackPage({ orderId }: { orderId: string }) {
   const form = useForm<RollbackFormValues>({ defaultValues: { reason: '' } });
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [confirmation, setConfirmation] = useState<RollbackFormValues | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const { busy, write } = useWrite();
   const [result, setResult] = useState<OrderPointRollbackResult | null>(null);
   const order = data && !data.denied ? data.order : null;
   const preview = data && !data.denied ? data.preview : null;
   const history = result ?? preview?.rollback;
-  const submit = async () => {
-    if (!confirmation || !preview || submitting) return;
-    setSubmitting(true);
+  const submit = () => {
+    if (!confirmation || !preview) return;
+    const request = {
+      reason: confirmation.reason.trim(),
+      expected_total_fee: preview.current_total_fee,
+      expected_offset_amount: preview.offset_amount,
+    };
     setConfirmationOpen(false);
-    try {
-      const response = await orderApi.pointRollback(orderId, {
-        reason: confirmation.reason.trim(),
-        expected_total_fee: preview.current_total_fee,
-        expected_offset_amount: preview.offset_amount,
-      });
-      if (!active.current) return;
-      setResult(response);
-      notify.success('ポイントを巻き戻しました');
-      await reload();
-    } catch (error) {
-      if (!active.current) return;
-      if (isForbidden(error)) setAllowed(false);
-      else if (isConflict(error)) {
-        notify.warning(getApiErrorMessage(error, '内容が変わりました。再確認してください'));
-        await reload();
-      } else notify.error(getApiErrorMessage(error, 'ポイントの巻き戻しに失敗しました'));
-    } finally {
-      if (active.current) setSubmitting(false);
-    }
+    return write(() => orderApi.pointRollback(orderId, request), {
+      success: 'ポイントを巻き戻しました',
+      failure: error => {
+        if (isForbidden(error)) return;
+        if (isConflict(error))
+          notify.warning(getApiErrorMessage(error, '内容が変わりました。再確認してください'));
+        else notify.error(getApiErrorMessage(error, 'ポイントの巻き戻しに失敗しました'));
+      },
+      onSuccess: response => {
+        setResult(response);
+        return reload();
+      },
+      onFailure: error => {
+        if (isForbidden(error)) return setAllowed(false);
+        if (isConflict(error)) return reload();
+      },
+    });
   };
 
   if (!allowed || data?.denied)
@@ -260,8 +261,8 @@ function RollbackPage({ orderId }: { orderId: string }) {
                     消費済みの付与は取り戻せません。誤った会員への帰属は会員帰属の訂正で扱います。
                   </p>
                   <div className="flex justify-end">
-                    <Button type="submit" disabled={submitting}>
-                      {submitting ? '巻き戻し中...' : '巻き戻す'}
+                    <Button type="submit" disabled={busy}>
+                      {busy ? '巻き戻し中...' : '巻き戻す'}
                     </Button>
                   </div>
                 </form>

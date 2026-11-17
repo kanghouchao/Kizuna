@@ -26,6 +26,7 @@ import {
   storePath,
   useKeyedResource,
   useResourceInitialization,
+  useWrite,
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { customerHeadingText } from '../lib/customerLabel';
@@ -135,7 +136,7 @@ function CorrectionEditor() {
   const { data: current, isLoading, failure, reload } = resource;
 
   const form = useForm<OrderCorrectionFormValues>({ defaultValues: EMPTY_VALUES });
-  const { handleSubmit, control, reset, formState } = form;
+  const { handleSubmit, control, reset } = form;
   const [outcomeState, setOutcome] = useState<
     (CorrectionOutcomeState & { orderId: string; storeId: string | undefined }) | null
   >(null);
@@ -159,6 +160,7 @@ function CorrectionEditor() {
   });
   const seeded = current !== null && initialized && !isLoading;
   const completed = current?.status === 'COMPLETED' && !current.completion_invalidated;
+  const { busy, write } = useWrite();
 
   /**
    * この受注が現に帰属している会員のコード。帰属していなければ null。
@@ -181,34 +183,20 @@ function CorrectionEditor() {
       return;
     }
     const operation = resource.capture();
-    try {
-      const request = {
-        // 開いた時点の版をそのまま返す。全量を送る口なので、間に別の操作者の訂正が挟まっていれば
-        // サーバが 409 で差し戻す（読み直さずに送ると、その訂正を黙って巻き戻す）
-        expected_version: current.version,
-        reason: values.reason.trim(),
-        actual_arrival_time: optionalTime(values.actual_arrival_time),
-        actual_end_time: optionalTime(values.actual_end_time),
-        special_service_revision_ids: values.special_service_revision_ids,
-        course_revision_id: values.course_revision_id || undefined,
-        fee_lines: toFeeLineInputs(values.fee_lines),
-      };
-      const token = await confirmation.confirm(() => orderApi.previewCorrection(orderId, request));
-      if (!token) return;
-      const corrected = await orderApi.correct(orderId, { ...request, confirmation_token: token });
-      if (!operation.isCurrent()) return;
-      notify.success('受注を訂正しました');
-      setOutcome({ result: corrected, memberCode: '不明', orderId, storeId });
-      void reload();
-      // 補助情報の遅延で訂正結果を隠さない。詳細再取得後の世代に結び付け、旧対象へは反映しない。
-      const enrichment = resource.capture();
-      void attributedMemberCode().then(memberCode => {
-        if (!enrichment.isCurrent()) return;
-        setOutcome(outcome =>
-          outcome?.result === corrected ? { ...outcome, memberCode } : outcome
-        );
-      });
-    } catch (error) {
+    const request = {
+      // 開いた時点の版をそのまま返す。全量を送る口なので、間に別の操作者の訂正が挟まっていれば
+      // サーバが 409 で差し戻す（読み直さずに送ると、その訂正を黙って巻き戻す）
+      expected_version: current.version,
+      reason: values.reason.trim(),
+      actual_arrival_time: optionalTime(values.actual_arrival_time),
+      actual_end_time: optionalTime(values.actual_end_time),
+      special_service_revision_ids: values.special_service_revision_ids,
+      course_revision_id: values.course_revision_id || undefined,
+      fee_lines: toFeeLineInputs(values.fee_lines),
+    };
+    // 取り直しは反映（onFailure）に入れない。transition の中で始めると読み込み中の表示が出ず、
+    // 置き換わる前のフォームに入力を続けられる
+    const settleFailure = async (error: unknown) => {
       if (!operation.isCurrent()) return;
       if (orderConflictField(error) === 'confirmation_token') {
         notify.warning(
@@ -224,7 +212,32 @@ function CorrectionEditor() {
         return;
       }
       notify.error(getApiErrorMessage(error, '受注の訂正に失敗しました'));
+    };
+    let token: string | null;
+    try {
+      token = await confirmation.confirm(() => orderApi.previewCorrection(orderId, request));
+    } catch (error) {
+      await settleFailure(error);
+      return;
     }
+    if (!token) return;
+    await write(() => orderApi.correct(orderId, { ...request, confirmation_token: token }), {
+      failure: settleFailure,
+      onSuccess: corrected => {
+        if (!operation.isCurrent()) return;
+        notify.success('受注を訂正しました');
+        setOutcome({ result: corrected, memberCode: '不明', orderId, storeId });
+        void reload();
+        // 補助情報の遅延で訂正結果を隠さない。詳細再取得後の世代に結び付け、旧対象へは反映しない。
+        const enrichment = resource.capture();
+        void attributedMemberCode().then(memberCode => {
+          if (!enrichment.isCurrent()) return;
+          setOutcome(outcome =>
+            outcome?.result === corrected ? { ...outcome, memberCode } : outcome
+          );
+        });
+      },
+    });
   };
 
   return (
@@ -370,13 +383,13 @@ function CorrectionEditor() {
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={formState.isSubmitting}
+                  disabled={busy}
                   onClick={() => router.push(storePath(storeId, '/orders'))}
                 >
                   一覧へ戻る
                 </Button>
-                <Button type="submit" disabled={formState.isSubmitting}>
-                  {formState.isSubmitting ? '訂正中...' : '訂正する'}
+                <Button type="submit" disabled={busy}>
+                  {busy ? '訂正中...' : '訂正する'}
                 </Button>
               </div>
             </form>

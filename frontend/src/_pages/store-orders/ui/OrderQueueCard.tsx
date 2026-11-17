@@ -12,8 +12,7 @@ import {
   isWebApplicationRoute,
   orderApi,
 } from '@/entities/order';
-import { getApiErrorMessage, requireId, storePath } from '@/shared/lib';
-import { notify } from '@/shared/notify';
+import { requireId, storePath, useWrite } from '@/shared/lib';
 import { UNLINKED_NOTE, customerLabel } from '../lib/customerLabel';
 import {
   Badge,
@@ -72,39 +71,26 @@ function CardMeta({ order }: { order: OrderWorkQueueRow }) {
 export function OrderQueueCard({ order, onProcessed, completionHref }: OrderQueueCardProps) {
   const storeId = useCurrentStoreId();
   const router = useRouter();
-  const [processing, setProcessing] = useState(false);
+  const { busy, write } = useWrite();
   const [cancelling, setCancelling] = useState(false);
   const cancelForm = useForm<{ reason: string }>({ defaultValues: { reason: '' } });
 
-  /**
-   * 処理を走らせて結果を通知する。処理後にこの受注が群から外れるのか、群の中で状態が変わるだけなのかは
-   * 操作ごとに違うので、行の始末は {@code settle} が決める。
-   *
-   * <p>ここで識別子を解くのは URI のためではない（それはアダプタの仕事）。群から外す行を名指すのに
-   * 確かな識別子が要るからで、名指せないなら手を付ける前に止める。
-   */
-  const run = async <T,>(
-    action: (id: string) => Promise<T>,
-    success: string,
-    failure: string,
-    settle: (updated: T, id: string) => void
-  ) => {
-    setProcessing(true);
-    try {
-      const id = requireId(order.id, '受注');
-      const updated = await action(id);
-      notify.success(success);
-      settle(updated, id);
-    } catch (error) {
-      // 指名の再検証や終端の凍結など、サーバは対処方法を含む文言を返す。汎用文言に潰さない
-      notify.error(getApiErrorMessage(error, failure));
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  /** 取消の後始末。この受注はもう「対応が要る」群の対象ではないので手元から取り除く。 */
-  const leaveQueue = (_updated: unknown, id: string) => onProcessed(id);
+  // 取消した受注はもう「対応が要る」群の対象ではないので、手元から取り除く。群から外す行を名指すのに
+  // 確かな識別子が要るので、名指せないなら送る前に止める
+  const cancel = (reason: string) =>
+    write(
+      async () => {
+        const id = requireId(order.id, '受注');
+        await orderApi.cancel(id, { reason });
+        return id;
+      },
+      {
+        success: '受注を取消しました',
+        // 指名の再検証や終端の凍結など、サーバは対処方法を含む文言を返す。汎用文言に潰さない
+        failure: '取消に失敗しました',
+        onSuccess: onProcessed,
+      }
+    );
 
   return (
     <li className="bg-card space-y-3 rounded-lg border p-4 shadow-sm">
@@ -153,7 +139,7 @@ export function OrderQueueCard({ order, onProcessed, completionHref }: OrderQueu
               type="button"
               variant="ghost"
               size="sm"
-              disabled={processing}
+              disabled={busy}
               onClick={() => router.push(storePath(storeId, `/orders/${order.id}/edit`))}
             >
               <SquarePenIcon aria-hidden="true" />
@@ -164,7 +150,7 @@ export function OrderQueueCard({ order, onProcessed, completionHref }: OrderQueu
               variant="ghost"
               size="sm"
               className="text-destructive-strong"
-              disabled={processing}
+              disabled={busy}
               onClick={() => setCancelling(true)}
             >
               <XIcon aria-hidden="true" />
@@ -179,14 +165,7 @@ export function OrderQueueCard({ order, onProcessed, completionHref }: OrderQueu
           {/* native の検証が割り込むと、こちらの文言が描かれないまま送信が止まる */}
           <form
             noValidate
-            onSubmit={cancelForm.handleSubmit(values =>
-              run(
-                id => orderApi.cancel(id, { reason: values.reason.trim() }),
-                '受注を取消しました',
-                '取消に失敗しました',
-                leaveQueue
-              )
-            )}
+            onSubmit={cancelForm.handleSubmit(values => cancel(values.reason.trim()))}
             className="border-destructive/40 space-y-3 rounded-lg border p-3"
           >
             <p className="text-destructive-strong text-sm">
@@ -219,7 +198,7 @@ export function OrderQueueCard({ order, onProcessed, completionHref }: OrderQueu
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={processing}
+                disabled={busy}
                 onClick={() => {
                   cancelForm.reset({ reason: '' });
                   setCancelling(false);
@@ -228,7 +207,7 @@ export function OrderQueueCard({ order, onProcessed, completionHref }: OrderQueu
                 やめる
               </Button>
               {/* 検証では塞がない — 灰色のボタンは何が足りないかを言わない。押せば欄の傍が言う */}
-              <Button type="submit" variant="destructive" size="sm" disabled={processing}>
+              <Button type="submit" variant="destructive" size="sm" disabled={busy}>
                 取消する
               </Button>
             </div>

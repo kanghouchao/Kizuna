@@ -1,11 +1,13 @@
 import { useMe } from '@/entities/user';
 import type { PermissionCode } from '@/entities/user';
 import { confirmPreview } from '../lib/orderTestSupport';
+import { startTransition } from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import OrderEditPage from '../ui/OrderEditPage';
 import { Order, orderApi } from '@/entities/order';
 
 import { mediumApi } from '@/entities/medium';
+import { notify } from '@/shared/notify';
 const mockPush = jest.fn();
 let mockStoreId = '1';
 let mockParams = { id: 'o1' };
@@ -393,7 +395,12 @@ describe('受注の編集ページ', () => {
   it('保存の最中は出口を塞ぐこと', async () => {
     // 送信中に離脱すると、要求はサーバへ届いたまま結果を誰も受け取らない（成否の通知も出ない）
     mockedOrderApi.get.mockResolvedValue(confirmedOrder());
-    mockedOrderApi.update.mockReturnValue(new Promise<Order>(() => {}));
+    let settle: (order: Order) => void = () => {};
+    mockedOrderApi.update.mockReturnValue(
+      new Promise<Order>(resolve => {
+        settle = resolve;
+      })
+    );
     render(<OrderEditPage />);
     await waitFor(() => expect(screen.getByLabelText('人数')).toHaveValue(2));
 
@@ -402,6 +409,36 @@ describe('受注の編集ページ', () => {
     await confirmPreview();
 
     await waitFor(() => expect(screen.getByRole('button', { name: 'キャンセル' })).toBeDisabled());
+
+    await act(async () => settle(confirmedOrder()));
+  });
+
+  it('保存の応答が返ってから一覧への遷移が終わるまで、保存を押せないままにすること', async () => {
+    mockedOrderApi.get.mockResolvedValue(confirmedOrder());
+    mockedOrderApi.update.mockResolvedValue(confirmedOrder());
+    let arrive: () => void = () => {};
+    // router.push と同じく何も返さず、自分の transition の中で画面を進める
+    mockPush.mockImplementationOnce(() => {
+      startTransition(async () => {
+        await new Promise<void>(resolve => {
+          arrive = resolve;
+        });
+      });
+    });
+    render(<OrderEditPage />);
+    await waitFor(() => expect(screen.getByLabelText('人数')).toHaveValue(2));
+
+    fireEvent.change(screen.getByLabelText('人数'), { target: { value: '5' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    await confirmPreview();
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/1/orders'));
+    expect(notify.success).toHaveBeenCalledWith('受注を更新しました');
+    expect(screen.getByRole('button', { name: '保存中...' })).toBeDisabled();
+    expect(mockedOrderApi.update).toHaveBeenCalledTimes(1);
+
+    await act(async () => arrive());
+    expect(screen.getByRole('button', { name: '保存' })).toBeEnabled();
   });
 
   it('文字列の欄は空にした結果も送ること（空文字が「空にする」の表し方）', async () => {

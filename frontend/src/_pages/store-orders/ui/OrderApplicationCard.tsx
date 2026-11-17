@@ -5,8 +5,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { CircleCheckIcon } from 'lucide-react';
 import { OrderApplicationRow, orderApplicationApi } from '@/entities/order';
-import { getApiErrorMessage, requireId } from '@/shared/lib';
-import { notify } from '@/shared/notify';
+import { requireId, useWrite } from '@/shared/lib';
 import {
   Badge,
   Button,
@@ -52,24 +51,24 @@ export function OrderApplicationCard({
   onDeclined,
   confirmHref,
 }: OrderApplicationCardProps) {
-  const [processing, setProcessing] = useState(false);
+  const { busy, write } = useWrite();
   const [declining, setDeclining] = useState(false);
   const declineForm = useForm<{ reason: string }>({ defaultValues: { reason: '' } });
 
-  const decline = async (reason: string) => {
-    setProcessing(true);
-    try {
-      const id = requireId(application.id, '予約申請');
-      await orderApplicationApi.decline(id, { reason });
-      notify.success('予約申請を謝絶しました');
-      onDeclined(id);
-    } catch (error) {
-      // 失効や処理済みなど、サーバは対処方法を含む文言を返す。汎用文言に潰さない
-      notify.error(getApiErrorMessage(error, '謝絶に失敗しました'));
-    } finally {
-      setProcessing(false);
-    }
-  };
+  const decline = (reason: string) =>
+    write(
+      async () => {
+        const id = requireId(application.id, '予約申請');
+        await orderApplicationApi.decline(id, { reason });
+        return id;
+      },
+      {
+        success: '予約申請を謝絶しました',
+        // 失効や処理済みなど、サーバは対処方法を含む文言を返す。汎用文言に潰さない
+        failure: '謝絶に失敗しました',
+        onSuccess: onDeclined,
+      }
+    );
 
   return (
     <li className="bg-card space-y-3 rounded-lg border p-4 shadow-sm">
@@ -131,7 +130,7 @@ export function OrderApplicationCard({
               type="button"
               variant="outline"
               size="sm"
-              disabled={processing}
+              disabled={busy}
               onClick={() => setDeclining(true)}
             >
               謝絶
@@ -184,7 +183,7 @@ export function OrderApplicationCard({
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={processing}
+                disabled={busy}
                 onClick={() => {
                   declineForm.reset({ reason: '' });
                   setDeclining(false);
@@ -193,7 +192,7 @@ export function OrderApplicationCard({
                 やめる
               </Button>
               {/* 検証では塞がない — 灰色のボタンは何が足りないかを言わない。押せば欄の傍が言う */}
-              <Button type="submit" variant="destructive" size="sm" disabled={processing}>
+              <Button type="submit" variant="destructive" size="sm" disabled={busy}>
                 謝絶する
               </Button>
             </div>
