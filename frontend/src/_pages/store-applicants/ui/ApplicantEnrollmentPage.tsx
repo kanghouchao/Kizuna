@@ -73,8 +73,17 @@ export default function ApplicantEnrollmentPage() {
           応募者「<span className="break-all">{applicant.name}</span>
           」の在籍と未公開のプロフィールを作ります。連絡先・面接記録・添付は写しません。招待は在籍の作成後にキャスト一覧から発行してください。
         </p>
+        {/* 競合中は取り直すまで送らせない。古い version の再送は同じ 409 を繰り返す */}
+        <fieldset disabled={writer.conflict} className="min-w-0">
+          <CastForm onSubmit={submit} isSubmitting={writer.busy} />
+        </fieldset>
+        {/* 送信ボタンは長いフォームの末尾にある。案内は押した場所の近くに出し、見える位置まで送る */}
         {writer.conflict && (
-          <div role="alert" className="space-y-3 rounded-lg border p-4">
+          <div
+            role="alert"
+            ref={element => element?.scrollIntoView({ block: 'nearest' })}
+            className="space-y-3 rounded-lg border p-4"
+          >
             <p>
               応募者情報が更新されています。最新の内容を読み込んでから、改めて操作してください。
             </p>
@@ -83,10 +92,6 @@ export default function ApplicantEnrollmentPage() {
             </Button>
           </div>
         )}
-        {/* 競合中は取り直すまで送らせない。古い version の再送は同じ 409 を繰り返す */}
-        <fieldset disabled={writer.conflict} className="min-w-0">
-          <CastForm onSubmit={submit} isSubmitting={writer.busy} />
-        </fieldset>
       </>
     );
   };
