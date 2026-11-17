@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { roleApi } from '@/entities/user';
-import { getApiErrorMessage, isConflict, useResource } from '@/shared/lib';
+import { getApiErrorMessage, isConflict, useResource, useWrite } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { Card, CardContent, RegionError } from '@/shared/ui';
 import { RoleForm, RoleFormValues } from './RoleForm';
@@ -19,28 +19,33 @@ export default function RoleEditPage() {
     reload,
   } = useResource(id !== null ? () => roleApi.get(id) : null, [id]);
   const loadFailure = id !== null ? failure : 'notFound';
+  const { busy, write } = useWrite();
 
-  const submit = async (values: RoleFormValues) => {
+  const submit = (values: RoleFormValues) => {
     if (id === null || role === null) return;
-    try {
-      await roleApi.update(id, {
-        name: values.name,
-        permissions: values.permissions,
-        // 楽観ロック用バージョン（詳細応答の version をそのまま往復する）
-        version: role.version,
-      });
-    } catch (error) {
-      if (isConflict(error)) {
-        // 古い version を抱えたままだと再試行が同じ 409 を繰り返すため、取り直して欄を最新で描き直す
-        notify.warning('他の管理者が更新しました。最新の内容を確認してください');
-        void reload();
-      } else {
-        notify.error(getApiErrorMessage(error, 'ロールの保存に失敗しました'));
+    return write(
+      () =>
+        roleApi.update(id, {
+          name: values.name,
+          permissions: values.permissions,
+          // 楽観ロック用バージョン（詳細応答の version をそのまま往復する）
+          version: role.version,
+        }),
+      {
+        success: 'ロールを更新しました',
+        failure: error => {
+          if (isConflict(error)) {
+            notify.warning('他の管理者が更新しました。最新の内容を確認してください');
+          } else {
+            notify.error(getApiErrorMessage(error, 'ロールの保存に失敗しました'));
+          }
+        },
+        onSuccess: () => router.push('/admin/roles'),
+        // 古い version を抱えたままだと再試行が同じ 409 を繰り返すため、取り直して欄を最新で描き直す。
+        // 取り直しが終わるまで送信中のままにし、古い version での再送を受けない
+        onFailure: error => (isConflict(error) ? reload() : undefined),
       }
-      return;
-    }
-    notify.success('ロールを更新しました');
-    router.push('/admin/roles');
+    );
   };
 
   if (loadFailure !== null) {
@@ -78,6 +83,7 @@ export default function RoleEditPage() {
               system: role.system,
             }}
             onSubmit={submit}
+            busy={busy}
           />
         </CardContent>
       </Card>

@@ -2,11 +2,10 @@
 
 import { PlusIcon } from 'lucide-react';
 import Link from 'next/link';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { StaffResponse, staffApi, useStoreContext, hasPermission, useMe } from '@/entities/user';
 import { roleSetLabel } from '@/features/staff-management';
-import { getApiErrorMessage, useDeleteAction, useListPage } from '@/shared/lib';
-import { notify } from '@/shared/notify';
+import { useDeleteAction, useListPage, useWrite } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import {
   Badge,
@@ -88,41 +87,36 @@ export default function StaffPage() {
   } | null>(null);
 
   // 応答は一度きり表示の仮パスワードを運び、表示枠は 1 つしかない。重なると有効な値が
-  // 失われるため、進行中は全行の入口を塞いで直列化し、最新要求以外の応答も世代守衛で棄てる。
-  const [resetting, setResetting] = useState(false);
-  const resetRequestIdRef = useRef(0);
+  // 失われるため、進行中は全行の入口を塞いで直列化する。再開とは別の書き込みとして持つ —
+  // 確認は押した時点で閉じるので、再開の応答待ちを理由に再設定を黙って捨てない。
+  const reset = useWrite();
+  const resumption = useWrite();
 
-  const resetPassword = async (member: StaffResponse) => {
+  const resetPassword = (member: StaffResponse) => {
     setResetTargetOpen(false);
-    setResetting(true);
-    const requestId = ++resetRequestIdRef.current;
-    try {
-      const result = await staffApi.resetPassword(member.id ?? 0);
-      if (requestId !== resetRequestIdRef.current) return;
-      setIssued({
-        displayName: member.display_name ?? '',
-        email: member.email ?? '',
-        password: result.temporary_password,
-      });
-      setIssuedOpen(true);
-    } catch (error) {
-      if (requestId !== resetRequestIdRef.current) return;
-      notify.error(getApiErrorMessage(error, 'パスワードの再設定に失敗しました'));
-    } finally {
-      setResetting(false);
-    }
+    // 表示は onSuccess に置かない。反映は他の書き込みの応答待ちに揃えて確定されるので、再開が
+    // 進行中だと発行済みの仮パスワードが出ない。await の後の更新は応答の時点で描かれる
+    void reset.write(
+      async () => {
+        const result = await staffApi.resetPassword(member.id ?? 0);
+        setIssued({
+          displayName: member.display_name ?? '',
+          email: member.email ?? '',
+          password: result.temporary_password,
+        });
+        setIssuedOpen(true);
+      },
+      { failure: 'パスワードの再設定に失敗しました' }
+    );
   };
 
   // 再開は元に戻す操作なので確認を挟まない
-  const resume = async (member: StaffResponse) => {
-    try {
-      await staffApi.resume(member.id ?? 0);
-      notify.success('アカウントを再開しました');
-      void list.reload();
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, 'アカウントの再開に失敗しました'));
-    }
-  };
+  const resume = (member: StaffResponse) =>
+    void resumption.write(() => staffApi.resume(member.id ?? 0), {
+      success: 'アカウントを再開しました',
+      failure: 'アカウントの再開に失敗しました',
+      onSuccess: () => list.reload(),
+    });
 
   // 引き金に出る文言は候補一覧から引かれるので、選べる値はここ一箇所に持つ。
   const storeFilterOptions = [
@@ -277,7 +271,8 @@ export default function StaffPage() {
                               variant="ghost"
                               size="sm"
                               className="text-primary-strong"
-                              onClick={() => void resume(member)}
+                              disabled={resumption.busy}
+                              onClick={() => resume(member)}
                             >
                               再開
                             </Button>
@@ -285,7 +280,7 @@ export default function StaffPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            disabled={resetting}
+                            disabled={reset.busy}
                             onClick={() => {
                               setResetTarget(member);
                               setResetTargetOpen(true);
@@ -321,7 +316,7 @@ export default function StaffPage() {
         title="パスワードを再設定しますか？"
         description={`${resetTarget?.display_name ?? ''} のセッションは即時に失効します。仮パスワードは発行直後に一度だけ表示され、閉じると二度と確認できません。`}
         confirmLabel="再設定する"
-        onConfirm={() => void (resetTarget && resetPassword(resetTarget))}
+        onConfirm={() => resetTarget && resetPassword(resetTarget)}
         onClose={() => setResetTargetOpen(false)}
       />
 

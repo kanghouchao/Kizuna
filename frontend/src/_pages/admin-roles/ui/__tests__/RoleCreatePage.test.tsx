@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { startTransition } from 'react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import { roleApi } from '@/entities/user';
 import RoleCreatePage from '../RoleCreatePage';
@@ -19,6 +20,18 @@ jest.mock('@/shared/notify', () => ({
 
 const mockedRoleApi = roleApi as jest.Mocked<typeof roleApi>;
 const mockedNotify = notify as jest.Mocked<typeof notify>;
+
+// router.push と同じく何も返さず、自分の transition の中で画面を進める。返り値で遷移を終わらせる
+const holdNavigation = () => {
+  let arrive: () => void = () => {};
+  const navigating = new Promise<void>(resolve => (arrive = resolve));
+  mockPush.mockImplementationOnce(() => {
+    startTransition(async () => {
+      await navigating;
+    });
+  });
+  return () => arrive();
+};
 
 const fillAndSave = async () => {
   fireEvent.change(await screen.findByLabelText('ロール名'), { target: { value: '新ロール' } });
@@ -57,6 +70,22 @@ describe('ロール追加ページ', () => {
       permissions: ['CUSTOMER_MANAGE'],
     });
     expect(mockedNotify.success).toHaveBeenCalledWith('ロールを追加しました');
+  });
+
+  it('応答が返ってから一覧への遷移が終わるまで、保存ボタンを押せないままにする', async () => {
+    const arrive = holdNavigation();
+    render(<RoleCreatePage />);
+
+    await fillAndSave();
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/roles'));
+    const saving = screen.getByRole('button', { name: '保存中...' });
+    expect(saving).toBeDisabled();
+    fireEvent.click(saving);
+    expect(mockedRoleApi.create).toHaveBeenCalledTimes(1);
+
+    await act(async () => arrive());
+    expect(await screen.findByRole('button', { name: '保存する' })).toBeEnabled();
   });
 
   it('失敗したらサーバ文言を出し、画面に留まる', async () => {

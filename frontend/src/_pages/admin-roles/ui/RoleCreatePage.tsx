@@ -2,31 +2,28 @@
 
 import { useRouter } from 'next/navigation';
 import { roleApi } from '@/entities/user';
-import { getApiErrorMessage } from '@/shared/lib';
-import { notify } from '@/shared/notify';
+import { useWrite } from '@/shared/lib';
 import { Card, CardContent } from '@/shared/ui';
 import { RoleForm, RoleFormValues } from './RoleForm';
 
 export default function RoleCreatePage() {
   const router = useRouter();
 
-  const submit = async (values: RoleFormValues) => {
-    try {
-      await roleApi.create({ name: values.name, permissions: values.permissions });
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, 'ロールの保存に失敗しました'));
-      return;
-    }
-    notify.success('ロールを追加しました');
-    router.push('/admin/roles');
-  };
+  const { busy, write } = useWrite();
+
+  const submit = (values: RoleFormValues) =>
+    write(() => roleApi.create({ name: values.name, permissions: values.permissions }), {
+      success: 'ロールを追加しました',
+      failure: 'ロールの保存に失敗しました',
+      onSuccess: () => router.push('/admin/roles'),
+    });
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-foreground">ロールを追加</h1>
       <Card>
         <CardContent>
-          <RoleForm onSubmit={submit} />
+          <RoleForm onSubmit={submit} busy={busy} />
         </CardContent>
       </Card>
     </div>

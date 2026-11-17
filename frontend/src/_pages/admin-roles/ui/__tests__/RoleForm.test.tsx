@@ -50,7 +50,7 @@ describe('ロールフォーム', () => {
   });
 
   it('権限を「木 → 区分見出し」の下に並べ、日本語名を項目名にする', async () => {
-    render(<RoleForm onSubmit={jest.fn()} />);
+    render(<RoleForm onSubmit={jest.fn()} busy={false} />);
 
     await screen.findByRole('checkbox', { name: '受注の管理' });
     const group = screen.getByRole('group', { name: '権限' });
@@ -79,7 +79,7 @@ describe('ロールフォーム', () => {
   });
 
   it('権限の項目は共有の Checkbox で描く', async () => {
-    render(<RoleForm onSubmit={jest.fn()} />);
+    render(<RoleForm onSubmit={jest.fn()} busy={false} />);
 
     await screen.findByRole('checkbox', { name: '受注の管理' });
     const boxes = within(screen.getByRole('group', { name: '権限' })).getAllByRole('checkbox');
@@ -93,6 +93,7 @@ describe('ロールフォーム', () => {
       <RoleForm
         initial={{ name: '受付担当', permissions: ['ORDER_MANAGE'], system: false }}
         onSubmit={onSubmit}
+        busy={false}
       />
     );
     expect(await screen.findByRole('checkbox', { name: '受注の管理' })).toBeChecked();
@@ -115,6 +116,7 @@ describe('ロールフォーム', () => {
       <RoleForm
         initial={{ name: '統括', permissions: ['ORDER_MANAGE'], system: true }}
         onSubmit={jest.fn()}
+        busy={false}
       />
     );
     await screen.findByRole('checkbox', { name: '受注の管理' });
@@ -124,7 +126,7 @@ describe('ロールフォーム', () => {
 
   it('権限が 1 つも無ければ組の傍に文言を出し、先頭の権限へ焦点を移して送信しない', async () => {
     const onSubmit = jest.fn();
-    render(<RoleForm onSubmit={onSubmit} />);
+    render(<RoleForm onSubmit={onSubmit} busy={false} />);
     await screen.findByRole('checkbox', { name: '受注の管理' });
 
     fireEvent.change(screen.getByLabelText('ロール名'), { target: { value: '新ロール' } });
@@ -140,7 +142,7 @@ describe('ロールフォーム', () => {
 
   it('ロール名が 100 文字を超えたら欄の傍に文言を出して送信しない', async () => {
     const onSubmit = jest.fn();
-    render(<RoleForm onSubmit={onSubmit} />);
+    render(<RoleForm onSubmit={onSubmit} busy={false} />);
     await screen.findByRole('checkbox', { name: '受注の管理' });
 
     fireEvent.change(screen.getByLabelText('ロール名'), { target: { value: 'あ'.repeat(101) } });
@@ -155,7 +157,7 @@ describe('ロールフォーム', () => {
 
   it('ロール名が空なら欄の傍に文言を出して送信しない', async () => {
     const onSubmit = jest.fn();
-    render(<RoleForm onSubmit={onSubmit} />);
+    render(<RoleForm onSubmit={onSubmit} busy={false} />);
     await screen.findByRole('checkbox', { name: '受注の管理' });
 
     fireEvent.click(screen.getByRole('checkbox', { name: '受注の管理' }));
@@ -167,7 +169,7 @@ describe('ロールフォーム', () => {
 
   it('権限目録の取得に失敗したら再試行で回復できる', async () => {
     mockedRoleApi.permissions.mockRejectedValueOnce({ response: { status: 500 } });
-    render(<RoleForm onSubmit={jest.fn()} />);
+    render(<RoleForm onSubmit={jest.fn()} busy={false} />);
 
     const region = await screen.findByRole('alert');
     expect(within(region).getByText('権限目録の取得に失敗しました')).toBeInTheDocument();
@@ -178,7 +180,7 @@ describe('ロールフォーム', () => {
   });
 
   it('キャンセルは一覧へのリンク', async () => {
-    render(<RoleForm onSubmit={jest.fn()} />);
+    render(<RoleForm onSubmit={jest.fn()} busy={false} />);
     await screen.findByRole('checkbox', { name: '受注の管理' });
 
     expect(screen.getByRole('link', { name: 'キャンセル' })).toHaveAttribute(
@@ -187,17 +189,16 @@ describe('ロールフォーム', () => {
     );
   });
 
-  it('送信中は保存ボタンを無効にして二重送信を防ぐ', async () => {
+  it('書き込み中は保存ボタンを無効にして二重送信を防ぐ', async () => {
     render(
       <RoleForm
         initial={{ name: '受付担当', permissions: ['ORDER_MANAGE'], system: false }}
-        onSubmit={() => new Promise(() => {})}
+        onSubmit={jest.fn()}
+        busy
       />
     );
     await screen.findByRole('checkbox', { name: '受注の管理' });
 
-    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
-
-    expect(await screen.findByRole('button', { name: '保存中...' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: '保存中...' })).toBeDisabled();
   });
 });

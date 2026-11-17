@@ -9,8 +9,7 @@ import {
   useStoreContext,
 } from '@/entities/user';
 import { roleSetLabel, storeSetLabel } from '@/features/staff-management';
-import { getApiErrorMessage, useDeleteAction, useListPage } from '@/shared/lib';
-import { notify } from '@/shared/notify';
+import { useDeleteAction, useListPage, useWrite } from '@/shared/lib';
 import { ListPage } from '@/widgets/list-page';
 import {
   Badge,
@@ -53,15 +52,13 @@ export default function ServiceIdentitiesPage() {
   });
 
   // 再開は元に戻す操作なので確認を挟まない
-  const resume = async (identity: ServiceIdentitySummaryResponse) => {
-    try {
-      await serviceIdentityApi.resume(identity.id ?? 0);
-      notify.success('サービスIDを再開しました');
-      void list.reload();
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, 'サービスIDの再開に失敗しました'));
-    }
-  };
+  const { busy: resuming, write } = useWrite();
+  const resume = (identity: ServiceIdentitySummaryResponse) =>
+    void write(() => serviceIdentityApi.resume(identity.id ?? 0), {
+      success: 'サービスIDを再開しました',
+      failure: 'サービスIDの再開に失敗しました',
+      onSuccess: () => list.reload(),
+    });
 
   return (
     <>
@@ -176,7 +173,8 @@ export default function ServiceIdentitiesPage() {
                       variant="ghost"
                       size="sm"
                       className="text-primary-strong"
-                      onClick={() => void resume(identity)}
+                      disabled={resuming}
+                      onClick={() => resume(identity)}
                     >
                       再開
                     </Button>

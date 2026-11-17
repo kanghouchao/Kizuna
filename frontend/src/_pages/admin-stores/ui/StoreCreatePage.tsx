@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { startTransition, useState } from 'react';
 import { Loader2Icon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import {
@@ -10,14 +10,13 @@ import {
   adminStoreApi,
 } from '@/entities/store';
 import { useStoreContext } from '@/entities/user';
-import { getApiErrorMessage } from '@/shared/lib';
+import { useWrite } from '@/shared/lib';
 import { Button, Card, CardContent, Input, Label } from '@/shared/ui';
-import { notify } from '@/shared/notify';
 
 export default function CreateStorePage() {
   const router = useRouter();
   const { reload: reloadStores } = useStoreContext();
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { busy, write } = useWrite();
   const [formData, setFormData] = useState<CreateStoreRequest>({
     name: '',
     short_name: '',
@@ -55,38 +54,40 @@ export default function CreateStorePage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!validateForm()) {
       return;
     }
 
-    setIsSubmitting(true);
-
-    try {
-      await adminStoreApi.create({ ...formData, short_name: formData.short_name.trim() });
-      reloadStores();
-      notify.success('店舗を作成しました。店舗一覧に戻ります');
-      router.push('/admin/stores');
-    } catch (error: unknown) {
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'response' in error &&
-        typeof error.response === 'object' &&
-        error.response !== null &&
-        'data' in error.response &&
-        typeof error.response.data === 'object' &&
-        error.response.data !== null &&
-        'errors' in error.response.data
-      ) {
-        setErrors(error.response.data.errors as Partial<CreateStoreRequest>);
+    void write(
+      () => adminStoreApi.create({ ...formData, short_name: formData.short_name.trim() }),
+      {
+        success: '店舗を作成しました。店舗一覧に戻ります',
+        failure: '店舗作成に失敗しました。入力内容をご確認ください',
+        onSuccess: () => {
+          reloadStores();
+          router.push('/admin/stores');
+        },
+        onFailure: error => {
+          if (
+            typeof error === 'object' &&
+            error !== null &&
+            'response' in error &&
+            typeof error.response === 'object' &&
+            error.response !== null &&
+            'data' in error.response &&
+            typeof error.response.data === 'object' &&
+            error.response.data !== null &&
+            'errors' in error.response.data
+          ) {
+            const fieldErrors = error.response.data.errors as Partial<CreateStoreRequest>;
+            startTransition(() => setErrors(fieldErrors));
+          }
+        },
       }
-      notify.error(getApiErrorMessage(error, '店舗作成に失敗しました。入力内容をご確認ください'));
-    } finally {
-      setIsSubmitting(false);
-    }
+    );
   };
 
   const handleInputChange = (field: keyof CreateStoreRequest, value: string) => {
@@ -171,8 +172,8 @@ export default function CreateStorePage() {
               <Button type="button" variant="outline" onClick={() => router.push('/admin/stores')}>
                 キャンセル
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? (
+              <Button type="submit" disabled={busy}>
+                {busy ? (
                   <>
                     <Loader2Icon className="animate-spin" />
                     作成中...

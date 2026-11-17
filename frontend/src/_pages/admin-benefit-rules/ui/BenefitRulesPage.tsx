@@ -8,7 +8,13 @@ import {
   benefitRuleTypeLabel,
 } from '@/entities/benefit-rule';
 import { AuthorizedStore, authApi } from '@/entities/user';
-import { getApiErrorMessage, isConflict, useListPage, useManagedList } from '@/shared/lib';
+import {
+  getApiErrorMessage,
+  isConflict,
+  useListPage,
+  useManagedList,
+  useWrite,
+} from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { ListPage } from '@/widgets/list-page';
 import {
@@ -68,22 +74,24 @@ export default function BenefitRulesPage() {
   const [deactivatingOpen, setDeactivatingOpen] = useState(false);
   const [deactivating, setDeactivating] = useState<BenefitRuleSummaryResponse | null>(null);
 
-  const deactivate = async (rule: BenefitRuleSummaryResponse) => {
+  const { busy, write } = useWrite();
+
+  const deactivate = (rule: BenefitRuleSummaryResponse) => {
     setDeactivatingOpen(false);
-    try {
-      await benefitRuleApi.deactivate(rule.id ?? 0, rule.version ?? 0);
-      notify.success('特典規則を停用しました');
-      void list.reload();
-    } catch (error) {
-      if (isConflict(error)) {
-        // 承認の画面を開いている間に別の管理者が内容を書き換えた。見ていない規則を消さずに
-        // 一覧を取り直し、最新の内容から選び直させる
-        notify.warning('他の管理者が更新しました。最新の内容を確認してください');
-      } else {
-        notify.error(getApiErrorMessage(error, '特典規則の停用に失敗しました'));
-      }
-      void list.reload();
-    }
+    void write(() => benefitRuleApi.deactivate(rule.id ?? 0, rule.version ?? 0), {
+      success: '特典規則を停用しました',
+      failure: error => {
+        if (isConflict(error)) {
+          notify.warning('他の管理者が更新しました。最新の内容を確認してください');
+        } else {
+          notify.error(getApiErrorMessage(error, '特典規則の停用に失敗しました'));
+        }
+      },
+      onSuccess: () => list.reload(),
+      // 承認の画面を開いている間に別の管理者が内容を書き換えた場合も含め、見ていない規則を
+      // 消さずに一覧を取り直し、最新の内容から選び直させる
+      onFailure: () => list.reload(),
+    });
   };
 
   return (
@@ -155,6 +163,7 @@ export default function BenefitRulesPage() {
                         variant="ghost"
                         size="sm"
                         className="text-destructive-strong"
+                        disabled={busy}
                         onClick={() => {
                           setDeactivating(rule);
                           setDeactivatingOpen(true);
@@ -188,7 +197,7 @@ export default function BenefitRulesPage() {
         title="特典規則を停用しますか？"
         description={`${deactivating?.name ?? ''} は以後発火しなくなります。規則は削除されず一覧に残りますが、再開の口はありません（同じ内容で作り直してください）。`}
         confirmLabel="停用する"
-        onConfirm={() => void (deactivating && deactivate(deactivating))}
+        onConfirm={() => deactivating && deactivate(deactivating)}
         onClose={() => setDeactivatingOpen(false)}
       />
     </>

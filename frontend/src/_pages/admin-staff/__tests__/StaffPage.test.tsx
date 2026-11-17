@@ -525,6 +525,32 @@ describe('パスワード再設定', () => {
     buttons.forEach(button => expect(button).toBeEnabled());
   });
 
+  // 仮パスワードは一度きりの表示。他の書き込みの応答待ちに引きずられて遅れてはならない
+  it('再開の応答待ちの間でも、再設定の応答が返った時点で仮パスワードを表示すること', async () => {
+    mockedStaffApi.list.mockResolvedValue(
+      paginated([
+        staff({ id: 1, display_name: '山田太郎', enabled: true }),
+        staff({ id: 2, display_name: '佐藤次郎', enabled: false }),
+      ])
+    );
+    let finishResume: () => void = () => {};
+    mockedStaffApi.resume.mockImplementationOnce(
+      () => new Promise<void>(resolve => (finishResume = resolve))
+    );
+
+    render(<StaffPage />);
+    fireEvent.click(await screen.findByRole('button', { name: '再開' }));
+    await waitFor(() => expect(mockedStaffApi.resume).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'パスワード再設定' })[0]);
+    fireEvent.click(await screen.findByRole('button', { name: '再設定する' }));
+
+    expect(await screen.findByDisplayValue('test-temporary-password')).toBeInTheDocument();
+
+    await act(async () => finishResume());
+    await waitFor(() => expect(mockedStaffApi.list).toHaveBeenCalledTimes(2));
+  });
+
   // 対象外（管理者・自分自身・委譲外）の判定はサーバだけが持つので、そのまま出す
   it('再設定の拒否はサーバの文言をそのまま通知すること', async () => {
     mockedStaffApi.resetPassword.mockRejectedValue({

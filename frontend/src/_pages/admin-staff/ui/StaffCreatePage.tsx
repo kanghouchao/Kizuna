@@ -3,8 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { staffApi } from '@/entities/user';
 import { GrantForm, toGrantRequest, type GrantFormValues } from '@/features/staff-management';
-import { EMAIL_PATTERN, EMAIL_PATTERN_MESSAGE, getApiErrorMessage } from '@/shared/lib';
-import { notify } from '@/shared/notify';
+import { EMAIL_PATTERN, EMAIL_PATTERN_MESSAGE, useWrite } from '@/shared/lib';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage, Input } from '@/shared/ui';
 import { PageHeader } from '@/widgets/page-header';
 import { LIST_HREF, STAFF_GRANT_FORM } from './staffForm';
@@ -17,20 +16,23 @@ interface StaffCreateValues extends GrantFormValues {
 export default function StaffCreatePage() {
   const router = useRouter();
 
+  const { busy, write } = useWrite();
+
   const submit = async (values: StaffCreateValues) => {
-    try {
-      await staffApi.create({
-        email: values.email,
-        password: values.password,
-        display_name: values.display_name,
-        ...toGrantRequest(values),
-      });
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, '従業員の追加に失敗しました'));
-      return;
-    }
-    notify.success('従業員を追加しました');
-    router.push(LIST_HREF);
+    await write(
+      () =>
+        staffApi.create({
+          email: values.email,
+          password: values.password,
+          display_name: values.display_name,
+          ...toGrantRequest(values),
+        }),
+      {
+        success: '従業員を追加しました',
+        failure: '従業員の追加に失敗しました',
+        onSuccess: () => router.push(LIST_HREF),
+      }
+    );
   };
 
   return (
@@ -98,6 +100,7 @@ export default function StaffCreatePage() {
           ),
         }}
         unnamedSubject="新しい従業員"
+        locked={busy}
         onSubmit={submit}
       />
     </div>

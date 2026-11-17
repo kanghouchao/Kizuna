@@ -13,7 +13,7 @@ import {
   benefitRuleRepeatPolicyOptionsFor,
 } from '@/entities/benefit-rule';
 import { AuthorizedStore } from '@/entities/user';
-import { getApiErrorMessage, integerRule, isConflict, useResource } from '@/shared/lib';
+import { getApiErrorMessage, integerRule, isConflict, useResource, useWrite } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import {
   Button,
@@ -111,13 +111,8 @@ export function BenefitRuleFormModal({
   } = useResource(editingId === null ? null : () => benefitRuleApi.get(editingId), [editingId]);
 
   const form = useForm<BenefitRuleFormValues>({ defaultValues: EMPTY_FORM });
-  const {
-    control,
-    handleSubmit,
-    reset,
-    setValue,
-    formState: { isSubmitting },
-  } = form;
+  const { control, handleSubmit, reset, setValue } = form;
+  const { busy, write } = useWrite();
 
   const type = useWatch({ control, name: 'type' });
   const storeScopeType = useWatch({ control, name: 'store_scope_type' });
@@ -177,7 +172,7 @@ export function BenefitRuleFormModal({
   const isReferral = type === 'REFERRAL';
   const showForm = detailFailure === null && !editingLoading;
 
-  const submit = async (values: BenefitRuleFormValues) => {
+  const submit = (values: BenefitRuleFormValues) => {
     const payload: Omit<BenefitRuleCreateRequest, 'type'> = {
       name: values.name,
       store_scope_type: values.store_scope_type,
@@ -190,28 +185,35 @@ export function BenefitRuleFormModal({
       referrer_points: isReferral ? optionalNumber(values.referrer_points) : null,
       referred_points: isReferral ? optionalNumber(values.referred_points) : null,
     };
-    try {
-      if (editingId !== null) {
-        if (editingRule?.version === undefined) return;
-        await benefitRuleApi.update(editingId, { ...payload, version: editingRule.version });
-        notify.success('特典規則を更新しました');
-      } else {
-        await benefitRuleApi.create({ ...payload, type: values.type });
-        notify.success('特典規則を作成しました');
-      }
-      onSaved();
-      onClose();
-    } catch (error) {
-      if (isConflict(error)) {
+    const version = editingRule?.version;
+    if (editingId !== null && version === undefined) return;
+    return write(
+      (): Promise<BenefitRuleResponse> =>
+        editingId !== null && version !== undefined
+          ? benefitRuleApi.update(editingId, { ...payload, version })
+          : benefitRuleApi.create({ ...payload, type: values.type }),
+      {
+        success: editingId !== null ? '特典規則を更新しました' : '特典規則を作成しました',
+        failure: error => {
+          if (isConflict(error)) {
+            notify.warning('他の管理者が更新しました。最新の内容を確認してください');
+          } else {
+            notify.error(getApiErrorMessage(error, '特典規則の保存に失敗しました'));
+          }
+        },
+        onSuccess: () => {
+          onSaved();
+          onClose();
+        },
         // 楽観ロック競合。詳細を取り直さないと古い version を抱えたままになり、再試行が同じ
-        // 409 を繰り返す。一覧側も内容が変わりうるので再取得する。
-        notify.warning('他の管理者が更新しました。最新の内容を確認してください');
-        onSaved();
-        void reloadEditingRule();
-      } else {
-        notify.error(getApiErrorMessage(error, '特典規則の保存に失敗しました'));
+        // 409 を繰り返す。取り直しが終わるまで送信中のままにする。一覧側も内容が変わりうるので再取得する。
+        onFailure: error => {
+          if (!isConflict(error)) return;
+          onSaved();
+          return reloadEditingRule();
+        },
       }
-    }
+    );
   };
 
   return (
@@ -221,9 +223,9 @@ export function BenefitRuleFormModal({
         if (!next) handleClosed();
       }}
       onOpenChange={next => {
-        // 送信中は閉じさせない。閉じると unmount で isSubmitting が消え、開き直した複製から
+        // 送信中は閉じさせない。閉じると unmount で busy が消え、開き直した複製から
         // 二重送信できてしまう
-        if (!next && !isSubmitting) onClose();
+        if (!next && !busy) onClose();
       }}
     >
       <Form {...form}>
@@ -238,11 +240,11 @@ export function BenefitRuleFormModal({
               </Button>
             ) : showForm ? (
               <>
-                <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
+                <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
                   キャンセル
                 </Button>
-                <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? '保存中...' : '保存する'}
+                <Button type="submit" disabled={busy}>
+                  {busy ? '保存中...' : '保存する'}
                 </Button>
               </>
             ) : undefined

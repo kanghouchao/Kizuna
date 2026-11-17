@@ -28,20 +28,18 @@ export interface RoleFormValues {
 interface RoleFormProps {
   /** 編集対象の現在値。省略は新規作成。到着後に mount する前提で、初期値としてだけ使う。 */
   initial?: RoleFormValues & { system: boolean };
-  /** 保存処理。失敗の通知は呼び出し側が行い、送信中の状態はこの関数の完了まで保たれる。 */
-  onSubmit: (values: RoleFormValues) => Promise<void>;
+  /** 保存処理。失敗の通知は呼び出し側が行う。 */
+  onSubmit: (values: RoleFormValues) => unknown;
+  /** 書き込み中は true。保存を受け付けない。 */
+  busy: boolean;
 }
 
 /** ロールの作成・編集に共通のフォーム（名称 + 「木 → 区分見出し」の下に並べた権限選択）。 */
-export function RoleForm({ initial, onSubmit }: RoleFormProps) {
+export function RoleForm({ initial, onSubmit, busy }: RoleFormProps) {
   const form = useForm<RoleFormValues>({
     defaultValues: { name: initial?.name ?? '', permissions: initial?.permissions ?? [] },
   });
-  const {
-    control,
-    handleSubmit,
-    formState: { isSubmitting },
-  } = form;
+  const { control, handleSubmit } = form;
   const permissionsLabelId = useId();
   const {
     items: trees,
@@ -167,8 +165,8 @@ export function RoleForm({ initial, onSubmit }: RoleFormProps) {
           <Button variant="outline" render={<Link href="/admin/roles" />}>
             キャンセル
           </Button>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? '保存中...' : '保存する'}
+          <Button type="submit" disabled={busy}>
+            {busy ? '保存中...' : '保存する'}
           </Button>
         </div>
       </form>

@@ -1,13 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { notify } from '@/shared/notify';
-import {
-  SystemConfigResponse,
-  SystemConfigUpdateRequest,
-  systemConfigService,
-} from '@/entities/system-config';
-import { getApiErrorMessage, useResource } from '@/shared/lib';
+import { SystemConfigResponse, systemConfigService } from '@/entities/system-config';
+import { useResource, useWrite } from '@/shared/lib';
 import { Badge, Button, Card, Input, RegionError, Textarea } from '@/shared/ui';
 
 type ConfigGroup = {
@@ -24,21 +19,7 @@ export default function SystemSettingsPage() {
   } = useResource(() => systemConfigService.getAllConfigs());
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  const saveConfig = async (configKey: string | undefined, configValue: string) => {
-    const request: SystemConfigUpdateRequest = {
-      config_value: configValue,
-    };
-    await systemConfigService.updateConfig(configKey, request);
-    // 更新できた 1 件だけを差し替える。一覧ごと取り直すと編集中の欄が読み込み表示で消える
-    setConfigs(
-      prev =>
-        prev?.map(c => (c.config_key === configKey ? { ...c, config_value: configValue } : c)) ??
-        null
-    );
-    notify.success('設定を更新しました');
-  };
+  const { busy: saving, write } = useWrite();
 
   const handleEdit = (config: SystemConfigResponse) => {
     setEditingKey(config.config_key ?? null);
@@ -51,18 +32,24 @@ export default function SystemSettingsPage() {
     setEditValue('');
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!editingKey) return;
-    setSaving(true);
-    try {
-      await saveConfig(editingKey, editValue);
-      setEditingKey(null);
-    } catch (error) {
-      console.error('設定の更新に失敗しました', error);
-      notify.error(getApiErrorMessage(error, '設定の更新に失敗しました'));
-    } finally {
-      setSaving(false);
-    }
+    const configKey = editingKey;
+    const configValue = editValue;
+    void write(() => systemConfigService.updateConfig(configKey, { config_value: configValue }), {
+      success: '設定を更新しました',
+      failure: '設定の更新に失敗しました',
+      onSuccess: () => {
+        // 更新できた 1 件だけを差し替える。一覧ごと取り直すと編集中の欄が読み込み表示で消える
+        setConfigs(
+          prev =>
+            prev?.map(c =>
+              c.config_key === configKey ? { ...c, config_value: configValue } : c
+            ) ?? null
+        );
+        setEditingKey(null);
+      },
+    });
   };
 
   // カテゴリごとにグループ化
