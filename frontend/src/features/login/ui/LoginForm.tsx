@@ -9,6 +9,7 @@ import {
   EMAIL_PATTERN_MESSAGE,
   getApiErrorMessage,
   loginReturnTarget,
+  useWrite,
 } from '@/shared/lib';
 import { completeLogin } from '../model/completeLogin';
 
@@ -18,23 +19,27 @@ export default function LoginForm() {
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<LoginRequest>({ defaultValues: { email: '', password: '' } });
 
+  const { busy, write } = useWrite();
+
+  // セッションの開始までを送信に含め、反映は遷移だけにする。着地は別の root layout で頁の読み込みになり、
+  // 遷移を反映の中で始めれば、頁が替わるまで busy が残る
   const onSubmit = async (data: LoginRequest) => {
-    try {
-      const completion = await completeLogin(await authApi.login(data), loginReturnTarget());
-      if (completion.status === 'unsupported') {
-        notify.error('この利用者種別のポータルは準備中です');
-        return;
-      }
-      router.push(completion.path);
-    } catch (error) {
-      console.error('Login failed:', error);
-      notify.error(
-        getApiErrorMessage(error, 'ログインに失敗しました。しばらくしてから再度お試しください')
-      );
-    }
+    await write(async () => completeLogin(await authApi.login(data), loginReturnTarget()), {
+      failure: error => {
+        console.error('Login failed:', error);
+        notify.error(
+          getApiErrorMessage(error, 'ログインに失敗しました。しばらくしてから再度お試しください')
+        );
+      },
+      onSuccess: completion => {
+        if (completion.status === 'unsupported')
+          notify.error('この利用者種別のポータルは準備中です');
+        else router.push(completion.path);
+      },
+    });
   };
 
   return (
@@ -106,8 +111,8 @@ export default function LoginForm() {
 
       {/* ログインボタン */}
       <div className="pt-2">
-        <button type="submit" disabled={isSubmitting} className="auth-btn">
-          {isSubmitting ? (
+        <button type="submit" disabled={busy} className="auth-btn">
+          {busy ? (
             <span className="flex items-center justify-center gap-2.5">
               <span className="auth-spinner" />
               ログイン中...

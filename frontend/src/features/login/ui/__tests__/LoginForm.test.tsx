@@ -1,4 +1,5 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { startTransition } from 'react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import Cookies from 'js-cookie';
 import { notify } from '@/shared/notify';
 import LoginForm from '../LoginForm';
@@ -78,6 +79,28 @@ describe('LoginForm の利用者種別による分岐', () => {
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin'));
     expect(Cookies.get('session-kind')).toBe('admin');
     expect(getSessionUserId()).toBe(7);
+  });
+
+  it('応答が返ってから遷移が終わるまで、送信ボタンを押せないままにする', async () => {
+    mockedAuthApi.me.mockResolvedValue(meResponse({ user_type: 'STAFF' }));
+    let arrive: () => void = () => {};
+    const navigating = new Promise<void>(resolve => (arrive = resolve));
+    // router.push と同じく何も返さず、自分の transition の中で画面を進める
+    mockPush.mockImplementationOnce(() => {
+      startTransition(async () => {
+        await navigating;
+      });
+    });
+
+    await submitLoginForm();
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin'));
+    // 送信の関数はここで返っている。遷移の間に押せると、同じログインをもう一度送れる
+    await act(async () => {});
+    expect(screen.getByRole('button', { name: 'ログイン中...' })).toBeDisabled();
+
+    await act(async () => arrive());
+    expect(await screen.findByRole('button', { name: 'ログイン' })).toBeEnabled();
   });
 
   it('user_type が想定外ならセッションを破棄し遷移しない', async () => {

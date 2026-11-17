@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { notify } from '@/shared/notify';
 import { landSession, storeSessionToken } from '@/shared/api';
 import { LineAuthorizationRequest, authApi, lineApi } from '@/entities/user';
 import { completeLogin } from '@/features/login';
@@ -12,6 +11,7 @@ import {
   getApiErrorMessage,
   lineCallbackRedirectUri,
   type LineLinkReturn,
+  useWrite,
   withNext,
 } from '@/shared/lib';
 import { AuthLayout } from '@/shared/ui';
@@ -136,19 +136,24 @@ export default function LineCallbackPage() {
     void run();
   }, [router]);
 
+  const { busy, write } = useWrite();
+
+  const registerMember = async (values: LineRegisterValues) => {
+    const issued = await lineApi.register({
+      registration_ticket: registrationTicket,
+      display_name: values.display_name,
+      email: values.email,
+    });
+    storeSessionToken(issued);
+    return landSession('member', issued.refresh_expires_at, next);
+  };
+
   const submitRegistration = async (values: LineRegisterValues) => {
-    try {
-      const issued = await lineApi.register({
-        registration_ticket: registrationTicket,
-        display_name: values.display_name,
-        email: values.email,
-      });
-      storeSessionToken(issued);
+    await write(() => registerMember(values), {
+      failure: '会員登録に失敗しました',
       // 消費済みのコールバック URL と使用済みフォームを履歴に残さない
-      router.replace(landSession('member', issued.refresh_expires_at, next));
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, '会員登録に失敗しました'));
-    }
+      onSuccess: landing => router.replace(landing),
+    });
   };
 
   if (stage === 'error') {
@@ -171,7 +176,11 @@ export default function LineCallbackPage() {
   if (stage === 'register') {
     return (
       <AuthLayout title="会員登録" subtitle="LINEアカウントで登録します。内容をご確認ください">
-        <LineRegisterStep defaultDisplayName={lineDisplayName} onSubmit={submitRegistration} />
+        <LineRegisterStep
+          defaultDisplayName={lineDisplayName}
+          busy={busy}
+          onSubmit={submitRegistration}
+        />
       </AuthLayout>
     );
   }

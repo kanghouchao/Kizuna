@@ -6,6 +6,7 @@ import { guestOrderApplicationApi } from '@/entities/order';
 import {
   getApiErrorMessage,
   useResource,
+  useWrite,
   isConflict,
   integerRule,
   EMAIL_PATTERN,
@@ -39,12 +40,13 @@ export function useGuestReservationForm(storeId: string) {
   const consent = useResource(guestOrderApplicationApi.consent);
   const [acceptedId, setAcceptedId] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
+  const { busy, write } = useWrite();
   const {
     register,
     setValue,
     getValues,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<GuestReservationFormValues>({
     defaultValues: {
       business_date: '',
@@ -100,43 +102,49 @@ export function useGuestReservationForm(storeId: string) {
       setFailure('同意文面を取得してから送信してください');
       return;
     }
-    try {
-      const accepted = await guestOrderApplicationApi.request(storeId, {
-        contact_consent: {
-          version: consent.data.version,
-          business_allowed: values.business_allowed,
-          marketing_allowed: values.marketing_allowed,
+    const { version } = consent.data;
+    await write(
+      () =>
+        guestOrderApplicationApi.request(storeId, {
+          contact_consent: {
+            version,
+            business_allowed: values.business_allowed,
+            marketing_allowed: values.marketing_allowed,
+          },
+          business_date: values.business_date,
+          arrival_scheduled_start_time: values.arrival_scheduled_start_time || undefined,
+          pax: Number(values.pax),
+          contact_snapshot: {
+            name: values.contact_name,
+            phone_number: values.contact_phone_number,
+            email: values.contact_email,
+            line_id: values.contact_line_id,
+          },
+          remarks: values.remarks || undefined,
+        }),
+      {
+        // 失敗はトーストではなく、フォームの中の文言で伝える
+        failure: () => {},
+        onSuccess: accepted => setAcceptedId(accepted.id),
+        onFailure: error => {
+          // 流量制限・希望日の範囲外など、サーバは対処の分かる文言を返す。汎用文言に潰さない
+          setFailure(
+            getApiErrorMessage(error, 'ご予約の送信に失敗しました。時間をおいてお試しください')
+          );
+          if (!isConflict(error)) return;
+          setValue('business_allowed', false);
+          setValue('marketing_allowed', false);
+          return consent.reload();
         },
-        business_date: values.business_date,
-        arrival_scheduled_start_time: values.arrival_scheduled_start_time || undefined,
-        pax: Number(values.pax),
-        contact_snapshot: {
-          name: values.contact_name,
-          phone_number: values.contact_phone_number,
-          email: values.contact_email,
-          line_id: values.contact_line_id,
-        },
-        remarks: values.remarks || undefined,
-      });
-      setAcceptedId(accepted.id);
-    } catch (error) {
-      if (isConflict(error)) {
-        setValue('business_allowed', false);
-        setValue('marketing_allowed', false);
-        await consent.reload();
       }
-      // 流量制限・希望日の範囲外など、サーバは対処の分かる文言を返す。汎用文言に潰さない
-      setFailure(
-        getApiErrorMessage(error, 'ご予約の送信に失敗しました。時間をおいてお試しください')
-      );
-    }
+    );
   };
 
   return {
     /** 入力欄へ渡す登録。検証の規則はここが持ち、画面は欄の名前だけを渡す。 */
     field,
     errors,
-    isSubmitting,
+    busy,
     onSubmit: handleSubmit(submit),
     consent,
     failure,

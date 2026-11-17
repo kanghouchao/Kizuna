@@ -1,9 +1,8 @@
 'use client';
 
 import { useForm } from 'react-hook-form';
-import { notify } from '@/shared/notify';
 import { CastAcceptanceResponse, castInvitationAcceptanceApi } from '@/entities/cast';
-import { EMAIL_PATTERN, EMAIL_PATTERN_MESSAGE, getApiErrorMessage } from '@/shared/lib';
+import { EMAIL_PATTERN, EMAIL_PATTERN_MESSAGE, useWrite } from '@/shared/lib';
 
 interface RegisterFormProps {
   token: string;
@@ -24,18 +23,18 @@ export function RegisterForm({ token, initialDisplayName, onSuccess, onBack }: R
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<RegisterFormValues>({
     defaultValues: { email: '', password: '', display_name: initialDisplayName },
   });
 
+  const { busy, write } = useWrite();
+
   const submit = async (values: RegisterFormValues) => {
-    try {
-      const response = await castInvitationAcceptanceApi.acceptAsNewUser(token, values);
-      onSuccess(response);
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, '登録に失敗しました'));
-    }
+    await write(() => castInvitationAcceptanceApi.acceptAsNewUser(token, values), {
+      failure: '登録に失敗しました',
+      onSuccess,
+    });
   };
 
   return (
@@ -122,8 +121,8 @@ export function RegisterForm({ token, initialDisplayName, onSuccess, onBack }: R
       </div>
 
       <div className="pt-2 space-y-3">
-        <button type="submit" disabled={isSubmitting} className="auth-btn">
-          {isSubmitting ? (
+        <button type="submit" disabled={busy} className="auth-btn">
+          {busy ? (
             <span className="flex items-center justify-center gap-2.5">
               <span className="auth-spinner" />
               登録中...

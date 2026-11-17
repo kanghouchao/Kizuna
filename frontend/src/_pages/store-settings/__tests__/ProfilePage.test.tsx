@@ -145,6 +145,9 @@ describe('店舗の稼働状態', () => {
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith('店舗を稼働中にしました'));
     expect(mockedApi.activate).toHaveBeenCalledTimes(1);
     expect(mockReloadStores).toHaveBeenCalledTimes(1);
+    // 店舗コンテキストに稼働中が届くまでの間も、成立した操作を送り直させない
+    await act(async () => {});
+    expect(within(region).getByRole('button', { name: '稼働中にする' })).toBeDisabled();
   });
 
   it('確認を取り消せば送らない', async () => {

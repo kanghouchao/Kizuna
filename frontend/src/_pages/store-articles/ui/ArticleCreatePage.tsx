@@ -1,9 +1,7 @@
 'use client';
-import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArticleInput, articleApi } from '@/entities/content/article';
-import { notify } from '@/shared/notify';
-import { getApiErrorMessage, storePath } from '@/shared/lib';
+import { storePath, useWrite } from '@/shared/lib';
 import { Card, CardContent } from '@/shared/ui';
 import { PageHeader } from '@/widgets/page-header';
 import { ArticleAccess } from './ArticleAccess';
@@ -21,17 +19,13 @@ export function ArticleCreatePage() {
 function ArticleCreate() {
   const storeId = useCurrentStoreId();
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
+  const { busy, write } = useWrite();
   const submit = async (input: ArticleInput) => {
-    setBusy(true);
-    try {
-      const { id } = await articleApi.create(input);
-      notify.success('記事を作成しました');
-      router.push(storePath(storeId, `/articles/${id}/edit`));
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, '記事を作成できませんでした'));
-      setBusy(false);
-    }
+    await write(() => articleApi.create(input), {
+      success: '記事を作成しました',
+      failure: '記事を作成できませんでした',
+      onSuccess: ({ id }) => router.push(storePath(storeId, `/articles/${id}/edit`)),
+    });
   };
   return (
     <div className="space-y-6">

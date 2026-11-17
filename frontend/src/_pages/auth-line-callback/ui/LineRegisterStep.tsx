@@ -11,6 +11,7 @@ export interface LineRegisterValues {
 
 interface LineRegisterStepProps {
   defaultDisplayName: string;
+  busy: boolean;
   onSubmit: (values: LineRegisterValues) => Promise<void>;
 }
 
@@ -18,11 +19,15 @@ interface LineRegisterStepProps {
  * 未登録の LINE アカウントに対する会員登録の確認段階。
  * 同意チェックは画面側の関門で、サーバーへは送信しない。
  */
-export default function LineRegisterStep({ defaultDisplayName, onSubmit }: LineRegisterStepProps) {
+export default function LineRegisterStep({
+  defaultDisplayName,
+  busy,
+  onSubmit,
+}: LineRegisterStepProps) {
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<LineRegisterValues>({
     defaultValues: { display_name: defaultDisplayName, email: '', consent: false },
   });
@@ -121,8 +126,8 @@ export default function LineRegisterStep({ defaultDisplayName, onSubmit }: LineR
       </div>
 
       <div className="pt-2">
-        <button type="submit" disabled={isSubmitting} className="auth-btn">
-          {isSubmitting ? (
+        <button type="submit" disabled={busy} className="auth-btn">
+          {busy ? (
             <span className="flex items-center justify-center gap-2.5">
               <span className="auth-spinner" />
               登録中...

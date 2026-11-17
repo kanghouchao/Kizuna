@@ -47,7 +47,7 @@ const card = 'm-bg-card m-sticker rounded-[var(--m-radius)]';
 
 /** ゲスト予約申請フォームの画面（modern テンプレート）。検証と送信は useGuestReservationForm が持つ。 */
 export default function ReservationForm({ storeId }: { storeId: string }) {
-  const { field, errors, isSubmitting, onSubmit, consent, failure, acceptedId } =
+  const { field, errors, busy, onSubmit, consent, failure, acceptedId } =
     useGuestReservationForm(storeId);
 
   if (acceptedId !== null) {
@@ -245,11 +245,11 @@ export default function ReservationForm({ storeId }: { storeId: string }) {
         {/* 検証では塞がない。灰色のボタンは何が足りないかを言わない。押せば欄の傍が言う */}
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={busy}
           className="m-bg-pink m-sticker m-lift flex w-full items-center justify-center gap-2 rounded-full px-6 py-4 text-lg font-bold disabled:opacity-60"
         >
           <SendIcon className="size-5 shrink-0" aria-hidden />
-          {isSubmitting ? '送信中...' : 'この内容で予約を希望する'}
+          {busy ? '送信中...' : 'この内容で予約を希望する'}
         </button>
       </form>
     </div>
