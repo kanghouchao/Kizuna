@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { startTransition, useRef, useState } from 'react';
 import { notify } from '@/shared/notify';
 import { getApiErrorMessage, isConflict, isNotFound } from '../apiError';
 import { useWrite } from './useWrite';
@@ -44,7 +44,8 @@ export function useVersionedWrite(reloadTarget: () => void | Promise<void>) {
       failure: async error => {
         notify.error(getApiErrorMessage(error, failure));
         if (isConflict(error)) {
-          markConflict(true);
+          // busy が戻るのと同じ描画で競合を見せる。先に見せると、押しても送信中として捨てられる案内が出る
+          startTransition(() => markConflict(true));
           failed = 'conflict';
         } else if (isNotFound(error)) {
           failed = 'notFound';
