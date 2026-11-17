@@ -8,6 +8,7 @@ import {
   isForbidden,
   isNotFound,
   useResource,
+  useWrite,
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { Button, Dialog, DialogFrame, RegionError } from '@/shared/ui';
@@ -41,7 +42,7 @@ export function ServiceEditor({
   );
   const [conflict, setConflict] = useState(false);
   const [missing, setMissing] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const { busy, write } = useWrite();
   const active = useRef(true);
   useEffect(() => {
     active.current = true;
@@ -50,31 +51,31 @@ export function ServiceEditor({
     };
   }, []);
   const save = async (values: ServiceCreateRequest) => {
-    setSaving(true);
-    try {
-      if (id && resource.data) {
-        const { name, duration_minutes, charge_type, price, remuneration } = values;
-        const body = { name, duration_minutes, charge_type, price, remuneration };
-        await serviceApi.update(id, { ...body, expected_version: resource.data.version });
-      } else {
-        await serviceApi.create(values);
-      }
-      if (!active.current) return;
-      notify.success('サービスを保存しました');
-      onSaved();
-      onClose();
-    } catch (error) {
-      if (!active.current) return;
-      if (isConflict(error)) setConflict(true);
-      else if (isNotFound(error)) setMissing(true);
-      else if (isForbidden(error)) onForbidden();
-      else {
+    const current = resource.data;
+    const send = () => {
+      if (!id || !current) return serviceApi.create(values);
+      const { name, duration_minutes, charge_type, price, remuneration } = values;
+      const body = { name, duration_minutes, charge_type, price, remuneration };
+      return serviceApi.update(id, { ...body, expected_version: current.version });
+    };
+    await write(send, {
+      success: 'サービスを保存しました',
+      // 競合・消失・権限なしは画面の表示で伝えるので、案内はそれ以外の失敗にだけ出す
+      failure: error => {
+        if (isConflict(error) || isNotFound(error) || isForbidden(error)) return;
         notify.error(getApiErrorMessage(error, 'サービスの保存に失敗しました'));
-        if (id && isBadRequest(error)) await resource.reload();
-      }
-    } finally {
-      if (active.current) setSaving(false);
-    }
+      },
+      onSuccess: () => {
+        onSaved();
+        onClose();
+      },
+      onFailure: error => {
+        if (isConflict(error)) setConflict(true);
+        else if (isNotFound(error)) setMissing(true);
+        else if (isForbidden(error)) onForbidden();
+        else if (id && isBadRequest(error)) return resource.reload();
+      },
+    });
   };
   const unavailable = missing || resource.failure === 'notFound' || resource.data?.deleted;
   return (
@@ -84,7 +85,7 @@ export function ServiceEditor({
         if (!next) handleClosed();
       }}
       onOpenChange={open => {
-        if (!open && !saving) {
+        if (!open && !busy) {
           onClose();
           if (unavailable) onSaved();
         }
@@ -137,7 +138,7 @@ export function ServiceEditor({
               key={resource.data?.version ?? 'new'}
               initial={resource.data ?? undefined}
               onSave={save}
-              disabled={saving || conflict}
+              disabled={busy || conflict}
             />
           </>
         )}

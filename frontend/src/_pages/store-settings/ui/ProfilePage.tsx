@@ -4,7 +4,7 @@ import { useId, useState } from 'react';
 import { notify } from '@/shared/notify';
 import { StoreProfileUpdateRequest, storeProfileApi } from '@/entities/store-profile';
 import { useStoreContext } from '@/entities/user';
-import { getApiErrorMessage, useResource } from '@/shared/lib';
+import { useResource, useWrite } from '@/shared/lib';
 import { Badge, Button, ConfirmDialog, RegionError } from '@/shared/ui';
 import { StoreProfileForm } from './StoreProfileForm';
 
@@ -13,22 +13,21 @@ function StoreActivationSection() {
   const headingId = useId();
   const { currentStore, reload } = useStoreContext();
   const [confirming, setConfirming] = useState(false);
-  const [isActivating, setIsActivating] = useState(false);
+  const { busy, write } = useWrite();
+  // 店舗コンテキストの取り直しは完了を返さない。稼働中が届いてボタンが消えるまで、成立した操作を送り直させない
+  const [activated, setActivated] = useState(false);
   const status = currentStore?.status;
 
-  const activate = async () => {
-    setIsActivating(true);
-    try {
-      await storeProfileApi.activate();
+  const activate = () =>
+    write(() => storeProfileApi.activate(), {
+      success: '店舗を稼働中にしました',
+      failure: '稼働状態の変更に失敗しました',
       // 稼働状態は店舗コンテキストが持つ授権店舗一覧の値なので、そちらを取り直して全画面へ反映する
-      reload();
-      notify.success('店舗を稼働中にしました');
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, '稼働状態の変更に失敗しました'));
-    } finally {
-      setIsActivating(false);
-    }
-  };
+      onSuccess: () => {
+        setActivated(true);
+        reload();
+      },
+    });
 
   return (
     <section
@@ -50,7 +49,7 @@ function StoreActivationSection() {
           </Badge>
         )}
         {status === 'PREPARING' && (
-          <Button type="button" onClick={() => setConfirming(true)} disabled={isActivating}>
+          <Button type="button" onClick={() => setConfirming(true)} disabled={busy || activated}>
             稼働中にする
           </Button>
         )}
@@ -75,19 +74,14 @@ export default function StoreProfilePage() {
     failure,
     reload: loadConfig,
   } = useResource(() => storeProfileApi.get());
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { busy, write } = useWrite();
 
   const handleSubmit = async (data: StoreProfileUpdateRequest) => {
-    setIsSubmitting(true);
-    try {
-      const updated = await storeProfileApi.update(data);
-      setConfig(updated);
-      notify.success('設定を保存しました');
-    } catch {
-      notify.error('設定の保存に失敗しました');
-    } finally {
-      setIsSubmitting(false);
-    }
+    await write(() => storeProfileApi.update(data), {
+      success: '設定を保存しました',
+      failure: () => notify.error('設定の保存に失敗しました'),
+      onSuccess: setConfig,
+    });
   };
 
   if (isLoading) {
@@ -117,7 +111,7 @@ export default function StoreProfilePage() {
         <p className="text-sm text-muted-foreground mt-1">店舗サイトの外観をカスタマイズします。</p>
       </div>
       <StoreActivationSection />
-      <StoreProfileForm initialData={config} onSubmit={handleSubmit} isSubmitting={isSubmitting} />
+      <StoreProfileForm initialData={config} onSubmit={handleSubmit} busy={busy} />
     </div>
   );
 }

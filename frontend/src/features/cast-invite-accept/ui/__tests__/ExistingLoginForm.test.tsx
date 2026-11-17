@@ -125,7 +125,7 @@ describe('ExistingLoginForm', () => {
 
     await waitFor(() => expect(error).toHaveBeenCalledWith('この店舗には既に有効な在籍があります'));
     expect(screen.getByLabelText('メールアドレス')).toHaveValue('cast@kizuna.test');
-    expect(screen.getByRole('button', { name: 'ログインして受諾する' })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: 'ログインして受諾する' })).toBeEnabled();
     expect(onSuccess).not.toHaveBeenCalled();
     expectPreviousSessionIntact();
     error.mockRestore();

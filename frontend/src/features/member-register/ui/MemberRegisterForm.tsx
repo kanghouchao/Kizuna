@@ -9,9 +9,9 @@ import { authApi } from '@/entities/user';
 import {
   EMAIL_PATTERN,
   EMAIL_PATTERN_MESSAGE,
-  getApiErrorMessage,
   loginPath,
   loginReturnTarget,
+  useWrite,
 } from '@/shared/lib';
 
 /**
@@ -23,27 +23,38 @@ export function MemberRegisterForm() {
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<MemberRegisterRequest>({
     defaultValues: { email: '', password: '', display_name: '' },
   });
 
-  const submit = async (values: MemberRegisterRequest) => {
-    try {
-      await memberApi.register(values);
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, '登録に失敗しました'));
-      return;
-    }
+  const { busy, write } = useWrite();
+
+  // 登録と自動ログインを一つの送信にする。失敗として案内するのは登録の失敗だけで、
+  // 自動ログインの失敗は着地先なし（null）で返し、ログイン画面から再開させる
+  const registerAndLogin = async (values: MemberRegisterRequest) => {
+    await memberApi.register(values);
     try {
       const issued = await authApi.login({ email: values.email, password: values.password });
       storeSessionToken(issued);
-      router.push(landSession('member', issued.refresh_expires_at, loginReturnTarget()));
+      return landSession('member', issued.refresh_expires_at, loginReturnTarget());
     } catch {
-      // 登録自体は完了している。自動ログインだけが失敗した稀な場合はログイン画面から再開させる。
-      notify.success('登録が完了しました。ログインしてください');
-      router.push(loginPath({ next: loginReturnTarget() }));
+      return null;
     }
+  };
+
+  const submit = async (values: MemberRegisterRequest) => {
+    await write(() => registerAndLogin(values), {
+      failure: '登録に失敗しました',
+      onSuccess: landing => {
+        if (landing !== null) {
+          router.push(landing);
+          return;
+        }
+        notify.success('登録が完了しました。ログインしてください');
+        router.push(loginPath({ next: loginReturnTarget() }));
+      },
+    });
   };
 
   return (
@@ -150,8 +161,8 @@ export function MemberRegisterForm() {
       </div>
 
       <div className="pt-2">
-        <button type="submit" disabled={isSubmitting} className="auth-btn">
-          {isSubmitting ? (
+        <button type="submit" disabled={busy} className="auth-btn">
+          {busy ? (
             <span className="flex items-center justify-center gap-2.5">
               <span className="auth-spinner" />
               登録中...

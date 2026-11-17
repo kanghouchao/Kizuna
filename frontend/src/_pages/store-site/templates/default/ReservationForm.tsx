@@ -37,7 +37,7 @@ function Field({ id, label, type = 'text', min, error, registration }: FieldProp
 
 /** ゲスト予約申請フォームの画面。検証と送信は useGuestReservationForm が持つ。 */
 export default function ReservationForm({ storeId }: { storeId: string }) {
-  const { field, errors, isSubmitting, onSubmit, consent, failure, acceptedId } =
+  const { field, errors, busy, onSubmit, consent, failure, acceptedId } =
     useGuestReservationForm(storeId);
 
   if (acceptedId !== null) {
@@ -180,8 +180,8 @@ export default function ReservationForm({ storeId }: { storeId: string }) {
         </p>
       )}
       {/* 検証では塞がない。灰色のボタンは何が足りないかを言わないが、押せば欄の傍が言う */}
-      <button type="submit" disabled={isSubmitting} className="sfd-btn sfd-form-submit">
-        {isSubmitting ? '送信中...' : 'この内容で予約を希望する'}
+      <button type="submit" disabled={busy} className="sfd-btn sfd-form-submit">
+        {busy ? '送信中...' : 'この内容で予約を希望する'}
       </button>
     </form>
   );

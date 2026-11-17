@@ -9,6 +9,7 @@ import {
   isNotFound,
   isForbidden,
   useListPage,
+  useWrite,
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { ListPage } from '@/widgets/list-page';
@@ -49,7 +50,7 @@ function Services() {
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [targetOpen, setTargetOpen] = useState(false);
   const [target, setTarget] = useState<ServiceSummary | null>(null);
-  const [removing, setRemoving] = useState(false);
+  const { busy: removing, write } = useWrite();
   const [denied, setDenied] = useState(false);
   const active = useRef(true);
   useEffect(() => {
@@ -69,27 +70,22 @@ function Services() {
     },
     { deleted: false }
   );
-  const remove = async (item: ServiceSummary) => {
-    setRemoving(true);
-    try {
-      await serviceApi.remove(item.id, item.version);
-      if (!active.current) return;
-      notify.success('サービスを削除しました');
-      await list.reload();
-    } catch (error) {
-      if (!active.current) return;
-      if (isConflict(error)) {
-        notify.warning('設定が変更されています。最新の内容を確認してから削除してください');
-        await list.reload();
-      } else if (isForbidden(error)) setDenied(true);
-      else {
-        notify.error(getApiErrorMessage(error, 'サービスの削除に失敗しました'));
-        if (isBadRequest(error) || isNotFound(error)) await list.reload();
-      }
-    } finally {
-      if (active.current) setRemoving(false);
-    }
-  };
+  const remove = (item: ServiceSummary) =>
+    write(() => serviceApi.remove(item.id, item.version), {
+      success: 'サービスを削除しました',
+      failure: error => {
+        if (isConflict(error))
+          notify.warning('設定が変更されています。最新の内容を確認してから削除してください');
+        else if (!isForbidden(error))
+          notify.error(getApiErrorMessage(error, 'サービスの削除に失敗しました'));
+      },
+      onSuccess: () => list.reload(),
+      onFailure: error => {
+        if (isForbidden(error)) setDenied(true);
+        else if (isConflict(error) || isBadRequest(error) || isNotFound(error))
+          return list.reload();
+      },
+    });
   const onForbidden = () => {
     if (active.current) setDenied(true);
   };

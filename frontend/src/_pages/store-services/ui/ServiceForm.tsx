@@ -242,7 +242,7 @@ export function ServiceForm({ initial, onSave, disabled }: Props) {
         />
       </form>
       <DialogFrameActions>
-        <Button type="submit" form={formId} disabled={disabled || form.formState.isSubmitting}>
+        <Button type="submit" form={formId} disabled={disabled}>
           保存する
         </Button>
       </DialogFrameActions>

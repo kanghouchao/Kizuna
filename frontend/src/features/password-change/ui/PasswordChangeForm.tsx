@@ -2,9 +2,8 @@
 
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { notify } from '@/shared/notify';
 import { authApi, useAuth } from '@/entities/user';
-import { getApiErrorMessage } from '@/shared/lib';
+import { useWrite } from '@/shared/lib';
 import {
   Button,
   Card,
@@ -40,32 +39,30 @@ export function PasswordChangeForm({ layout = 'console' }: { layout?: 'console' 
   const form = useForm<PasswordChangeFormValues>({
     defaultValues: { current_password: '', new_password: '', confirm_password: '' },
   });
-  const {
-    control,
-    handleSubmit,
-    formState: { isSubmitting },
-  } = form;
-  // 成功後はログアウトの遷移が進行中で、この画面はまだ立っている。isSubmitting は
-  // ハンドラの完了で戻るため、それだけを見ると遷移の間だけボタンが再び押せてしまう。
-  // react-hook-form の isSubmitSuccessful は使えない — ハンドラが自分で握り潰した
-  // 失敗も「成功」と数えるため、失敗後もボタンが塞がったままになる。
+  const { control, handleSubmit } = form;
+  const { busy, write } = useWrite();
+  // 変更は成立すると現在のパスワードが替わる。ログアウトに失敗して画面が残っても、同じ内容を送り直させない
   const [changed, setChanged] = useState(false);
 
-  const pending = isSubmitting || changed;
+  const pending = busy || changed;
 
   const submit = async (values: PasswordChangeFormValues) => {
-    try {
-      await authApi.changePassword({
-        current_password: values.current_password,
-        new_password: values.new_password,
-      });
-      setChanged(true);
-      // 成功の知らせは出さない。直後のログアウトでこの画面ごと破棄され、通知は読まれる前に消える。
-      // 代わりに理由コードを渡し、着地したログイン画面に名乗らせる。
-      logout('password-changed');
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, 'パスワードの変更に失敗しました'));
-    }
+    await write(
+      () =>
+        authApi.changePassword({
+          current_password: values.current_password,
+          new_password: values.new_password,
+        }),
+      {
+        failure: 'パスワードの変更に失敗しました',
+        // 成功の知らせは出さない。直後のログアウトでこの画面ごと破棄され、通知は読まれる前に消える。
+        // 代わりに理由コードを渡し、着地したログイン画面に名乗らせる。
+        onSuccess: () => {
+          setChanged(true);
+          return logout('password-changed');
+        },
+      }
+    );
   };
 
   const portal = layout === 'portal';

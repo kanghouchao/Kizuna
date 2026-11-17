@@ -46,7 +46,7 @@ interface StoreProfileFormData {
 interface StoreProfileFormProps {
   initialData: StoreProfileResponse;
   onSubmit: (data: StoreProfileUpdateRequest) => Promise<void>;
-  isSubmitting: boolean;
+  busy: boolean;
 }
 
 // 引き金に出る文言は候補一覧（items）から引かれる。渡さないと生の値が出る。
@@ -64,7 +64,7 @@ const SNS_PLATFORMS = [
   { value: 'facebook', label: 'Facebook' },
 ];
 
-export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreProfileFormProps) {
+export function StoreProfileForm({ initialData, onSubmit, busy }: StoreProfileFormProps) {
   const form = useForm<StoreProfileFormData>({
     defaultValues: {
       template_key: initialData.template_key || 'default',
@@ -483,8 +483,8 @@ export function StoreProfileForm({ initialData, onSubmit, isSubmitting }: StoreP
         </section>
 
         <div className="flex justify-end gap-4 pt-6 border-t">
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? '保存中...' : '設定を保存する'}
+          <Button type="submit" disabled={busy}>
+            {busy ? '保存中...' : '設定を保存する'}
           </Button>
         </div>
       </form>

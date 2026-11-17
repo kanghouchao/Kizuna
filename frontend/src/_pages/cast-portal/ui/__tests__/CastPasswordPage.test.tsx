@@ -77,6 +77,6 @@ describe('CastPasswordPage', () => {
       expect(mockedNotifyError).toHaveBeenCalledWith('現在のパスワードが正しくありません')
     );
     expect(mockLogout).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'パスワードを変更する' })).toBeEnabled();
+    expect(await screen.findByRole('button', { name: 'パスワードを変更する' })).toBeEnabled();
   });
 });

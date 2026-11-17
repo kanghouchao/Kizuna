@@ -5,7 +5,13 @@ import { useRouter } from 'next/navigation';
 import { notify } from '@/shared/notify';
 import { authApi, initialSetupApi, InitialSetupRequest } from '@/entities/user';
 import { completeLogin } from '@/features/login';
-import { EMAIL_PATTERN, EMAIL_PATTERN_MESSAGE, getApiErrorMessage, isNotFound } from '@/shared/lib';
+import {
+  EMAIL_PATTERN,
+  EMAIL_PATTERN_MESSAGE,
+  getApiErrorMessage,
+  isNotFound,
+  useWrite,
+} from '@/shared/lib';
 
 interface InitialSetupFormValues extends InitialSetupRequest {
   confirm_password: string;
@@ -17,36 +23,46 @@ export function InitialSetupForm() {
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<InitialSetupFormValues>({
     defaultValues: { email: '', display_name: '', password: '', confirm_password: '' },
   });
 
-  const submit = async (values: InitialSetupFormValues) => {
-    const { email, password, display_name } = values;
-    try {
-      await initialSetupApi.register({ email, password, display_name });
-    } catch (error) {
-      // 画面を開いた後に別の誰かが先に登録を済ませた場合
-      if (isNotFound(error)) {
-        notify.error('初期設定は完了しています');
-        router.push('/auth/login');
-        return;
-      }
-      notify.error(getApiErrorMessage(error, '登録に失敗しました'));
-      return;
-    }
+  const { busy, write } = useWrite();
+
+  // 登録と自動ログインを一つの送信にする。失敗として案内するのは登録の失敗だけで、
+  // 自動ログインできなかった分は着地先なし（null）で返し、ログイン画面から再開させる
+  const registerAndLogin = async ({ email, password, display_name }: InitialSetupFormValues) => {
+    await initialSetupApi.register({ email, password, display_name });
     try {
       const completion = await completeLogin(await authApi.login({ email, password }));
-      if (completion.status === 'ok') {
-        router.push(completion.path);
-        return;
-      }
+      return completion.status === 'ok' ? completion.path : null;
     } catch {
-      // 登録自体は完了しているため、自動ログインできなかった分はログイン画面から再開させる。
+      return null;
     }
-    notify.success('登録が完了しました。ログインしてください');
-    router.push('/auth/login');
+  };
+
+  const submit = async (values: InitialSetupFormValues) => {
+    await write(() => registerAndLogin(values), {
+      // 404 は、画面を開いた後に別の誰かが先に登録を済ませた場合
+      failure: error =>
+        notify.error(
+          isNotFound(error)
+            ? '初期設定は完了しています'
+            : getApiErrorMessage(error, '登録に失敗しました')
+        ),
+      onSuccess: landing => {
+        if (landing !== null) {
+          router.push(landing);
+          return;
+        }
+        notify.success('登録が完了しました。ログインしてください');
+        router.push('/auth/login');
+      },
+      onFailure: error => {
+        if (isNotFound(error)) router.push('/auth/login');
+      },
+    });
   };
 
   return (
@@ -187,8 +203,8 @@ export function InitialSetupForm() {
       </div>
 
       <div className="pt-2">
-        <button type="submit" disabled={isSubmitting} className="auth-btn">
-          {isSubmitting ? (
+        <button type="submit" disabled={busy} className="auth-btn">
+          {busy ? (
             <span className="flex items-center justify-center gap-2.5">
               <span className="auth-spinner" />
               登録中...

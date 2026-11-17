@@ -48,9 +48,7 @@ function initialData(overrides: Partial<StoreProfileResponse> = {}): StoreProfil
 
 function renderForm(data: StoreProfileResponse) {
   const onSubmit = jest.fn<Promise<void>, [StoreProfileUpdateRequest]>().mockResolvedValue();
-  const view = render(
-    <StoreProfileForm initialData={data} onSubmit={onSubmit} isSubmitting={false} />
-  );
+  const view = render(<StoreProfileForm initialData={data} onSubmit={onSubmit} busy={false} />);
   return { ...view, onSubmit };
 }
 

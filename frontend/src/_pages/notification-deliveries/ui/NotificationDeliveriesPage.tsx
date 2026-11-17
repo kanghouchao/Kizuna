@@ -20,6 +20,7 @@ import {
   useOperation,
   useResource,
   useVersionedWrite,
+  useWrite,
   GENERATED_ID_PATTERN,
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
@@ -262,7 +263,7 @@ function Resolution({
             </FormItem>
           )}
         />
-        <Button type="submit" disabled={write.busy || form.formState.isSubmitting}>
+        <Button type="submit" disabled={write.busy}>
           判定を記録する
         </Button>
       </form>
@@ -286,36 +287,32 @@ function Detail({
   const resolution = useVersionedWrite(detail.reload);
   const form = useForm<{ reason: string }>({ defaultValues: { reason: '' } });
   const active = useActive();
-  const busy = useRef(false);
+  const { busy, write } = useWrite();
   const [historyKey, setHistoryKey] = useState(0);
   const [missing, setMissing] = useState(false);
   useEffect(() => {
     if (missing || detail.failure === 'notFound') onChanged();
   }, [missing, detail.failure, onChanged]);
   const act = async ({ reason }: { reason: string }) => {
-    if (busy.current || !detail.data) return;
-    busy.current = true;
     const row = detail.data;
-    try {
-      const result = await (row.status === 'DRAFT' ? api.queue : api.retry)(
-        id,
-        row.version,
-        reason
-      );
-      if (!active.current) return;
-      detail.setData(result);
-      form.reset();
-      setHistoryKey(n => n + 1);
-      onChanged();
-      notify.success('通知を送信待ちに登録しました');
-    } catch (error) {
-      if (active.current) {
+    if (!row) return;
+    await write(() => (row.status === 'DRAFT' ? api.queue : api.retry)(id, row.version, reason), {
+      success: '通知を送信待ちに登録しました',
+      // 消えた通知は画面の表示で伝える
+      failure: error => {
+        if (!isNotFound(error))
+          notify.error(getApiErrorMessage(error, '送信待ちに登録できませんでした'));
+      },
+      onSuccess: result => {
+        detail.setData(result);
+        form.reset();
+        setHistoryKey(n => n + 1);
+        onChanged();
+      },
+      onFailure: error => {
         if (isNotFound(error)) setMissing(true);
-        else notify.error(getApiErrorMessage(error, '送信待ちに登録できませんでした'));
-      }
-    } finally {
-      busy.current = false;
-    }
+      },
+    });
   };
   if (detail.isLoading) return <p>読み込み中...</p>;
   if (missing || detail.failure === 'notFound')
@@ -370,7 +367,7 @@ function Detail({
       )}
       <Button
         variant="outline"
-        disabled={form.formState.isSubmitting}
+        disabled={busy}
         onClick={() => {
           void resolution.reload();
           setHistoryKey(n => n + 1);
@@ -417,7 +414,7 @@ function Detail({
                 </FormItem>
               )}
             />
-            <Button type="submit" disabled={form.formState.isSubmitting}>
+            <Button type="submit" disabled={busy}>
               {row.status === 'DRAFT' ? '確認して送信待ちにする' : '明示的に再試行する'}
             </Button>
           </form>

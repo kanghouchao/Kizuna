@@ -1,13 +1,12 @@
 'use client';
 
 import { useForm } from 'react-hook-form';
-import { notify } from '@/shared/notify';
 import {
   CastAcceptanceResponse,
   CastInvitationExistingAcceptRequest,
   castInvitationAcceptanceApi,
 } from '@/entities/cast';
-import { EMAIL_PATTERN, EMAIL_PATTERN_MESSAGE, getApiErrorMessage } from '@/shared/lib';
+import { EMAIL_PATTERN, EMAIL_PATTERN_MESSAGE, useWrite } from '@/shared/lib';
 
 interface ExistingLoginFormProps {
   token: string;
@@ -23,15 +22,16 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<CastInvitationExistingAcceptRequest>({ defaultValues: { email: '', password: '' } });
 
+  const { busy, write } = useWrite();
+
   const submit = async (values: CastInvitationExistingAcceptRequest) => {
-    try {
-      onSuccess(await castInvitationAcceptanceApi.acceptAsExistingUser(token, values));
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, 'ログインまたは受諾に失敗しました'));
-    }
+    await write(() => castInvitationAcceptanceApi.acceptAsExistingUser(token, values), {
+      failure: 'ログインまたは受諾に失敗しました',
+      onSuccess,
+    });
   };
 
   return (
@@ -94,8 +94,8 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
       </div>
 
       <div className="pt-2 space-y-3">
-        <button type="submit" disabled={isSubmitting} className="auth-btn">
-          {isSubmitting ? (
+        <button type="submit" disabled={busy} className="auth-btn">
+          {busy ? (
             <span className="flex items-center justify-center gap-2.5">
               <span className="auth-spinner" />
               ログイン中...
