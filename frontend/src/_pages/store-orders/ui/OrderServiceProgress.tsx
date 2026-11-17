@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { startTransition, useRef, useState } from 'react';
 import { useStoreContext } from '@/entities/user';
 import { Order, orderApi, ORDER_STATUS_LABELS } from '@/entities/order';
-import { getApiErrorMessage, useKeyedResource } from '@/shared/lib';
+import { getApiErrorMessage, useKeyedResource, useWrite } from '@/shared/lib';
 import { Button, Input, Label, Pager, RegionError } from '@/shared/ui';
 import { orderConflictField } from './useOrderConfirmation';
 
@@ -18,20 +18,41 @@ export function OrderServiceProgress({
   const [reason, setReason] = useState('');
   const [reasonError, setReasonError] = useState(false);
   const reasonInput = useRef<HTMLInputElement>(null);
-  const mounted = useRef(true);
-  useEffect(() => {
-    mounted.current = true;
-    return () => {
-      mounted.current = false;
-    };
-  }, []);
-  const [saving, setSaving] = useState(false);
+  const { busy, write } = useWrite();
   const [error, setError] = useState<string>();
   const [page, setPage] = useState(0);
   const history = useKeyedResource(
     ['special-service-events', store, order.id, order.version, page],
     order.id ? () => orderApi.specialServiceEvents(order.id!, page) : null
   );
+  const start = () =>
+    write(() => orderApi.start(order.id!, order.version!, reason.trim()), {
+      // 失敗は toast ではなく、この節の中に出す
+      failure: () => {},
+      onSuccess: onOrderUpdated,
+      onFailure: async e => {
+        if (orderConflictField(e) !== 'expected_version') {
+          setError(getApiErrorMessage(e, '開始できませんでした。最新の受注を確認してください。'));
+          return;
+        }
+        try {
+          const latest = await orderApi.get(order.id!);
+          startTransition(() => {
+            onOrderUpdated(latest);
+            setError('最新の受注を読み込みました。内容を確認してから開始を再試行してください。');
+          });
+        } catch (refreshError) {
+          startTransition(() =>
+            setError(
+              getApiErrorMessage(
+                refreshError,
+                '最新の受注を取得できませんでした。開始を再試行して再取得してください。'
+              )
+            )
+          );
+        }
+      },
+    });
   return (
     <section
       className="grid gap-6 rounded-xl border bg-card p-6 text-sm md:grid-cols-2"
@@ -70,44 +91,15 @@ export function OrderServiceProgress({
             )}
             <Button
               type="button"
-              disabled={saving || order.requires_attention || order.version === undefined}
-              onClick={async () => {
+              disabled={busy || order.requires_attention || order.version === undefined}
+              onClick={() => {
                 if (!reason.trim()) {
                   setReasonError(true);
                   reasonInput.current?.focus();
                   return;
                 }
-                setSaving(true);
                 setError(undefined);
-                try {
-                  const updated = await orderApi.start(order.id!, order.version!, reason.trim());
-                  if (mounted.current) onOrderUpdated(updated);
-                } catch (e) {
-                  if (!mounted.current) return;
-                  if (orderConflictField(e) === 'expected_version') {
-                    try {
-                      const latest = await orderApi.get(order.id!);
-                      if (!mounted.current) return;
-                      onOrderUpdated(latest);
-                      setError(
-                        '最新の受注を読み込みました。内容を確認してから開始を再試行してください。'
-                      );
-                    } catch (refreshError) {
-                      if (mounted.current)
-                        setError(
-                          getApiErrorMessage(
-                            refreshError,
-                            '最新の受注を取得できませんでした。開始を再試行して再取得してください。'
-                          )
-                        );
-                    }
-                  } else
-                    setError(
-                      getApiErrorMessage(e, '開始できませんでした。最新の受注を確認してください。')
-                    );
-                } finally {
-                  if (mounted.current) setSaving(false);
-                }
+                void start();
               }}
             >
               サービスを開始

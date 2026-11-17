@@ -9,11 +9,17 @@ import {
   useMe,
   useStoreContext,
 } from '@/entities/user';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { orderApi, type OrderCorrectionHistoryEntry } from '@/entities/order';
-import { getApiErrorMessage, isConflict, isForbidden, storePath, useResource } from '@/shared/lib';
-import { notify } from '@/shared/notify';
+import {
+  getApiErrorMessage,
+  isConflict,
+  isForbidden,
+  storePath,
+  useResource,
+  useWrite,
+} from '@/shared/lib';
 import {
   Button,
   ConfirmDialog,
@@ -58,13 +64,6 @@ function Invalidation({
   const storeId = useCurrentStoreId();
   // 開いた後に権限が外れた場合は、取得・送信の 403 で閉じる。
   const [allowed, setAllowed] = useState(true);
-  const active = useRef(true);
-  useEffect(() => {
-    active.current = true;
-    return () => {
-      active.current = false;
-    };
-  }, []);
   const { data, failure, isLoading, reload } = useResource(
     allowed
       ? async () => {
@@ -92,7 +91,7 @@ function Invalidation({
   const form = useForm<{ reason: string }>({ defaultValues: { reason: '' } });
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [confirmation, setConfirmation] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const { busy, write } = useWrite();
   const [result, setResult] = useState<OrderCorrectionHistoryEntry | null>(null);
   const order = data?.order;
   const change = result ?? data?.change;
@@ -110,30 +109,22 @@ function Invalidation({
       0
     ) ?? 0;
   const invalidated = !!changeId || order?.completion_invalidated;
-  const submit = async () => {
-    if (!canCorrect || confirmation === null || !order || order.version === undefined || submitting)
-      return;
-    setSubmitting(true);
+  const submit = () => {
+    if (!canCorrect || confirmation === null || !order || order.version === undefined) return;
+    const request = { expected_version: order.version, reason: confirmation };
     setConfirmationOpen(false);
     setError(null);
-    try {
-      const result = await orderApi.invalidateCompletion(id, {
-        expected_version: order.version,
-        reason: confirmation,
-      });
-      if (!active.current) return;
-      setResult(result);
-      notify.success('誤完了を無効化しました');
-    } catch (e) {
-      if (!active.current) return;
-      if (isForbidden(e)) setAllowed(false);
-      else {
+    return write(() => orderApi.invalidateCompletion(id, request), {
+      success: '誤完了を無効化しました',
+      // 失敗は toast ではなく、画面の中に出す
+      failure: () => {},
+      onSuccess: setResult,
+      onFailure: e => {
+        if (isForbidden(e)) return setAllowed(false);
         setError(getApiErrorMessage(e, '無効化できませんでした。内容を確認してください。'));
-        if (isConflict(e)) await reload();
-      }
-    } finally {
-      if (active.current) setSubmitting(false);
-    }
+        if (isConflict(e)) return reload();
+      },
+    });
   };
   if (!allowed)
     return (
@@ -252,7 +243,7 @@ function Invalidation({
                     </FormItem>
                   )}
                 />
-                <Button type="submit" disabled={submitting}>
+                <Button type="submit" disabled={busy}>
                   無効化を確認
                 </Button>
               </form>

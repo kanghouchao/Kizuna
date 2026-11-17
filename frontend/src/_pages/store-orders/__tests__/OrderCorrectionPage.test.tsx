@@ -361,7 +361,7 @@ describe('完了後訂正のページ', () => {
     await waitFor(() => expect(notify.warning).toHaveBeenCalled());
     // 取り直した値で播き直る。入力は破棄され、頁は開いたまま
     await waitFor(() => expect(screen.getByText(/採用済み: 90 分コース/)).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: '訂正する' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '訂正する' })).toBeInTheDocument();
     expect(notify.error).not.toHaveBeenCalled();
   });
 

@@ -22,6 +22,7 @@ import {
   isConflict,
   useKeyedResource,
   useResourceInitialization,
+  useWrite,
 } from '@/shared/lib';
 import {
   Button,
@@ -75,12 +76,8 @@ function Completion({ id }: { id: string }) {
   const form = useForm<OrderCompletionFormValues>({
     defaultValues: { fee_lines: [], use_points: NaN },
   });
-  const {
-    handleSubmit,
-    reset,
-    control,
-    formState: { isSubmitting },
-  } = form;
+  const { handleSubmit, reset, control } = form;
+  const { busy, write } = useWrite();
 
   // 見込みは打鍵ごとではなく、欄を離れた時点の金額で取り直す。合計はサーバが行から導出するので、
   // ここで足すのは見込みの取得と利用ポイントの上限判定に要る「ポイント利用が入る前の総和」だけ。
@@ -126,24 +123,17 @@ function Completion({ id }: { id: string }) {
     // 版は完了の必須項目。詳細が無い／版を運んでいない姿では送る先が決まらないので、送らない
     if (!seeded || detail === null || detail.version === undefined) return;
     const operation = resource.capture();
-    try {
-      const request = {
-        // 版は内訳を播いた詳細そのものから採る。別の取得元から採ると、送る内訳と名指す版が
-        // 別の瞬間の姿になり、照合が通ったのに古い内訳で凍らせる完了が成立する
-        expected_version: detail.version,
-        fee_lines: toFeeLineInputs(values.fee_lines),
-        // 0 はサーバ側の @Min(1) に撥ねられる。利用しない完了では項目ごと送らない
-        use_points: values.use_points > 0 ? values.use_points : undefined,
-      };
-      const token = await confirmation.confirm(() => orderApi.completionPreview(id, request));
-      if (!token) return;
-      const completed = await orderApi.complete(id, { ...request, confirmation_token: token });
-      if (!operation.isCurrent()) return;
-      notify.success('オーダーを完了しました');
-      if (completed.receipt_token) setReceiptToken(completed.receipt_token);
-      // 履歴を置き換え、戻るで完了済みの受注の画面へ帰らないようにする
-      else router.replace(backHref);
-    } catch (error) {
+    const request = {
+      // 版は内訳を播いた詳細そのものから採る。別の取得元から採ると、送る内訳と名指す版が
+      // 別の瞬間の姿になり、照合が通ったのに古い内訳で凍らせる完了が成立する
+      expected_version: detail.version,
+      fee_lines: toFeeLineInputs(values.fee_lines),
+      // 0 はサーバ側の @Min(1) に撥ねられる。利用しない完了では項目ごと送らない
+      use_points: values.use_points > 0 ? values.use_points : undefined,
+    };
+    // 取り直しは反映（onFailure）に入れない。transition の中で始めると読み込み中の表示が出ず、
+    // 置き換わる前のフォームに入力を続けられる
+    const settleFailure = async (error: unknown) => {
       if (!operation.isCurrent()) return;
       if (orderConflictField(error) === 'customer_lock') {
         notify.error(
@@ -173,7 +163,25 @@ function Completion({ id }: { id: string }) {
       }
       // 残高不足・単位違反・非会員の利用は、サーバが対処できる文言を返す。汎用文言に潰さない。
       notify.error(getApiErrorMessage(error, 'オーダーの完了に失敗しました'));
+    };
+    let token: string | null;
+    try {
+      token = await confirmation.confirm(() => orderApi.completionPreview(id, request));
+    } catch (error) {
+      await settleFailure(error);
+      return;
     }
+    if (!token) return;
+    await write(() => orderApi.complete(id, { ...request, confirmation_token: token }), {
+      failure: settleFailure,
+      onSuccess: completed => {
+        if (!operation.isCurrent()) return;
+        notify.success('オーダーを完了しました');
+        if (completed.receipt_token) setReceiptToken(completed.receipt_token);
+        // 履歴を置き換え、戻るで完了済みの受注の画面へ帰らないようにする
+        else router.replace(backHref);
+      },
+    });
   };
 
   const fallback = { href: backHref, label: 'オーダー一覧へ' };
@@ -317,7 +325,7 @@ function Completion({ id }: { id: string }) {
                 </p>
                 <div className="flex shrink-0 gap-3">
                   {/* 送信中に離れると、応答にしか現れない伝票トークンを受け取れずに失う */}
-                  {isSubmitting ? (
+                  {busy ? (
                     <Button type="button" variant="outline" disabled>
                       戻る
                     </Button>
@@ -326,8 +334,8 @@ function Completion({ id }: { id: string }) {
                       戻る
                     </Button>
                   )}
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? '処理中...' : '完了する'}
+                  <Button type="submit" disabled={busy}>
+                    {busy ? '処理中...' : '完了する'}
                   </Button>
                 </div>
               </div>

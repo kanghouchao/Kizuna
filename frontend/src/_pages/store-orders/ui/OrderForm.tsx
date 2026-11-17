@@ -76,7 +76,7 @@ export interface OrderFormData extends AcquisitionValues {
 
 interface OrderFormProps {
   onSubmit: (data: OrderFormData) => void;
-  isSubmitting?: boolean;
+  busy?: boolean;
   /**
    * 予約申請の確定。申請内容を事前入力し、確定端点が持たない項目（派遣先・受付経路など）は出さない。
    * 確定前に申請だけを書き換える口は無い — 原文を直せると「不変のまま対照できる」が成り立たない（ADR 0017）。
@@ -84,7 +84,7 @@ interface OrderFormProps {
   confirming?: { application: OrderApplicationDetail; backHref: string };
 }
 
-export function OrderForm({ onSubmit, isSubmitting, confirming }: OrderFormProps) {
+export function OrderForm({ onSubmit, busy, confirming }: OrderFormProps) {
   const router = useRouter();
   const application = confirming?.application;
   const form = useForm<OrderFormData & FeePreviewValues>({
@@ -337,14 +337,8 @@ export function OrderForm({ onSubmit, isSubmitting, confirming }: OrderFormProps
               </Button>
             )}
             {/* 検証では塞がない — 灰色のボタンは何が足りないかを言わない。押せば欄の傍が言う */}
-            <Button type="submit" disabled={isSubmitting}>
-              {confirming
-                ? isSubmitting
-                  ? '確定中...'
-                  : '確定する'
-                : isSubmitting
-                  ? '登録中...'
-                  : '登録する'}
+            <Button type="submit" disabled={busy}>
+              {confirming ? (busy ? '確定中...' : '確定する') : busy ? '登録中...' : '登録する'}
             </Button>
           </div>
         </div>

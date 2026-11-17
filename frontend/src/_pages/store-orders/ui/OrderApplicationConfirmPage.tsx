@@ -1,11 +1,9 @@
 'use client';
 
-import { useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { orderApplicationApi } from '@/entities/order';
 import { useCurrentStoreId, useStoreContext } from '@/entities/user';
-import { notify } from '@/shared/notify';
-import { getApiErrorMessage, useResource } from '@/shared/lib';
+import { useResource, useWrite } from '@/shared/lib';
 import { RegionError } from '@/shared/ui';
 import { toApplicationConfirmationBody } from '../lib/orderFormAssembly';
 import { orderListHref } from '../lib/orderListHref';
@@ -34,27 +32,22 @@ function ApplicationConfirm({ id }: { id: string }) {
     isLoading,
     reload,
   } = useResource(() => orderApplicationApi.detail(id), [id]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { busy, write } = useWrite();
 
   const submit = async (data: OrderFormData) => {
     if (!application) return;
-    setIsSubmitting(true);
-    try {
-      const request = toApplicationConfirmationBody(data, !application.requester_member_code);
-      const token = await confirmation.confirm(() =>
-        orderApplicationApi.previewConfirmation(id, request)
-      );
-      if (!token) return;
-      await orderApplicationApi.confirm(id, { ...request, confirmation_token: token });
-      notify.success('予約を確定しました');
-      // 履歴を置き換え、戻るで処理済みの申請の画面へ帰らないようにする
-      router.replace(backHref);
-    } catch (error) {
+    const request = toApplicationConfirmationBody(data, !application.requester_member_code);
+    const token = await confirmation.confirm(() =>
+      orderApplicationApi.previewConfirmation(id, request)
+    );
+    if (!token) return;
+    await write(() => orderApplicationApi.confirm(id, { ...request, confirmation_token: token }), {
+      success: '予約を確定しました',
       // 指名の再検証や失効など、サーバは対処方法を含む文言を返す。汎用文言に潰さない
-      notify.error(getApiErrorMessage(error, '予約の確定に失敗しました'));
-    } finally {
-      setIsSubmitting(false);
-    }
+      failure: '予約の確定に失敗しました',
+      // 履歴を置き換え、戻るで処理済みの申請の画面へ帰らないようにする
+      onSuccess: () => router.replace(backHref),
+    });
   };
 
   const fallback = { href: backHref, label: 'オーダー一覧へ' };
@@ -85,11 +78,7 @@ function ApplicationConfirm({ id }: { id: string }) {
               fallback={fallback}
             />
           ) : (
-            <OrderForm
-              confirming={{ application, backHref }}
-              onSubmit={submit}
-              isSubmitting={isSubmitting}
-            />
+            <OrderForm confirming={{ application, backHref }} onSubmit={submit} busy={busy} />
           ))}
       </div>
     </>

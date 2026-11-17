@@ -619,7 +619,7 @@ describe('受注の完了画面', () => {
     await waitFor(() =>
       expect(screen.getByLabelText('明細1の名称')).toHaveValue('他の操作者が直した明細')
     );
-    fireEvent.click(screen.getByRole('button', { name: '完了する' }));
+    fireEvent.click(await screen.findByRole('button', { name: '完了する' }));
     await confirmPreview();
     await waitFor(() => expect(mockedComplete).toHaveBeenCalledTimes(2));
     expect(mockedComplete.mock.calls[1][1].expected_version).toBe(4);

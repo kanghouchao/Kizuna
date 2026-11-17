@@ -525,7 +525,12 @@ test('帰属記録の複合キーが変わったら旧上限と理由を隠す',
         resolve = done;
       })
     );
-  const props = { orderId: 'o1', attributionId: 1, onBusyChange: jest.fn(), onDone: jest.fn() };
+  const props = {
+    orderId: 'o1',
+    attributionId: 1,
+    correction: { busy: false, write: jest.fn() },
+    onDone: jest.fn(),
+  };
   const { rerender } = render(<AttributionCorrectionStep {...props} attributionId={1} />);
   fireEvent.change(await screen.findByLabelText('訂正の理由'), { target: { value: '旧理由' } });
   rerender(<AttributionCorrectionStep {...props} attributionId={2} />);

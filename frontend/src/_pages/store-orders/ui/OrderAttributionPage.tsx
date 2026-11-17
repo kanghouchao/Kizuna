@@ -12,6 +12,7 @@ import {
   storePath,
   useKeyedResource,
   useResourceInitialization,
+  useWrite,
 } from '@/shared/lib';
 import {
   Badge,
@@ -76,12 +77,11 @@ function Attribution({ id }: { id: string }) {
   const storeId = useCurrentStoreId();
   const listHref = storePath(storeId, '/orders');
   const form = useForm<InvalidationFormValues>({ defaultValues: { reason: '' } });
-  const {
-    control,
-    handleSubmit,
-    reset,
-    formState: { isSubmitting },
-  } = form;
+  const { control, handleSubmit, reset } = form;
+  const invalidation = useWrite();
+  const reissuing = useWrite();
+  // 差し引きの書きは親で持つ。送信中に離れると、成立したか分からないまま冪等キーが失われる
+  const correction = useWrite();
 
   const orderResource = useKeyedResource<Order>(['order', storeId, id], () => orderApi.get(id));
   const { data: order, failure: orderFailure, reload: reloadOrder } = orderResource;
@@ -96,55 +96,58 @@ function Attribution({ id }: { id: string }) {
 
   // 再発行した伝票トークンの生値。応答にしか現れないので、メモリにだけ持つ
   const [receiptToken, setReceiptToken] = useState<string | null>(null);
-  const [isReissuing, setIsReissuing] = useState(false);
   const [correcting, setCorrecting] = useState<CorrectionTarget | null>(null);
-  // 差し引きの送信状態を子から上げる。送信中に離れると、成立したか分からないまま冪等キーが失われる
-  const [isCorrectingBusy, setIsCorrectingBusy] = useState(false);
 
   // 権限による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ）。
   // /me の取得前・失敗時は導線を出さない（fail-closed）。
   const canAdjust = hasPermission(useMe().me, 'POINT_ADJUST');
 
-  const invalidate = async (values: InvalidationFormValues) => {
+  const invalidate = (values: InvalidationFormValues) => {
     // 対象は画面が読み口で得た記録そのものを名指す。受注から導く形へ戻すと、開いたまま別の操作者が
     // 訂正を一巡させた場合に、この理由が新しく成立した正しい帰属へ当たって来店を消す
     if (attribution?.id === undefined || !initialized || isLoading) return;
     const operation = resource.capture();
-    try {
-      const updated = await orderApi.invalidateAttribution(id, {
-        attribution_id: attribution.id,
-        reason: values.reason,
-      });
-      // 応答が訂正後の現況を持つので、取り直さず差し替える（読み込み表示で一瞬消えない）
-      if (!operation.replace(updated)) return;
-      notify.success('帰属を無効化しました');
-      // 宛先には今まさに倒した記録を渡す（受注から導き直さない）
-      setCorrecting({ attributionId: attribution.id, memberCode: attribution.member_code });
-    } catch (error) {
-      if (!operation.isCurrent()) return;
-      // 帰属していない・既に無効化済みは、サーバが対処できる文言を返す。汎用文言に潰さない。
-      notify.error(getApiErrorMessage(error, '帰属の無効化に失敗しました'));
-    }
+    const target = { attributionId: attribution.id, memberCode: attribution.member_code };
+    return invalidation.write(
+      () =>
+        orderApi.invalidateAttribution(id, {
+          attribution_id: target.attributionId,
+          reason: values.reason,
+        }),
+      {
+        failure: error => {
+          if (!operation.isCurrent()) return;
+          // 帰属していない・既に無効化済みは、サーバが対処できる文言を返す。汎用文言に潰さない。
+          notify.error(getApiErrorMessage(error, '帰属の無効化に失敗しました'));
+        },
+        onSuccess: updated => {
+          // 応答が訂正後の現況を持つので、取り直さず差し替える（読み込み表示で一瞬消えない）
+          if (!operation.replace(updated)) return;
+          notify.success('帰属を無効化しました');
+          // 宛先には今まさに倒した記録を渡す（受注から導き直さない）
+          setCorrecting(target);
+        },
+      }
+    );
   };
 
-  const reissue = async () => {
+  const reissue = () => {
     if (order === null || order.completion_invalidated) return;
     const operation = resource.capture();
-    try {
-      setIsReissuing(true);
-      const issued = await orderApi.reissueReceiptToken(id);
-      if (!operation.isCurrent()) return;
-      notify.success('伝票QRを再発行しました');
-      setReceiptToken(issued.receipt_token);
-    } catch (error) {
-      if (!operation.isCurrent()) return;
-      notify.error(getApiErrorMessage(error, '伝票QRの再発行に失敗しました'));
-    } finally {
-      if (operation.isCurrent()) setIsReissuing(false);
-    }
+    return reissuing.write(() => orderApi.reissueReceiptToken(id), {
+      failure: error => {
+        if (!operation.isCurrent()) return;
+        notify.error(getApiErrorMessage(error, '伝票QRの再発行に失敗しました'));
+      },
+      onSuccess: issued => {
+        if (!operation.isCurrent()) return;
+        notify.success('伝票QRを再発行しました');
+        setReceiptToken(issued.receipt_token);
+      },
+    });
   };
 
-  const isBusy = isSubmitting || isReissuing || isCorrectingBusy;
+  const isBusy = invalidation.busy || reissuing.busy || correction.busy;
   const fallback = { href: listHref, label: 'オーダー一覧へ' };
   const missing = orderFailure === 'notFound' || failure === 'notFound';
   const notCompleted = order !== null && order.status !== 'COMPLETED';
@@ -198,7 +201,7 @@ function Attribution({ id }: { id: string }) {
               orderId={id}
               attributionId={correcting.attributionId}
               memberCode={correcting.memberCode}
-              onBusyChange={setIsCorrectingBusy}
+              correction={correction}
               onDone={() => {
                 setCorrecting(null);
                 // 差し引きが済むと残りの誤付与も変わる。取り直さないと、差し引きへの導線が済んだ訂正を指し続ける
@@ -320,12 +323,12 @@ function Attribution({ id }: { id: string }) {
                 {backButton}
                 {showsInvalidationForm && (
                   <Button type="submit" disabled={isBusy}>
-                    {isSubmitting ? '処理中...' : '無効化する'}
+                    {invalidation.busy ? '処理中...' : '無効化する'}
                   </Button>
                 )}
                 {canReissue && (
                   <Button type="button" onClick={() => void reissue()} disabled={isBusy}>
-                    {isReissuing ? '発行中...' : '伝票QRを再発行'}
+                    {reissuing.busy ? '発行中...' : '伝票QRを再発行'}
                   </Button>
                 )}
               </div>

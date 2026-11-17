@@ -5,12 +5,10 @@ import { useOrderConfirmation } from './useOrderConfirmation';
 import { OrderForm, OrderFormData } from './OrderForm';
 import { toOrderRequestBody } from '../lib/orderFormAssembly';
 import { RegionError } from '@/shared/ui';
-import { notify } from '@/shared/notify';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCurrentStoreId, useStoreContext } from '@/entities/user';
-import { useState } from 'react';
 import { OrderCreateRequest, orderApi } from '@/entities/order';
-import { getApiErrorMessage, storePath, useResource } from '@/shared/lib';
+import { storePath, useResource, useWrite } from '@/shared/lib';
 
 export default function CreateOrderPage() {
   const storeId = useStoreContext().currentStoreId;
@@ -26,27 +24,20 @@ function CreateOrder({ replacement }: { replacement?: string }) {
     replacement,
     storeId,
   ]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { busy, write } = useWrite();
 
   const handleSubmit = async (data: OrderFormData) => {
-    setIsSubmitting(true);
-    try {
-      const request: OrderCreateRequest = {
-        ...toOrderRequestBody(data),
-        replacement_for_order_id: replacement,
-      };
-
-      const token = await confirmation.confirm(() => orderApi.previewCreate(request));
-      if (!token) return;
-      await orderApi.create({ ...request, confirmation_token: token });
-
-      notify.success('オーダーを登録しました');
-      router.push(storePath(storeId, '/orders'));
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, 'オーダーの登録に失敗しました'));
-    } finally {
-      setIsSubmitting(false);
-    }
+    const request: OrderCreateRequest = {
+      ...toOrderRequestBody(data),
+      replacement_for_order_id: replacement,
+    };
+    const token = await confirmation.confirm(() => orderApi.previewCreate(request));
+    if (!token) return;
+    await write(() => orderApi.create({ ...request, confirmation_token: token }), {
+      success: 'オーダーを登録しました',
+      failure: 'オーダーの登録に失敗しました',
+      onSuccess: () => router.push(storePath(storeId, '/orders')),
+    });
   };
 
   return (
@@ -89,7 +80,7 @@ function CreateOrder({ replacement }: { replacement?: string }) {
         )}
         {(!replacement ||
           (original.data?.completion_invalidated && !original.isLoading && !original.failure)) && (
-          <OrderForm onSubmit={handleSubmit} isSubmitting={isSubmitting} />
+          <OrderForm onSubmit={handleSubmit} busy={busy} />
         )}
       </div>
     </>

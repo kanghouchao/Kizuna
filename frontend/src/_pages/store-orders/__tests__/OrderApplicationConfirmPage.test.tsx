@@ -249,7 +249,7 @@ describe('予約申請の確定画面', () => {
       )
     );
     expect(mockReplace).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: '確定する' })).toBeEnabled();
+    await waitFor(() => expect(screen.getByRole('button', { name: '確定する' })).toBeEnabled());
   });
 
   it('新規顧客への連絡先と販促同意の取り込みをそれぞれ明示する', async () => {
