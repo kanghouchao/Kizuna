@@ -491,6 +491,38 @@ describe('日別一覧からのシフト削除', () => {
     );
   });
 
+  it('削除の送信から取り直しが終わるまで、ほかの行の削除口も押せないままにすること', async () => {
+    mockedShiftList.mockResolvedValue([confirmed, tentative]);
+    await openTimeline();
+    let respond!: () => void;
+    mockedShiftDelete.mockImplementationOnce(
+      () => new Promise<void>(resolve => (respond = resolve))
+    );
+    let reloaded!: (rows: (typeof tentative)[]) => void;
+
+    fireEvent.click(await screen.findByRole('button', { name: 'さくら 18:00–23:00 を削除' }));
+    fireEvent.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: '削除する' })
+    );
+    await waitFor(() => expect(mockedShiftDelete).toHaveBeenCalledWith('s1'));
+    const other = () => screen.getByRole('button', { name: 'あおい 20:00–21:00 を削除' });
+    expect(other()).toBeDisabled();
+
+    mockedShiftList.mockImplementationOnce(() => new Promise(resolve => (reloaded = resolve)));
+    const callsBeforeReload = mockedShiftList.mock.calls.length;
+    await act(async () => respond());
+    await waitFor(() =>
+      expect(mockedShiftList.mock.calls.length).toBeGreaterThan(callsBeforeReload)
+    );
+    expect(other()).toBeDisabled();
+
+    await act(async () => reloaded([tentative]));
+    await waitFor(() => expect(other()).toBeEnabled());
+    expect(
+      screen.queryByRole('button', { name: 'さくら 18:00–23:00 を削除' })
+    ).not.toBeInTheDocument();
+  });
+
   it('確認を取り消すと削除されないこと', async () => {
     mockedShiftList.mockResolvedValue([confirmed]);
     await openTimeline();
