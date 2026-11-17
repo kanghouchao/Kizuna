@@ -69,6 +69,24 @@ describe('useVersionedWrite', () => {
     expect(outcome).toBe('success');
   });
 
+  it('競合は busy が戻るのと同じ描画で立てる', async () => {
+    const reloadTarget = jest.fn(async () => {});
+    const renders: { busy: boolean; conflict: boolean }[] = [];
+    const { result } = renderHook(() => {
+      const writer = useVersionedWrite(reloadTarget);
+      renders.push({ busy: writer.busy, conflict: writer.conflict });
+      return writer;
+    });
+
+    await act(async () => {
+      await result.current.write(rejectWith(409), messages);
+    });
+
+    expect(result.current.conflict).toBe(true);
+    // 送信中のまま競合の案内を出すと、案内の「読み込む」を押しても画面が送信中として捨てる
+    expect(renders).not.toContainEqual({ busy: true, conflict: true });
+  });
+
   it('404 は失敗文言を出して対象を取り直し、競合は立てない', async () => {
     const { result, reloadTarget } = setup();
 
