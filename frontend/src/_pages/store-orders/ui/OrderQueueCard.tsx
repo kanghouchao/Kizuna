@@ -32,8 +32,8 @@ const CANCEL_REASON_MAX_LENGTH = 500;
 
 interface OrderQueueCardProps {
   order: OrderWorkQueueRow;
-  /** 取消のように、この受注が群から外れる処理が終わったとき。 */
-  onProcessed: (id: string) => void;
+  /** 取消のように、この受注が群から外れる処理が終わったとき。promise を返すと、その完了まで操作を塞ぐ。 */
+  onProcessed: (id: string) => unknown;
   /** 完了画面の URL（一覧の検索条件を持つ）。識別子の無い受注には無い。 */
   completionHref?: string;
 }

@@ -350,6 +350,29 @@ describe('作業キューの描画', () => {
     );
   });
 
+  it('謝絶の応答が返ってから受付箱を取り直し終えるまで、謝絶を押せないままにすること', async () => {
+    stubInbox(pendingApplication());
+    mockedApplicationApi.decline.mockResolvedValue(undefined);
+    render(<OrderListPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '謝絶' }));
+    fireEvent.change(screen.getByLabelText('謝絶の理由'), { target: { value: '満席' } });
+    let arrive: (page: Awaited<ReturnType<typeof orderApplicationApi.list>>) => void = () => {};
+    mockedApplicationApi.list.mockReturnValueOnce(
+      new Promise(resolve => {
+        arrive = resolve;
+      })
+    );
+    fireEvent.click(screen.getByRole('button', { name: '謝絶する' }));
+
+    await waitFor(() => expect(mockedApplicationApi.list).toHaveBeenCalledTimes(2));
+    expect(notify.success).toHaveBeenCalledWith('予約申請を謝絶しました');
+    expect(screen.getByRole('button', { name: '謝絶する' })).toBeDisabled();
+
+    await act(async () => arrive({ rows: [], page: 0, pageCount: 1, total: 0 }));
+    await waitFor(() => expect(screen.queryByText('高橋美咲')).not.toBeInTheDocument());
+  });
+
   it('作業キューはページ送りで次のページを同じ条件で取り直すこと', async () => {
     mockedOrderApi.listWorkQueue.mockResolvedValue({
       rows: [confirmedOrder()],

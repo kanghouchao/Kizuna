@@ -23,8 +23,8 @@ const DECLINE_REASON_MAX_LENGTH = 500;
 
 interface OrderApplicationCardProps {
   application: OrderApplicationRow;
-  /** 謝絶が終わったとき。この申請はもう受付箱の対象ではないので手元から取り除く。 */
-  onDeclined: (id: string) => void;
+  /** 謝絶が終わったとき。この申請はもう受付箱の対象ではないので手元から取り除く。promise を返すと、その完了まで操作を塞ぐ。 */
+  onDeclined: (id: string) => unknown;
   /** 確定画面の URL。一覧の検索条件を運び、確定画面からの戻り先にする。識別子の無い行では出さない。 */
   confirmHref?: string;
 }
