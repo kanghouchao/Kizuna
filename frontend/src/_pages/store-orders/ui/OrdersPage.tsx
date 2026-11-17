@@ -183,8 +183,8 @@ export default function OrderListPage() {
 
   /** 取消した受注の後始末。作業キューを取り直し、取消のアーカイブを取り直させる。 */
   const settleCancelled = () => {
-    void queue.reload();
     setArchived(prev => ({ ...prev, CANCELLED: prev.CANCELLED + 1 }));
+    return queue.reload();
   };
 
   return (
@@ -311,7 +311,7 @@ export default function OrderListPage() {
               <OrderApplicationCard
                 key={application.id}
                 application={application}
-                onDeclined={() => void inbox.reload()}
+                onDeclined={() => inbox.reload()}
                 confirmHref={
                   application.id
                     ? applicationConfirmHref(storeId, application.id, query)
