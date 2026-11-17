@@ -188,7 +188,7 @@ describe('PointAdjustmentDialog', () => {
 
     await submitWith('100');
     await waitFor(() => expect(notify.error).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole('button', { name: '調整する' }));
+    fireEvent.click(await screen.findByRole('button', { name: '調整する' }));
 
     await waitFor(() => expect(mockedAdjust).toHaveBeenCalledTimes(2));
     const firstKey = mockedAdjust.mock.calls[0][1].idempotency_key;
@@ -206,7 +206,7 @@ describe('PointAdjustmentDialog', () => {
     await submitWith('100');
     await waitFor(() => expect(notify.error).toHaveBeenCalled());
     fireEvent.change(screen.getByLabelText('増減ポイント'), { target: { value: '300' } });
-    fireEvent.click(screen.getByRole('button', { name: '調整する' }));
+    fireEvent.click(await screen.findByRole('button', { name: '調整する' }));
 
     await waitFor(() => expect(mockedAdjust).toHaveBeenCalledTimes(2));
     expect(mockedAdjust.mock.calls[1][1].delta).toBe(300);

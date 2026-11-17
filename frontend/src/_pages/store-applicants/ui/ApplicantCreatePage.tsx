@@ -2,23 +2,20 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { applicantApi, type ApplicantIntake } from '@/entities/applicant';
-import { getApiErrorMessage } from '@/shared/lib';
-import { storePath } from '@/shared/lib';
-import { notify } from '@/shared/notify';
+import { storePath, useWrite } from '@/shared/lib';
 import { Button } from '@/shared/ui';
 import { ApplicantIntakeForm } from './ApplicantIntakeForm';
 import { useCurrentStoreId } from '@/entities/user';
 export default function ApplicantCreatePage() {
   const storeId = useCurrentStoreId();
   const router = useRouter();
+  const { busy, write } = useWrite();
   const save = async (data: ApplicantIntake) => {
-    try {
-      const result = await applicantApi.create(data);
-      notify.success('応募者を登録しました');
-      router.push(storePath(storeId, `/applicants/${result.id}`));
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, '応募者の登録に失敗しました'));
-    }
+    await write(() => applicantApi.create(data), {
+      success: '応募者を登録しました',
+      failure: '応募者の登録に失敗しました',
+      onSuccess: result => router.push(storePath(storeId, `/applicants/${result.id}`)),
+    });
   };
   return (
     <div className="space-y-6">
@@ -28,7 +25,7 @@ export default function ApplicantCreatePage() {
           一覧へ
         </Button>
       </div>
-      <ApplicantIntakeForm onSave={save} />
+      <ApplicantIntakeForm busy={busy} onSave={save} />
     </div>
   );
 }

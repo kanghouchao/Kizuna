@@ -82,7 +82,7 @@ test('取得した版で登録し、詳細へ戻る', async () => {
   expect(notify.success).toHaveBeenCalledWith('在籍を登録しました');
   expect(push).toHaveBeenCalledWith('/store/1/applicants/a');
 });
-test('重複登録の拒否は入力を残して通知する', async () => {
+test('競合の拒否は入力を残して通知し、取り直すまで送らせない', async () => {
   (applicantApi.enroll as jest.Mock).mockRejectedValue({
     isAxiosError: true,
     response: { status: 409, data: { error: 'この応募者は既に在籍登録されています' } },
@@ -90,10 +90,18 @@ test('重複登録の拒否は入力を残して通知する', async () => {
   render(<ApplicantEnrollmentPage />);
   fireEvent.change(await screen.findByLabelText('源氏名 *'), { target: { value: 'あおい' } });
   fireEvent.click(screen.getByRole('button', { name: '保存する' }));
-  await waitFor(() => expect(notify.error).toHaveBeenCalled());
+  await waitFor(() =>
+    expect(notify.error).toHaveBeenCalledWith('この応募者は既に在籍登録されています')
+  );
   expect(push).not.toHaveBeenCalled();
+  expect(await screen.findByRole('alert')).toHaveTextContent('応募者情報が更新されています');
   expect(screen.getByLabelText('源氏名 *')).toHaveValue('あおい');
-  expect(screen.getByRole('button', { name: '保存する' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: '保存する' })).toBeDisabled();
+  expect(applicantApi.enroll).toHaveBeenCalledTimes(1);
+
+  (applicantApi.get as jest.Mock).mockResolvedValue({ ...hired, enrollment_id: 'e1' });
+  fireEvent.click(screen.getByRole('button', { name: '最新の内容を読み込む' }));
+  expect(await screen.findByRole('link', { name: '在籍を開く' })).toBeVisible();
 });
 test('登録済み・採用前の応募者にはフォームを出さない', async () => {
   (applicantApi.get as jest.Mock).mockResolvedValue({ ...hired, enrollment_id: 'e1' });

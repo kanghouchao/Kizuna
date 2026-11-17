@@ -2,10 +2,9 @@
 
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { notify } from '@/shared/notify';
 import { CastResponse } from '@/entities/cast';
 import { AttendanceResponse, ShiftResponse, attendanceApi } from '@/entities/shift';
-import { getApiErrorMessage } from '@/shared/lib';
+import { useWrite } from '@/shared/lib';
 import { SELECT_NONE, castValue } from '../lib/cast-select';
 import { dateOfDateTime, dateTimeInputOn, hhmmOfDateTime, toDateTimeInput } from '../lib/datetime';
 import { castName } from '../lib/labels';
@@ -76,12 +75,8 @@ export function AttendanceFormModal({
       waiting_place: '',
     },
   });
-  const {
-    handleSubmit,
-    reset,
-    control,
-    formState: { isSubmitting },
-  } = form;
+  const { handleSubmit, reset, control } = form;
+  const { busy, write } = useWrite();
 
   const attendance = target?.attendance ?? null;
   const shift = target?.shift ?? null;
@@ -122,7 +117,7 @@ export function AttendanceFormModal({
     });
   }, [open, target, defaultDate, reset]);
 
-  const submit = async (values: AttendanceFormValues) => {
+  const submit = (values: AttendanceFormValues) => {
     if (target === null) return;
     // 空欄は「値なし」として送る。空文字のまま送ると待機場所に空の記録が残る
     const preserveTime = (value: string, original: string | undefined) =>
@@ -132,26 +127,25 @@ export function AttendanceFormModal({
       actual_end_at: preserveTime(values.actual_end_at, target.attendance?.actual_end_at) || null,
       waiting_place: values.waiting_place.trim() || null,
     };
-    try {
-      if (target.attendance) {
-        await attendanceApi.correct(target.attendance.id, {
-          business_date: values.business_date,
-          ...common,
-        });
-        notify.success('当日実績を訂正しました');
-      } else {
-        await attendanceApi.record({
-          cast_id: values.cast_id,
-          shift_id: target.shift?.id ?? null,
-          ...common,
-        });
-        notify.success('当日実績を記録しました');
+    const { attendance: recorded, shift: scheduled } = target;
+    return write(
+      () =>
+        recorded
+          ? attendanceApi.correct(recorded.id, { business_date: values.business_date, ...common })
+          : attendanceApi.record({
+              cast_id: values.cast_id,
+              shift_id: scheduled?.id ?? null,
+              ...common,
+            }),
+      {
+        success: recorded ? '当日実績を訂正しました' : '当日実績を記録しました',
+        failure: '当日実績の保存に失敗しました',
+        onSuccess: () => {
+          onSaved();
+          onClose();
+        },
       }
-      onSaved();
-      onClose();
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, '当日実績の保存に失敗しました'));
-    }
+    );
   };
 
   return (
@@ -168,8 +162,8 @@ export function AttendanceFormModal({
             <Button type="button" variant="outline" onClick={onClose}>
               キャンセル
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? '保存中...' : '保存する'}
+            <Button type="submit" disabled={busy}>
+              {busy ? '保存中...' : '保存する'}
             </Button>
           </>
         }

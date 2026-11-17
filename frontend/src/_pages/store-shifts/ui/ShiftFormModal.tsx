@@ -2,10 +2,9 @@
 
 import { useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
-import { notify } from '@/shared/notify';
 import { CastResponse } from '@/entities/cast';
 import { ShiftResponse, shiftApi } from '@/entities/shift';
-import { getApiErrorMessage } from '@/shared/lib';
+import { useWrite } from '@/shared/lib';
 import { SELECT_NONE, castValue } from '../lib/cast-select';
 import { hhmm } from '../lib/datetime';
 import { ShiftDialogShell } from './ShiftDialogShell';
@@ -78,12 +77,8 @@ export function ShiftFormModal({
       published: true,
     },
   });
-  const {
-    handleSubmit,
-    reset,
-    control,
-    formState: { isSubmitting },
-  } = form;
+  const { handleSubmit, reset, control } = form;
+  const { busy, write } = useWrite();
   // 実績が付くのは既存のシフトだけ。新規作成の面は何も塞がない
   const locked = editing !== null && hasAttendance;
 
@@ -133,7 +128,7 @@ export function ShiftFormModal({
     }
   }, [open, editing, defaultDate, selectableCasts, reset]);
 
-  const submit = async (values: ShiftFormValues) => {
+  const submit = (values: ShiftFormValues) => {
     const payload = {
       cast_id: values.cast_id,
       work_date: values.work_date,
@@ -141,20 +136,21 @@ export function ShiftFormModal({
       end_time: `${values.end_time}:00`,
       status: values.status,
     };
-    try {
-      if (editing) {
-        // 更新の送信物は公開可否の欄を持たない — 切替は専用の口が受ける
-        await shiftApi.update(editing.id, payload);
-        notify.success('シフトを更新しました');
-      } else {
-        await shiftApi.create({ ...payload, published: values.published });
-        notify.success('シフトを追加しました');
+    return write(
+      () =>
+        editing
+          ? // 更新の送信物は公開可否の欄を持たない — 切替は専用の口が受ける
+            shiftApi.update(editing.id, payload)
+          : shiftApi.create({ ...payload, published: values.published }),
+      {
+        success: editing ? 'シフトを更新しました' : 'シフトを追加しました',
+        failure: 'シフトの保存に失敗しました',
+        onSuccess: () => {
+          onSaved();
+          onClose();
+        },
       }
-      onSaved();
-      onClose();
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, 'シフトの保存に失敗しました'));
-    }
+    );
   };
 
   return (
@@ -171,8 +167,8 @@ export function ShiftFormModal({
             <Button type="button" variant="outline" onClick={onClose}>
               キャンセル
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? '保存中...' : '保存する'}
+            <Button type="submit" disabled={busy}>
+              {busy ? '保存中...' : '保存する'}
             </Button>
           </>
         }

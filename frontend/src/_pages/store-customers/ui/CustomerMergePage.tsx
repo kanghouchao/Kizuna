@@ -7,8 +7,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import { CheckIcon, InfoIcon } from 'lucide-react';
 import { customerApi, MergePreferences, MergePreview, MergeProfile } from '@/entities/customer';
 import { MePending, hasPermission, useCurrentStoreId, useMe } from '@/entities/user';
-import { getApiErrorMessage, isNotFound, storePath, useResource } from '@/shared/lib';
-import { notify } from '@/shared/notify';
+import { getApiErrorMessage, isNotFound, storePath, useResource, useWrite } from '@/shared/lib';
 import {
   Badge,
   Button,
@@ -132,7 +131,9 @@ function MergeEditor({ initial, survivingId, mergedId }: Target & { initial: Mer
   }
   const [acknowledged, setAcknowledged] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const merging = useWrite();
+  const busy = previewing || merging.busy;
   const [failure, setFailure] = useState<string | null>(null);
   const form = useForm<Values>({
     defaultValues: {
@@ -154,7 +155,7 @@ function MergeEditor({ initial, survivingId, mergedId }: Target & { initial: Mer
     else setFailure(getApiErrorMessage(error, message));
   };
   const refresh = async () => {
-    setBusy(true);
+    setPreviewing(true);
     invalidate();
     setFailure(null);
     try {
@@ -172,11 +173,11 @@ function MergeEditor({ initial, survivingId, mergedId }: Target & { initial: Mer
     } catch (error) {
       fail(error, '最新資料の取得に失敗しました');
     } finally {
-      setBusy(false);
+      setPreviewing(false);
     }
   };
   const review = handleSubmit(async values => {
-    setBusy(true);
+    setPreviewing(true);
     invalidate();
     setFailure(null);
     try {
@@ -190,29 +191,34 @@ function MergeEditor({ initial, survivingId, mergedId }: Target & { initial: Mer
     } catch (error) {
       fail(error, 'プレビューの確認に失敗しました');
     } finally {
-      setBusy(false);
+      setPreviewing(false);
     }
   });
-  const merge = handleSubmit(async values => {
-    if (!preview?.preview_token || !acknowledged || busy) return;
-    setBusy(true);
-    try {
-      await customerApi.merge(survivingId, {
-        merged_customer_id: mergedId,
-        profile: values.profile,
-        preferred_contacts: values.preferences,
-        preview_token: preview.preview_token,
-        warnings_acknowledged: acknowledged,
-        operation_reason: values.reason.trim(),
-      });
-      notify.success('顧客を統合しました');
-      // 統合した組へ戻るボタンで戻らせない。被統合側はもう存在しない
-      router.replace(listHref(storeId));
-    } catch (error) {
-      invalidate();
-      fail(error, '顧客の統合に失敗しました');
-      setBusy(false);
-    }
+  const merge = handleSubmit(values => {
+    const token = preview?.preview_token;
+    if (!token || !acknowledged || previewing) return;
+    return merging.write(
+      () =>
+        customerApi.merge(survivingId, {
+          merged_customer_id: mergedId,
+          profile: values.profile,
+          preferred_contacts: values.preferences,
+          preview_token: token,
+          warnings_acknowledged: acknowledged,
+          operation_reason: values.reason.trim(),
+        }),
+      {
+        success: '顧客を統合しました',
+        // 失敗は toast ではなく、再試行の導線を持つ区画の失敗表示で伝える
+        failure: () => {},
+        // 統合した組へ戻るボタンで戻らせない。被統合側はもう存在しない
+        onSuccess: () => router.replace(listHref(storeId)),
+        onFailure: error => {
+          invalidate();
+          fail(error, '顧客の統合に失敗しました');
+        },
+      }
+    );
   });
   if (gone) return <MissingCustomer />;
   const sides =

@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { CustomerForm, CustomerFormData, toCustomerRequest } from './CustomerForm';
 import { CustomerContactsSection } from './CustomerContactsSection';
@@ -10,7 +9,7 @@ import { customerApi } from '@/entities/customer';
 import { ORDER_STATUS_LABELS, orderApi } from '@/entities/order';
 import { notify } from '@/shared/notify';
 import { hasPermission, useCurrentStoreId, useMe } from '@/entities/user';
-import { storePath, useResource } from '@/shared/lib';
+import { storePath, useResource, useWrite } from '@/shared/lib';
 import {
   RegionError,
   Table,
@@ -53,24 +52,19 @@ export default function CustomerEditPage() {
     [resolvedId]
   );
   const orders = ordersData ?? [];
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { busy, write } = useWrite();
   // 権限による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ）。
   // /me の取得前・失敗時は導線を出さない（fail-closed）。
   const canMerge = hasPermission(useMe().me, 'CUSTOMER_MERGE');
 
-  const handleSubmit = async (data: CustomerFormData) => {
-    try {
-      setIsSubmitting(true);
-      const profile = toCustomerRequest(data);
-      delete profile.contacts;
-      await customerApi.update(resolvedId, profile);
-      notify.success('顧客情報を更新しました');
-      router.push(storePath(storeId, '/customers'));
-    } catch {
-      notify.error('顧客情報の更新に失敗しました');
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleSubmit = (data: CustomerFormData) => {
+    const profile = toCustomerRequest(data);
+    delete profile.contacts;
+    return write(() => customerApi.update(resolvedId, profile), {
+      success: '顧客情報を更新しました',
+      failure: () => notify.error('顧客情報の更新に失敗しました'),
+      onSuccess: () => router.push(storePath(storeId, '/customers')),
+    });
   };
 
   if (isLoading) {
@@ -124,7 +118,7 @@ export default function CustomerEditPage() {
           ng_content: customer.ng_content || '',
         }}
         onSubmit={handleSubmit}
-        isSubmitting={isSubmitting}
+        busy={busy}
       />
 
       {/* 顧客が変わったら区画ごと作り直す。中の履歴はページで辿る読み口で、マウント時にしか

@@ -7,7 +7,7 @@ import { useState } from 'react';
 import { validateContactValue } from '../lib/contactValidation';
 import { useForm, useWatch } from 'react-hook-form';
 import { customerApi, ContactInput, ContactResponse, ContactState } from '@/entities/customer';
-import { useListPage, getApiErrorMessage, isNotFound } from '@/shared/lib';
+import { useListPage, getApiErrorMessage, isNotFound, useWrite } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import {
   Button,
@@ -63,7 +63,7 @@ export function CustomerContactsSection({ customerId }: { customerId: string }) 
   const [editing, setEditing] = useState<ContactResponse | null>(null);
   const [deleting, setDeleting] = useState<ContactResponse | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const { busy, write } = useWrite();
   const form = useForm<ContactInput>({ defaultValues: { type: 'PHONE', value: '' } });
   const type = useWatch({
     control: form.control,
@@ -81,33 +81,41 @@ export function CustomerContactsSection({ customerId }: { customerId: string }) 
     );
     setOpen(true);
   };
-  const mutate = async (operation: () => Promise<unknown>) => {
-    setBusy(true);
-    try {
-      await operation();
-      refresh();
-      notify.success('連絡先を更新しました');
-    } catch (error) {
-      if (isNotFound(error)) {
-        refresh();
-        notify.warning(getApiErrorMessage(error, '連絡先が見つからないため一覧を更新しました'));
-      } else notify.error(getApiErrorMessage(error, '連絡先を更新できませんでした'));
-    } finally {
-      setBusy(false);
-    }
-  };
-  const save = form.handleSubmit(async data => {
-    try {
-      if (editing) await customerApi.updateContact(customerId, editing.id, data);
-      else await customerApi.addContact(customerId, data);
-      setOpen(false);
-      refresh();
-      notify.success('連絡先を保存しました');
-    } catch (error) {
-      if (isNotFound(error)) setGone(true);
-      else notify.error(getApiErrorMessage(error, '連絡先を保存できませんでした'));
-    }
-  });
+  const mutate = (operation: () => Promise<unknown>) =>
+    write(operation, {
+      success: '連絡先を更新しました',
+      failure: error => {
+        if (isNotFound(error))
+          notify.warning(getApiErrorMessage(error, '連絡先が見つからないため一覧を更新しました'));
+        else notify.error(getApiErrorMessage(error, '連絡先を更新できませんでした'));
+      },
+      onSuccess: refresh,
+      onFailure: error => {
+        if (isNotFound(error)) refresh();
+      },
+    });
+  const save = form.handleSubmit(data =>
+    write(
+      () =>
+        editing
+          ? customerApi.updateContact(customerId, editing.id, data)
+          : customerApi.addContact(customerId, data),
+      {
+        success: '連絡先を保存しました',
+        failure: error => {
+          if (!isNotFound(error))
+            notify.error(getApiErrorMessage(error, '連絡先を保存できませんでした'));
+        },
+        onSuccess: () => {
+          setOpen(false);
+          refresh();
+        },
+        onFailure: error => {
+          if (isNotFound(error)) setGone(true);
+        },
+      }
+    )
+  );
   return (
     <>
       <Card>
@@ -286,7 +294,7 @@ export function CustomerContactsSection({ customerId }: { customerId: string }) 
                   閉じる
                 </Button>
               ) : (
-                <Button type="submit" disabled={form.formState.isSubmitting}>
+                <Button type="submit" disabled={busy}>
                   保存する
                 </Button>
               )

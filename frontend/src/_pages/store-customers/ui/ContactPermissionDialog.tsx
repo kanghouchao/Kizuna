@@ -8,7 +8,7 @@ import {
   ContactPurpose,
   ContactResponse,
 } from '@/entities/customer';
-import { getApiErrorMessage, isNotFound } from '@/shared/lib';
+import { getApiErrorMessage, isNotFound, useWrite } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import {
   Button,
@@ -46,6 +46,7 @@ export function ContactPermissionDialog({
   onSaved: () => void;
 }) {
   const [gone, setGone] = useState(false);
+  const { busy, write } = useWrite();
   const status = purpose === 'BUSINESS' ? contact.business_status : contact.marketing_status;
   const form = useForm<ContactPermissionInput>({
     defaultValues: { status, source: '', reason: '' },
@@ -54,21 +55,30 @@ export function ContactPermissionDialog({
     onClose();
     if (gone) onSaved();
   };
-  const save = form.handleSubmit(async data => {
-    try {
-      await customerApi.setContactPermission(customerId, contact.id, purpose, {
-        ...data,
-        source: data.source.trim(),
-        reason: data.reason.trim(),
-      });
-      onClose();
-      onSaved();
-      notify.success('連絡可否を更新しました');
-    } catch (error) {
-      if (isNotFound(error)) setGone(true);
-      else notify.error(getApiErrorMessage(error, '連絡可否を更新できませんでした'));
-    }
-  });
+  const save = form.handleSubmit(data =>
+    write(
+      () =>
+        customerApi.setContactPermission(customerId, contact.id, purpose, {
+          ...data,
+          source: data.source.trim(),
+          reason: data.reason.trim(),
+        }),
+      {
+        success: '連絡可否を更新しました',
+        failure: error => {
+          if (!isNotFound(error))
+            notify.error(getApiErrorMessage(error, '連絡可否を更新できませんでした'));
+        },
+        onSuccess: () => {
+          onClose();
+          onSaved();
+        },
+        onFailure: error => {
+          if (isNotFound(error)) setGone(true);
+        },
+      }
+    )
+  );
   return (
     <Dialog
       open={open}
@@ -85,7 +95,7 @@ export function ContactPermissionDialog({
             gone ? (
               <Button onClick={close}>閉じる</Button>
             ) : (
-              <Button type="submit" disabled={form.formState.isSubmitting}>
+              <Button type="submit" disabled={busy}>
                 可否を保存
               </Button>
             )

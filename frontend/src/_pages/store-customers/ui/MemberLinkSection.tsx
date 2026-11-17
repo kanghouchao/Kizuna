@@ -3,11 +3,10 @@
 import { useState } from 'react';
 import { isAxiosError } from 'axios';
 import { useForm, useWatch } from 'react-hook-form';
-import { notify } from '@/shared/notify';
 import { customerApi } from '@/entities/customer';
 import { PointAdjustmentDialog } from './PointAdjustmentDialog';
 import { hasPermission, useMe } from '@/entities/user';
-import { getApiErrorMessage, useListPage, useResource } from '@/shared/lib';
+import { useListPage, useResource, useWrite } from '@/shared/lib';
 import {
   Badge,
   Button,
@@ -82,7 +81,7 @@ function MemberLinkContent({ customerId }: MemberLinkSectionProps) {
   const operationReason = useWatch({ control: form.control, name: 'operation_reason' });
   const [isConfirmingLink, setIsConfirmingLink] = useState(false);
   const [needsReconfirmation, setNeedsReconfirmation] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const { busy, write } = useWrite();
   const [isConfirmingUnlink, setIsConfirmingUnlink] = useState(false);
   const [isAdjusting, setIsAdjusting] = useState(false);
   // 権限による UI 出し分け（強制はサーバ側 @PreAuthorize — ここは導線の表示制御のみ）。
@@ -91,57 +90,61 @@ function MemberLinkContent({ customerId }: MemberLinkSectionProps) {
 
   // 現況と履歴の理由を確認できるまで書き込みを止める。現況の 404 は未紐づけを表す。
   const isLinkReady = !isLinkLoading && (linkFailure === null || linkFailure === 'notFound');
-  const canWriteLink = isLinkReady && !isLoading && !failed && !isSubmitting;
+  const canWriteLink = isLinkReady && !isLoading && !failed && !busy;
 
-  const handleLink = async () => {
-    try {
-      setIsSubmitting(true);
-      await customerApi.linkMember(customerId, {
-        member_code: memberCode,
-        expected_link_id: activeLink?.id,
-        operation_reason: operationReason.trim() || undefined,
-      });
-      notify.success('会員を紐づけました');
-      form.reset();
-      setNeedsReconfirmation(false);
-      // 紐づく先が変われば残高の指す台帳も変わる。履歴と一緒に取り直す
-      void reload();
-      await Promise.all([reloadLink(), reloadBalance()]);
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, '会員の紐づけに失敗しました'));
-      await refreshAfterConflict(error);
-    } finally {
-      setIsSubmitting(false);
-    }
+  // 紐づく先が変われば残高の指す台帳も変わる。履歴と一緒に取り直す
+  const reloadAll = () => {
+    void reload();
+    return Promise.all([reloadLink(), reloadBalance()]);
   };
 
-  const handleUnlink = async () => {
+  const handleLink = () =>
+    write(
+      () =>
+        customerApi.linkMember(customerId, {
+          member_code: memberCode,
+          expected_link_id: activeLink?.id,
+          operation_reason: operationReason.trim() || undefined,
+        }),
+      {
+        success: '会員を紐づけました',
+        failure: '会員の紐づけに失敗しました',
+        onSuccess: () => {
+          form.reset();
+          setNeedsReconfirmation(false);
+          return reloadAll();
+        },
+        onFailure: refreshAfterConflict,
+      }
+    );
+
+  const handleUnlink = () => {
     setIsConfirmingUnlink(false);
     if (!activeLink) return;
-    try {
-      setIsSubmitting(true);
-      await customerApi.unlinkMember(customerId, {
-        expected_link_id: activeLink.id,
-        operation_reason: operationReason.trim(),
-      });
-      form.setValue('operation_reason', '');
-      setNeedsReconfirmation(false);
-      notify.success('会員の紐づけを解除しました');
-      void reload();
-      await Promise.all([reloadLink(), reloadBalance()]);
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, '会員の紐づけ解除に失敗しました'));
-      await refreshAfterConflict(error);
-    } finally {
-      setIsSubmitting(false);
-    }
+    const linkId = activeLink.id;
+    return write(
+      () =>
+        customerApi.unlinkMember(customerId, {
+          expected_link_id: linkId,
+          operation_reason: operationReason.trim(),
+        }),
+      {
+        success: '会員の紐づけを解除しました',
+        failure: '会員の紐づけ解除に失敗しました',
+        onSuccess: () => {
+          form.setValue('operation_reason', '');
+          setNeedsReconfirmation(false);
+          return reloadAll();
+        },
+        onFailure: refreshAfterConflict,
+      }
+    );
   };
 
-  async function refreshAfterConflict(error: unknown) {
+  function refreshAfterConflict(error: unknown) {
     if (isAxiosError(error) && error.response?.status === 409) {
       setNeedsReconfirmation(true);
-      void reload();
-      await Promise.all([reloadLink(), reloadBalance()]);
+      return reloadAll();
     }
   }
 
@@ -225,12 +228,7 @@ function MemberLinkContent({ customerId }: MemberLinkSectionProps) {
               <FormItem>
                 <FormLabel>操作理由</FormLabel>
                 <FormControl>
-                  <Textarea
-                    {...field}
-                    required={!!activeLink}
-                    maxLength={500}
-                    disabled={isSubmitting}
-                  />
+                  <Textarea {...field} required={!!activeLink} maxLength={500} disabled={busy} />
                 </FormControl>
                 <FormMessage />
                 <p className="text-sm text-muted-foreground">
@@ -255,7 +253,7 @@ function MemberLinkContent({ customerId }: MemberLinkSectionProps) {
                       {...field}
                       required
                       maxLength={MEMBER_CODE_LENGTH}
-                      disabled={isSubmitting}
+                      disabled={busy}
                       placeholder="数字12桁"
                     />
                   </FormControl>

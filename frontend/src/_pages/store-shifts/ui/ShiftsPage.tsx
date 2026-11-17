@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { notify } from '@/shared/notify';
 import { CastResponse, castApi } from '@/entities/cast';
 import { AttendanceResponse, ShiftResponse, attendanceApi, shiftApi } from '@/entities/shift';
-import { getApiErrorMessage, useResource } from '@/shared/lib';
+import { getApiErrorMessage, useResource, useWrite } from '@/shared/lib';
 import { ConfirmDialog, RegionError, Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/ui';
 import { attendanceByShift, castsWithAttendance } from '../lib/attendance';
 import { monthRange, toDateStr } from '../lib/datetime';
@@ -34,7 +34,8 @@ export default function ShiftsPage() {
   const [selectedDate, setSelectedDate] = useState(() => toDateStr(new Date()));
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ShiftResponse | null>(null);
-  const [publishing, setPublishing] = useState(false);
+  const publication = useWrite();
+  const deletion = useWrite();
   const [attendanceTargetOpen, setAttendanceTargetOpen] = useState(false);
   const [attendanceTarget, setAttendanceTarget] = useState<AttendanceFormTarget | null>(null);
   const [cancellingOpen, setCancellingOpen] = useState(false);
@@ -142,47 +143,51 @@ export default function ShiftsPage() {
    * <p>一括は UI 上の操作にすぎず、データは逐行更新する（一括エンドポイントは無い — ADR 0015）。
    * 途中で落ちた行があっても成功した行だけを差し替えるので、画面はそのあとも本当のことを言う。
    */
-  const changePublication = async (targets: ShiftResponse[], published: boolean) => {
+  const changePublication = (targets: ShiftResponse[], published: boolean) => {
     const ids = targets.map(s => s.id).filter((id): id is string => id !== undefined);
     if (ids.length === 0) return;
-    setPublishing(true);
-    try {
-      const results = await Promise.allSettled(
-        ids.map(id => shiftApi.changePublication(id, published))
-      );
-      const updated = new Map<string, ShiftResponse>();
-      for (const r of results) {
-        if (r.status === 'fulfilled' && r.value?.id !== undefined) updated.set(r.value.id, r.value);
-      }
-      // 取り直しに倒すと、切り替えたばかりのタイムラインが読み込み表示で一瞬消える
-      if (updated.size > 0) {
-        setShiftsData(rows =>
-          (rows ?? []).map(s => (s.id !== undefined ? (updated.get(s.id) ?? s) : s))
+    return publication.write(
+      async () => {
+        const results = await Promise.allSettled(
+          ids.map(id => shiftApi.changePublication(id, published))
         );
+        // 行ごとの結末で案内を選ぶ。送信の側で出すので、画面が外れた後も届く
+        const rejected = results.filter(r => r.status === 'rejected');
+        if (rejected.length === 0) {
+          notify.success(`${ids.length}件のシフトを${published ? '公開' : '非公開に'}しました`);
+        } else if (rejected.length === ids.length) {
+          notify.error(getApiErrorMessage(rejected[0].reason, '公開状態の変更に失敗しました'));
+        } else {
+          notify.error(`${rejected.length}件のシフトの公開状態を変更できませんでした`);
+        }
+        const updated = new Map<string, ShiftResponse>();
+        for (const r of results) {
+          if (r.status === 'fulfilled' && r.value?.id !== undefined)
+            updated.set(r.value.id, r.value);
+        }
+        return updated;
+      },
+      {
+        failure: '公開状態の変更に失敗しました',
+        // 取り直しに倒すと、切り替えたばかりのタイムラインが読み込み表示で一瞬消える
+        onSuccess: updated => {
+          if (updated.size > 0) {
+            setShiftsData(rows =>
+              (rows ?? []).map(s => (s.id !== undefined ? (updated.get(s.id) ?? s) : s))
+            );
+          }
+        },
       }
-      const rejected = results.filter(r => r.status === 'rejected');
-      if (rejected.length === 0) {
-        notify.success(`${ids.length}件のシフトを${published ? '公開' : '非公開に'}しました`);
-      } else if (rejected.length === ids.length) {
-        notify.error(getApiErrorMessage(rejected[0].reason, '公開状態の変更に失敗しました'));
-      } else {
-        notify.error(`${rejected.length}件のシフトの公開状態を変更できませんでした`);
-      }
-    } finally {
-      setPublishing(false);
-    }
+    );
   };
 
   /** 確認を経た削除。行が消えるので公開切替のような局所差し替えは効かず、取り直しで映す。 */
-  const deleteShift = async (shift: ShiftResponse) => {
-    try {
-      await shiftApi.delete(shift.id);
-      notify.success('シフトを削除しました');
-      void reloadShifts();
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, 'シフトの削除に失敗しました'));
-    }
-  };
+  const deleteShift = (shift: ShiftResponse) =>
+    deletion.write(() => shiftApi.delete(shift.id), {
+      success: 'シフトを削除しました',
+      failure: 'シフトの削除に失敗しました',
+      onSuccess: () => void reloadShifts(),
+    });
 
   const openAdd = () => {
     setEditing(null);
@@ -279,7 +284,7 @@ export default function ShiftsPage() {
             onChangeDate={setSelectedDate}
             onAddShift={openAdd}
             onEditShift={openEdit}
-            publishing={publishing}
+            publishing={publication.busy}
             onChangePublication={(targets, published) => void changePublication(targets, published)}
           />
           {/* 取得失敗はタイムラインが名乗る。同じ取得を映すパネルにまで二重に名乗らせず、
@@ -288,7 +293,7 @@ export default function ShiftsPage() {
             <ShiftDayList
               shifts={dayShifts}
               casts={casts}
-              publishing={publishing}
+              publishing={publication.busy}
               attendedShiftIds={attendedShiftIds}
               attendanceLoading={attendancesLoading}
               onChangePublication={(targets, published) =>

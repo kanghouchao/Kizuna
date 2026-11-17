@@ -122,7 +122,7 @@ export function ApplicantDecisionForm({
             <p className="text-sm text-muted-foreground">
               {hireHint}確定後は編集・再開できません。
             </p>
-            <Button type="submit" disabled={busy || form.formState.isSubmitting}>
+            <Button type="submit" disabled={busy}>
               採否を確定
             </Button>
           </fieldset>

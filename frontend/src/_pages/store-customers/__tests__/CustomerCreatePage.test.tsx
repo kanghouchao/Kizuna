@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { startTransition } from 'react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import CustomerCreatePage from '../ui/CustomerCreatePage';
 import { customerApi } from '@/entities/customer';
 import { notify } from '@/shared/notify';
@@ -20,6 +21,8 @@ jest.mock('@/entities/user', () => ({
 }));
 jest.mock('@/entities/customer', () => ({ customerApi: { create: jest.fn() } }));
 jest.mock('@/shared/notify', () => ({ notify: { success: jest.fn(), error: jest.fn() } }));
+
+beforeEach(() => jest.clearAllMocks());
 
 test('連絡先の登録エラーを具体的に伝え、入力を修正して再送できる', async () => {
   (customerApi.create as jest.Mock)
@@ -45,4 +48,44 @@ test('連絡先の登録エラーを具体的に伝え、入力を修正して�
       contacts: [{ type: 'PHONE', value: '09012345678' }],
     })
   );
+});
+
+test('応答が返ってから遷移が終わるまで、送信ボタンを押せないままにする', async () => {
+  let respond!: (value: { id: string }) => void;
+  (customerApi.create as jest.Mock).mockImplementationOnce(
+    () => new Promise(resolve => (respond = resolve))
+  );
+  let arrive!: () => void;
+  // router.push と同じく何も返さず、自分の transition の中で画面を進める
+  mockPush.mockImplementationOnce(() => {
+    startTransition(async () => {
+      await new Promise<void>(resolve => (arrive = resolve));
+    });
+  });
+  render(<CustomerCreatePage />);
+  fireEvent.change(screen.getByLabelText('名前 *'), { target: { value: '遷移待ち' } });
+  fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+  await waitFor(() => expect(customerApi.create).toHaveBeenCalled());
+  expect(screen.getByRole('button', { name: '保存中...' })).toBeDisabled();
+
+  await act(async () => respond({ id: 'new' }));
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/1/customers'));
+  expect(screen.getByRole('button', { name: '保存中...' })).toBeDisabled();
+
+  await act(async () => arrive());
+  expect(screen.getByRole('button', { name: '保存する' })).toBeEnabled();
+});
+
+test('同じフレームで二度送信しても、登録は一度しか送らない', async () => {
+  (customerApi.create as jest.Mock).mockResolvedValue({ id: 'new' });
+  render(<CustomerCreatePage />);
+  fireEvent.change(screen.getByLabelText('名前 *'), { target: { value: '二度押し' } });
+  const submit = screen.getByRole('button', { name: '保存する' });
+  act(() => {
+    fireEvent.click(submit);
+    fireEvent.click(submit);
+  });
+  await waitFor(() => expect(mockPush).toHaveBeenCalled());
+  await waitFor(() => expect(screen.getByRole('button', { name: '保存する' })).toBeEnabled());
+  expect(customerApi.create).toHaveBeenCalledTimes(1);
 });
