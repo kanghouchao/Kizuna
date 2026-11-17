@@ -1,11 +1,10 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { taskExecutionApi, ExecutionSummary } from '@/entities/task-execution';
-import { createUuid, getApiErrorMessage, useListPage, useResource } from '@/shared/lib';
+import { createUuid, useListPage, useResource, useWrite } from '@/shared/lib';
 import { TriangleAlertIcon } from 'lucide-react';
-import { notify } from '@/shared/notify';
 import {
   Badge,
   Button,
@@ -66,21 +65,17 @@ function time(value: string | null) {
 function ExecutionDetail({ id, onChanged }: { id: number; onChanged: (id: number) => void }) {
   const detail = useResource(() => taskExecutionApi.get(id), [id]);
   const form = useForm<{ reason: string }>({ defaultValues: { reason: '' } });
-  const [busy, setBusy] = useState(false);
-  const mutate = async (kind: 'retry' | 'interrupt', reason: string) => {
-    setBusy(true);
-    try {
-      const result = await taskExecutionApi[kind](id, reason);
-      detail.setData(result);
-      form.reset();
-      onChanged(result.execution.id);
-      notify.success(kind === 'retry' ? '再試行の結果を記録しました' : '中断を記録しました');
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, '操作に失敗しました'));
-    } finally {
-      setBusy(false);
-    }
-  };
+  const { busy, write } = useWrite();
+  const mutate = (kind: 'retry' | 'interrupt', reason: string) =>
+    write(() => taskExecutionApi[kind](id, reason), {
+      success: kind === 'retry' ? '再試行の結果を記録しました' : '中断を記録しました',
+      failure: '操作に失敗しました',
+      onSuccess: result => {
+        detail.setData(result);
+        form.reset();
+        onChanged(result.execution.id);
+      },
+    });
   if (detail.isLoading) return <p>読み込み中...</p>;
   if (detail.failure || !detail.data)
     return (
@@ -252,39 +247,35 @@ export default function TaskExecutionsPage() {
     defaultValues: { service: '', date: '' },
   });
   const pending = useRef<{ signature: string; key: string } | null>(null);
-  const generation = useRef(0);
-  useEffect(
-    () => () => {
-      generation.current++;
-    },
-    []
-  );
-  const submit = async (values: { service: string; date: string }) => {
+  const { busy, write } = useWrite();
+  const submit = (values: { service: string; date: string }) => {
     if (!taskType?.manual_allowed) return;
-    const currentGeneration = generation.current;
     const signature = JSON.stringify({ ...values, taskName });
     if (pending.current?.signature !== signature)
       pending.current = {
         signature,
         key: createUuid(),
       };
-    try {
-      const result = await taskExecutionApi.create({
-        task_name: taskName,
-        logical_key: pending.current.key,
-        service_user_id: Number(values.service),
-        period_start: values.date,
-        period_end: values.date,
-      });
-      if (generation.current !== currentGeneration) return;
-      pending.current = null;
-      setSelected(result.execution.id);
-      setDetailOpen(true);
-      void list.reload();
-    } catch (error) {
-      if (generation.current === currentGeneration)
-        notify.error(getApiErrorMessage(error, '実行に失敗しました'));
-    }
+    const logicalKey = pending.current.key;
+    return write(
+      () =>
+        taskExecutionApi.create({
+          task_name: taskName,
+          logical_key: logicalKey,
+          service_user_id: Number(values.service),
+          period_start: values.date,
+          period_end: values.date,
+        }),
+      {
+        failure: '実行に失敗しました',
+        onSuccess: result => {
+          pending.current = null;
+          setSelected(result.execution.id);
+          setDetailOpen(true);
+          void list.reload();
+        },
+      }
+    );
   };
   return (
     <div className="space-y-6">
@@ -299,7 +290,7 @@ export default function TaskExecutionsPage() {
           <Label htmlFor="task-name">処理</Label>
           <Select
             value={taskName}
-            disabled={form.formState.isSubmitting || catalog.isLoading}
+            disabled={busy || catalog.isLoading}
             items={(catalog.data ?? []).map(task => ({
               value: task.name,
               label: taskLabel(task.name),
@@ -310,7 +301,6 @@ export default function TaskExecutionsPage() {
               setCandidatePage(0);
               candidates.setData(null);
               pending.current = null;
-              generation.current++;
               setTaskName(value);
             }}
           >
@@ -436,13 +426,13 @@ export default function TaskExecutionsPage() {
               <Button
                 type="submit"
                 disabled={
-                  form.formState.isSubmitting ||
+                  busy ||
                   !candidates.data?.rows.length ||
                   !taskType?.manual_allowed ||
                   catalog.failure !== null
                 }
               >
-                {form.formState.isSubmitting
+                {busy
                   ? '実行中...'
                   : (TASK_COPY[taskName] ?? TASK_COPY.SERVICE_IDENTITY_CHECK).action}
               </Button>

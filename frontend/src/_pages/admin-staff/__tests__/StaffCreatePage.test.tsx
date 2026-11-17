@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { startTransition } from 'react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import { staffApi, useStoreContext } from '@/entities/user';
 import { StaffCreatePage } from '..';
@@ -35,6 +36,18 @@ const givenStores = (
     reload,
   } as unknown as ReturnType<typeof useStoreContext>);
   return reload;
+};
+
+// router.push と同じく何も返さず、自分の transition の中で画面を進める。返り値で遷移を終わらせる
+const holdNavigation = () => {
+  let arrive: () => void = () => {};
+  const navigating = new Promise<void>(resolve => (arrive = resolve));
+  mockPush.mockImplementationOnce(() => {
+    startTransition(async () => {
+      await navigating;
+    });
+  });
+  return () => arrive();
 };
 
 const fillIdentity = () => {
@@ -92,6 +105,24 @@ describe('従業員追加ページ', () => {
     expect(mockedNotify.success).toHaveBeenCalledWith('従業員を追加しました');
   });
 
+  it('応答が返ってから一覧への遷移が終わるまで、追加ボタンを押せないままにする', async () => {
+    const arrive = holdNavigation();
+    render(<StaffCreatePage />);
+
+    fillIdentity();
+    fireEvent.click(await screen.findByRole('checkbox', { name: /スタッフ/ }));
+    const submit = screen.getByRole('button', { name: '追加する' });
+    fireEvent.click(submit);
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/staff'));
+    expect(submit).toBeDisabled();
+    fireEvent.click(submit);
+    expect(mockedStaffApi.create).toHaveBeenCalledTimes(1);
+
+    await act(async () => arrive());
+    await waitFor(() => expect(submit).toBeEnabled());
+  });
+
   it('ロール・本人の欄が欠けていれば欄の傍に文言を出し、作成 API を呼ばない', async () => {
     render(<StaffCreatePage />);
     await screen.findByRole('checkbox', { name: '店長' });
@@ -121,7 +152,7 @@ describe('従業員追加ページ', () => {
     );
     expect(mockPush).not.toHaveBeenCalled();
     expect(screen.getByLabelText('氏名')).toHaveValue('新人 花子');
-    expect(screen.getByRole('button', { name: '追加する' })).toBeEnabled();
+    await waitFor(() => expect(screen.getByRole('button', { name: '追加する' })).toBeEnabled());
   });
 
   it('この設定の結果が氏名・ロール・店舗の選択に追従する', async () => {

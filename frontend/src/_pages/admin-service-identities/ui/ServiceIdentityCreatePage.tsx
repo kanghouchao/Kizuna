@@ -3,8 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { serviceIdentityApi } from '@/entities/user';
 import { GrantForm, toGrantRequest, type GrantFormValues } from '@/features/staff-management';
-import { getApiErrorMessage } from '@/shared/lib';
-import { notify } from '@/shared/notify';
+import { useWrite } from '@/shared/lib';
 import { FormControl, FormField, FormItem, FormLabel, FormMessage, Input } from '@/shared/ui';
 import { PageHeader } from '@/widgets/page-header';
 import { LIST_HREF, SERVICE_IDENTITY_GRANT_FORM } from './serviceIdentityForm';
@@ -12,18 +11,21 @@ import { LIST_HREF, SERVICE_IDENTITY_GRANT_FORM } from './serviceIdentityForm';
 export default function ServiceIdentityCreatePage() {
   const router = useRouter();
 
+  const { busy, write } = useWrite();
+
   const submit = async (values: GrantFormValues) => {
-    try {
-      await serviceIdentityApi.create({
-        display_name: values.display_name,
-        ...toGrantRequest(values),
-      });
-    } catch (error) {
-      notify.error(getApiErrorMessage(error, 'サービスIDの追加に失敗しました'));
-      return;
-    }
-    notify.success('サービスIDを追加しました');
-    router.push(LIST_HREF);
+    await write(
+      () =>
+        serviceIdentityApi.create({
+          display_name: values.display_name,
+          ...toGrantRequest(values),
+        }),
+      {
+        success: 'サービスIDを追加しました',
+        failure: 'サービスIDの追加に失敗しました',
+        onSuccess: () => router.push(LIST_HREF),
+      }
+    );
   };
 
   return (
@@ -63,6 +65,7 @@ export default function ServiceIdentityCreatePage() {
         }}
         unnamedSubject="新しいサービスID"
         loadRoles={serviceIdentityApi.grantableRoles}
+        locked={busy}
         onSubmit={submit}
       />
     </div>

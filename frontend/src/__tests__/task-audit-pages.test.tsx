@@ -99,7 +99,8 @@ test('実行要求の応答を受け取れなくても同じ入力の再送に�
   expect(first.logical_key).toMatch(
     /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
   );
-  fireEvent.click(screen.getByRole('button', { name: '実行確認を記録' }));
+  // busy は失敗の案内より後に戻る
+  fireEvent.click(await screen.findByRole('button', { name: '実行確認を記録' }));
   const modal = await screen.findByRole('dialog');
   expect(await within(modal).findByText('成功', { exact: true })).toBeVisible();
   expect(tasks.create).toHaveBeenCalledTimes(2);
@@ -148,7 +149,7 @@ test('再試行の競合では理由を保持し成功するまで履歴を変�
     initiated_by: 20,
     reason: '修正したため',
   });
-  fireEvent.click(within(modal).getByRole('button', { name: '再試行する' }));
+  fireEvent.click(await within(modal).findByRole('button', { name: '再試行する' }));
   expect(await within(modal).findByText('成功', { exact: true })).toBeVisible();
   expect(within(modal).queryByRole('button', { name: '再試行する' })).not.toBeInTheDocument();
   expect(tasks.retry).toHaveBeenLastCalledWith(1, '修正したため');

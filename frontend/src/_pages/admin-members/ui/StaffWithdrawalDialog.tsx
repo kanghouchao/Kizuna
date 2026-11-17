@@ -2,7 +2,7 @@
 
 import { useForm, useWatch } from 'react-hook-form';
 import { adminMemberApi } from '@/entities/member';
-import { getApiErrorMessage, isConflict } from '@/shared/lib';
+import { getApiErrorMessage, isConflict, useWrite } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import {
   Button,
@@ -49,31 +49,31 @@ export function StaffWithdrawalDialog({
   onWithdrawn,
 }: StaffWithdrawalDialogProps) {
   const form = useForm<FormValues>({ defaultValues: { reason: '', confirmation: '' } });
-  const {
-    control,
-    handleSubmit,
-    reset,
-    formState: { isSubmitting },
-  } = form;
+  const { control, handleSubmit, reset } = form;
+  const { busy, write } = useWrite();
   const confirmed = useWatch({ control, name: 'confirmation' }) === CONFIRMATION_WORD;
 
-  const submit = async (values: FormValues) => {
-    try {
-      await adminMemberApi.withdraw(memberId, { reason: values.reason });
-      notify.success('会員を退会させました');
-      onClose();
-      onWithdrawn();
-    } catch (error) {
-      if (isConflict(error)) {
-        // 画面を開いている間に本人か別の職員が退会させた。退会済みの事実を詳細で読ませる
-        notify.warning('この会員は既に退会しています。最新の内容を確認してください');
-        onClose();
-        onWithdrawn();
-        return;
-      }
-      notify.error(getApiErrorMessage(error, '退会の手続きに失敗しました'));
-    }
+  const closeAndReload = () => {
+    onClose();
+    onWithdrawn();
   };
+
+  const submit = (values: FormValues) =>
+    write(() => adminMemberApi.withdraw(memberId, { reason: values.reason }), {
+      success: '会員を退会させました',
+      failure: error => {
+        if (isConflict(error)) {
+          notify.warning('この会員は既に退会しています。最新の内容を確認してください');
+        } else {
+          notify.error(getApiErrorMessage(error, '退会の手続きに失敗しました'));
+        }
+      },
+      onSuccess: closeAndReload,
+      // 画面を開いている間に本人か別の職員が退会させた。退会済みの事実を詳細で読ませる
+      onFailure: error => {
+        if (isConflict(error)) closeAndReload();
+      },
+    });
 
   return (
     <Dialog
@@ -103,8 +103,8 @@ export function StaffWithdrawalDialog({
               <Button type="button" variant="outline" onClick={onClose}>
                 キャンセル
               </Button>
-              <Button type="submit" variant="destructive" disabled={!confirmed || isSubmitting}>
-                {isSubmitting ? '手続き中...' : '退会させる'}
+              <Button type="submit" variant="destructive" disabled={!confirmed || busy}>
+                {busy ? '手続き中...' : '退会させる'}
               </Button>
             </>
           }

@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { startTransition } from 'react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { PageResult } from '@/shared/api';
 import { Store, adminStoreApi } from '@/entities/store';
 import StoresPage from '../ui/StoresPage';
@@ -36,6 +37,18 @@ jest.mock('@/shared/notify', () => ({
 }));
 
 const mockedApi = adminStoreApi as jest.Mocked<typeof adminStoreApi>;
+
+// router.push と同じく何も返さず、自分の transition の中で画面を進める。返り値で遷移を終わらせる
+const holdNavigation = () => {
+  let arrive: () => void = () => {};
+  const navigating = new Promise<void>(resolve => (arrive = resolve));
+  mockPush.mockImplementationOnce(() => {
+    startTransition(async () => {
+      await navigating;
+    });
+  });
+  return () => arrive();
+};
 
 const store = (override: Partial<Store>): Store => ({
   id: '1',
@@ -269,6 +282,26 @@ describe('店舗管理 3 画面の挙動', () => {
     });
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/stores'));
     expect(mockReloadStores).toHaveBeenCalledTimes(1);
+  });
+
+  it('新規作成は応答が返ってから一覧への遷移が終わるまで、作成ボタンを押せないままにすること', async () => {
+    mockedApi.create.mockResolvedValue({ id: 1 });
+    const arrive = holdNavigation();
+
+    render(<StoreCreatePage />);
+    fireEvent.change(screen.getByLabelText(/店舗名/), { target: { value: 'ガンマ店' } });
+    fireEvent.change(screen.getByLabelText(/略称/), { target: { value: '新宿' } });
+    fireEvent.change(screen.getByLabelText(/ドメイン/), { target: { value: 'gamma.example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: '店舗を作成' }));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/stores'));
+    const creating = screen.getByRole('button', { name: '作成中...' });
+    expect(creating).toBeDisabled();
+    fireEvent.click(creating);
+    expect(mockedApi.create).toHaveBeenCalledTimes(1);
+
+    await act(async () => arrive());
+    expect(await screen.findByRole('button', { name: '店舗を作成' })).toBeEnabled();
   });
 
   it('新規作成はドメイン形式が不正なら送信せずエラーを表示すること', async () => {

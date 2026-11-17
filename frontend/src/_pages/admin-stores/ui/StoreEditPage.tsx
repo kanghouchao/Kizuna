@@ -1,19 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { startTransition, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Store, UpdateStoreRequest, adminStoreApi, storeShortNameError } from '@/entities/store';
 import { useStoreContext } from '@/entities/user';
-import { getApiErrorMessage, useResource } from '@/shared/lib';
+import { useResource, useWrite } from '@/shared/lib';
 import { Button, Card, CardContent, Input, Label, RegionError } from '@/shared/ui';
-import { notify } from '@/shared/notify';
 
 export default function EditStorePage() {
   const id = useParams<{ id: string }>()?.id;
   const router = useRouter();
   const { reload: reloadStores } = useStoreContext();
 
-  const [saving, setSaving] = useState(false);
+  const { busy: saving, write } = useWrite();
   const {
     data: store,
     isLoading: loading,
@@ -44,37 +43,41 @@ export default function EditStorePage() {
     return Object.keys(next).length === 0;
   };
 
-  const handleSave = async (e: React.FormEvent) => {
+  const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!store) return;
     if (!validate()) return;
-    setSaving(true);
-    try {
-      await adminStoreApi.update(store.id, {
-        ...formData,
-        short_name: formData.short_name.trim(),
-      });
-      reloadStores();
-      notify.success('店舗情報を更新しました');
-      router.push('/admin/stores');
-    } catch (err: unknown) {
-      if (
-        typeof err === 'object' &&
-        err !== null &&
-        'response' in err &&
-        typeof err.response === 'object' &&
-        err.response !== null &&
-        'data' in err.response &&
-        typeof err.response.data === 'object' &&
-        err.response.data !== null &&
-        'errors' in err.response.data
-      ) {
-        setErrors(err.response.data.errors as Partial<UpdateStoreRequest>);
+    void write(
+      () =>
+        adminStoreApi.update(store.id, {
+          ...formData,
+          short_name: formData.short_name.trim(),
+        }),
+      {
+        success: '店舗情報を更新しました',
+        failure: '更新に失敗しました。入力内容をご確認ください',
+        onSuccess: () => {
+          reloadStores();
+          router.push('/admin/stores');
+        },
+        onFailure: error => {
+          if (
+            typeof error === 'object' &&
+            error !== null &&
+            'response' in error &&
+            typeof error.response === 'object' &&
+            error.response !== null &&
+            'data' in error.response &&
+            typeof error.response.data === 'object' &&
+            error.response.data !== null &&
+            'errors' in error.response.data
+          ) {
+            const fieldErrors = error.response.data.errors as Partial<UpdateStoreRequest>;
+            startTransition(() => setErrors(fieldErrors));
+          }
+        },
       }
-      notify.error(getApiErrorMessage(err, '更新に失敗しました。入力内容をご確認ください'));
-    } finally {
-      setSaving(false);
-    }
+    );
   };
 
   if (loading) {
