@@ -304,6 +304,24 @@ describe('店舗管理 3 画面の挙動', () => {
     expect(await screen.findByRole('button', { name: '店舗を作成' })).toBeEnabled();
   });
 
+  it('新規作成は応答の前に画面を離れても、共有の店舗一覧を取り直し、遷移はしないこと', async () => {
+    let respond: (value: { id: number }) => void = () => {};
+    mockedApi.create.mockImplementationOnce(() => new Promise(resolve => (respond = resolve)));
+
+    const { unmount } = render(<StoreCreatePage />);
+    fireEvent.change(screen.getByLabelText(/店舗名/), { target: { value: 'ガンマ店' } });
+    fireEvent.change(screen.getByLabelText(/略称/), { target: { value: '新宿' } });
+    fireEvent.change(screen.getByLabelText(/ドメイン/), { target: { value: 'gamma.example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: '店舗を作成' }));
+    await waitFor(() => expect(mockedApi.create).toHaveBeenCalledTimes(1));
+
+    unmount();
+    await act(async () => respond({ id: 1 }));
+
+    await waitFor(() => expect(mockReloadStores).toHaveBeenCalledTimes(1));
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
   it('新規作成はドメイン形式が不正なら送信せずエラーを表示すること', async () => {
     render(<StoreCreatePage />);
     fireEvent.change(screen.getByLabelText(/店舗名/), { target: { value: 'ガンマ店' } });
