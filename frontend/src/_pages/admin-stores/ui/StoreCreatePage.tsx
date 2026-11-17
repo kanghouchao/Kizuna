@@ -62,14 +62,15 @@ export default function CreateStorePage() {
     }
 
     void write(
-      () => adminStoreApi.create({ ...formData, short_name: formData.short_name.trim() }),
+      async () => {
+        await adminStoreApi.create({ ...formData, short_name: formData.short_name.trim() });
+        // 店舗一覧は画面をまたいで共有される。反映は画面を離れると呼ばれないので、応答の直後に取り直す
+        reloadStores();
+      },
       {
         success: '店舗を作成しました。店舗一覧に戻ります',
         failure: '店舗作成に失敗しました。入力内容をご確認ください',
-        onSuccess: () => {
-          reloadStores();
-          router.push('/admin/stores');
-        },
+        onSuccess: () => router.push('/admin/stores'),
         onFailure: error => {
           if (
             typeof error === 'object' &&
