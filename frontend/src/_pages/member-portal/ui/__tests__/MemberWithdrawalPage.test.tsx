@@ -81,8 +81,9 @@ describe('MemberWithdrawalPage', () => {
     expect(notify.success).not.toHaveBeenCalled();
     // ログアウトの遷移中は再び押せない
     expect(screen.getByRole('button', { name: '手続き中...' })).toBeDisabled();
-    // 終わらない transition を残すと、同じファイルの後続のテストの busy まで戻らなくなる
+    // ログアウトが遷移せずに終わっても、成立した退会を送り直させない
     await act(async () => leave());
+    expect(screen.getByRole('button', { name: '手続き中...' })).toBeDisabled();
   });
 
   it('失敗したらサーバの文言で知らせ、ログアウトせず画面に入力を残す', async () => {

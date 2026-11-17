@@ -3,7 +3,6 @@
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
-import { notify } from '@/shared/notify';
 import { memberOrderApplicationApi } from '@/entities/order';
 import { ConfirmedShiftCast, shiftApi } from '@/entities/shift';
 import { formatTime, integerRule, useResource, useWrite } from '@/shared/lib';
@@ -113,7 +112,7 @@ export function MemberReservationForm({
         }),
       {
         success: '予約を申請しました',
-        failure: () => notify.error('予約の申請に失敗しました'),
+        failure: '予約の申請に失敗しました',
         onSuccess: () => router.push('/member/reservations/'),
       }
     );

@@ -75,23 +75,38 @@ describe('useWrite', () => {
     expect(result.current.busy).toBe(false);
   });
 
-  it('failure が関数ならエラーを渡して案内を任せ、返した promise が終わるまで busy を残す', async () => {
+  it('failure が関数ならエラーを渡して案内を任せる', async () => {
     const { result } = renderHook(() => useWrite());
     const error = { response: { status: 409, data: {} } };
-    const handling = deferred();
-    const onFailure = jest.fn(() => handling.promise);
+    const present = jest.fn();
+
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.write(() => Promise.reject(error), { failure: present });
+    });
+
+    expect(outcome).toBe('failed');
+    expect(present).toHaveBeenCalledWith(error);
+    expect(notify.error).not.toHaveBeenCalled();
+  });
+
+  it('onFailure にエラーを渡し、返した promise が終わるまで busy を残す', async () => {
+    const { result } = renderHook(() => useWrite());
+    const error = { response: { status: 404, data: {} } };
+    const reloading = deferred();
+    const onFailure = jest.fn(() => reloading.promise);
 
     let pending: Promise<unknown> = Promise.resolve();
     await act(async () => {
-      pending = result.current.write(() => Promise.reject(error), { failure: onFailure });
+      pending = result.current.write(() => Promise.reject(error), { failure, onFailure });
     });
 
     expect(onFailure).toHaveBeenCalledWith(error);
-    expect(notify.error).not.toHaveBeenCalled();
+    expect(notify.error).toHaveBeenCalledWith(failure);
     expect(result.current.busy).toBe(true);
 
     await act(async () => {
-      handling.resolve();
+      reloading.resolve();
       await pending;
     });
     expect(await pending).toBe('failed');
@@ -238,5 +253,24 @@ describe('useWrite', () => {
 
     expect(notify.success).toHaveBeenCalledWith('保存しました');
     expect(onSuccess).not.toHaveBeenCalled();
+  });
+
+  it('画面が外れた後の失敗は、案内だけを出して反映しない', async () => {
+    const { result, unmount } = renderHook(() => useWrite());
+    const response = deferred<null>();
+    const onFailure = jest.fn();
+
+    let pending: Promise<unknown> = Promise.resolve();
+    act(() => {
+      pending = result.current.write(() => response.promise, { failure, onFailure });
+    });
+    unmount();
+    await act(async () => {
+      response.reject({ response: { status: 500, data: {} } });
+      await pending;
+    });
+
+    expect(notify.error).toHaveBeenCalledWith(failure);
+    expect(onFailure).not.toHaveBeenCalled();
   });
 });

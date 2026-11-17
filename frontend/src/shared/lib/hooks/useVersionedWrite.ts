@@ -1,8 +1,7 @@
 'use client';
 
 import { startTransition, useRef, useState } from 'react';
-import { notify } from '@/shared/notify';
-import { getApiErrorMessage, isConflict, isNotFound } from '../apiError';
+import { isConflict, isNotFound } from '../apiError';
 import { useWrite } from './useWrite';
 
 /** 書き込みの結末。表示（案内・ダイアログ・行の取り直し）は呼び出し側がこれで選ぶ。 */
@@ -25,7 +24,7 @@ interface WriteMessages<R> {
 export function useVersionedWrite(reloadTarget: () => void | Promise<void>) {
   const conflictRef = useRef(false);
   const latestReload = useRef(0);
-  const { busy, write: send } = useWrite();
+  const base = useWrite();
   const [conflict, setConflict] = useState(false);
 
   const markConflict = (value: boolean) => {
@@ -34,28 +33,28 @@ export function useVersionedWrite(reloadTarget: () => void | Promise<void>) {
   };
 
   const write = async <R>(
-    request: () => Promise<R>,
+    send: () => Promise<R>,
     { success, failure, onSuccess }: WriteMessages<R>
   ): Promise<WriteOutcome> => {
     if (conflictRef.current) return 'refused';
-    let failed: WriteOutcome = 'failed';
-    const outcome = await send(request, {
+    let failedAs: WriteOutcome = 'failed';
+    const outcome = await base.write(send, {
       success,
-      failure: async error => {
-        notify.error(getApiErrorMessage(error, failure));
+      failure,
+      onSuccess,
+      onFailure: async error => {
         if (isConflict(error)) {
+          failedAs = 'conflict';
           // busy が戻るのと同じ描画で競合を見せる。先に見せると、押しても送信中として捨てられる案内が出る
           startTransition(() => markConflict(true));
-          failed = 'conflict';
         } else if (isNotFound(error)) {
-          failed = 'notFound';
+          failedAs = 'notFound';
           // 取り直しが終わるまで送信中のまま。終わる前に次を受けると古い版で送る
           await reloadTarget();
         }
       },
-      onSuccess,
     });
-    return outcome === 'failed' ? failed : outcome;
+    return outcome === 'failed' ? failedAs : outcome;
   };
 
   /**
@@ -71,5 +70,5 @@ export function useVersionedWrite(reloadTarget: () => void | Promise<void>) {
     }
   };
 
-  return { busy, conflict, write, reload };
+  return { busy: base.busy, conflict, write, reload };
 }
