@@ -57,22 +57,22 @@ export function ContactPermissionDialog({
   };
   const save = form.handleSubmit(data =>
     write(
-      () =>
-        customerApi.setContactPermission(customerId, contact.id, purpose, {
+      async () => {
+        await customerApi.setContactPermission(customerId, contact.id, purpose, {
           ...data,
           source: data.source.trim(),
           reason: data.reason.trim(),
-        }),
+        });
+        // 一覧はこのダイアログより長く残る。別の行のダイアログに替わった後も取り直すため、送信の中で呼ぶ
+        onSaved();
+      },
       {
         success: '連絡可否を更新しました',
         failure: error => {
           if (!isNotFound(error))
             notify.error(getApiErrorMessage(error, '連絡可否を更新できませんでした'));
         },
-        onSuccess: () => {
-          onClose();
-          onSaved();
-        },
+        onSuccess: onClose,
         onFailure: error => {
           if (isNotFound(error)) setGone(true);
         },

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import { castApi } from '@/entities/cast';
 import { InvitationButton } from '../InvitationButton';
@@ -51,6 +51,31 @@ describe('キャスト招待の行内発行ボタン', () => {
     fireEvent.click(screen.getByRole('button', { name: '招待を発行' }));
 
     await waitFor(() => expect(mockedCastApi.issueInvitation).toHaveBeenCalledWith('c1'));
+    expect(onIssued).toHaveBeenCalledWith({
+      token: 'tok-1',
+      expiresAt: '2026-07-31T15:00:00Z',
+    });
+  });
+
+  it('応答の前に行が外れても、発行した token を親へ渡す', async () => {
+    let respond: (value: unknown) => void = () => {};
+    mockedCastApi.issueInvitation.mockReturnValue(
+      new Promise(resolve => {
+        respond = resolve;
+      }) as never
+    );
+    const onIssued = jest.fn();
+    const { unmount } = render(
+      <InvitationButton castId="c1" status="NOT_INVITED" onIssued={onIssued} />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: '招待を発行' }));
+    await waitFor(() => expect(mockedCastApi.issueInvitation).toHaveBeenCalled());
+    unmount();
+    await act(async () => {
+      respond({ token: 'tok-1', expires_at: '2026-07-31T15:00:00Z' });
+    });
+
     expect(onIssued).toHaveBeenCalledWith({
       token: 'tok-1',
       expiresAt: '2026-07-31T15:00:00Z',

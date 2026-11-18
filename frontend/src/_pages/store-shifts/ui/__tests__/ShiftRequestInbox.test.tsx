@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import { ShiftRequestInbox } from '../ShiftRequestInbox';
 import { CastResponse } from '@/entities/cast';
@@ -168,6 +168,30 @@ describe('ShiftRequestInbox', () => {
     await waitFor(() => expect(mockedApprove).toHaveBeenCalledWith('sr1', undefined));
     await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
     expect(onApproved).toHaveBeenCalledTimes(1);
+  });
+
+  it('応答の前に一覧が外れても、承認の後にシフトを再取得すること', async () => {
+    mockedList.mockResolvedValue([REQUEST]);
+    let respond: (value: unknown) => void = () => {};
+    mockedApprove.mockReturnValue(
+      new Promise(resolve => {
+        respond = resolve;
+      })
+    );
+    const onApproved = jest.fn();
+
+    const { unmount } = render(<ShiftRequestInbox casts={CASTS} onApproved={onApproved} />);
+    await screen.findByText('キャストA');
+
+    fireEvent.click(screen.getByRole('button', { name: '承認' }));
+    await waitFor(() => expect(mockedApprove).toHaveBeenCalled());
+    unmount();
+    await act(async () => {
+      respond({ ...REQUEST, status: 'APPROVED' });
+    });
+
+    expect(onApproved).toHaveBeenCalledTimes(1);
+    expect(mockedList).toHaveBeenCalledTimes(1);
   });
 
   it('非公開で承認すると出生時から非公開が指定されること', async () => {

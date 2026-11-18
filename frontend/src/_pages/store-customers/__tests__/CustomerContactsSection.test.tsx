@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { ContactPermissionDialog } from '../ui/ContactPermissionDialog';
 import { CustomerContactsSection } from '../ui/CustomerContactsSection';
 import { customerApi } from '@/entities/customer';
 import { notify } from '@/shared/notify';
@@ -269,4 +270,44 @@ test('連絡先と履歴はそれぞれのページ送りで次のページを�
   expect(await screen.findByText('+819022222222')).toBeInTheDocument();
   expect(screen.queryByText('+819011111111')).not.toBeInTheDocument();
   expect(customerApi.contacts).toHaveBeenLastCalledWith('customer1', 1);
+});
+
+test('応答の前に可否のダイアログが外れても、保存の後に一覧を取り直す', async () => {
+  let respond: () => void = () => {};
+  (customerApi.setContactPermission as jest.Mock).mockReturnValue(
+    new Promise<void>(resolve => {
+      respond = resolve;
+    })
+  );
+  const onSaved = jest.fn();
+  const onClose = jest.fn();
+  const { unmount } = render(
+    <ContactPermissionDialog
+      customerId="customer1"
+      contact={
+        {
+          id: 'phone1',
+          type: 'PHONE',
+          value: '+819012345678',
+          business_status: 'ALLOWED',
+          marketing_status: 'UNKNOWN',
+        } as never
+      }
+      purpose="BUSINESS"
+      open
+      onClose={onClose}
+      onSaved={onSaved}
+    />
+  );
+  fireEvent.change(screen.getByLabelText('出所'), { target: { value: '電話' } });
+  fireEvent.change(screen.getByLabelText('根拠'), { target: { value: '本人からの回答' } });
+  fireEvent.click(screen.getByRole('button', { name: '可否を保存' }));
+  await waitFor(() => expect(customerApi.setContactPermission).toHaveBeenCalled());
+  unmount();
+  await act(async () => {
+    respond();
+  });
+
+  expect(onSaved).toHaveBeenCalledTimes(1);
+  expect(onClose).not.toHaveBeenCalled();
 });
