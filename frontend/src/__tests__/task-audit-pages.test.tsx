@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import TaskExecutionsPage from '@/_pages/admin-task-executions';
 import AuditEventsPage from '@/_pages/admin-audit-events';
 import { taskExecutionApi, ExecutionSummary } from '@/entities/task-execution';
@@ -362,4 +362,40 @@ test('実行履歴はページ番号で送り、次のページを取り直す',
   fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
   expect(await screen.findByText('二頁目の処理')).toBeInTheDocument();
   expect(tasks.list).toHaveBeenLastCalledWith(1);
+});
+test('再試行の応答の前に詳細を閉じても、履歴を取り直すこと', async () => {
+  tasks.list.mockResolvedValue({ rows: [row], page: 0, pageCount: 1, total: 1 });
+  tasks.get.mockResolvedValue({
+    execution: row,
+    logical_key: 'daily',
+    retry_of: null,
+    initiated_by: null,
+    reason: '初回実行',
+  });
+  let respond!: (value: Awaited<ReturnType<typeof taskExecutionApi.retry>>) => void;
+  tasks.retry.mockReturnValueOnce(new Promise(resolve => (respond = resolve)));
+  render(<TaskExecutionsPage />);
+  fireEvent.click(await screen.findByRole('button', { name: '詳細' }));
+  const modal = screen.getByRole('dialog');
+  fireEvent.change(await within(modal).findByLabelText('操作の理由'), {
+    target: { value: '修正したため' },
+  });
+  fireEvent.click(within(modal).getByRole('button', { name: '再試行する' }));
+  await waitFor(() => expect(tasks.retry).toHaveBeenCalled());
+  fireEvent.click(within(modal).getByRole('button', { name: 'Close' }));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  const listed = tasks.list.mock.calls.length;
+
+  await act(async () =>
+    respond({
+      execution: { ...row, id: 2, attempt_number: 2, status: 'SUCCEEDED', processed_count: 0 },
+      logical_key: 'daily',
+      retry_of: 1,
+      initiated_by: 20,
+      reason: '修正したため',
+    })
+  );
+
+  await waitFor(() => expect(tasks.list).toHaveBeenCalledTimes(listed + 1));
+  expect(notify.success).toHaveBeenCalledWith('再試行の結果を記録しました');
 });
