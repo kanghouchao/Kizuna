@@ -22,7 +22,7 @@ export default function CastEditPage() {
     failure,
     reload: reloadCast,
   } = useResource(() => castApi.get(id), [id]);
-  // 公開の切替と保存は別の操作で、互いを待たせない
+  // 公開の切替と保存は別の操作。分けておくと、片方の送信中でももう片方が拒まれない
   const saving = useWrite();
   const publishing = useWrite();
   const publication = cast?.publication_status;
