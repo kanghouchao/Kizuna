@@ -48,19 +48,18 @@ export function PasswordChangeForm({ layout = 'console' }: { layout?: 'console' 
 
   const submit = async (values: PasswordChangeFormValues) => {
     await write(
-      () =>
-        authApi.changePassword({
+      async () => {
+        await authApi.changePassword({
           current_password: values.current_password,
           new_password: values.new_password,
-        }),
+        });
+        // ログアウトは送信に含める。反映は画面を離れた後には呼ばれず、変更だけ成立してセッションが残る。
+        // 成功の知らせは出さず、理由コードを渡して着地したログイン画面に名乗らせる。
+        await logout('password-changed');
+      },
       {
         failure: 'パスワードの変更に失敗しました',
-        // 成功の知らせは出さない。直後のログアウトでこの画面ごと破棄され、通知は読まれる前に消える。
-        // 代わりに理由コードを渡し、着地したログイン画面に名乗らせる。
-        onSuccess: () => {
-          setChanged(true);
-          return logout('password-changed');
-        },
+        onSuccess: () => setChanged(true),
       }
     );
   };

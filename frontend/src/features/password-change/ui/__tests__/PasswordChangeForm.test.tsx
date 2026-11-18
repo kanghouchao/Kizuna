@@ -55,6 +55,24 @@ describe('パスワード変更フォーム', () => {
     expect(mockedNotifySuccess).not.toHaveBeenCalled();
   });
 
+  it('応答の前に画面を離れても、変更が成立したらログアウトすること', async () => {
+    let respond!: () => void;
+    mockedChangePassword.mockReturnValue(new Promise<void>(resolve => (respond = resolve)));
+    const { container, unmount } = render(<PasswordChangeForm />);
+    const { current, next, confirm } = fields(container);
+
+    fireEvent.change(current, { target: { value: 'oldpass123' } });
+    fireEvent.change(next, { target: { value: 'newpass123' } });
+    fireEvent.change(confirm, { target: { value: 'newpass123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'パスワードを変更する' }));
+    await waitFor(() => expect(mockedChangePassword).toHaveBeenCalledTimes(1));
+
+    unmount();
+    respond();
+
+    await waitFor(() => expect(mockLogout).toHaveBeenCalledWith('password-changed'));
+  });
+
   it('確認用パスワードが一致しない場合は、その欄の傍に文言を出し API を呼ばないこと', async () => {
     const { container } = render(<PasswordChangeForm />);
     const { current, next, confirm } = fields(container);
