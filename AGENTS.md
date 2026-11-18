@@ -10,6 +10,7 @@ Kizuna operates multiple stores within one group (CMS / CRM / HRM). Before reaso
 - Infrastructure: [infrastructure/AGENTS.md](infrastructure/AGENTS.md).
 - E2E: [e2e/AGENTS.md](e2e/AGENTS.md).
 - Schema changes: [database rules](backend/src/main/resources/db/AGENTS.md).
+- Code review, as author or reviewer: [CODEREVIEW.md](CODEREVIEW.md) sets severity and scope.
 - Development and PR verification: [CONTRIBUTING.md](CONTRIBUTING.md). Final verification before committing uses Taskfiles (Docker parity); judge success by exit code only. Local toolchains are for fast iteration.
 
 `AGENTS.md` is the instruction source in each directory; `CLAUDE.md` is its single-line loader.
@@ -30,7 +31,7 @@ Single-context: `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents
 
 ## Language Policy
 
-- **AI-instruction docs** (this file, per-directory `AGENTS.md`, and `CLAUDE.md` loaders): **English**.
+- **AI-instruction docs** (this file, per-directory `AGENTS.md`, `CODEREVIEW.md`, and `CLAUDE.md` loaders): **English**.
 - **Human-facing docs** (`README.md`, `GLOSSARY.md`, `CONTRIBUTING.md`, `frontend/DESIGN.md`, `e2e/README.md`), **code comments**, **GitHub issues/PRs**, and **commit messages**: **Japanese**.
 - Code identifiers, module names, and shell commands stay verbatim regardless of the surrounding language.
 
@@ -66,14 +67,3 @@ Issues use `.github/ISSUE_TEMPLATE/` (feature / bug); PR bodies follow `.github/
 - `logback` — log4j2 is the logging backend and logback is explicitly excluded in `backend/build.gradle`.
 - ModelMapper / Dozer (MapStruct is the mapper), MyBatis (Spring Data JPA is the data layer), TestNG (JUnit 5 is the test framework).
 - `jjwt` or a hand-written JWT filter — authentication uses the Spring Security standard stack described in [backend/AGENTS.md](backend/AGENTS.md).
-
-## Code Review Rules
-
-Severity and scope for any reviewer, human or bot. The conventions themselves live in this file and the per-directory `AGENTS.md`; this section does not restate them.
-
-- **Important** only when the change can break behavior, expose a store's data outside the caller's store set (`StoreScope` in GLOSSARY.md), bypass authorization, race under concurrent requests, or lose data. Style and naming are at most Nit, and a review carries at most 3 Nits.
-- **Do not report**: anything `task lint` (Spotless / ESLint) already enforces, lockfiles, or pinned ids in Liquibase seed changesets for tables that only Liquibase writes.
-- **Always check**: an added or changed endpoint follows the [API contract](backend/AGENTS.md#api-contract); a cross-store read takes the caller's store set and a write verifies its single storeId; logs and list DTOs carry no PII the endpoint does not need.
-- **Evidence**: a claim about behavior cites the `file:line` that produces it; never infer behavior from names.
-- **Human review**: a diff that meets a criterion in [CONTRIBUTING.md](CONTRIBUTING.md) "人手レビューが必要な PR" while the PR body leaves that item unchecked is Important.
-- **Scope**: report what this diff introduces. Pre-existing problems go in a separate, non-blocking list. Do not repeat a finding already answered in the thread.
