@@ -163,7 +163,7 @@ test('改名の応答で行を差し替えて閉じる', async () => {
   fireEvent.click(within(dialog).getByRole('button', { name: '保存する' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(api.rename).toHaveBeenCalledWith('m1', '求人サイト', 3);
-  expect(screen.getByText('求人サイト')).toBeVisible();
+  expect(await screen.findByText('求人サイト')).toBeVisible();
   expect(api.list).toHaveBeenCalledTimes(1);
 });
 
@@ -177,9 +177,11 @@ test('改名の 409 は入力を残したまま一覧を取り直し、取り直
   fireEvent.click(within(dialog).getByRole('button', { name: '保存する' }));
   await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2));
   // 取り直しの応答待ちは古い行が残っているが、その版では送らせない
-  expect(
-    within(screen.getByRole('dialog')).getByRole('button', { name: '保存する' })
-  ).toBeDisabled();
+  await waitFor(() =>
+    expect(
+      within(screen.getByRole('dialog')).getByRole('button', { name: '保存する' })
+    ).toBeDisabled()
+  );
   await act(async () => finishList([{ ...medium, version: 6 }]));
   expect(notify.error).toHaveBeenCalledWith('同じ名前の媒体が既に登録されています');
   expect(screen.getByRole('dialog')).toBeVisible();
