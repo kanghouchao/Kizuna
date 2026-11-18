@@ -2,7 +2,7 @@
 
 import { useParams, useRouter } from 'next/navigation';
 import { roleApi } from '@/entities/user';
-import { getApiErrorMessage, isConflict, useResource, useWrite } from '@/shared/lib';
+import { getApiErrorMessage, useResource, useVersionedWrite } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { Card, CardContent, RegionError } from '@/shared/ui';
 import { RoleForm, RoleFormValues } from './RoleForm';
@@ -19,11 +19,11 @@ export default function RoleEditPage() {
     reload,
   } = useResource(id !== null ? () => roleApi.get(id) : null, [id]);
   const loadFailure = id !== null ? failure : 'notFound';
-  const { busy, write } = useWrite();
+  const writer = useVersionedWrite(reload);
 
-  const submit = (values: RoleFormValues) => {
+  const submit = async (values: RoleFormValues) => {
     if (id === null || role === null) return;
-    return write(
+    const outcome = await writer.write(
       () =>
         roleApi.update(id, {
           name: values.name,
@@ -33,19 +33,18 @@ export default function RoleEditPage() {
         }),
       {
         success: 'ロールを更新しました',
-        failure: error => {
-          if (isConflict(error)) {
+        failure: (error, kind) => {
+          if (kind === 'conflict') {
             notify.warning('他の管理者が更新しました。最新の内容を確認してください');
           } else {
             notify.error(getApiErrorMessage(error, 'ロールの保存に失敗しました'));
           }
         },
         onSuccess: () => router.push('/admin/roles'),
-        // 古い version を抱えたままだと再試行が同じ 409 を繰り返すため、取り直して欄を最新で描き直す。
-        // 取り直しが終わるまで送信中のままにし、古い version での再送を受けない
-        onFailure: error => (isConflict(error) ? reload() : undefined),
       }
     );
+    // 古い version を抱えたままだと再試行が同じ 409 を繰り返すため、取り直して欄を最新で描き直す
+    if (outcome === 'conflict') await writer.reload();
   };
 
   if (loadFailure !== null) {
@@ -59,7 +58,10 @@ export default function RoleEditPage() {
             fallback={{ href: '/admin/roles', label: 'ロール一覧へ' }}
           />
         ) : (
-          <RegionError message="ロール情報の取得に失敗しました" onRetry={() => void reload()} />
+          <RegionError
+            message="ロール情報の取得に失敗しました"
+            onRetry={() => void writer.reload()}
+          />
         )}
       </div>
     );
@@ -83,7 +85,7 @@ export default function RoleEditPage() {
               system: role.system,
             }}
             onSubmit={submit}
-            busy={busy}
+            busy={writer.busy || writer.conflict}
           />
         </CardContent>
       </Card>

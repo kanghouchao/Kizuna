@@ -14,11 +14,10 @@ import { useForm } from 'react-hook-form';
 import { orderApi, type OrderCorrectionHistoryEntry } from '@/entities/order';
 import {
   getApiErrorMessage,
-  isConflict,
   isForbidden,
   storePath,
   useResource,
-  useWrite,
+  useVersionedWrite,
 } from '@/shared/lib';
 import {
   Button,
@@ -91,7 +90,7 @@ function Invalidation({
   const form = useForm<{ reason: string }>({ defaultValues: { reason: '' } });
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [confirmation, setConfirmation] = useState<string | null>(null);
-  const { busy, write } = useWrite();
+  const writer = useVersionedWrite(reload);
   const [result, setResult] = useState<OrderCorrectionHistoryEntry | null>(null);
   const order = data?.order;
   const change = result ?? data?.change;
@@ -109,22 +108,22 @@ function Invalidation({
       0
     ) ?? 0;
   const invalidated = !!changeId || order?.completion_invalidated;
-  const submit = () => {
+  const submit = async () => {
     if (!canCorrect || confirmation === null || !order || order.version === undefined) return;
     const request = { expected_version: order.version, reason: confirmation };
     setConfirmationOpen(false);
     setError(null);
-    return write(() => orderApi.invalidateCompletion(id, request), {
+    const outcome = await writer.write(() => orderApi.invalidateCompletion(id, request), {
       success: '誤完了を無効化しました',
       // 失敗は toast ではなく、画面の中に出す
       failure: () => {},
       onSuccess: setResult,
-      onFailure: e => {
-        if (isForbidden(e)) return setAllowed(false);
+      onFailure: (e, kind) => {
+        if (kind === 'forbidden') return setAllowed(false);
         setError(getApiErrorMessage(e, '無効化できませんでした。内容を確認してください。'));
-        if (isConflict(e)) return reload();
       },
     });
+    if (outcome === 'conflict') await writer.reload();
   };
   if (!allowed)
     return (
@@ -138,7 +137,7 @@ function Invalidation({
       <h1 className="text-foreground text-2xl font-bold">誤完了の無効化</h1>
       {isLoading && <p>読み込み中...</p>}
       {failure === 'error' && (
-        <RegionError message="受注を取得できませんでした。" onRetry={() => void reload()} />
+        <RegionError message="受注を取得できませんでした。" onRetry={() => void writer.reload()} />
       )}
       {failure === 'notFound' && (
         <RegionError
@@ -211,7 +210,7 @@ function Invalidation({
               ) : (
                 <p>ORDER_MANAGE と POINT_ADJUST を持つポイント救済担当者へ依頼してください。</p>
               )}
-              <Button variant="outline" onClick={() => void reload()}>
+              <Button variant="outline" onClick={() => void writer.reload()}>
                 処置後に再取得
               </Button>
             </div>
@@ -243,7 +242,7 @@ function Invalidation({
                     </FormItem>
                   )}
                 />
-                <Button type="submit" disabled={busy}>
+                <Button type="submit" disabled={writer.busy || writer.conflict}>
                   無効化を確認
                 </Button>
               </form>

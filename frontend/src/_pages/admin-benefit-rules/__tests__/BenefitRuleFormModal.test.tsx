@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { notify } from '@/shared/notify';
 import { benefitRuleApi } from '@/entities/benefit-rule';
 import { BenefitRuleFormModal } from '../ui/BenefitRuleFormModal';
 
@@ -97,5 +98,56 @@ describe('特典規則フォームの重複可否', () => {
       expect(screen.getByRole('combobox', { name: '重複可否' })).toHaveTextContent('毎回')
     );
     expect(await optionNamesOf('重複可否')).toEqual(['毎回', '一人一回限り']);
+  });
+});
+
+describe('特典規則フォームの更新の競合', () => {
+  const detail = (version: number, name: string) => ({
+    id: 7,
+    name,
+    type: 'VISIT' as const,
+    store_scope_type: 'ALL_STORES' as const,
+    store_ids: [],
+    store_count: 0,
+    repeat_policy: 'EVERY_TIME' as const,
+    points: 500,
+    enabled: true,
+    version,
+  });
+
+  it('409 は警告を出して一覧も取り直させ、詳細の取り直しの間は欄を出さず、最新の版で保存し直せる', async () => {
+    jest.clearAllMocks();
+    let finish: (value: ReturnType<typeof detail>) => void = () => {};
+    mockedApi.get
+      .mockResolvedValueOnce(detail(3, '来店ボーナス'))
+      .mockImplementationOnce(() => new Promise(resolve => (finish = resolve)));
+    mockedApi.update
+      .mockRejectedValueOnce({ response: { status: 409 } })
+      .mockResolvedValueOnce(detail(5, '別の管理者の変更'));
+    const onSaved = jest.fn();
+    render(
+      <BenefitRuleFormModal
+        onClose={jest.fn()}
+        editingId={7}
+        onSaved={onSaved}
+        stores={[]}
+        storesLoading={false}
+        storesFailed={false}
+        onReloadStores={jest.fn()}
+      />
+    );
+    fireEvent.click(await screen.findByRole('button', { name: '保存する' }));
+
+    expect(await screen.findByText('読み込み中...')).toBeInTheDocument();
+    expect(notify.warning).toHaveBeenCalledWith(
+      '他の管理者が更新しました。最新の内容を確認してください'
+    );
+    expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: '保存する' })).not.toBeInTheDocument();
+
+    await act(async () => finish(detail(4, '別の管理者の変更')));
+    fireEvent.click(await screen.findByRole('button', { name: '保存する' }));
+    await waitFor(() => expect(mockedApi.update).toHaveBeenCalledTimes(2));
+    expect(mockedApi.update.mock.calls[1][1]).toEqual(expect.objectContaining({ version: 4 }));
   });
 });

@@ -4,12 +4,10 @@ import { useStoreContext, MePending, hasPermission, useMe } from '@/entities/use
 import { serviceApi, ServiceSummary, ServiceKind, serviceKindLabels } from '@/entities/service';
 import {
   getApiErrorMessage,
-  isConflict,
   isBadRequest,
-  isNotFound,
   isForbidden,
   useListPage,
-  useWrite,
+  useVersionedWrite,
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { ListPage } from '@/widgets/list-page';
@@ -50,7 +48,6 @@ function Services() {
   const [historyId, setHistoryId] = useState<string | null>(null);
   const [targetOpen, setTargetOpen] = useState(false);
   const [target, setTarget] = useState<ServiceSummary | null>(null);
-  const { busy: removing, write } = useWrite();
   const [denied, setDenied] = useState(false);
   const active = useRef(true);
   useEffect(() => {
@@ -70,22 +67,24 @@ function Services() {
     },
     { deleted: false }
   );
-  const remove = (item: ServiceSummary) =>
-    write(() => serviceApi.remove(item.id, item.version), {
+  const writer = useVersionedWrite(list.reload);
+  const remove = async (item: ServiceSummary) => {
+    const outcome = await writer.write(() => serviceApi.remove(item.id, item.version), {
       success: 'サービスを削除しました',
-      failure: error => {
-        if (isConflict(error))
+      failure: (error, kind) => {
+        if (kind === 'conflict')
           notify.warning('設定が変更されています。最新の内容を確認してから削除してください');
-        else if (!isForbidden(error))
+        else if (kind !== 'forbidden')
           notify.error(getApiErrorMessage(error, 'サービスの削除に失敗しました'));
       },
-      onSuccess: () => list.reload(),
-      onFailure: error => {
-        if (isForbidden(error)) setDenied(true);
-        else if (isConflict(error) || isBadRequest(error) || isNotFound(error))
-          return list.reload();
+      onSuccess: () => writer.reload(),
+      onFailure: (error, kind) => {
+        if (kind === 'forbidden') setDenied(true);
+        else if (kind === 'failed' && isBadRequest(error)) return writer.reload();
       },
     });
+    if (outcome === 'conflict') await writer.reload();
+  };
   const onForbidden = () => {
     if (active.current) setDenied(true);
   };
@@ -139,7 +138,7 @@ function Services() {
           ),
         }}
         state={list}
-        onRetry={() => void list.reload()}
+        onRetry={() => void writer.reload()}
         errorMessage="サービス一覧の取得に失敗しました"
         emptyMessage="該当するサービスはありません"
       >
@@ -187,7 +186,7 @@ function Services() {
                             setTarget(item);
                             setTargetOpen(true);
                           }}
-                          disabled={removing}
+                          disabled={writer.busy || writer.conflict}
                         >
                           削除
                         </Button>
@@ -215,7 +214,7 @@ function Services() {
           key={editor.id ?? 'new'}
           id={editor.id}
           onClose={() => setEditor(null)}
-          onSaved={() => void list.reload()}
+          onSaved={() => void writer.reload()}
           onForbidden={onForbidden}
         />
       )}

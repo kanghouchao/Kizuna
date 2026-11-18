@@ -19,10 +19,9 @@ import {
 import {
   getApiErrorMessage,
   integerRule,
-  isConflict,
   useKeyedResource,
   useResourceInitialization,
-  useWrite,
+  useVersionedWrite,
 } from '@/shared/lib';
 import {
   Button,
@@ -53,6 +52,9 @@ interface OrderCompletionFormValues {
 
 const isTerminal = (order: Order) => order.status === 'COMPLETED' || order.status === 'CANCELLED';
 
+/** 入力を残したまま版だけを取り直す 409。どれも操作者の入力を見直せば再送できる業務の競合 */
+const INPUT_KEEPING_CONFLICTS = ['customer_lock', 'use_points', 'confirmation_token'];
+
 export default function OrderCompletionPage() {
   const id = useParams().id as string;
   const storeId = useStoreContext().currentStoreId;
@@ -77,7 +79,6 @@ function Completion({ id }: { id: string }) {
     defaultValues: { fee_lines: [], use_points: NaN },
   });
   const { handleSubmit, reset, control } = form;
-  const { busy, write } = useWrite();
 
   // 見込みは打鍵ごとではなく、欄を離れた時点の金額で取り直す。合計はサーバが行から導出するので、
   // ここで足すのは見込みの取得と利用ポイントの上限判定に要る「ポイント利用が入る前の総和」だけ。
@@ -85,19 +86,34 @@ function Completion({ id }: { id: string }) {
 
   const resource = useKeyedResource<Order>(['order', storeId, id], () => orderApi.get(id));
   const { data: detail, failure: detailFailure, reload: reloadDetail } = resource;
+  const writer = useVersionedWrite(reloadDetail);
+  const { busy } = writer;
+  // 次の播種で操作者の入力を残すか。画面は対象ごとに作り直すので、真偽で足りる。播種で必ず消す。
+  // 残す取り直しの間はフォームを外さない（外すと入力中の欄の状態を失う）
+  const [keepingInput, setKeepingInput] = useState(false);
+  // 取り直しを始める操作はここを通し、入力を残すか置き換えるかを決める。
+  // 取得失敗の再試行は直前の決定を引き継ぐ（入力を残す取り直しの失敗で入力を失わない）
+  const reloadOrder = (keep: boolean) => {
+    setKeepingInput(keep);
+    return writer.reload();
+  };
   const usePoints = useWatch({ control, name: 'use_points' });
   const chargeAmount =
     feeLinesTotal(useWatch({ control, name: 'fee_lines' }) ?? []) +
     (detail?.course.price ?? 0) +
     (detail?.special_services ?? []).reduce((sum, item) => sum + item.price, 0);
   const initialized = useResourceInitialization(resource.success, detail => {
+    setKeepingInput(false);
     if (isTerminal(detail)) return;
-    const existing = storeEditableFeeLines(detail.fee_lines);
-    reset({ fee_lines: existing, use_points: NaN });
-    setCommittedFee(feeLinesTotal(existing));
+    reset(
+      { fee_lines: storeEditableFeeLines(detail.fee_lines), use_points: NaN },
+      { keepDirtyValues: keepingInput }
+    );
+    setCommittedFee(feeLinesTotal(form.getValues('fee_lines')));
   });
   const terminal = detail !== null && isTerminal(detail);
-  const seeded = initialized && !resource.isLoading && detail !== null && !terminal;
+  const seeded =
+    detail !== null && !terminal && (keepingInput || (initialized && !resource.isLoading));
   const {
     data: previewResult,
     isLoading: previewLoading,
@@ -112,12 +128,21 @@ function Completion({ id }: { id: string }) {
             expected_version: detail!.version!,
             fee_lines: toFeeLineInputs(form.getValues('fee_lines')),
           }),
-    [committedFee]
+    // 受注を取り直したら見込みも取り直す。入力を残す取り直しではフォームが外れず、残高が古いまま残る
+    [committedFee, resource.success]
   );
   const preview = previewResult?.points ?? null;
 
   // 会員へ帰属しなかった完了でだけ返る伝票トークン。生値はこの応答にしか現れないので、メモリにだけ持つ
   const [receiptToken, setReceiptToken] = useState<string | null>(null);
+
+  const replaceWithLatest = async () => {
+    // 取り直した受注が終端なら、播き直さずに画面が終端を名乗る（警告は重ねない）
+    const result = await reloadOrder(false);
+    if (result.status === 'success' && result.isCurrent() && !isTerminal(result.data)) {
+      notify.warning('他の操作者が更新しました。入力を最新の内容に置き換えました');
+    }
+  };
 
   const submit = async (values: OrderCompletionFormValues) => {
     // 版は完了の必須項目。詳細が無い／版を運んでいない姿では送る先が決まらないので、送らない
@@ -131,57 +156,57 @@ function Completion({ id }: { id: string }) {
       // 0 はサーバ側の @Min(1) に撥ねられる。利用しない完了では項目ごと送らない
       use_points: values.use_points > 0 ? values.use_points : undefined,
     };
-    // 取り直しは反映（onFailure）に入れない。transition の中で始めると読み込み中の表示が出ず、
-    // 置き換わる前のフォームに入力を続けられる
-    const settleFailure = async (error: unknown) => {
-      if (!operation.isCurrent()) return;
-      if (orderConflictField(error) === 'customer_lock') {
-        notify.error(
-          getApiErrorMessage(error, '顧客情報が変更中です。しばらく待ってから再試算してください')
-        );
-        return;
-      }
-      if (orderConflictField(error) === 'use_points') {
-        notify.error(
-          `${getApiErrorMessage(error, 'ポイントの利用条件が変更されています')}。利用点数を見直してください`
-        );
-        return;
-      }
-      if (orderConflictField(error) === 'confirmation_token') {
-        notify.warning(
-          '採用条件が変更されています。入力を保持しました。再試算して確認してください'
-        );
-        return;
-      }
-      if (isConflict(error)) {
-        // 取り直した受注が終端なら、播き直さずに画面が終端を名乗る（警告は重ねない）
-        const result = await reloadDetail();
-        if (result.status === 'success' && result.isCurrent() && !isTerminal(result.data)) {
-          notify.warning('他の操作者が更新しました。入力を最新の内容に置き換えました');
-        }
-        return;
-      }
-      // 残高不足・単位違反・非会員の利用は、サーバが対処できる文言を返す。汎用文言に潰さない。
-      notify.error(getApiErrorMessage(error, 'オーダーの完了に失敗しました'));
-    };
     let token: string | null;
     try {
       token = await confirmation.confirm(() => orderApi.completionPreview(id, request));
-    } catch (error) {
-      await settleFailure(error);
+    } catch {
+      // 試算ダイアログの「最新の受注を読み直す」だけがここへ来る（版の食い違い）
+      await replaceWithLatest();
       return;
     }
     if (!token) return;
-    await write(() => orderApi.complete(id, { ...request, confirmation_token: token }), {
-      failure: settleFailure,
-      onSuccess: completed => {
-        if (!operation.isCurrent()) return;
-        notify.success('オーダーを完了しました');
-        if (completed.receipt_token) setReceiptToken(completed.receipt_token);
-        // 履歴を置き換え、戻るで完了済みの受注の画面へ帰らないようにする
-        else router.replace(backHref);
-      },
-    });
+    let conflictField: string | undefined;
+    const outcome = await writer.write(
+      () => orderApi.complete(id, { ...request, confirmation_token: token }),
+      {
+        failure: (error, kind) => {
+          if (kind === 'conflict') conflictField = orderConflictField(error);
+          if (!operation.isCurrent()) return;
+          if (conflictField === 'customer_lock') {
+            notify.error(
+              getApiErrorMessage(
+                error,
+                '顧客情報が変更中です。しばらく待ってから再試算してください'
+              )
+            );
+          } else if (conflictField === 'use_points') {
+            notify.error(
+              `${getApiErrorMessage(error, 'ポイントの利用条件が変更されています')}。利用点数を見直してください`
+            );
+          } else if (conflictField === 'confirmation_token') {
+            notify.warning(
+              '採用条件が変更されています。入力を保持しました。再試算して確認してください'
+            );
+          } else if (kind !== 'conflict') {
+            // 残高不足・単位違反・非会員の利用は、サーバが対処できる文言を返す。汎用文言に潰さない。
+            notify.error(getApiErrorMessage(error, 'オーダーの完了に失敗しました'));
+          }
+        },
+        onSuccess: completed => {
+          if (!operation.isCurrent()) return;
+          notify.success('オーダーを完了しました');
+          if (completed.receipt_token) setReceiptToken(completed.receipt_token);
+          // 履歴を置き換え、戻るで完了済みの受注の画面へ帰らないようにする
+          else router.replace(backHref);
+        },
+      }
+    );
+    if (outcome !== 'conflict') return;
+    if (conflictField !== undefined && INPUT_KEEPING_CONFLICTS.includes(conflictField)) {
+      await reloadOrder(true);
+    } else {
+      await replaceWithLatest();
+    }
   };
 
   const fallback = { href: backHref, label: 'オーダー一覧へ' };
@@ -201,7 +226,10 @@ function Completion({ id }: { id: string }) {
           {detail !== null && <p className="mt-1 text-sm text-muted-foreground">{heading}</p>}
         </div>
         {detailFailure === 'error' ? (
-          <RegionError message="受注を取得できませんでした。" onRetry={() => void reloadDetail()} />
+          <RegionError
+            message="受注を取得できませんでした。"
+            onRetry={() => void writer.reload()}
+          />
         ) : detailFailure === 'notFound' ? (
           <RegionError message="受注が見つかりません。" fallback={fallback} />
         ) : terminal ? (
@@ -224,6 +252,9 @@ function Completion({ id }: { id: string }) {
               // 行が増減しても取り直しの引き金が 1 つで済むよう、個々の欄ではなくフォームの focusout で拾う
               onBlur={() => setCommittedFee(chargeAmount)}
             >
+              {resource.isLoading && (
+                <p className="px-6 pt-4 text-sm text-muted-foreground">読み込み中...</p>
+              )}
               <OrderEditorSection
                 title="会計"
                 description="合計は内訳の総和です。コースと特別サービスは受注の内容から採ります。"
@@ -334,7 +365,7 @@ function Completion({ id }: { id: string }) {
                       戻る
                     </Button>
                   )}
-                  <Button type="submit" disabled={busy}>
+                  <Button type="submit" disabled={busy || writer.conflict}>
                     {busy ? '処理中...' : '完了する'}
                   </Button>
                 </div>

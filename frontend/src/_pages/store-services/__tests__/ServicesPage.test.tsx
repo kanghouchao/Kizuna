@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { notify } from '@/shared/notify';
 import ServicesPage from '../ui/ServicesPage';
 import { serviceApi } from '@/entities/service';
 import { useMe } from '@/entities/user';
@@ -147,6 +148,34 @@ it('削除は確認後にのみ実行し古い版本を送る', async () => {
   fireEvent.click(screen.getByRole('button', { name: '削除' }));
   fireEvent.click(screen.getByRole('button', { name: '削除する' }));
   await waitFor(() => expect(api.remove).toHaveBeenCalledWith('10', 1));
+});
+it('削除が競合したら警告を出し、取り直しの間は行を出さず、最新の版で削除し直せる', async () => {
+  let finish: (value: {
+    rows: (typeof item)[];
+    page: number;
+    pageCount: number;
+    total: number;
+  }) => void = () => {};
+  api.list
+    .mockResolvedValueOnce({ rows: [item], page: 0, pageCount: 1, total: 1 })
+    .mockImplementationOnce(() => new Promise(resolve => (finish = resolve)));
+  api.remove.mockRejectedValueOnce({ response: { status: 409 } }).mockResolvedValueOnce();
+  render(<ServicesPage />);
+  fireEvent.click(await screen.findByRole('button', { name: '削除' }));
+  fireEvent.click(screen.getByRole('button', { name: '削除する' }));
+
+  expect(await screen.findByText('読み込み中...')).toBeInTheDocument();
+  expect(notify.warning).toHaveBeenCalledWith(
+    '設定が変更されています。最新の内容を確認してから削除してください'
+  );
+  expect(screen.queryByRole('button', { name: '削除' })).not.toBeInTheDocument();
+
+  await act(async () =>
+    finish({ rows: [{ ...item, version: 2 }], page: 0, pageCount: 1, total: 1 })
+  );
+  fireEvent.click(await screen.findByRole('button', { name: '削除' }));
+  fireEvent.click(screen.getByRole('button', { name: '削除する' }));
+  await waitFor(() => expect(api.remove).toHaveBeenLastCalledWith('10', 2));
 });
 it('取得失敗を空一覧にせず再試行できる', async () => {
   api.list.mockRejectedValueOnce(new Error('offline'));

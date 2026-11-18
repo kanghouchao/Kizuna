@@ -8,13 +8,7 @@ import {
   benefitRuleTypeLabel,
 } from '@/entities/benefit-rule';
 import { AuthorizedStore, authApi } from '@/entities/user';
-import {
-  getApiErrorMessage,
-  isConflict,
-  useListPage,
-  useManagedList,
-  useWrite,
-} from '@/shared/lib';
+import { getApiErrorMessage, useListPage, useManagedList, useVersionedWrite } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { ListPage } from '@/widgets/list-page';
 import {
@@ -74,24 +68,30 @@ export default function BenefitRulesPage() {
   const [deactivatingOpen, setDeactivatingOpen] = useState(false);
   const [deactivating, setDeactivating] = useState<BenefitRuleSummaryResponse | null>(null);
 
-  const { busy, write } = useWrite();
+  const writer = useVersionedWrite(list.reload);
+  const busy = writer.busy || writer.conflict;
 
-  const deactivate = (rule: BenefitRuleSummaryResponse) => {
+  const deactivate = async (rule: BenefitRuleSummaryResponse) => {
     setDeactivatingOpen(false);
-    void write(() => benefitRuleApi.deactivate(rule.id ?? 0, rule.version ?? 0), {
-      success: '特典規則を停用しました',
-      failure: error => {
-        if (isConflict(error)) {
-          notify.warning('他の管理者が更新しました。最新の内容を確認してください');
-        } else {
-          notify.error(getApiErrorMessage(error, '特典規則の停用に失敗しました'));
-        }
-      },
-      onSuccess: () => list.reload(),
-      // 承認の画面を開いている間に別の管理者が内容を書き換えた場合も含め、見ていない規則を
-      // 消さずに一覧を取り直し、最新の内容から選び直させる
-      onFailure: () => list.reload(),
-    });
+    const outcome = await writer.write(
+      () => benefitRuleApi.deactivate(rule.id ?? 0, rule.version ?? 0),
+      {
+        success: '特典規則を停用しました',
+        failure: (error, kind) => {
+          if (kind === 'conflict') {
+            notify.warning('他の管理者が更新しました。最新の内容を確認してください');
+          } else {
+            notify.error(getApiErrorMessage(error, '特典規則の停用に失敗しました'));
+          }
+        },
+        onSuccess: () => writer.reload(),
+        // 承認の画面を開いている間に別の管理者が内容を書き換えた場合も含め、見ていない規則を
+        // 消さずに一覧を取り直し、最新の内容から選び直させる。404 はフックが取り直す
+        onFailure: (_, kind) =>
+          kind === 'failed' || kind === 'forbidden' ? writer.reload() : undefined,
+      }
+    );
+    if (outcome === 'conflict') await writer.reload();
   };
 
   return (
@@ -107,7 +107,7 @@ export default function BenefitRulesPage() {
         state={list}
         emptyMessage="特典規則が登録されていません"
         errorMessage="特典規則一覧の取得に失敗しました"
-        onRetry={list.reload}
+        onRetry={() => void writer.reload()}
       >
         <Table>
           <TableHeader>
@@ -184,7 +184,7 @@ export default function BenefitRulesPage() {
         <BenefitRuleFormModal
           editingId={editing === 'new' ? null : editing}
           onClose={() => setEditing(null)}
-          onSaved={() => void list.reload()}
+          onSaved={() => void writer.reload()}
           stores={stores}
           storesLoading={storesLoading}
           storesFailed={storesFailed}

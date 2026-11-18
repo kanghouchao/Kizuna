@@ -22,11 +22,10 @@ import {
 import { ExternalLinkIcon } from 'lucide-react';
 import {
   getApiErrorMessage,
-  isConflict,
   storePath,
   useKeyedResource,
   useResourceInitialization,
-  useWrite,
+  useVersionedWrite,
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { customerHeadingText } from '../lib/customerLabel';
@@ -134,6 +133,19 @@ function CorrectionEditor() {
     orderApi.get(orderId)
   );
   const { data: current, isLoading, failure, reload } = resource;
+  const scope = `${storeId}:${orderId}`;
+  const writer = useVersionedWrite(reload);
+  const { busy } = writer;
+  // 次の播種で操作者の入力を残す対象。播種で必ず消し、対象を名乗らせるので別の受注へは漏れない。
+  // 残す取り直しの間はフォームを外さない。外すと、欄が自分で持つ選択中の表示名が元に戻る
+  const [keepInputFor, setKeepInputFor] = useState<string | null>(null);
+  const keepingInput = keepInputFor === scope;
+  // 取り直しを始める操作はここを通し、入力を残すか置き換えるかを決める。
+  // 取得失敗の再試行は直前の決定を引き継ぐ（入力を残す取り直しの失敗で入力を失わない）
+  const reloadOrder = (keep: boolean) => {
+    setKeepInputFor(keep ? scope : null);
+    return writer.reload();
+  };
 
   const form = useForm<OrderCorrectionFormValues>({ defaultValues: EMPTY_VALUES });
   const { handleSubmit, control, reset } = form;
@@ -149,18 +161,23 @@ function CorrectionEditor() {
 
   // 取得の到着はレンダーより後なので、初期値ではなく効果で播く（開いた最初のフレームが空欄になる）。
   const initialized = useResourceInitialization(resource.success, current => {
-    reset({
-      actual_arrival_time: toTimeInput(current.actual_arrival_time),
-      actual_end_time: toTimeInput(current.actual_end_time),
-      special_service_revision_ids: (current.special_services ?? []).map(item => item.revision_id),
-      course_revision_id: '',
-      fee_lines: storeEditableFeeLines(current.fee_lines),
-      reason: '',
-    });
+    reset(
+      {
+        actual_arrival_time: toTimeInput(current.actual_arrival_time),
+        actual_end_time: toTimeInput(current.actual_end_time),
+        special_service_revision_ids: (current.special_services ?? []).map(
+          item => item.revision_id
+        ),
+        course_revision_id: '',
+        fee_lines: storeEditableFeeLines(current.fee_lines),
+        reason: '',
+      },
+      { keepDirtyValues: keepingInput }
+    );
+    setKeepInputFor(null);
   });
-  const seeded = current !== null && initialized && !isLoading;
+  const seeded = current !== null && (keepingInput || (initialized && !isLoading));
   const completed = current?.status === 'COMPLETED' && !current.completion_invalidated;
-  const { busy, write } = useWrite();
 
   /**
    * この受注が現に帰属している会員のコード。帰属していなければ null。
@@ -194,50 +211,56 @@ function CorrectionEditor() {
       course_revision_id: values.course_revision_id || undefined,
       fee_lines: toFeeLineInputs(values.fee_lines),
     };
-    // 取り直しは反映（onFailure）に入れない。transition の中で始めると読み込み中の表示が出ず、
-    // 置き換わる前のフォームに入力を続けられる
-    const settleFailure = async (error: unknown) => {
-      if (!operation.isCurrent()) return;
-      if (orderConflictField(error) === 'confirmation_token') {
-        notify.warning(
-          '採用条件が変更されています。入力を保持しました。再試算して確認してください'
-        );
-        return;
+    const replaceWithLatest = async () => {
+      const result = await reloadOrder(false);
+      if (result.status === 'success' && result.isCurrent()) {
+        notify.warning('他の操作者がこの受注を訂正しました。入力を最新の内容に置き換えました');
       }
-      if (isConflict(error)) {
-        const result = await reload();
-        if (result.status === 'success' && result.isCurrent()) {
-          notify.warning('他の操作者がこの受注を訂正しました。入力を最新の内容に置き換えました');
-        }
-        return;
-      }
-      notify.error(getApiErrorMessage(error, '受注の訂正に失敗しました'));
     };
     let token: string | null;
     try {
       token = await confirmation.confirm(() => orderApi.previewCorrection(orderId, request));
-    } catch (error) {
-      await settleFailure(error);
+    } catch {
+      // 試算ダイアログの「最新の受注を読み直す」だけがここへ来る（版の食い違い）
+      await replaceWithLatest();
       return;
     }
     if (!token) return;
-    await write(() => orderApi.correct(orderId, { ...request, confirmation_token: token }), {
-      failure: settleFailure,
-      onSuccess: corrected => {
-        if (!operation.isCurrent()) return;
-        notify.success('受注を訂正しました');
-        setOutcome({ result: corrected, memberCode: '不明', orderId, storeId });
-        void reload();
-        // 補助情報の遅延で訂正結果を隠さない。詳細再取得後の世代に結び付け、旧対象へは反映しない。
-        const enrichment = resource.capture();
-        void attributedMemberCode().then(memberCode => {
-          if (!enrichment.isCurrent()) return;
-          setOutcome(outcome =>
-            outcome?.result === corrected ? { ...outcome, memberCode } : outcome
-          );
-        });
-      },
-    });
+    let tokenConflict = false;
+    const outcome = await writer.write(
+      () => orderApi.correct(orderId, { ...request, confirmation_token: token }),
+      {
+        failure: (error, kind) => {
+          tokenConflict = orderConflictField(error) === 'confirmation_token';
+          if (!operation.isCurrent()) return;
+          if (tokenConflict) {
+            notify.warning(
+              '採用条件が変更されています。入力を保持しました。再試算して確認してください'
+            );
+          } else if (kind !== 'conflict') {
+            notify.error(getApiErrorMessage(error, '受注の訂正に失敗しました'));
+          }
+        },
+        onSuccess: corrected => {
+          if (!operation.isCurrent()) return;
+          notify.success('受注を訂正しました');
+          setOutcome({ result: corrected, memberCode: '不明', orderId, storeId });
+          void reloadOrder(false);
+          // 補助情報の遅延で訂正結果を隠さない。詳細再取得後の世代に結び付け、旧対象へは反映しない。
+          const enrichment = resource.capture();
+          void attributedMemberCode().then(memberCode => {
+            if (!enrichment.isCurrent()) return;
+            setOutcome(outcome =>
+              outcome?.result === corrected ? { ...outcome, memberCode } : outcome
+            );
+          });
+        },
+      }
+    );
+    if (outcome !== 'conflict') return;
+    // 採用条件の変化は入力を残したまま版を取り直す。それ以外の 409 は最新の内容に置き換える
+    if (tokenConflict) await reloadOrder(true);
+    else await replaceWithLatest();
   };
 
   return (
@@ -256,7 +279,10 @@ function CorrectionEditor() {
 
         {isLoading && <p className="text-muted-foreground text-sm">読み込み中...</p>}
         {failure === 'error' && (
-          <RegionError message="受注を取得できませんでした。" onRetry={() => void reload()} />
+          <RegionError
+            message="受注を取得できませんでした。"
+            onRetry={() => void writer.reload()}
+          />
         )}
         {failure === 'notFound' && (
           <RegionError
@@ -388,7 +414,7 @@ function CorrectionEditor() {
                 >
                   一覧へ戻る
                 </Button>
-                <Button type="submit" disabled={busy}>
+                <Button type="submit" disabled={busy || writer.conflict}>
                   {busy ? '訂正中...' : '訂正する'}
                 </Button>
               </div>

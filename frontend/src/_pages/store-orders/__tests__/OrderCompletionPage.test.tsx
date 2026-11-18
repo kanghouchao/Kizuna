@@ -428,9 +428,10 @@ describe('受注の完了画面', () => {
     fireEvent.change(await screen.findByLabelText('利用ポイント'), { target: { value: '200' } });
     await completeWith('8000');
     await waitFor(() => expect(notify.error).toHaveBeenCalledWith(message));
-    expect(screen.getByLabelText('利用ポイント')).toHaveValue(200);
+    // 版は取り直すが、入力は置き換えない
+    await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
+    expect(await screen.findByLabelText('利用ポイント')).toHaveValue(200);
     expect(screen.getByLabelText('明細1の金額')).toHaveValue(8000);
-    expect(mockedGet).toHaveBeenCalledTimes(1);
     expect(notify.warning).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByRole('button', { name: '完了する' }));
     await confirmPreview();
@@ -488,10 +489,53 @@ describe('受注の完了画面', () => {
         expect.stringMatching(/残高: 100.*利用点数を見直してください/)
       )
     );
-    expect(screen.getByLabelText('利用ポイント')).toHaveValue(200);
+    // 版は取り直すが、入力は置き換えない
+    await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
+    expect(await screen.findByLabelText('利用ポイント')).toHaveValue(200);
     expect(mockedComplete).toHaveBeenCalledTimes(1);
-    expect(mockedGet).toHaveBeenCalledTimes(1);
     expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('業務の 409 の後は取り直し終えるまで再送できず、取り直しても入力を残す', async () => {
+    let settle!: (order: typeof confirmedOrder) => void;
+    mockedGet.mockResolvedValueOnce(confirmedOrder).mockReturnValueOnce(
+      new Promise(resolve => {
+        settle = resolve;
+      })
+    );
+    mockedComplete.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: { error: '顧客情報が変更中です', details: { customer_lock: '再試算してください' } },
+      },
+    });
+    renderPage();
+    fireEvent.change(await screen.findByLabelText('利用ポイント'), { target: { value: '200' } });
+    await completeWith('8000');
+
+    // 入力を残す取り直しの間はフォームを外さず、取得中を示して押す口だけを塞ぐ
+    expect(await screen.findByText('読み込み中...')).toBeInTheDocument();
+    expect(mockedGet).toHaveBeenCalledTimes(2);
+    expect(screen.getByLabelText('利用ポイント')).toHaveValue(200);
+    expect(await screen.findByRole('button', { name: '完了する' })).toBeDisabled();
+    expect(mockedComplete).toHaveBeenCalledTimes(1);
+
+    const previewsBefore = mockedPreview.mock.calls.length;
+    await act(async () => settle({ ...confirmedOrder, version: 4 }));
+    expect(await screen.findByLabelText('利用ポイント')).toHaveValue(200);
+    // 残高の見込みも、取り直した版で取り直す
+    await waitFor(() => expect(mockedPreview.mock.calls.length).toBeGreaterThan(previewsBefore));
+    expect(mockedPreview).toHaveBeenLastCalledWith(
+      'o1',
+      expect.objectContaining({ expected_version: 4 })
+    );
+    expect(screen.getByLabelText('明細1の金額')).toHaveValue(8000);
+    fireEvent.click(await screen.findByRole('button', { name: '完了する' }));
+    await confirmPreview();
+    await waitFor(() => expect(mockedComplete).toHaveBeenCalledTimes(2));
+    expect(mockedComplete.mock.calls[1][1]).toEqual(
+      expect.objectContaining({ expected_version: 4, use_points: 200 })
+    );
   });
 
   it('利用ポイントを入れたら、その値を添えて送る', async () => {
