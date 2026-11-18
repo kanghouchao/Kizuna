@@ -150,6 +150,23 @@ describe('店舗の稼働状態', () => {
     expect(within(region).getByRole('button', { name: '稼働中にする' })).toBeDisabled();
   });
 
+  it('応答の前に画面を離れても、稼働中にできたら店舗コンテキストを取り直す', async () => {
+    withCurrentStatus('PREPARING');
+    let respond!: () => void;
+    mockedApi.activate.mockReturnValue(new Promise<void>(resolve => (respond = resolve)));
+
+    const { unmount } = render(<StoreProfilePage />);
+    fireEvent.click(within(await statusRegion()).getByRole('button', { name: '稼働中にする' }));
+    const dialog = await screen.findByRole('alertdialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: '稼働中にする' }));
+    await waitFor(() => expect(mockedApi.activate).toHaveBeenCalledTimes(1));
+
+    unmount();
+    respond();
+
+    await waitFor(() => expect(mockReloadStores).toHaveBeenCalledTimes(1));
+  });
+
   it('確認を取り消せば送らない', async () => {
     withCurrentStatus('PREPARING');
 

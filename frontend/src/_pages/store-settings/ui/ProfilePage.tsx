@@ -19,15 +19,19 @@ function StoreActivationSection() {
   const status = currentStore?.status;
 
   const activate = () =>
-    write(() => storeProfileApi.activate(), {
-      success: '店舗を稼働中にしました',
-      failure: '稼働状態の変更に失敗しました',
-      // 稼働状態は店舗コンテキストが持つ授権店舗一覧の値なので、そちらを取り直して全画面へ反映する
-      onSuccess: () => {
-        setActivated(true);
+    write(
+      async () => {
+        await storeProfileApi.activate();
+        // 稼働状態は店舗コンテキストが持つ授権店舗一覧の値で、他の画面も読む。
+        // この画面を離れた後でも取り直すよう、反映ではなく送信に含める
         reload();
       },
-    });
+      {
+        success: '店舗を稼働中にしました',
+        failure: '稼働状態の変更に失敗しました',
+        onSuccess: () => setActivated(true),
+      }
+    );
 
   return (
     <section

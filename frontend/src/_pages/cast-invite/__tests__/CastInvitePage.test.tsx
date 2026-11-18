@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import CastInvitePage from '../ui/CastInvitePage';
 import { castInvitationAcceptanceApi } from '@/entities/cast';
 
@@ -10,12 +10,14 @@ jest.mock('@/entities/cast', () => {
       ...actual.castInvitationAcceptanceApi,
       view: jest.fn(),
       acceptAsExistingUser: jest.fn(),
+      acceptAsNewUser: jest.fn(),
     },
   };
 });
 
 const mockedView = castInvitationAcceptanceApi.view as jest.Mock;
 const mockedAcceptExisting = castInvitationAcceptanceApi.acceptAsExistingUser as jest.Mock;
+const mockedAcceptNew = castInvitationAcceptanceApi.acceptAsNewUser as jest.Mock;
 
 const NOT_FOUND = '招待リンクが見つかりません。URLをご確認ください。';
 
@@ -93,5 +95,49 @@ describe('CastInvitePage', () => {
     expect(await screen.findByText('銀座店との連携が完了しました')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'ポータルへ' })).toHaveAttribute('href', '/cast');
     expect(screen.queryByText(/準備中/)).not.toBeInTheDocument();
+  });
+
+  it('既存アカウントの受諾の応答の前に戻っても、成立したら完了画面を出す', async () => {
+    window.location.hash = '#raw-invitation-token';
+    mockedView.mockResolvedValue({ status: 'VALID', store_name: '銀座店', cast_name: '花子' });
+    let respond!: (value: { store_name: string }) => void;
+    mockedAcceptExisting.mockReturnValue(new Promise(resolve => (respond = resolve)));
+
+    render(<CastInvitePage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '既存アカウントでログイン' }));
+    fireEvent.change(screen.getByLabelText('メールアドレス'), {
+      target: { value: 'cast@kizuna.test' },
+    });
+    fireEvent.change(screen.getByLabelText('パスワード'), { target: { value: 'pass' } });
+    fireEvent.click(screen.getByRole('button', { name: 'ログインして受諾する' }));
+    await waitFor(() => expect(mockedAcceptExisting).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: '戻る' }));
+    respond({ store_name: '銀座店' });
+
+    expect(await screen.findByText('銀座店との連携が完了しました')).toBeInTheDocument();
+  });
+
+  it('新規登録の受諾の応答の前に戻っても、成立したら完了画面を出す', async () => {
+    window.location.hash = '#raw-invitation-token';
+    mockedView.mockResolvedValue({ status: 'VALID', store_name: '銀座店', cast_name: '花子' });
+    let respond!: (value: { store_name: string }) => void;
+    mockedAcceptNew.mockReturnValue(new Promise(resolve => (respond = resolve)));
+
+    render(<CastInvitePage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '新規登録して受諾' }));
+    fireEvent.change(screen.getByLabelText('メールアドレス'), {
+      target: { value: 'cast@kizuna.test' },
+    });
+    fireEvent.change(screen.getByLabelText('パスワード'), { target: { value: 'password123' } });
+    fireEvent.click(screen.getByRole('button', { name: '登録して受諾する' }));
+    await waitFor(() => expect(mockedAcceptNew).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: '戻る' }));
+    respond({ store_name: '銀座店' });
+
+    expect(await screen.findByText('銀座店との連携が完了しました')).toBeInTheDocument();
   });
 });

@@ -28,10 +28,11 @@ export function ExistingLoginForm({ token, onSuccess, onBack }: ExistingLoginFor
   const { busy, write } = useWrite();
 
   const submit = async (values: CastInvitationExistingAcceptRequest) => {
-    await write(() => castInvitationAcceptanceApi.acceptAsExistingUser(token, values), {
-      failure: 'ログインまたは受諾に失敗しました',
-      onSuccess,
-    });
+    // 完了の通知は送信に含める。「戻る」でこのフォームが外れた後は反映が呼ばれず、受諾だけ成立して画面が進まない
+    await write(
+      async () => onSuccess(await castInvitationAcceptanceApi.acceptAsExistingUser(token, values)),
+      { failure: 'ログインまたは受諾に失敗しました' }
+    );
   };
 
   return (
