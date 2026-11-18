@@ -60,13 +60,13 @@ export function OrderApplicationCard({
       async () => {
         const id = requireId(application.id, '予約申請');
         await orderApplicationApi.decline(id, { reason });
-        return id;
+        // 受付箱はカードより長く生きる。反映（onSuccess）に置くと、応答の前にカードが外れたとき呼ばれない
+        await onDeclined(id);
       },
       {
         success: '予約申請を謝絶しました',
         // 失効や処理済みなど、サーバは対処方法を含む文言を返す。汎用文言に潰さない
         failure: '謝絶に失敗しました',
-        onSuccess: onDeclined,
       }
     );
 
