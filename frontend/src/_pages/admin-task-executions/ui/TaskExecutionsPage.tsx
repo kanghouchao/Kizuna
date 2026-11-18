@@ -67,15 +67,22 @@ function ExecutionDetail({ id, onChanged }: { id: number; onChanged: (id: number
   const form = useForm<{ reason: string }>({ defaultValues: { reason: '' } });
   const { busy, write } = useWrite();
   const mutate = (kind: 'retry' | 'interrupt', reason: string) =>
-    write(() => taskExecutionApi[kind](id, reason), {
-      success: kind === 'retry' ? '再試行の結果を記録しました' : '中断を記録しました',
-      failure: '操作に失敗しました',
-      onSuccess: result => {
-        detail.setData(result);
-        form.reset();
+    write(
+      async () => {
+        const result = await taskExecutionApi[kind](id, reason);
+        // 履歴は詳細の外にある。反映は詳細を閉じると呼ばれないので、応答の直後に取り直す
         onChanged(result.execution.id);
+        return result;
       },
-    });
+      {
+        success: kind === 'retry' ? '再試行の結果を記録しました' : '中断を記録しました',
+        failure: '操作に失敗しました',
+        onSuccess: result => {
+          detail.setData(result);
+          form.reset();
+        },
+      }
+    );
   if (detail.isLoading) return <p>読み込み中...</p>;
   if (detail.failure || !detail.data)
     return (
