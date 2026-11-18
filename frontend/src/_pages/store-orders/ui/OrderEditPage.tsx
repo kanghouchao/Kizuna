@@ -16,7 +16,7 @@ import { OrderContactFields } from './OrderContactFields';
 import { OrderCustomerField } from './OrderCustomerField';
 import { ContactSnapshot, CustomerSelection } from '@/entities/order';
 import Link from 'next/link';
-import { useRef } from 'react';
+import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useCurrentStoreId } from '@/entities/user';
 import { useForm } from 'react-hook-form';
@@ -34,7 +34,7 @@ import {
   storePath,
   useKeyedResource,
   useResourceInitialization,
-  useWrite,
+  useVersionedWrite,
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { formatDateTime } from '../lib/formatDateTime';
@@ -146,7 +146,12 @@ export default function OrderEditPage() {
   );
   const { data: current, isLoading, failure, reload } = resource;
 
-  const progressOrder = useRef<Order | null>(null);
+  const scope = `${storeId}:${orderId}`;
+  const writer = useVersionedWrite(reload);
+  // 次の播種で操作者の入力を残す対象。播種で必ず消し、対象を名乗らせるので別の受注へは漏れない。
+  // 残す取り直しの間はフォームを外さない。外すと、欄が自分で持つ選択中の表示名が元に戻る
+  const [keepInputFor, setKeepInputFor] = useState<string | null>(null);
+  const keepingInput = keepInputFor === scope;
   const form = useForm<OrderEditFormValues>({ defaultValues: EMPTY_VALUES });
   const { handleSubmit, control, reset, formState } = form;
   // 播種の reset がその時点の値を基準にするので、ここに現れるのは操作者が触った欄だけになる。
@@ -182,13 +187,19 @@ export default function OrderEditPage() {
           ? { mode: 'EXISTING', customer_id: current.customer_id }
           : { mode: 'NONE' },
       },
-      { keepDirtyValues: progressOrder.current === current }
+      { keepDirtyValues: keepingInput }
     );
-    progressOrder.current = null;
+    setKeepInputFor(null);
   });
-  const seeded = current !== null && initialized && !isLoading;
+  // 取り直しを始める操作はここを通し、入力を残すか置き換えるかを決める。
+  // 取得失敗の再試行は直前の決定を引き継ぐ（入力を残す取り直しの失敗で入力を失わない）
+  const reloadOrder = (keep: boolean) => {
+    setKeepInputFor(keep ? scope : null);
+    return writer.reload();
+  };
+  const seeded = current !== null && (keepingInput || (initialized && !isLoading));
   const startScope = resource.capture();
-  const { busy, write } = useWrite();
+  const { busy } = writer;
 
   const submit = async (values: OrderEditFormValues) => {
     if (current === null || current.version === undefined) {
@@ -238,42 +249,50 @@ export default function OrderEditPage() {
         : {}),
     };
     const operation = resource.capture();
-    // 取り直しは反映（onFailure）に入れない。transition の中で始めると読み込み中の表示が出ず、
-    // 置き換わる前のフォームに入力を続けられる
-    const settleFailure = async (error: unknown) => {
-      if (!operation.isCurrent()) return;
-      if (orderConflictField(error) === 'confirmation_token') {
-        notify.warning(
-          '採用条件が変更されています。入力を保持しました。再試算して確認してください'
-        );
-        return;
-      }
-      if (orderConflictField(error) === 'expected_version') {
-        const result = await reload();
-        if (result.status === 'success' && result.isCurrent()) {
-          notify.warning('他の操作者が更新しました。入力を最新の内容に置き換えました');
-        }
-        return;
-      }
-      // 終端状態の凍結など、サーバは対処の分かる文言を返す。汎用文言に潰さない
-      notify.error(getApiErrorMessage(error, '受注の更新に失敗しました'));
-    };
     let token: string | null;
     try {
       token = await confirmation.confirm(() => orderApi.previewUpdate(orderId, request));
-    } catch (error) {
-      await settleFailure(error);
+    } catch {
+      // 試算ダイアログの「最新の受注を読み直す」だけがここへ来る（版の食い違い）
+      const result = await reloadOrder(false);
+      if (result.status === 'success' && result.isCurrent()) {
+        notify.warning('他の操作者が更新しました。入力を最新の内容に置き換えました');
+      }
       return;
     }
     if (!token) return;
-    await write(() => orderApi.update(orderId, { ...request, confirmation_token: token }), {
-      failure: settleFailure,
-      onSuccess: () => {
-        if (!operation.isCurrent()) return;
-        notify.success('受注を更新しました');
-        router.push(storePath(storeId, '/orders'));
-      },
-    });
+    let conflict: unknown;
+    const outcome = await writer.write(
+      () => orderApi.update(orderId, { ...request, confirmation_token: token }),
+      {
+        failure: (error, kind) => {
+          if (kind === 'conflict') conflict = error;
+          if (!operation.isCurrent()) return;
+          const field = orderConflictField(error);
+          if (field === 'expected_version') return;
+          if (field === 'confirmation_token') {
+            notify.warning(
+              '採用条件が変更されています。入力を保持しました。再試算して確認してください'
+            );
+            return;
+          }
+          // 終端状態の凍結など、サーバは対処の分かる文言を返す。汎用文言に潰さない
+          notify.error(getApiErrorMessage(error, '受注の更新に失敗しました'));
+        },
+        onSuccess: () => {
+          if (!operation.isCurrent()) return;
+          notify.success('受注を更新しました');
+          router.push(storePath(storeId, '/orders'));
+        },
+      }
+    );
+    if (outcome !== 'conflict') return;
+    // 版の食い違いだけは入力を最新の内容に置き換える。業務の競合は入力を残したまま版を取り直す
+    const replace = orderConflictField(conflict) === 'expected_version';
+    const result = await reloadOrder(!replace);
+    if (replace && result.status === 'success' && result.isCurrent()) {
+      notify.warning('他の操作者が更新しました。入力を最新の内容に置き換えました');
+    }
   };
 
   return (
@@ -339,18 +358,21 @@ export default function OrderEditPage() {
           <OrderServiceProgress
             key={`${storeId}:${orderId}`}
             order={current}
+            writer={writer}
+            // 進行操作の応答と競合後の取り直しでは、未保存の編集内容を保持する
             onOrderUpdated={updated => {
-              if (!startScope.isCurrent()) return;
-              // 進行操作と競合時の再取得では、未保存の編集内容を保持する。
-              progressOrder.current = updated;
-              startScope.replace(updated);
+              if (startScope.replace(updated)) setKeepInputFor(scope);
             }}
+            onReload={() => reloadOrder(true)}
           />
         )}
         {isLoading && <p className="text-muted-foreground text-sm">読み込み中...</p>}
         {/* 取得に失敗した領域を空のフォームに見せない（空欄を保存すると内容を消してしまう） */}
         {failure === 'error' && (
-          <RegionError message="受注を取得できませんでした。" onRetry={() => void reload()} />
+          <RegionError
+            message="受注を取得できませんでした。"
+            onRetry={() => void writer.reload()}
+          />
         )}
         {failure === 'notFound' && (
           // 404 は何度押しても取れないので再試行ではなく、一覧へ戻る導線だけを出す
@@ -590,7 +612,7 @@ export default function OrderEditPage() {
                   >
                     キャンセル
                   </Button>
-                  <Button type="submit" disabled={busy}>
+                  <Button type="submit" disabled={busy || writer.conflict}>
                     {busy ? '保存中...' : '保存'}
                   </Button>
                 </div>

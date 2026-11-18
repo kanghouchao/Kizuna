@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { notify } from '@/shared/notify';
 import { BenefitRuleSummaryResponse, benefitRuleApi } from '@/entities/benefit-rule';
 import BenefitRulesPage from '../ui/BenefitRulesPage';
 
@@ -113,5 +114,31 @@ describe('特典規則一覧ページ', () => {
     await waitFor(() => expect(mockedApi.deactivate).toHaveBeenCalledWith(1, 4));
     // 停用後は一覧を取り直す（停用済みバッジへ切り替わる）
     await waitFor(() => expect(mockedApi.list).toHaveBeenCalledTimes(2));
+  });
+
+  it('停用が競合したら警告を出し、取り直しの間は行を出さず、最新の版で停用し直せること', async () => {
+    let finish: (value: ReturnType<typeof pageOf>) => void = () => {};
+    mockedApi.list
+      .mockResolvedValueOnce(pageOf([rule({})]))
+      .mockImplementationOnce(() => new Promise(resolve => (finish = resolve)));
+    mockedApi.deactivate
+      .mockRejectedValueOnce({ response: { status: 409 } })
+      .mockResolvedValueOnce(undefined);
+    render(<BenefitRulesPage />);
+    await screen.findByText('来店ボーナス');
+
+    fireEvent.click(screen.getByRole('button', { name: '停用' }));
+    fireEvent.click(await screen.findByRole('button', { name: '停用する' }));
+
+    expect(await screen.findByText('読み込み中...')).toBeInTheDocument();
+    expect(notify.warning).toHaveBeenCalledWith(
+      '他の管理者が更新しました。最新の内容を確認してください'
+    );
+    expect(screen.queryByRole('button', { name: '停用' })).not.toBeInTheDocument();
+
+    await act(async () => finish(pageOf([rule({ version: 5 })])));
+    fireEvent.click(await screen.findByRole('button', { name: '停用' }));
+    fireEvent.click(await screen.findByRole('button', { name: '停用する' }));
+    await waitFor(() => expect(mockedApi.deactivate).toHaveBeenLastCalledWith(1, 5));
   });
 });

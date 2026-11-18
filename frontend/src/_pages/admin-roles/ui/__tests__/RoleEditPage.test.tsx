@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import type { RoleResponse } from '@/entities/user';
 import { roleApi } from '@/entities/user';
@@ -128,6 +128,41 @@ describe('ロール編集ページ', () => {
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
     await waitFor(() => expect(mockedRoleApi.update).toHaveBeenCalledTimes(2));
     expect(mockedRoleApi.update.mock.calls[1][1]).toEqual(expect.objectContaining({ version: 4 }));
+  });
+
+  it('409 の取り直し中は読み込み中を出し、古い欄を残さない', async () => {
+    let finish: (value: RoleResponse) => void = () => {};
+    mockedRoleApi.update.mockRejectedValueOnce({ response: { status: 409 } });
+    mockedRoleApi.get
+      .mockResolvedValueOnce(role())
+      .mockImplementationOnce(() => new Promise(resolve => (finish = resolve)));
+    render(<RoleEditPage />);
+    await screen.findByRole('checkbox', { name: '受注の管理' });
+
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    expect(await screen.findByText('読み込み中...')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '保存する' })).not.toBeInTheDocument();
+    expect(mockedRoleApi.update).toHaveBeenCalledTimes(1);
+
+    await act(async () => finish(role({ name: '別の管理者の変更', version: 4 })));
+    expect(await screen.findByLabelText('ロール名')).toHaveValue('別の管理者の変更');
+  });
+
+  it('保存の 404 は取り直して、見つからない表示に替える', async () => {
+    mockedRoleApi.update.mockRejectedValueOnce({ response: { status: 404 } });
+    mockedRoleApi.get
+      .mockResolvedValueOnce(role())
+      .mockRejectedValueOnce({ response: { status: 404 } });
+    render(<RoleEditPage />);
+    await screen.findByRole('checkbox', { name: '受注の管理' });
+
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    const region = await screen.findByRole('alert');
+    expect(within(region).getByText('このロールは見つかりませんでした')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '保存する' })).not.toBeInTheDocument();
+    expect(mockedNotify.error).toHaveBeenCalledWith('ロールの保存に失敗しました');
   });
 
   it('409 以外の失敗は再取得せずサーバ文言を出す', async () => {

@@ -1,14 +1,12 @@
 'use client';
-import { useEffect, useState, useRef } from 'react';
+import { useState } from 'react';
 import { serviceApi, ServiceCreateRequest } from '@/entities/service';
 import {
   getApiErrorMessage,
   isBadRequest,
-  isConflict,
   isForbidden,
-  isNotFound,
   useResource,
-  useWrite,
+  useVersionedWrite,
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { Button, Dialog, DialogFrame, RegionError } from '@/shared/ui';
@@ -40,16 +38,9 @@ export function ServiceEditor({
       : null,
     [id]
   );
-  const [conflict, setConflict] = useState(false);
+  const writer = useVersionedWrite(resource.reload);
+  // 書き込みが 404 を返したら、取り直しの結果を待たずに「存在しない」へ替える
   const [missing, setMissing] = useState(false);
-  const { busy, write } = useWrite();
-  const active = useRef(true);
-  useEffect(() => {
-    active.current = true;
-    return () => {
-      active.current = false;
-    };
-  }, []);
   const save = async (values: ServiceCreateRequest) => {
     const current = resource.data;
     const send = () => {
@@ -58,25 +49,25 @@ export function ServiceEditor({
       const body = { name, duration_minutes, charge_type, price, remuneration };
       return serviceApi.update(id, { ...body, expected_version: current.version });
     };
-    await write(send, {
+    await writer.write(send, {
       success: 'サービスを保存しました',
       // 競合・消失・権限なしは画面の表示で伝えるので、案内はそれ以外の失敗にだけ出す
-      failure: error => {
-        if (isConflict(error) || isNotFound(error) || isForbidden(error)) return;
-        notify.error(getApiErrorMessage(error, 'サービスの保存に失敗しました'));
+      failure: (error, kind) => {
+        if (kind === 'failed')
+          notify.error(getApiErrorMessage(error, 'サービスの保存に失敗しました'));
       },
       onSuccess: () => {
         onSaved();
         onClose();
       },
-      onFailure: error => {
-        if (isConflict(error)) setConflict(true);
-        else if (isNotFound(error)) setMissing(true);
-        else if (isForbidden(error)) onForbidden();
-        else if (id && isBadRequest(error)) return resource.reload();
+      onFailure: (error, kind) => {
+        if (kind === 'forbidden') onForbidden();
+        else if (kind === 'notFound') setMissing(true);
+        else if (kind === 'failed' && id && isBadRequest(error)) return writer.reload();
       },
     });
   };
+  const { busy, conflict } = writer;
   const unavailable = missing || resource.failure === 'notFound' || resource.data?.deleted;
   return (
     <Dialog
@@ -114,7 +105,7 @@ export function ServiceEditor({
         ) : resource.failure !== null ? (
           <RegionError
             message="サービスの取得に失敗しました"
-            onRetry={() => void resource.reload()}
+            onRetry={() => void writer.reload()}
           />
         ) : resource.isLoading || (id && !resource.data) ? (
           <p>読み込み中...</p>
@@ -123,13 +114,7 @@ export function ServiceEditor({
             {conflict && (
               <div role="alert" className="space-y-3">
                 <p>設定が変更されています。最新の内容を再取得し、確認してから保存してください。</p>
-                <Button
-                  variant="outline"
-                  onClick={async () => {
-                    await resource.reload();
-                    if (active.current) setConflict(false);
-                  }}
-                >
+                <Button variant="outline" onClick={() => void writer.reload()}>
                   最新の内容を再取得
                 </Button>
               </div>

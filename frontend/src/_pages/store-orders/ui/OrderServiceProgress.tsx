@@ -1,58 +1,66 @@
 'use client';
 
-import { startTransition, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useStoreContext } from '@/entities/user';
 import { Order, orderApi, ORDER_STATUS_LABELS } from '@/entities/order';
-import { getApiErrorMessage, useKeyedResource, useWrite } from '@/shared/lib';
+import {
+  getApiErrorMessage,
+  KeyedResource,
+  useKeyedResource,
+  useVersionedWrite,
+} from '@/shared/lib';
 import { Button, Input, Label, Pager, RegionError } from '@/shared/ui';
 import { orderConflictField } from './useOrderConfirmation';
 
+/** 編集画面と同じ受注の版を送るので、書き込みは編集画面のものを共有する。409 はどちらの送信も塞ぐ。 */
+type OrderWriter = Pick<ReturnType<typeof useVersionedWrite>, 'busy' | 'conflict' | 'write'>;
+
 export function OrderServiceProgress({
   order,
+  writer,
   onOrderUpdated,
+  onReload,
 }: {
   order: Order;
+  writer: OrderWriter;
   onOrderUpdated: (order: Order) => void;
+  /** 入力を残したまま受注を取り直す。取り直しは共有の書き込みを通し、競合を畳む */
+  onReload: KeyedResource<Order>['reload'];
 }) {
   const store = useStoreContext().currentStoreId;
   const [reason, setReason] = useState('');
   const [reasonError, setReasonError] = useState(false);
   const reasonInput = useRef<HTMLInputElement>(null);
-  const { busy, write } = useWrite();
+  const { busy } = writer;
   const [error, setError] = useState<string>();
   const [page, setPage] = useState(0);
   const history = useKeyedResource(
     ['special-service-events', store, order.id, order.version, page],
     order.id ? () => orderApi.specialServiceEvents(order.id!, page) : null
   );
-  const start = () =>
-    write(() => orderApi.start(order.id!, order.version!, reason.trim()), {
-      // 失敗は toast ではなく、この節の中に出す
-      failure: () => {},
-      onSuccess: onOrderUpdated,
-      onFailure: async e => {
-        if (orderConflictField(e) !== 'expected_version') {
-          setError(getApiErrorMessage(e, '開始できませんでした。最新の受注を確認してください。'));
-          return;
-        }
-        try {
-          const latest = await orderApi.get(order.id!);
-          startTransition(() => {
-            onOrderUpdated(latest);
-            setError('最新の受注を読み込みました。内容を確認してから開始を再試行してください。');
-          });
-        } catch (refreshError) {
-          startTransition(() =>
-            setError(
-              getApiErrorMessage(
-                refreshError,
-                '最新の受注を取得できませんでした。開始を再試行して再取得してください。'
-              )
-            )
-          );
-        }
-      },
-    });
+  const start = async () => {
+    let versionConflict = false;
+    const outcome = await writer.write(
+      () => orderApi.start(order.id!, order.version!, reason.trim()),
+      {
+        // 失敗は toast ではなく、この節の中に出す
+        failure: (e, kind) => {
+          versionConflict = kind === 'conflict' && orderConflictField(e) === 'expected_version';
+        },
+        onSuccess: onOrderUpdated,
+        onFailure: e => {
+          if (!versionConflict) {
+            setError(getApiErrorMessage(e, '開始できませんでした。最新の受注を確認してください。'));
+          }
+        },
+      }
+    );
+    if (outcome !== 'conflict') return;
+    const result = await onReload();
+    if (versionConflict && result.status === 'success' && result.isCurrent()) {
+      setError('最新の受注を読み込みました。内容を確認してから開始を再試行してください。');
+    }
+  };
   return (
     <section
       className="grid gap-6 rounded-xl border bg-card p-6 text-sm md:grid-cols-2"
@@ -91,7 +99,9 @@ export function OrderServiceProgress({
             )}
             <Button
               type="button"
-              disabled={busy || order.requires_attention || order.version === undefined}
+              disabled={
+                busy || writer.conflict || order.requires_attention || order.version === undefined
+              }
               onClick={() => {
                 if (!reason.trim()) {
                   setReasonError(true);

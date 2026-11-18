@@ -712,6 +712,192 @@ test('開始の版競合から再取得しても未保存の編集と理由を�
   expect(screen.getByLabelText('人数')).toHaveValue(5);
   expect(screen.getByLabelText('備考')).toHaveValue('未保存');
   expect(screen.getByLabelText('開始の理由')).toHaveValue('提供開始');
+  await waitFor(() => expect(screen.getByRole('button', { name: 'サービスを開始' })).toBeEnabled());
   fireEvent.click(screen.getByRole('button', { name: 'サービスを開始' }));
   await waitFor(() => expect(mockedOrderApi.start).toHaveBeenLastCalledWith('o1', 4, '提供開始'));
+});
+
+test('保存の 404 では取り直してフォームを畳み、見つからないと名乗る', async () => {
+  mockedOrderApi.get
+    .mockResolvedValueOnce(confirmedOrder())
+    .mockRejectedValueOnce({ response: { status: 404 } });
+  mockedOrderApi.update.mockRejectedValueOnce({ response: { status: 404 } });
+  render(<OrderEditPage />);
+  await waitFor(() => expect(screen.getByLabelText('人数')).toHaveValue(2));
+  fireEvent.change(screen.getByLabelText('人数'), { target: { value: '5' } });
+  fireEvent.click(screen.getByRole('button', { name: '保存' }));
+  await confirmPreview();
+  expect(await screen.findByText('この受注は見つかりませんでした。')).toBeInTheDocument();
+  expect(screen.queryByLabelText('人数')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '保存' })).not.toBeInTheDocument();
+  expect(notify.error).toHaveBeenCalledWith('受注の更新に失敗しました');
+  expect(mockedOrderApi.get).toHaveBeenCalledTimes(2);
+});
+
+test.each([
+  {
+    name: '採用条件の変更',
+    data: { details: { confirmation_token: '変更' } },
+    toast: () =>
+      expect(notify.warning).toHaveBeenCalledWith(
+        '採用条件が変更されています。入力を保持しました。再試算して確認してください'
+      ),
+  },
+  {
+    name: '理由を名指さない競合',
+    data: { error: '完了した受注は編集できません' },
+    toast: () => expect(notify.error).toHaveBeenCalledWith('完了した受注は編集できません'),
+  },
+])(
+  '$name の 409 では入力を残して取り直し、取り直し終えるまで再送できない',
+  async ({ data, toast }) => {
+    let settle!: (order: Order) => void;
+    mockedOrderApi.get.mockResolvedValueOnce(confirmedOrder()).mockReturnValueOnce(
+      new Promise<Order>(resolve => {
+        settle = resolve;
+      })
+    );
+    mockedOrderApi.update
+      .mockRejectedValueOnce({ response: { status: 409, data } })
+      .mockResolvedValue(confirmedOrder());
+    render(<OrderEditPage />);
+    await waitFor(() => expect(screen.getByLabelText('人数')).toHaveValue(2));
+    fireEvent.change(screen.getByLabelText('人数'), { target: { value: '5' } });
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    await confirmPreview();
+
+    // 取り直しの間もフォームは外さず（欄が持つ選択中の表示を失わない）、押す口だけを塞ぐ
+    expect(await screen.findByText('読み込み中...')).toBeInTheDocument();
+    expect(screen.getByLabelText('人数')).toHaveValue(5);
+    // 試算ダイアログが閉じ切るまで、背後のボタンは役割で引けない
+    expect(await screen.findByRole('button', { name: '保存' })).toBeDisabled();
+    expect(mockedOrderApi.get).toHaveBeenCalledTimes(2);
+    expect(mockedOrderApi.update).toHaveBeenCalledTimes(1);
+    // 開始は同じ受注の版を送るので、同じ競合で塞がる
+    expect(screen.getByRole('button', { name: 'サービスを開始' })).toBeDisabled();
+    toast();
+
+    await act(async () => settle(confirmedOrder({ version: 4, remarks: '他の操作者の備考' })));
+    // 触った欄は残り、触っていない欄は取り直した内容になる
+    expect(await screen.findByLabelText('人数')).toHaveValue(5);
+    expect(screen.getByLabelText('備考')).toHaveValue('他の操作者の備考');
+    expect(notify.warning).not.toHaveBeenCalledWith(
+      '他の操作者が更新しました。入力を最新の内容に置き換えました'
+    );
+    await waitFor(() => expect(screen.getByRole('button', { name: '保存' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: '保存' }));
+    await confirmPreview();
+    await waitFor(() => expect(mockedOrderApi.update).toHaveBeenCalledTimes(2));
+    expect(mockedOrderApi.update).toHaveBeenLastCalledWith(
+      'o1',
+      expect.objectContaining({ pax: 5, expected_version: 4 })
+    );
+  }
+);
+
+test('開始の 409 の取り直しに失敗しても、再試行で未保存の編集を残したまま復旧できる', async () => {
+  const initial = confirmedOrder();
+  mockedOrderApi.get
+    .mockResolvedValueOnce(initial)
+    .mockRejectedValueOnce({ response: { status: 500 } })
+    .mockResolvedValueOnce({ ...initial, version: 4 });
+  mockedOrderApi.start.mockRejectedValueOnce({
+    isAxiosError: true,
+    response: { status: 409, data: { details: { expected_version: '競合' } } },
+  });
+  mockedOrderApi.update.mockResolvedValue(initial);
+  render(<OrderEditPage />);
+  await waitFor(() => expect(screen.getByLabelText('人数')).toHaveValue(2));
+  fireEvent.change(screen.getByLabelText('人数'), { target: { value: '5' } });
+  fireEvent.change(screen.getByLabelText('開始の理由'), { target: { value: '提供開始' } });
+  fireEvent.click(screen.getByRole('button', { name: 'サービスを開始' }));
+
+  expect(await screen.findByText('受注を取得できませんでした。')).toBeInTheDocument();
+  expect(screen.queryByLabelText('人数')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '再試行' }));
+
+  expect(await screen.findByLabelText('人数')).toHaveValue(5);
+  await waitFor(() => expect(screen.getByRole('button', { name: '保存' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: '保存' }));
+  await confirmPreview();
+  await waitFor(() =>
+    expect(mockedOrderApi.update).toHaveBeenCalledWith(
+      'o1',
+      expect.objectContaining({ pax: 5, expected_version: 4 })
+    )
+  );
+});
+
+test('入力を残す取り直しの後も、選び直した顧客の表示名が元の顧客へ戻らない', async () => {
+  mockedOrderApi.get
+    .mockResolvedValueOnce(confirmedOrder())
+    .mockResolvedValueOnce(confirmedOrder({ version: 4 }));
+  mockedOrderApi.customerCandidates.mockResolvedValue({
+    rows: [{ id: 'c2', name: '別の顧客', phone_number: null }],
+    page: 0,
+    pageCount: 1,
+    total: 0,
+  });
+  mockedOrderApi.update
+    .mockRejectedValueOnce({ response: { status: 409, data: { error: '確定できません' } } })
+    .mockResolvedValue(confirmedOrder({ customer_id: 'c2' }));
+  render(<OrderEditPage />);
+  fireEvent.click(await screen.findByRole('combobox', { name: '既存顧客の検索' }));
+  const option = await screen.findByRole('option', { name: /別の顧客/ });
+  fireEvent.pointerDown(option);
+  fireEvent.click(option);
+  fireEvent.click(screen.getByRole('button', { name: '保存' }));
+  await confirmPreview();
+
+  await waitFor(() => expect(mockedOrderApi.get).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.getByRole('button', { name: '保存' })).toBeEnabled());
+  expect(screen.getByRole('combobox', { name: '既存顧客の検索' })).toHaveTextContent('別の顧客');
+  fireEvent.click(screen.getByRole('button', { name: '保存' }));
+  await confirmPreview();
+  await waitFor(() => expect(mockedOrderApi.update).toHaveBeenCalledTimes(2));
+  expect(mockedOrderApi.update).toHaveBeenLastCalledWith(
+    'o1',
+    expect.objectContaining({
+      customer_selection: { mode: 'EXISTING', customer_id: 'c2' },
+      expected_version: 4,
+    })
+  );
+});
+
+test('開始の 409 では、取り直し終えるまで編集の保存も押せない', async () => {
+  const initial = confirmedOrder();
+  let settle!: (order: Order) => void;
+  mockedOrderApi.get.mockResolvedValueOnce(initial).mockReturnValueOnce(
+    new Promise<Order>(resolve => {
+      settle = resolve;
+    })
+  );
+  mockedOrderApi.start.mockRejectedValueOnce({
+    isAxiosError: true,
+    response: { status: 409, data: { details: { expected_version: '競合' } } },
+  });
+  mockedOrderApi.update.mockResolvedValue(initial);
+  render(<OrderEditPage />);
+  await waitFor(() => expect(screen.getByLabelText('人数')).toHaveValue(2));
+  fireEvent.change(screen.getByLabelText('人数'), { target: { value: '5' } });
+  fireEvent.change(screen.getByLabelText('開始の理由'), { target: { value: '提供開始' } });
+  fireEvent.click(screen.getByRole('button', { name: 'サービスを開始' }));
+
+  await waitFor(() => expect(mockedOrderApi.get).toHaveBeenCalledTimes(2));
+  expect(await screen.findByText('読み込み中...')).toBeInTheDocument();
+  // 送信中の表示（保存中...）が戻った後も、競合の標識が保存を塞ぐ
+  expect(await screen.findByRole('button', { name: '保存' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'サービスを開始' })).toBeDisabled();
+
+  await act(async () => settle({ ...initial, version: 4 }));
+  expect(await screen.findByLabelText('人数')).toHaveValue(5);
+  await waitFor(() => expect(screen.getByRole('button', { name: '保存' })).toBeEnabled());
+  fireEvent.click(screen.getByRole('button', { name: '保存' }));
+  await confirmPreview();
+  await waitFor(() =>
+    expect(mockedOrderApi.update).toHaveBeenCalledWith(
+      'o1',
+      expect.objectContaining({ pax: 5, expected_version: 4 })
+    )
+  );
 });

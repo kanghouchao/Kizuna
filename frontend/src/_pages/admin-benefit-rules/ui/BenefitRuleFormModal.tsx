@@ -13,7 +13,7 @@ import {
   benefitRuleRepeatPolicyOptionsFor,
 } from '@/entities/benefit-rule';
 import { AuthorizedStore } from '@/entities/user';
-import { getApiErrorMessage, integerRule, isConflict, useResource, useWrite } from '@/shared/lib';
+import { getApiErrorMessage, integerRule, useResource, useVersionedWrite } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import {
   Button,
@@ -112,7 +112,8 @@ export function BenefitRuleFormModal({
 
   const form = useForm<BenefitRuleFormValues>({ defaultValues: EMPTY_FORM });
   const { control, handleSubmit, reset, setValue } = form;
-  const { busy, write } = useWrite();
+  const writer = useVersionedWrite(reloadEditingRule);
+  const busy = writer.busy || writer.conflict;
 
   const type = useWatch({ control, name: 'type' });
   const storeScopeType = useWatch({ control, name: 'store_scope_type' });
@@ -172,7 +173,7 @@ export function BenefitRuleFormModal({
   const isReferral = type === 'REFERRAL';
   const showForm = detailFailure === null && !editingLoading;
 
-  const submit = (values: BenefitRuleFormValues) => {
+  const submit = async (values: BenefitRuleFormValues) => {
     const payload: Omit<BenefitRuleCreateRequest, 'type'> = {
       name: values.name,
       store_scope_type: values.store_scope_type,
@@ -187,15 +188,15 @@ export function BenefitRuleFormModal({
     };
     const version = editingRule?.version;
     if (editingId !== null && version === undefined) return;
-    return write(
+    const outcome = await writer.write(
       (): Promise<BenefitRuleResponse> =>
         editingId !== null && version !== undefined
           ? benefitRuleApi.update(editingId, { ...payload, version })
           : benefitRuleApi.create({ ...payload, type: values.type }),
       {
         success: editingId !== null ? '特典規則を更新しました' : '特典規則を作成しました',
-        failure: error => {
-          if (isConflict(error)) {
+        failure: (error, kind) => {
+          if (kind === 'conflict') {
             notify.warning('他の管理者が更新しました。最新の内容を確認してください');
           } else {
             notify.error(getApiErrorMessage(error, '特典規則の保存に失敗しました'));
@@ -205,15 +206,14 @@ export function BenefitRuleFormModal({
           onSaved();
           onClose();
         },
-        // 楽観ロック競合。詳細を取り直さないと古い version を抱えたままになり、再試行が同じ
-        // 409 を繰り返す。取り直しが終わるまで送信中のままにする。一覧側も内容が変わりうるので再取得する。
-        onFailure: error => {
-          if (!isConflict(error)) return;
-          onSaved();
-          return reloadEditingRule();
+        // 競合した規則は一覧側の内容も変わりうるので、一覧も取り直させる
+        onFailure: (_, kind) => {
+          if (kind === 'conflict') onSaved();
         },
       }
     );
+    // 詳細を取り直さないと古い version を抱えたままになり、再試行が同じ 409 を繰り返す
+    if (outcome === 'conflict') await writer.reload();
   };
 
   return (
@@ -256,7 +256,7 @@ export function BenefitRuleFormModal({
             ) : (
               <RegionError
                 message="特典規則の取得に失敗しました"
-                onRetry={() => void reloadEditingRule()}
+                onRetry={() => void writer.reload()}
               />
             )
           ) : editingLoading ? (

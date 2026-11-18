@@ -1,5 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Order, orderApi } from '@/entities/order';
+import { useVersionedWrite } from '@/shared/lib';
+import type { KeyedResource } from '@/shared/lib';
 import { OrderServiceProgress } from '../ui/OrderServiceProgress';
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
@@ -15,8 +17,29 @@ jest.mock('@/entities/user', () => ({
 
 jest.mock('@/entities/order', () => ({
   ...jest.requireActual('@/entities/order'),
-  orderApi: { specialServiceEvents: jest.fn(), start: jest.fn(), get: jest.fn() },
+  orderApi: { specialServiceEvents: jest.fn(), start: jest.fn() },
 }));
+type Reload = KeyedResource<Order>['reload'];
+/** 編集画面と同じく、書き込みを親で作って渡す。取り直しは共有の書き込みを通す */
+function Harness({
+  order,
+  onOrderUpdated,
+  onReload = jest.fn(),
+}: {
+  order: Order;
+  onOrderUpdated: (order: Order) => void;
+  onReload?: Reload;
+}) {
+  const writer = useVersionedWrite(onReload);
+  return (
+    <OrderServiceProgress
+      order={order}
+      writer={writer}
+      onOrderUpdated={onOrderUpdated}
+      onReload={writer.reload}
+    />
+  );
+}
 const order = {
   id: 'o1',
   version: 1,
@@ -33,7 +56,7 @@ beforeEach(() => {
   });
 });
 test('空の開始理由は送信時にエラーを示して入力へフォーカスする', async () => {
-  render(<OrderServiceProgress order={order} onOrderUpdated={jest.fn()} />);
+  render(<Harness order={order} onOrderUpdated={jest.fn()} />);
   fireEvent.click(screen.getByRole('button', { name: 'サービスを開始' }));
   expect(screen.getByRole('alert')).toHaveTextContent('開始の理由を入力してください');
   expect(screen.getByLabelText('開始の理由')).toHaveFocus();
@@ -48,7 +71,7 @@ test('開始中の履歴ページ変更でも更新応答を反映し、送信�
     })
   );
   const onOrderUpdated = jest.fn();
-  render(<OrderServiceProgress order={order} onOrderUpdated={onOrderUpdated} />);
+  render(<Harness order={order} onOrderUpdated={onOrderUpdated} />);
   await waitFor(() => expect(screen.getAllByRole('button', { name: '次へ' })[0]).toBeEnabled());
   fireEvent.change(screen.getByLabelText('開始の理由'), { target: { value: '提供開始' } });
   fireEvent.click(screen.getByRole('button', { name: 'サービスを開始' }));
@@ -60,7 +83,7 @@ test('開始中の履歴ページ変更でも更新応答を反映し、送信�
   expect(screen.getByRole('button', { name: 'サービスを開始' })).toBeEnabled();
 });
 
-test('開始の版競合では最新の受注を反映して新しい版で再試行できる', async () => {
+test('開始の版競合では入力を残して取り直し、取り直した版で再試行できる', async () => {
   const conflict = {
     isAxiosError: true,
     response: { status: 409, data: { details: { expected_version: '競合' } } },
@@ -69,33 +92,49 @@ test('開始の版競合では最新の受注を反映して新しい版で再�
     .mockRejectedValueOnce(conflict)
     .mockResolvedValue({ ...order, version: 3, status: 'IN_SERVICE' });
   const latest = { ...order, version: 2 };
-  (orderApi.get as jest.Mock).mockResolvedValue(latest);
+  const onReload = jest.fn<ReturnType<Reload>, []>(async () => ({
+    status: 'success' as const,
+    data: latest,
+    isCurrent: () => true,
+  }));
   const onOrderUpdated = jest.fn();
-  const view = render(<OrderServiceProgress order={order} onOrderUpdated={onOrderUpdated} />);
+  const view = render(
+    <Harness order={order} onOrderUpdated={onOrderUpdated} onReload={onReload} />
+  );
   fireEvent.change(screen.getByLabelText('開始の理由'), { target: { value: '提供開始' } });
   fireEvent.click(screen.getByRole('button', { name: 'サービスを開始' }));
-  await waitFor(() => expect(onOrderUpdated).toHaveBeenCalledWith(latest));
-  expect(orderApi.get).toHaveBeenCalledWith('o1');
-  view.rerender(<OrderServiceProgress order={latest} onOrderUpdated={onOrderUpdated} />);
+  await screen.findByText(
+    '最新の受注を読み込みました。内容を確認してから開始を再試行してください。'
+  );
+  expect(onReload).toHaveBeenCalledTimes(1);
+  expect(onOrderUpdated).not.toHaveBeenCalled();
+  view.rerender(<Harness order={latest} onOrderUpdated={onOrderUpdated} onReload={onReload} />);
   expect(screen.getByLabelText('開始の理由')).toHaveValue('提供開始');
-  fireEvent.click(screen.getByRole('button', { name: 'サービスを開始' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'サービスを開始' }));
   await waitFor(() => expect(orderApi.start).toHaveBeenLastCalledWith('o1', 2, '提供開始'));
 });
 
-test('版競合後の再取得に失敗しても再試行で復旧できる', async () => {
+test('業務の競合ではサーバの文言を節に出し、取り直すまで開始を塞ぐ', async () => {
   (orderApi.start as jest.Mock).mockRejectedValue({
     isAxiosError: true,
-    response: { status: 409, data: { details: { expected_version: '競合' } } },
+    response: { status: 409, data: { error: '本人拒否の処置が必要です' } },
   });
-  (orderApi.get as jest.Mock)
-    .mockRejectedValueOnce(new Error('offline'))
-    .mockResolvedValue({ ...order, version: 2 });
-  const onOrderUpdated = jest.fn();
-  render(<OrderServiceProgress order={order} onOrderUpdated={onOrderUpdated} />);
+  let settle!: () => void;
+  const onReload = jest.fn<ReturnType<Reload>, []>(
+    () =>
+      new Promise(resolve => {
+        settle = () => resolve({ status: 'success', data: order, isCurrent: () => true });
+      })
+  );
+  render(<Harness order={order} onOrderUpdated={jest.fn()} onReload={onReload} />);
   fireEvent.change(screen.getByLabelText('開始の理由'), { target: { value: '開始' } });
   fireEvent.click(screen.getByRole('button', { name: 'サービスを開始' }));
-  await screen.findByText('最新の受注を取得できませんでした。開始を再試行して再取得してください。');
-  expect(onOrderUpdated).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'サービスを開始' }));
-  await waitFor(() => expect(onOrderUpdated).toHaveBeenCalledWith({ ...order, version: 2 }));
+  await screen.findByText('本人拒否の処置が必要です');
+  await waitFor(() => expect(onReload).toHaveBeenCalledTimes(1));
+  expect(screen.getByRole('button', { name: 'サービスを開始' })).toBeDisabled();
+  await act(async () => settle());
+  expect(await screen.findByRole('button', { name: 'サービスを開始' })).toBeEnabled();
+  expect(
+    screen.queryByText('最新の受注を読み込みました。内容を確認してから開始を再試行してください。')
+  ).not.toBeInTheDocument();
 });

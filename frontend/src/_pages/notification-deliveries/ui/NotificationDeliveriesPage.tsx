@@ -14,13 +14,11 @@ import {
 } from '@/entities/notification-delivery';
 import {
   getApiErrorMessage,
-  isNotFound,
   memoryOperationStore,
   useListPage,
   useOperation,
   useResource,
   useVersionedWrite,
-  useWrite,
   GENERATED_ID_PATTERN,
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
@@ -284,38 +282,43 @@ function Detail({
   onMissing: () => void;
 }) {
   const detail = useResource(() => api.get(id), [id]);
-  const resolution = useVersionedWrite(detail.reload);
+  // 判定と送信待ち・再試行は同じ通知の版を送るので、進行中の判定と競合の標識を一つにする
+  const writer = useVersionedWrite(detail.reload);
   const form = useForm<{ reason: string }>({ defaultValues: { reason: '' } });
   const active = useActive();
-  const { busy, write } = useWrite();
   const [historyKey, setHistoryKey] = useState(0);
-  const [missing, setMissing] = useState(false);
+  // 書き込みが 404 を返したら、取り直しの結果を待たずに「見つからない」へ替える
+  const [gone, setGone] = useState(false);
+  const missing = gone || detail.failure === 'notFound';
   useEffect(() => {
-    if (missing || detail.failure === 'notFound') onChanged();
-  }, [missing, detail.failure, onChanged]);
+    if (missing) onChanged();
+  }, [missing, onChanged]);
   const act = async ({ reason }: { reason: string }) => {
     const row = detail.data;
     if (!row) return;
-    await write(() => (row.status === 'DRAFT' ? api.queue : api.retry)(id, row.version, reason), {
-      success: '通知を送信待ちに登録しました',
-      // 消えた通知は画面の表示で伝える
-      failure: error => {
-        if (!isNotFound(error))
-          notify.error(getApiErrorMessage(error, '送信待ちに登録できませんでした'));
-      },
-      onSuccess: result => {
-        detail.setData(result);
-        form.reset();
-        setHistoryKey(n => n + 1);
-        onChanged();
-      },
-      onFailure: error => {
-        if (isNotFound(error)) setMissing(true);
-      },
-    });
+    await writer.write(
+      () => (row.status === 'DRAFT' ? api.queue : api.retry)(id, row.version, reason),
+      {
+        success: '通知を送信待ちに登録しました',
+        // 消えた通知は画面の表示で伝える
+        failure: (error, kind) => {
+          if (kind !== 'notFound')
+            notify.error(getApiErrorMessage(error, '送信待ちに登録できませんでした'));
+        },
+        onSuccess: result => {
+          detail.setData(result);
+          form.reset();
+          setHistoryKey(n => n + 1);
+          onChanged();
+        },
+        onFailure: (_, kind) => {
+          if (kind === 'notFound') setGone(true);
+        },
+      }
+    );
   };
   if (detail.isLoading) return <p>読み込み中...</p>;
-  if (missing || detail.failure === 'notFound')
+  if (missing)
     return (
       <>
         <p role="alert">通知が見つかりません</p>
@@ -328,7 +331,7 @@ function Detail({
     );
   if (detail.failure !== null || !detail.data)
     return (
-      <RegionError message="通知を取得できませんでした" onRetry={() => void detail.reload()} />
+      <RegionError message="通知を取得できませんでした" onRetry={() => void writer.reload()} />
     );
   const row = detail.data;
   return (
@@ -367,9 +370,9 @@ function Detail({
       )}
       <Button
         variant="outline"
-        disabled={busy}
+        disabled={writer.busy}
         onClick={() => {
-          void resolution.reload();
+          void writer.reload();
           setHistoryKey(n => n + 1);
         }}
       >
@@ -380,7 +383,7 @@ function Detail({
           api={api}
           key={row.version}
           row={row}
-          write={resolution}
+          write={writer}
           onResolved={result => {
             if (!active.current) return;
             detail.setData(result);
@@ -396,6 +399,16 @@ function Detail({
             onSubmit={event => void form.handleSubmit(act)(event)}
             className="space-y-4"
           >
+            {writer.conflict && (
+              <div role="alert" className="space-y-2">
+                <p className="text-destructive-strong">
+                  通知の状態が変わりました。最新の状態を取得してから操作してください。
+                </p>
+                <Button type="button" variant="outline" onClick={() => void writer.reload()}>
+                  最新の状態を取得してやり直す
+                </Button>
+              </div>
+            )}
             <FormField
               control={form.control}
               name="reason"
@@ -414,7 +427,7 @@ function Detail({
                 </FormItem>
               )}
             />
-            <Button type="submit" disabled={busy}>
+            <Button type="submit" disabled={writer.busy || writer.conflict}>
               {row.status === 'DRAFT' ? '確認して送信待ちにする' : '明示的に再試行する'}
             </Button>
           </form>

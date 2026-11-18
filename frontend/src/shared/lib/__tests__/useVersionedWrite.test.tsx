@@ -1,7 +1,7 @@
 import { startTransition } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { notify } from '@/shared/notify';
-import { useVersionedWrite } from '@/shared/lib';
+import { useResource, useVersionedWrite } from '@/shared/lib';
 
 jest.mock('@/shared/notify', () => ({
   notify: { success: jest.fn(), error: jest.fn(), warning: jest.fn() },
@@ -113,6 +113,119 @@ describe('useVersionedWrite', () => {
     expect(notify.error).toHaveBeenCalledWith('入力が不正です');
     expect(reloadTarget).not.toHaveBeenCalled();
     expect(result.current.conflict).toBe(false);
+  });
+
+  it.each([
+    [409, 'conflict', true],
+    [404, 'notFound', false],
+    [403, 'forbidden', false],
+    [400, 'failed', false],
+  ])(
+    'failure に関数を渡すと %i のエラーと種類 %s を受け取り、案内は出さない',
+    async (status, kind, conflict) => {
+      const { result, reloadTarget } = setup();
+      const failure = jest.fn();
+      const onFailure = jest.fn();
+      const error = { response: { status, data: { error: 'サーバの文言' } } };
+
+      let outcome;
+      await act(async () => {
+        outcome = await result.current.write(() => Promise.reject(error), { failure, onFailure });
+      });
+
+      expect(outcome).toBe(kind);
+      expect(failure).toHaveBeenCalledWith(error, kind);
+      expect(onFailure).toHaveBeenCalledWith(error, kind);
+      expect(notify.error).not.toHaveBeenCalled();
+      expect(notify.success).not.toHaveBeenCalled();
+      expect(result.current.conflict).toBe(conflict);
+      expect(reloadTarget).toHaveBeenCalledTimes(status === 404 ? 1 : 0);
+    }
+  );
+
+  it('403 は文言の案内を出し、forbidden を返して取り直さない', async () => {
+    const { result, reloadTarget } = setup();
+
+    let outcome;
+    await act(async () => {
+      outcome = await result.current.write(rejectWith(403), messages);
+    });
+
+    expect(outcome).toBe('forbidden');
+    expect(notify.error).toHaveBeenCalledWith('保存に失敗しました');
+    expect(reloadTarget).not.toHaveBeenCalled();
+    expect(result.current.conflict).toBe(false);
+  });
+
+  it('onFailure は 404 の取り直しが終わってから呼び、返した promise の完了まで busy を残す', async () => {
+    const order: string[] = [];
+    const reloadTarget = jest.fn(async () => {
+      order.push('reload');
+    });
+    const { result } = renderHook(() => useVersionedWrite(reloadTarget));
+    let finish: () => void = () => {};
+    const onFailure = jest.fn(() => {
+      order.push('onFailure');
+      return new Promise<void>(resolve => (finish = resolve));
+    });
+
+    let pending: Promise<unknown> = Promise.resolve();
+    act(() => {
+      pending = result.current.write(rejectWith(404), { ...messages, onFailure });
+    });
+    await waitFor(() => expect(onFailure).toHaveBeenCalled());
+    expect(order).toEqual(['reload', 'onFailure']);
+    expect(result.current.busy).toBe(true);
+
+    await act(async () => {
+      finish();
+      await pending;
+    });
+    expect(result.current.busy).toBe(false);
+  });
+
+  it('reload は取り直しの結果を返す', async () => {
+    const { result } = renderHook(() => useVersionedWrite(async () => 'latest'));
+
+    let reloaded;
+    await act(async () => {
+      reloaded = await result.current.reload();
+    });
+
+    expect(reloaded).toBe('latest');
+  });
+
+  it('409 の結末を受けてから始めた取り直しは、取得中の表示を描く', async () => {
+    let finishFetch: (value: string) => void = () => {};
+    const fetcher = jest
+      .fn<Promise<string>, []>()
+      .mockResolvedValueOnce('古い内容')
+      .mockImplementationOnce(() => new Promise(resolve => (finishFetch = resolve)));
+    const { result } = renderHook(() => {
+      const resource = useResource(fetcher);
+      return { resource, writer: useVersionedWrite(resource.reload) };
+    });
+    await waitFor(() => expect(result.current.resource.data).toBe('古い内容'));
+
+    let reloading: Promise<void> = Promise.resolve();
+    await act(async () => {
+      const outcome = await result.current.writer.write(rejectWith(409), messages);
+      if (outcome === 'conflict') reloading = result.current.writer.reload();
+    });
+    expect(result.current.resource.isLoading).toBe(true);
+    // 取得中は busy が戻っていても、競合の標識が次の書き込みを止める
+    expect(result.current.writer.busy).toBe(false);
+    const send = jest.fn(async () => null);
+    expect(await act(() => result.current.writer.write(send, messages))).toBe('refused');
+
+    await act(async () => {
+      finishFetch('最新の内容');
+      await reloading;
+    });
+    expect(result.current.resource.isLoading).toBe(false);
+    expect(result.current.resource.data).toBe('最新の内容');
+    expect(result.current.writer.conflict).toBe(false);
+    expect(send).not.toHaveBeenCalled();
   });
 
   it('取り直しが終わるまでは、409 の後も 404 の後も次を送らない', async () => {

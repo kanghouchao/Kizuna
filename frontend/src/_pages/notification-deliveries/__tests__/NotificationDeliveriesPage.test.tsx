@@ -347,6 +347,32 @@ test('本人情報が未取得のサーバー描画では権限に依存した�
   expect(api.list).not.toHaveBeenCalled();
 });
 
+test('送信待ちが競合したら最新の状態を取るまで送らない', async () => {
+  api.get.mockResolvedValueOnce(row).mockResolvedValueOnce({ ...row, version: 2 });
+  api.queue
+    .mockRejectedValueOnce({ response: { status: 409, data: { error: '状態が変わりました' } } })
+    .mockResolvedValueOnce({ ...row, status: 'QUEUED', version: 3 });
+  render(<StoreNotificationDeliveriesPage />);
+  const dialog = await detail();
+  fireEvent.change(await within(dialog).findByLabelText('内容を確認した理由・再試行の理由'), {
+    target: { value: '内容確認' },
+  });
+  const submit = within(dialog).getByRole('button', { name: '確認して送信待ちにする' });
+  fireEvent.click(submit);
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+    '通知の状態が変わりました。最新の状態を取得してから操作してください。'
+  );
+  expect(notify.error).toHaveBeenCalledWith('状態が変わりました');
+  fireEvent.submit(submit.closest('form')!);
+  await act(async () => {});
+  expect(api.queue).toHaveBeenCalledTimes(1);
+  fireEvent.click(within(dialog).getByRole('button', { name: '最新の状態を取得してやり直す' }));
+  await waitFor(() => expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument());
+  expect(api.get).toHaveBeenCalledTimes(2);
+  fireEvent.click(await within(dialog).findByRole('button', { name: '確認して送信待ちにする' }));
+  await waitFor(() => expect(api.queue).toHaveBeenCalledTimes(2));
+  expect(api.queue).toHaveBeenLastCalledWith('10', 2, '内容確認');
+});
 test('確認操作の404では保存を外して一覧へ戻れる', async () => {
   api.queue.mockRejectedValue({ response: { status: 404 } });
   render(<StoreNotificationDeliveriesPage />);
