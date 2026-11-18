@@ -31,10 +31,11 @@ export function RegisterForm({ token, initialDisplayName, onSuccess, onBack }: R
   const { busy, write } = useWrite();
 
   const submit = async (values: RegisterFormValues) => {
-    await write(() => castInvitationAcceptanceApi.acceptAsNewUser(token, values), {
-      failure: '登録に失敗しました',
-      onSuccess,
-    });
+    // 完了の通知は送信に含める。「戻る」でこのフォームが外れた後は反映が呼ばれず、受諾だけ成立して画面が進まない
+    await write(
+      async () => onSuccess(await castInvitationAcceptanceApi.acceptAsNewUser(token, values)),
+      { failure: '登録に失敗しました' }
+    );
   };
 
   return (
