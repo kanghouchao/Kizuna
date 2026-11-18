@@ -31,14 +31,18 @@ export function ShiftRequestInbox({ casts, onApproved }: ShiftRequestInboxProps)
 
   /** 承認する。published を渡すのは新規希望だけ — 変更申請の承認で指定すると後端が撥ねる。 */
   const approve = (request: StoreShiftRequestItem, published?: boolean) =>
-    write(() => shiftApi.approveShiftRequest(request.id, published), {
-      success: published === false ? '出勤希望を非公開で承認しました' : '出勤希望を承認しました',
-      failure: '承認に失敗しました',
-      onSuccess: () => {
-        void load();
+    write(
+      async () => {
+        await shiftApi.approveShiftRequest(request.id, published);
+        // 隣のタブの出勤表は、この一覧が外れた後も取り直す。反映に置くとタブを替えた利用者に届かない
         onApproved();
       },
-    });
+      {
+        success: published === false ? '出勤希望を非公開で承認しました' : '出勤希望を承認しました',
+        failure: '承認に失敗しました',
+        onSuccess: () => void load(),
+      }
+    );
 
   const decline = (request: StoreShiftRequestItem) =>
     write(() => shiftApi.declineShiftRequest(request.id), {

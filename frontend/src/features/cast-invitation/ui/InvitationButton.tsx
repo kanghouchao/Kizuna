@@ -26,12 +26,15 @@ export function InvitationButton({ castId, status, onIssued }: InvitationButtonP
 
   if (status === 'LINKED' || status === 'UNAVAILABLE') return null;
 
+  // 発行した token は応答でしか受け取れない。行が外れた後も渡すため、反映ではなく送信の中で渡す
   const handleIssue = () =>
-    write(() => castApi.issueInvitation(castId), {
-      failure: '招待の発行に失敗しました',
-      onSuccess: response =>
-        onIssued({ token: response.token ?? '', expiresAt: response.expires_at ?? '' }),
-    });
+    write(
+      async () => {
+        const response = await castApi.issueInvitation(castId);
+        onIssued({ token: response.token ?? '', expiresAt: response.expires_at ?? '' });
+      },
+      { failure: '招待の発行に失敗しました' }
+    );
 
   return (
     <Button
