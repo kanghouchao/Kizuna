@@ -38,6 +38,7 @@ import {
 } from '@/shared/ui';
 import { customerHeadingText } from '../lib/customerLabel';
 import { orderListHref } from '../lib/orderListHref';
+import { reseedForm } from '../lib/reseedForm';
 import { OrderEditorSection } from './OrderEditorSection';
 import { OrderFeeLinesField } from './OrderFeeLinesField';
 import { ReceiptTokenDialog } from './ReceiptTokenDialog';
@@ -78,7 +79,7 @@ function Completion({ id }: { id: string }) {
   const form = useForm<OrderCompletionFormValues>({
     defaultValues: { fee_lines: [], use_points: NaN },
   });
-  const { handleSubmit, reset, control } = form;
+  const { handleSubmit, control } = form;
 
   // 見込みは打鍵ごとではなく、欄を離れた時点の金額で取り直す。合計はサーバが行から導出するので、
   // ここで足すのは見込みの取得と利用ポイントの上限判定に要る「ポイント利用が入る前の総和」だけ。
@@ -105,9 +106,10 @@ function Completion({ id }: { id: string }) {
   const initialized = useResourceInitialization(resource.success, detail => {
     setKeepingInput(false);
     if (isTerminal(detail)) return;
-    reset(
+    reseedForm(
+      form,
       { fee_lines: storeEditableFeeLines(detail.fee_lines), use_points: NaN },
-      { keepDirtyValues: keepingInput }
+      keepingInput
     );
     setCommittedFee(feeLinesTotal(form.getValues('fee_lines')));
   });

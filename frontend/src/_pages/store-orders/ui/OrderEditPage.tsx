@@ -39,6 +39,7 @@ import {
 import { notify } from '@/shared/notify';
 import { formatDateTime } from '../lib/formatDateTime';
 import { customerHeadingText } from '../lib/customerLabel';
+import { reseedForm } from '../lib/reseedForm';
 // 日付・時刻・数値の空欄は「送らない」。この契約は null を「変更しない」と読むため空への書き換えを
 // 表現する形が無く、空にしたつもりの欄は元の値が残る（空文字を送ると型の変換に失敗して 400）。
 import {
@@ -153,7 +154,7 @@ export default function OrderEditPage() {
   const [keepInputFor, setKeepInputFor] = useState<string | null>(null);
   const keepingInput = keepInputFor === scope;
   const form = useForm<OrderEditFormValues>({ defaultValues: EMPTY_VALUES });
-  const { handleSubmit, control, reset, formState } = form;
+  const { handleSubmit, control, formState } = form;
   // 播種の reset がその時点の値を基準にするので、ここに現れるのは操作者が触った欄だけになる。
   // レンダー中に読むのは、react-hook-form が formState の購読をこの読み取りで決めるため
   const { dirtyFields } = formState;
@@ -163,7 +164,8 @@ export default function OrderEditPage() {
   // 取得できたら播く。取得の到着はレンダーより後なので、values ではなく効果で入れる
   // （初期値として渡すと、開いた最初のフレームが空欄のまま描かれる）。
   const initialized = useResourceInitialization(resource.success, current => {
-    reset(
+    reseedForm(
+      form,
       {
         receptionist_id: current.receptionist_id != null ? String(current.receptionist_id) : '',
         cast_id: current.cast_id ?? '',
@@ -187,7 +189,7 @@ export default function OrderEditPage() {
           ? { mode: 'EXISTING', customer_id: current.customer_id }
           : { mode: 'NONE' },
       },
-      { keepDirtyValues: keepingInput }
+      keepingInput
     );
     setKeepInputFor(null);
   });

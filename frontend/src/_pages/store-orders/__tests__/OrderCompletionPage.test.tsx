@@ -538,6 +538,32 @@ describe('受注の完了画面', () => {
     );
   });
 
+  it('入力を残す取り直しで、消した明細を戻さない', async () => {
+    const withLine = {
+      ...confirmedOrder,
+      fee_lines: [{ line_id: 'l1', kind: 'CREDIT_SURCHARGE', name: '延長', amount: 3000 }],
+    } as typeof confirmedOrder;
+    mockedGet.mockResolvedValueOnce(withLine).mockResolvedValueOnce({ ...withLine, version: 4 });
+    mockedComplete.mockRejectedValueOnce({
+      response: { status: 409, data: { details: { customer_lock: '再試算してください' } } },
+    });
+    renderPage();
+    expect(await screen.findByLabelText('明細1の名称')).toHaveValue('延長');
+    fireEvent.click(screen.getByRole('button', { name: '明細1を削除' }));
+    fireEvent.click(screen.getByRole('button', { name: '完了する' }));
+    await confirmPreview();
+
+    await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.getByRole('button', { name: '完了する' })).toBeEnabled());
+    expect(screen.queryByLabelText('明細1の名称')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '完了する' }));
+    await confirmPreview();
+    await waitFor(() => expect(mockedComplete).toHaveBeenCalledTimes(2));
+    expect(mockedComplete.mock.calls[1][1]).toEqual(
+      expect.objectContaining({ expected_version: 4, fee_lines: [] })
+    );
+  });
+
   it('利用ポイントを入れたら、その値を添えて送る', async () => {
     renderPage();
 

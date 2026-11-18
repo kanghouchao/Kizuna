@@ -29,6 +29,7 @@ import {
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
 import { customerHeadingText } from '../lib/customerLabel';
+import { reseedForm } from '../lib/reseedForm';
 // 空欄は「値なし」として送る。この契約は全量送信なので、省略と空欄が同じ意味になる。
 import { optionalTime, toTimeInput } from '../lib/formValues';
 import { OrderFeeLinesField } from './OrderFeeLinesField';
@@ -148,7 +149,7 @@ function CorrectionEditor() {
   };
 
   const form = useForm<OrderCorrectionFormValues>({ defaultValues: EMPTY_VALUES });
-  const { handleSubmit, control, reset } = form;
+  const { handleSubmit, control } = form;
   const [outcomeState, setOutcome] = useState<
     (CorrectionOutcomeState & { orderId: string; storeId: string | undefined }) | null
   >(null);
@@ -161,7 +162,8 @@ function CorrectionEditor() {
 
   // 取得の到着はレンダーより後なので、初期値ではなく効果で播く（開いた最初のフレームが空欄になる）。
   const initialized = useResourceInitialization(resource.success, current => {
-    reset(
+    reseedForm(
+      form,
       {
         actual_arrival_time: toTimeInput(current.actual_arrival_time),
         actual_end_time: toTimeInput(current.actual_end_time),
@@ -172,7 +174,7 @@ function CorrectionEditor() {
         fee_lines: storeEditableFeeLines(current.fee_lines),
         reason: '',
       },
-      { keepDirtyValues: keepingInput }
+      keepingInput
     );
     setKeepInputFor(null);
   });
