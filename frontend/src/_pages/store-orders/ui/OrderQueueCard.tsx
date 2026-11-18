@@ -82,13 +82,13 @@ export function OrderQueueCard({ order, onProcessed, completionHref }: OrderQueu
       async () => {
         const id = requireId(order.id, '受注');
         await orderApi.cancel(id, { reason });
-        return id;
+        // 一覧はカードより長く生きる。反映（onSuccess）に置くと、応答の前にカードが外れたとき呼ばれない
+        await onProcessed(id);
       },
       {
         success: '受注を取消しました',
         // 指名の再検証や終端の凍結など、サーバは対処方法を含む文言を返す。汎用文言に潰さない
         failure: '取消に失敗しました',
-        onSuccess: onProcessed,
       }
     );
 

@@ -193,6 +193,14 @@ function stubArchive(status: OrderArchiveRow['status'], ...rows: OrderArchiveRow
   );
 }
 
+/** 押せる「次へ」。ページが 1 つしか無い群のページ送りは押せないので除く。 */
+const enabledNext = () => {
+  const [next] = screen
+    .getAllByRole('button', { name: '次へ' })
+    .filter(button => !(button as HTMLButtonElement).disabled);
+  return next;
+};
+
 const mockedUseMe = useMe as jest.MockedFunction<typeof useMe>;
 const meWith = (permissions: PermissionCode[]) =>
   mockedUseMe.mockReturnValue({
@@ -366,11 +374,85 @@ describe('作業キューの描画', () => {
     fireEvent.click(screen.getByRole('button', { name: '謝絶する' }));
 
     await waitFor(() => expect(mockedApplicationApi.list).toHaveBeenCalledTimes(2));
-    expect(notify.success).toHaveBeenCalledWith('予約申請を謝絶しました');
     expect(screen.getByRole('button', { name: '謝絶する' })).toBeDisabled();
 
     await act(async () => arrive({ rows: [], page: 0, pageCount: 1, total: 0 }));
     await waitFor(() => expect(screen.queryByText('高橋美咲')).not.toBeInTheDocument());
+    expect(notify.success).toHaveBeenCalledWith('予約申請を謝絶しました');
+  });
+
+  it('謝絶の応答の前にページ送りでカードが外れても、応答の後に受付箱を取り直すこと', async () => {
+    mockedApplicationApi.list.mockResolvedValueOnce({
+      rows: [pendingApplication()],
+      page: 0,
+      pageCount: 2,
+      total: 21,
+    });
+    let answer: () => void = () => {};
+    mockedApplicationApi.decline.mockReturnValue(
+      new Promise<void>(resolve => {
+        answer = resolve;
+      })
+    );
+    render(<OrderListPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: '謝絶' }));
+    fireEvent.change(screen.getByLabelText('謝絶の理由'), { target: { value: '満席' } });
+    fireEvent.click(screen.getByRole('button', { name: '謝絶する' }));
+    await waitFor(() => expect(mockedApplicationApi.decline).toHaveBeenCalled());
+
+    mockedApplicationApi.list.mockResolvedValue({
+      rows: [pendingApplication({ id: 'a2', requester_declared_name: '佐藤結衣' })],
+      page: 1,
+      pageCount: 2,
+      total: 21,
+    });
+    fireEvent.click(enabledNext());
+    await screen.findByText('佐藤結衣');
+    expect(screen.queryByText('高橋美咲')).not.toBeInTheDocument();
+    expect(mockedApplicationApi.list).toHaveBeenCalledTimes(2);
+
+    await act(async () => answer());
+    await waitFor(() => expect(mockedApplicationApi.list).toHaveBeenCalledTimes(3));
+  });
+
+  it('取消の応答の前にページ送りでカードが外れても、応答の後に作業キューと取消のアーカイブを取り直すこと', async () => {
+    mockedOrderApi.listWorkQueue.mockResolvedValueOnce({
+      rows: [confirmedOrder()],
+      page: 0,
+      pageCount: 2,
+      total: 21,
+    });
+    let answer: () => void = () => {};
+    mockedOrderApi.cancel.mockReturnValue(
+      new Promise<void>(resolve => {
+        answer = resolve;
+      })
+    );
+    render(<OrderListPage />);
+    await waitFor(() => expect(mockedOrderApi.listArchive).toHaveBeenCalledTimes(2));
+
+    fireEvent.click(await screen.findByRole('button', { name: '取消' }));
+    fireEvent.change(screen.getByLabelText('取消の理由'), { target: { value: '客都合' } });
+    fireEvent.click(screen.getByRole('button', { name: '取消する' }));
+    await waitFor(() => expect(mockedOrderApi.cancel).toHaveBeenCalled());
+
+    mockedOrderApi.listWorkQueue.mockResolvedValue({
+      rows: [confirmedOrder({ id: 'o2', customer_name: '鈴木一郎' })],
+      page: 1,
+      pageCount: 2,
+      total: 21,
+    });
+    fireEvent.click(enabledNext());
+    await screen.findByText('鈴木一郎');
+    expect(screen.queryByText('山田太郎')).not.toBeInTheDocument();
+    expect(mockedOrderApi.listWorkQueue).toHaveBeenCalledTimes(2);
+
+    await act(async () => answer());
+    await waitFor(() => expect(mockedOrderApi.listWorkQueue).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(mockedOrderApi.listArchive).toHaveBeenCalledTimes(3));
+    const [lastCall] = mockedOrderApi.listArchive.mock.calls.slice(-1);
+    expect(lastCall[0].statuses).toEqual(['CANCELLED']);
   });
 
   it('作業キューはページ送りで次のページを同じ条件で取り直すこと', async () => {
