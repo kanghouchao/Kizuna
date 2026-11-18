@@ -223,7 +223,8 @@ test('改名後の取り直しが失敗したら、入力を残したままダ�
   expect(screen.queryByText('この媒体は削除されています。')).not.toBeInTheDocument();
   const dialog2 = screen.getByRole('dialog');
   expect(within(dialog2).getByLabelText('媒体名')).toHaveValue('重複名');
-  expect(within(dialog2).getByRole('button', { name: '保存する' })).toBeDisabled();
+  // 送信中は名前が「保存中...」なので、名前で待って busy が戻った後の無効を見る
+  expect(await within(dialog2).findByRole('button', { name: '保存する' })).toBeDisabled();
 
   api.list.mockResolvedValue([{ ...medium, version: 6 }]);
   fireEvent.click(within(dialog2).getByRole('button', { name: '再試行' }));
