@@ -8,6 +8,7 @@ import {
   INPUT_KEPT_MESSAGE,
   LATEST_LOADED_MESSAGE,
   LOAD_LATEST_LABEL,
+  STALE_MESSAGE,
 } from '../ui/OrderStaleNotice';
 import { Order, orderApi } from '@/entities/order';
 
@@ -696,7 +697,7 @@ test('開始の応答で未保存の入力を失わず、新しい版で編集�
   );
 });
 
-test('開始の版競合では帯を出して入力を残し、読み込むまで保存も開始も塞ぐ', async () => {
+test('開始の版競合では通知して入力を残し、読み込むまで保存も開始も塞ぐ', async () => {
   const initial = confirmedOrder({ remarks: '保存済み' });
   mockedOrderApi.get.mockResolvedValueOnce(initial).mockResolvedValue({ ...initial, version: 4 });
   mockedOrderApi.start
@@ -711,7 +712,11 @@ test('開始の版競合では帯を出して入力を残し、読み込むま�
   fireEvent.change(screen.getByLabelText('備考'), { target: { value: '未保存' } });
   fireEvent.change(screen.getByLabelText('開始の理由'), { target: { value: '提供開始' } });
   fireEvent.click(screen.getByRole('button', { name: 'サービスを開始' }));
-  const load = await screen.findByRole('button', { name: LOAD_LATEST_LABEL });
+  await waitFor(() => expect(notify.warning).toHaveBeenCalledWith(STALE_MESSAGE));
+  // 読み込みの口は、押せなくなった開始のそばと保存のそばの両方に出る
+  const start = screen.getByRole('region', { name: 'サービスの進行' });
+  const load = within(start).getByRole('button', { name: LOAD_LATEST_LABEL });
+  expect(screen.getAllByRole('button', { name: LOAD_LATEST_LABEL })).toHaveLength(2);
   // 自動では取り直さない。入力は操作者が読み込みを選ぶまで画面に残る
   expect(mockedOrderApi.get).toHaveBeenCalledTimes(1);
   expect(screen.getByLabelText('人数')).toHaveValue(5);
@@ -719,6 +724,7 @@ test('開始の版競合では帯を出して入力を残し、読み込むま�
   expect(await screen.findByRole('button', { name: '保存' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'サービスを開始' })).toBeDisabled();
 
+  await waitFor(() => expect(load).toBeEnabled());
   fireEvent.click(load);
   await waitFor(() => expect(notify.success).toHaveBeenCalledWith(LATEST_LOADED_MESSAGE));
   expect(await screen.findByLabelText('人数')).toHaveValue(2);
@@ -920,7 +926,7 @@ const versionConflict = {
   response: { status: 409, data: { details: { expected_version: '競合' } } },
 };
 
-test('保存の版競合では帯を出して入力を残し、読み込みに失敗しても塞いだまま再試行で替わる', async () => {
+test('保存の版競合では通知して入力を残し、読み込みに失敗したら再試行で替わる', async () => {
   mockedOrderApi.get
     .mockResolvedValueOnce(confirmedOrder())
     .mockRejectedValueOnce({ response: { status: 500 } })
@@ -932,15 +938,20 @@ test('保存の版競合では帯を出して入力を残し、読み込みに�
   fireEvent.click(screen.getByRole('button', { name: '保存' }));
   await confirmPreview();
 
-  const load = await screen.findByRole('button', { name: LOAD_LATEST_LABEL });
+  await waitFor(() => expect(notify.warning).toHaveBeenCalledWith(STALE_MESSAGE));
+  const save = await screen.findByRole('button', { name: '保存' });
+  // 通知は消える。止めている理由と読み込みの口は、押せなくなった保存のそばに残る
+  const load = within(save.closest('form')!).getByRole('button', { name: LOAD_LATEST_LABEL });
   expect(mockedOrderApi.get).toHaveBeenCalledTimes(1);
   expect(screen.getByLabelText('人数')).toHaveValue(5);
-  expect(await screen.findByRole('button', { name: '保存' })).toBeDisabled();
+  expect(save).toBeDisabled();
 
+  await waitFor(() => expect(load).toBeEnabled());
   fireEvent.click(load);
   expect(await screen.findByText('受注を取得できませんでした。')).toBeInTheDocument();
-  // 読み込めていない間は、帯も保存の抑止も残る
-  expect(screen.getByRole('button', { name: LOAD_LATEST_LABEL })).toBeInTheDocument();
+  // フォームも開始の節も失敗の表示に替わる。入力はもう無いので、口は再試行だけ
+  expect(screen.queryByRole('button', { name: LOAD_LATEST_LABEL })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'サービスを開始' })).not.toBeInTheDocument();
   expect(notify.success).not.toHaveBeenCalledWith(LATEST_LOADED_MESSAGE);
   fireEvent.click(screen.getByRole('button', { name: '再試行' }));
 
@@ -950,7 +961,7 @@ test('保存の版競合では帯を出して入力を残し、読み込みに�
   await waitFor(() => expect(screen.getByRole('button', { name: '保存' })).toBeEnabled());
 });
 
-test('試算の版競合で入力に戻ると帯が出て、その場の読み込みを選ぶと最新の内容に替わる', async () => {
+test('試算の版競合で入力に戻ると通知して保存のそばに読み込みが出て、押すと最新の内容に替わる', async () => {
   mockedOrderApi.get
     .mockResolvedValueOnce(confirmedOrder())
     .mockResolvedValue(confirmedOrder({ version: 4, remarks: '他の操作者の備考' }));
@@ -964,15 +975,17 @@ test('試算の版競合で入力に戻ると帯が出て、その場の読み�
   fireEvent.click(within(dialog).getByRole('button', { name: '入力に戻る' }));
 
   // 弾かれた理由を画面に残し、古い版のまま試算を繰り返させない
-  expect(await screen.findByRole('button', { name: '保存' })).toBeDisabled();
-  // 帯はフォームの上にある。押せなくなった理由を、末尾にいる操作者の見える位置へ運ぶ
-  const notice = screen.getByRole('button', { name: LOAD_LATEST_LABEL }).parentElement;
-  expect(jest.mocked(Element.prototype.scrollIntoView).mock.contexts).toContain(notice);
+  const save = await screen.findByRole('button', { name: '保存' });
+  expect(save).toBeDisabled();
+  expect(notify.warning).toHaveBeenCalledWith(STALE_MESSAGE);
+  // 末尾で保存を押した操作者の目の前（保存のそば）に、読み込みの口を出す
+  const load = within(save.closest('form')!).getByRole('button', { name: LOAD_LATEST_LABEL });
   expect(screen.getByLabelText('人数')).toHaveValue(5);
   expect(mockedOrderApi.get).toHaveBeenCalledTimes(1);
   expect(mockedOrderApi.update).not.toHaveBeenCalled();
 
-  fireEvent.click(await screen.findByRole('button', { name: LOAD_LATEST_LABEL }));
+  await waitFor(() => expect(load).toBeEnabled());
+  fireEvent.click(load);
   await waitFor(() => expect(notify.success).toHaveBeenCalledWith(LATEST_LOADED_MESSAGE));
   expect(await screen.findByLabelText('備考')).toHaveValue('他の操作者の備考');
   expect(screen.getByLabelText('人数')).toHaveValue(2);

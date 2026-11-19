@@ -6,6 +6,7 @@ import {
   INPUT_KEPT_MESSAGE,
   LATEST_LOADED_MESSAGE,
   LOAD_LATEST_LABEL,
+  STALE_MESSAGE,
 } from '../ui/OrderStaleNotice';
 import { Order, orderApi } from '@/entities/order';
 // 伝票 QR はアプリドメインの申領画面を指す。根 layout が渡す値をここで固定する
@@ -651,7 +652,7 @@ describe('受注の完了画面', () => {
     expect(mockedComplete.mock.calls[0][1].expected_version).toBe(7);
   });
 
-  it('版の食い違いは帯を出して入力を残し、読み込むと取り直した内容と版で播き直す', async () => {
+  it('版の食い違いは通知して入力を残し、読み込むと取り直した内容と版で播き直す', async () => {
     // 読み込まないと画面は古い版を持ったままで、その場の再送は何度でも 409 になる（行き止まり）
     mockedGet
       .mockResolvedValueOnce({
@@ -688,12 +689,15 @@ describe('受注の完了画面', () => {
     await confirmPreview();
 
     const load = await screen.findByRole('button', { name: LOAD_LATEST_LABEL });
+    expect(notify.warning).toHaveBeenCalledWith(STALE_MESSAGE);
+    expect(screen.getByRole('button', { name: '完了する' }).closest('form')).toContainElement(load);
     // 自動では取り直さない。入力は操作者が読み込みを選ぶまで画面に残り、完了は押せない
     expect(mockedGet).toHaveBeenCalledTimes(1);
     expect(screen.getByLabelText('明細1の名称')).toHaveValue('古い明細');
     expect(await screen.findByRole('button', { name: '完了する' })).toBeDisabled();
     expect(notify.success).not.toHaveBeenCalled();
 
+    await waitFor(() => expect(load).toBeEnabled());
     fireEvent.click(load);
     await waitFor(() => expect(notify.success).toHaveBeenCalledWith(LATEST_LOADED_MESSAGE));
     expect(screen.queryByRole('button', { name: LOAD_LATEST_LABEL })).not.toBeInTheDocument();
@@ -728,15 +732,20 @@ describe('受注の完了画面', () => {
     expect(await screen.findByLabelText('明細1の名称')).toHaveValue('古い明細');
     fireEvent.click(screen.getByRole('button', { name: '完了する' }));
     await confirmPreview();
-    fireEvent.click(await screen.findByRole('button', { name: LOAD_LATEST_LABEL }));
+    const load = await screen.findByRole('button', { name: LOAD_LATEST_LABEL });
+    // 書き込みの後始末が済むまでは押せない
+    await waitFor(() => expect(load).toBeEnabled());
+    fireEvent.click(load);
 
     expect(
       await screen.findByText('この受注は完了または取消済みのため、完了できません。')
     ).toBeInTheDocument();
     expect(screen.queryByLabelText('明細1の名称')).not.toBeInTheDocument();
-    // 文言は領域の名乗りだけ。帯や読み込みの案内まで重ねると、従うべき指示が 2 つ同時に出る
+    // 文言は領域の名乗りだけ。読み込みの口や案内まで重ねると、従うべき指示が 2 つ同時に出る
     expect(screen.queryByRole('button', { name: LOAD_LATEST_LABEL })).not.toBeInTheDocument();
-    expect(notify.warning).not.toHaveBeenCalled();
+    // 通知は弾かれた時の 1 回だけ。読み込んだ後には足さない
+    expect(notify.warning).toHaveBeenCalledTimes(1);
+    expect(notify.warning).toHaveBeenCalledWith(STALE_MESSAGE);
     // 完了の成功ではない。成功の通知を出すと「オーダーを完了しました」が嘘になる
     expect(notify.success).not.toHaveBeenCalled();
     expect(mockedComplete).toHaveBeenCalledTimes(1);

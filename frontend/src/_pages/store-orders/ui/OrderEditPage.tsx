@@ -3,7 +3,12 @@
 import { OrderCorrectionHistoryDialog } from '@/widgets/order-correction-history';
 
 import { orderConflictField, StaleOrderError, useOrderConfirmation } from './useOrderConfirmation';
-import { INPUT_KEPT_MESSAGE, LATEST_LOADED_MESSAGE, OrderStaleNotice } from './OrderStaleNotice';
+import {
+  INPUT_KEPT_MESSAGE,
+  LATEST_LOADED_MESSAGE,
+  OrderStaleNotice,
+  STALE_MESSAGE,
+} from './OrderStaleNotice';
 
 import { OrderEditorSection } from './OrderEditorSection';
 import { OrderServiceProgress } from './OrderServiceProgress';
@@ -204,6 +209,11 @@ export default function OrderEditPage() {
     setKeepInputFor(keep ? scope : null);
     return writer.reload();
   };
+  // 通知は消えるので、画面にも止めている理由を残す（押せなくなった操作のそばの案内）
+  const markStale = () => {
+    setStaleFor(scope);
+    notify.warning(STALE_MESSAGE);
+  };
   const loadLatest = async () => {
     const result = await reloadOrder(false);
     if (result.status === 'success' && result.isCurrent()) notify.success(LATEST_LOADED_MESSAGE);
@@ -271,7 +281,7 @@ export default function OrderEditPage() {
     } catch (error) {
       // 試算が版の食い違いで止まったときだけここへ来る
       if (error instanceof StaleOrderError && error.reloadNow) await loadLatest();
-      else setStaleFor(scope);
+      else markStale();
       return;
     }
     if (!token) return;
@@ -301,8 +311,8 @@ export default function OrderEditPage() {
       }
     );
     if (outcome !== 'conflict') return;
-    // 版の食い違いは帯を出して操作者の読み込みを待つ。業務の競合は入力を残したまま版を取り直す
-    if (orderConflictField(conflict) === 'expected_version') setStaleFor(scope);
+    // 版の食い違いは操作者の読み込みを待つ。業務の競合は入力を残したまま版を取り直す
+    if (orderConflictField(conflict) === 'expected_version') markStale();
     else await reloadKeepingInput();
   };
 
@@ -365,14 +375,14 @@ export default function OrderEditPage() {
             {current.completed_at && ` / 完了日時: ${formatDateTime(current.completed_at)}`}
           </p>
         )}
-        {stale && <OrderStaleNotice busy={busy} onLoad={() => void loadLatest()} />}
         {current && (
           <OrderServiceProgress
             key={`${storeId}:${orderId}`}
             order={current}
             writer={writer}
             stale={stale}
-            onStale={() => setStaleFor(scope)}
+            onStale={markStale}
+            onLoadLatest={() => void loadLatest()}
             // 進行操作の応答と業務の競合後の取り直しでは、未保存の編集内容を保持する
             onOrderUpdated={updated => {
               if (startScope.replace(updated)) setKeepInputFor(scope);
@@ -613,22 +623,25 @@ export default function OrderEditPage() {
                 </div>
               </OrderEditorSection>
 
-              <div className="flex items-center justify-between gap-6 rounded-b-xl border-t bg-card p-6">
-                <p className="text-sm text-muted-foreground">
-                  変更内容は保存前の確認画面で確認できます。
-                </p>
-                <div className="flex shrink-0 gap-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => router.push(storePath(storeId, '/orders'))}
-                  >
-                    キャンセル
-                  </Button>
-                  <Button type="submit" disabled={busy || writer.conflict || stale}>
-                    {busy ? '保存中...' : '保存'}
-                  </Button>
+              <div className="space-y-4 rounded-b-xl border-t bg-card p-6">
+                {stale && <OrderStaleNotice busy={busy} onLoad={() => void loadLatest()} />}
+                <div className="flex items-center justify-between gap-6">
+                  <p className="text-sm text-muted-foreground">
+                    変更内容は保存前の確認画面で確認できます。
+                  </p>
+                  <div className="flex shrink-0 gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => router.push(storePath(storeId, '/orders'))}
+                    >
+                      キャンセル
+                    </Button>
+                    <Button type="submit" disabled={busy || writer.conflict || stale}>
+                      {busy ? '保存中...' : '保存'}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </form>

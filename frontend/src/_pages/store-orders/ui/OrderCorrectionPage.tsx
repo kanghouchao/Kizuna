@@ -1,7 +1,12 @@
 'use client';
 
 import { orderConflictField, StaleOrderError, useOrderConfirmation } from './useOrderConfirmation';
-import { INPUT_KEPT_MESSAGE, LATEST_LOADED_MESSAGE, OrderStaleNotice } from './OrderStaleNotice';
+import {
+  INPUT_KEPT_MESSAGE,
+  LATEST_LOADED_MESSAGE,
+  OrderStaleNotice,
+  STALE_MESSAGE,
+} from './OrderStaleNotice';
 
 import { OrderCourseField } from './OrderCourseField';
 import { OrderSpecialServicesField } from './OrderSpecialServicesField';
@@ -202,6 +207,11 @@ function CorrectionEditor() {
     }
   };
 
+  // 通知は消えるので、画面にも止めている理由を残す（押せなくなった操作のそばの案内）
+  const markStale = () => {
+    setStaleFor(scope);
+    notify.warning(STALE_MESSAGE);
+  };
   const loadLatest = async () => {
     const result = await reloadOrder(false);
     if (result.status === 'success' && result.isCurrent()) notify.success(LATEST_LOADED_MESSAGE);
@@ -229,7 +239,7 @@ function CorrectionEditor() {
     } catch (error) {
       // 試算が版の食い違いで止まったときだけここへ来る
       if (error instanceof StaleOrderError && error.reloadNow) await loadLatest();
-      else setStaleFor(scope);
+      else markStale();
       return;
     }
     if (!token) return;
@@ -265,9 +275,9 @@ function CorrectionEditor() {
       }
     );
     if (outcome !== 'conflict') return;
-    // 採用条件の変化は入力を残したまま版を取り直す。それ以外の 409 は帯を出して読み込みを待つ
+    // 採用条件の変化は入力を残したまま版を取り直す。それ以外の 409 は操作者の読み込みを待つ
     if (!tokenConflict) {
-      setStaleFor(scope);
+      markStale();
       return;
     }
     const result = await reloadOrder(true);
@@ -308,7 +318,6 @@ function CorrectionEditor() {
           </p>
         )}
         {outcome !== null && <CorrectionOutcome outcome={outcome} />}
-        {stale && <OrderStaleNotice busy={busy} onLoad={() => void loadLatest()} />}
 
         {/* 門は台帳を読みも書きもしない（ADR 0019）。全否定が要る誤完了のためにポイント側の操作面を
           指すだけで、機構は繋がない — 門はここが実行されたかを知らないまま */}
@@ -417,6 +426,7 @@ function CorrectionEditor() {
                 </p>
               </section>
 
+              {stale && <OrderStaleNotice busy={busy} onLoad={() => void loadLatest()} />}
               <div className="flex justify-end gap-4">
                 <Button
                   type="button"
