@@ -116,6 +116,7 @@ describe('従業員追加ページ', () => {
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/admin/staff'));
     expect(submit).toBeDisabled();
+    expect(submit).toHaveTextContent('追加中...');
     fireEvent.click(submit);
     expect(mockedStaffApi.create).toHaveBeenCalledTimes(1);
 

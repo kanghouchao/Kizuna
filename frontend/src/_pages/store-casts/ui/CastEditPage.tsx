@@ -133,7 +133,7 @@ export default function CastEditPage() {
         }}
         existingCustomFields={cast.custom_fields}
         onSubmit={handleSubmit}
-        isSubmitting={saving.busy}
+        busy={saving.busy}
       />
     </div>
   );

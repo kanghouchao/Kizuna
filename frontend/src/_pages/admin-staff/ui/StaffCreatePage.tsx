@@ -100,7 +100,7 @@ export default function StaffCreatePage() {
           ),
         }}
         unnamedSubject="新しい従業員"
-        locked={busy}
+        busy={busy}
         onSubmit={submit}
       />
     </div>

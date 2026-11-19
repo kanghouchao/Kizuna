@@ -87,7 +87,8 @@ export default function ServiceIdentityEditPage() {
         editingName={identity.display_name ?? ''}
         unnamedSubject="このサービスID"
         loadRoles={serviceIdentityApi.grantableRoles}
-        locked={writer.busy || writer.conflict}
+        busy={writer.busy}
+        locked={writer.conflict}
         onSubmit={submit}
       />
     </div>
