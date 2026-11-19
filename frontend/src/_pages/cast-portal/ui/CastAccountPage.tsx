@@ -1,13 +1,14 @@
 'use client';
 
 import { authApi, useAuth } from '@/entities/user';
-import { useResource } from '@/shared/lib';
+import { useResource, useWrite } from '@/shared/lib';
 import { Button, ListRow, ListRows, RegionError, Skeleton } from '@/shared/ui';
 import { PANEL } from './RemunerationDetail';
 
 /** アカウントタブ。表示名と、サービス条件・パスワード変更・LINE連携の下位画面への入口、ログアウト。 */
 export function CastAccountPage() {
   const { logout } = useAuth();
+  const { busy, write } = useWrite();
   const { data: me, isLoading, failure, reload } = useResource(() => authApi.me());
 
   return (
@@ -34,7 +35,8 @@ export function CastAccountPage() {
       <Button
         type="button"
         variant="outline"
-        onClick={() => logout()}
+        disabled={busy}
+        onClick={() => void write(() => logout(), { failure: () => {} })}
         className="min-h-11 w-full text-base"
       >
         ログアウト

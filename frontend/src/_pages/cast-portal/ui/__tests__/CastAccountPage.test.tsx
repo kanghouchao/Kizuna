@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { CastAccountPage } from '../CastAccountPage';
 import { authApi, useAuth } from '@/entities/user';
 
@@ -46,14 +46,24 @@ describe('CastAccountPage', () => {
     await screen.findByText('田中一郎');
   });
 
-  it('ログアウトボタンは useAuth().logout を呼ぶ', async () => {
+  it('ログアウトは、終わるまで続けて押しても 1 回だけ送る', async () => {
     mockedMe.mockResolvedValue({ display_name: '田中一郎' });
+    let finish: () => void = () => {};
+    mockLogout.mockReturnValue(new Promise<void>(resolve => (finish = resolve)));
 
     render(<CastAccountPage />);
     await screen.findByText('田中一郎');
-    fireEvent.click(screen.getByRole('button', { name: 'ログアウト' }));
+    const button = screen.getByRole('button', { name: 'ログアウト' });
+    act(() => {
+      fireEvent.click(button);
+      fireEvent.click(button);
+    });
 
-    await waitFor(() => expect(mockLogout).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(button).toBeDisabled());
+    expect(mockLogout).toHaveBeenCalledTimes(1);
+
+    await act(async () => finish());
+    await waitFor(() => expect(button).toBeEnabled());
   });
 
   it('表示名が取れなければ読み込み表示に固着せず、失敗を名乗って再試行できる', async () => {

@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Header } from '../Header';
 import { useMe } from '@/entities/user';
 import type { MeResponse } from '@/entities/user';
@@ -63,6 +63,31 @@ describe('Header 操作', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: 'ログアウト' }));
 
     expect(mockedLogout).toHaveBeenCalledTimes(1);
+  });
+
+  it('ログアウトが終わるまで、メニューを開き直しても押せない', async () => {
+    let finish: () => void = () => {};
+    mockedLogout.mockReturnValue(new Promise<void>(resolve => (finish = resolve)));
+    render(<Header />);
+    openAccountMenu();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'ログアウト' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('menuitem', { name: 'ログアウト' })).not.toBeInTheDocument()
+    );
+
+    openAccountMenu();
+    const item = await screen.findByRole('menuitem', { name: 'ログアウト' });
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(item);
+    expect(mockedLogout).toHaveBeenCalledTimes(1);
+
+    await act(async () => finish());
+    await waitFor(() =>
+      expect(screen.getByRole('menuitem', { name: 'ログアウト' })).not.toHaveAttribute(
+        'aria-disabled',
+        'true'
+      )
+    );
   });
 
   // 切替 UI 自体の配線は ModeToggle.test.tsx が持つ。ここで押さえるのは

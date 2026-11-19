@@ -2,11 +2,13 @@
 
 import Link from 'next/link';
 import { useAuth } from '@/entities/user';
+import { useWrite } from '@/shared/lib';
 import { Button, ListRow, ListRows } from '@/shared/ui';
 
 /** アカウントタブ。設定の一覧とログアウト、最下部に誤操作しにくい灰色の退会リンクを置く。 */
 export function MemberAccountPage() {
   const { logout } = useAuth();
+  const { busy, write } = useWrite();
 
   return (
     <div className="space-y-6">
@@ -17,7 +19,8 @@ export function MemberAccountPage() {
       <Button
         type="button"
         variant="outline"
-        onClick={() => logout()}
+        disabled={busy}
+        onClick={() => void write(() => logout(), { failure: () => {} })}
         className="h-12 w-full text-lg"
       >
         ログアウト
