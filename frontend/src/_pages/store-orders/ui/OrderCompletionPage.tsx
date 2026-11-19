@@ -43,7 +43,12 @@ import { OrderEditorSection } from './OrderEditorSection';
 import { OrderFeeLinesField } from './OrderFeeLinesField';
 import { ReceiptTokenDialog } from './ReceiptTokenDialog';
 import { orderConflictField, StaleOrderError, useOrderConfirmation } from './useOrderConfirmation';
-import { INPUT_KEPT_MESSAGE, LATEST_LOADED_MESSAGE, OrderStaleNotice } from './OrderStaleNotice';
+import {
+  INPUT_KEPT_MESSAGE,
+  LATEST_LOADED_MESSAGE,
+  OrderStaleNotice,
+  STALE_MESSAGE,
+} from './OrderStaleNotice';
 
 interface OrderCompletionFormValues {
   /** 会計の内訳。合計はこの総和としてサーバが導出するので、画面に会計金額の欄は無い。 */
@@ -142,6 +147,11 @@ function Completion({ id }: { id: string }) {
   // 会員へ帰属しなかった完了でだけ返る伝票トークン。生値はこの応答にしか現れないので、メモリにだけ持つ
   const [receiptToken, setReceiptToken] = useState<string | null>(null);
 
+  // 通知は消えるので、画面にも止めている理由を残す（押せなくなった操作のそばの案内）
+  const markStale = () => {
+    setStale(true);
+    notify.warning(STALE_MESSAGE);
+  };
   const loadLatest = async () => {
     // 取り直した受注が終端なら、播き直さずに画面が終端を名乗る（案内は重ねない）
     const result = await reloadOrder(false);
@@ -174,7 +184,7 @@ function Completion({ id }: { id: string }) {
     } catch (error) {
       // 試算が版の食い違いで止まったときだけここへ来る
       if (error instanceof StaleOrderError && error.reloadNow) await loadLatest();
-      else setStale(true);
+      else markStale();
       return;
     }
     if (!token) return;
@@ -218,8 +228,8 @@ function Completion({ id }: { id: string }) {
     if (conflictField !== undefined && INPUT_KEEPING_CONFLICTS.includes(conflictField)) {
       await reloadKeepingInput();
     } else {
-      // それ以外の 409 は受注が古い。帯を出して操作者の読み込みを待つ
-      setStale(true);
+      // それ以外の 409 は受注が古い。操作者の読み込みを待つ
+      markStale();
     }
   };
 
@@ -268,11 +278,6 @@ function Completion({ id }: { id: string }) {
             >
               {resource.isLoading && (
                 <p className="px-6 pt-4 text-sm text-muted-foreground">読み込み中...</p>
-              )}
-              {stale && (
-                <div className="px-6 pt-4">
-                  <OrderStaleNotice busy={busy} onLoad={() => void loadLatest()} />
-                </div>
               )}
               <OrderEditorSection
                 title="会計"
@@ -369,6 +374,11 @@ function Completion({ id }: { id: string }) {
                   )}
                 </section>
               </OrderEditorSection>
+              {stale && (
+                <div className="px-6 pt-6">
+                  <OrderStaleNotice busy={busy} onLoad={() => void loadLatest()} />
+                </div>
+              )}
               <div className="flex items-center justify-between gap-6 rounded-b-xl bg-card p-6">
                 <p className="text-sm text-muted-foreground">
                   完了前に料金・報酬・ポイントを確認できます。

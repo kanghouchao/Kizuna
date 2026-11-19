@@ -10,6 +10,7 @@ import {
   useVersionedWrite,
 } from '@/shared/lib';
 import { Button, Input, Label, Pager, RegionError } from '@/shared/ui';
+import { OrderStaleNotice } from './OrderStaleNotice';
 import { orderConflictField } from './useOrderConfirmation';
 
 /** 編集画面と同じ受注の版を送るので、書き込みは編集画面のものを共有する。409 はどちらの送信も塞ぐ。 */
@@ -20,6 +21,7 @@ export function OrderServiceProgress({
   writer,
   stale,
   onStale,
+  onLoadLatest,
   onOrderUpdated,
   onReload,
 }: {
@@ -28,6 +30,7 @@ export function OrderServiceProgress({
   /** 画面の受注の版が食い違っている。操作者が最新を読み込むまで開始を塞ぐ */
   stale: boolean;
   onStale: () => void;
+  onLoadLatest: () => void;
   onOrderUpdated: (order: Order) => void;
   /** 入力を残したまま受注を取り直す。取り直しは共有の書き込みを通し、競合を畳む */
   onReload: KeyedResource<Order>['reload'];
@@ -61,7 +64,7 @@ export function OrderServiceProgress({
       }
     );
     if (outcome !== 'conflict') return;
-    // 版の食い違いは画面の帯に任せ、未保存の編集を別の操作者の内容と黙って混ぜない
+    // 版の食い違いは操作者の読み込みに任せ、未保存の編集を別の操作者の内容と黙って混ぜない
     if (versionConflict) onStale();
     else await onReload();
   };
@@ -122,6 +125,7 @@ export function OrderServiceProgress({
             >
               サービスを開始
             </Button>
+            {stale && <OrderStaleNotice busy={busy} onLoad={onLoadLatest} />}
           </div>
         )}
         {error && <p role="alert">{error}</p>}

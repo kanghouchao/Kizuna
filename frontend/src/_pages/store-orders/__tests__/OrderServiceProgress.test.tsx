@@ -3,6 +3,7 @@ import { Order, orderApi } from '@/entities/order';
 import { useVersionedWrite } from '@/shared/lib';
 import type { KeyedResource } from '@/shared/lib';
 import { OrderServiceProgress } from '../ui/OrderServiceProgress';
+import { LOAD_LATEST_LABEL } from '../ui/OrderStaleNotice';
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
   useCurrentStoreId: () => '1',
@@ -36,19 +37,15 @@ function Harness({
 }) {
   const writer = useVersionedWrite(onReload);
   return (
-    <>
-      <button type="button" onClick={() => void writer.reload()}>
-        読み込む
-      </button>
-      <OrderServiceProgress
-        order={order}
-        writer={writer}
-        stale={stale}
-        onStale={onStale}
-        onOrderUpdated={onOrderUpdated}
-        onReload={writer.reload}
-      />
-    </>
+    <OrderServiceProgress
+      order={order}
+      writer={writer}
+      stale={stale}
+      onStale={onStale}
+      onLoadLatest={() => void writer.reload()}
+      onOrderUpdated={onOrderUpdated}
+      onReload={writer.reload}
+    />
   );
 }
 const order = {
@@ -119,9 +116,9 @@ test('開始の版競合では取り直さずに画面へ伝え、最新を読�
   expect(onOrderUpdated).not.toHaveBeenCalled();
   view.rerender(<Harness order={order} {...props} stale />);
   expect(screen.getByRole('button', { name: 'サービスを開始' })).toBeDisabled();
-  // 画面が最新を読み込むと、共有の書き込みの競合が畳まれ、版が替わる
+  // 押せなくなった開始のそばに読み込みの口が出る。読み込むと共有の書き込みの競合が畳まれ、版が替わる
   await act(async () => {
-    fireEvent.click(screen.getByRole('button', { name: '読み込む' }));
+    fireEvent.click(screen.getByRole('button', { name: LOAD_LATEST_LABEL }));
   });
   view.rerender(<Harness order={latest} {...props} />);
   expect(screen.getByLabelText('開始の理由')).toHaveValue('提供開始');
