@@ -361,7 +361,9 @@ describe('完了後訂正のページ', () => {
 
     const load = await screen.findByRole('button', { name: LOAD_LATEST_LABEL });
     expect(notify.warning).toHaveBeenCalledWith(STALE_MESSAGE);
-    expect(screen.getByRole('button', { name: '訂正する' }).closest('form')).toContainElement(load);
+    // busy が戻るまで、送信ボタンは「…中」を名乗る。名前が戻るのを待ってから位置を見る
+    const submit = await screen.findByRole('button', { name: '訂正する' });
+    expect(submit.closest('form')).toContainElement(load);
     // 自動では取り直さない。入力は操作者が読み込みを選ぶまで画面に残り、訂正は押せない
     expect(mockedOrderApi.get).toHaveBeenCalledTimes(1);
     expect(screen.getByLabelText('理由')).toHaveValue('金額の誤記');
