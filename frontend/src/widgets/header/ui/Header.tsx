@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useAuth, useMe } from '@/entities/user';
+import { useWrite } from '@/shared/lib';
 import {
   Button,
   DropdownMenu,
@@ -15,6 +16,7 @@ import { ModeToggle } from './ModeToggle';
 
 export function Header() {
   const { logout } = useAuth();
+  const { busy, write } = useWrite();
 
   // 表示名は /me の共有 seam（管理画面シェルに搭載）から読む。アカウント設定ページの
   // プロフィール更新は同じ seam の setMe で差し替わるため、この表示も再取得なしで追随する。
@@ -75,7 +77,8 @@ export function Header() {
               {/* 原語の destructive 変種は淡色地の上で既定の赤を使い明モードで 4.5 を割るため、
                   文字は -strong 側を指定する。 */}
               <DropdownMenuItem
-                onClick={() => logout()}
+                disabled={busy}
+                onClick={() => void write(() => logout(), { failure: () => {} })}
                 className="text-destructive-strong focus:bg-destructive/10 focus:text-destructive-strong"
               >
                 ログアウト

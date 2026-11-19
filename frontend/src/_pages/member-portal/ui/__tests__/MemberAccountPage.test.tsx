@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemberAccountPage } from '../MemberAccountPage';
 
 const mockLogout = jest.fn();
@@ -35,11 +35,21 @@ describe('MemberAccountPage', () => {
     ).toBeTruthy();
   });
 
-  it('ログアウトできる', () => {
+  it('ログアウトは、終わるまで続けて押しても 1 回だけ送る', async () => {
+    let finish: () => void = () => {};
+    mockLogout.mockReturnValue(new Promise<void>(resolve => (finish = resolve)));
     render(<MemberAccountPage />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'ログアウト' }));
+    const button = screen.getByRole('button', { name: 'ログアウト' });
+    act(() => {
+      fireEvent.click(button);
+      fireEvent.click(button);
+    });
 
+    await waitFor(() => expect(button).toBeDisabled());
     expect(mockLogout).toHaveBeenCalledTimes(1);
+
+    await act(async () => finish());
+    await waitFor(() => expect(button).toBeEnabled());
   });
 });
