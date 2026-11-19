@@ -122,7 +122,7 @@ public class OrderSpecialServices implements SpecialServiceRejectionHandler {
   @Transactional(propagation = Propagation.MANDATORY)
   public void requireProgress(Long storeId, Order order) {
     if (!events.unresolved(storeId, order.getId()).isEmpty())
-      throw new OrderConfirmationConflict("special_services", "拒否された特殊サービスを編集画面で修復してください");
+      throw new ServiceException("拒否された特殊サービスを編集画面で修復してください");
   }
 
   /** 応答の表示用。修復待ちの印に加えて、在籍の同意の現況を引く。 */

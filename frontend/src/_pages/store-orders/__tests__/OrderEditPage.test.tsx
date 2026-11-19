@@ -921,9 +921,14 @@ test('開始の 409 では、取り直し終えるまで編集の保存も押せ
   );
 });
 
+const VERSION_CONFLICT_MESSAGE =
+  'この受注は別の操作者が更新しました。最新の内容を読み直してからやり直してください';
 const versionConflict = {
   isAxiosError: true,
-  response: { status: 409, data: { details: { expected_version: '競合' } } },
+  response: {
+    status: 409,
+    data: { error: VERSION_CONFLICT_MESSAGE, details: { expected_version: '競合' } },
+  },
 };
 
 test('保存の版競合では通知して入力を残し、読み込みに失敗したら再試行で替わる', async () => {
@@ -972,6 +977,9 @@ test('試算の版競合で入力に戻ると通知して保存のそばに読�
   fireEvent.click(screen.getByRole('button', { name: '保存' }));
   const dialog = await screen.findByRole('dialog');
   await within(dialog).findByRole('button', { name: LOAD_LATEST_LABEL });
+  // 同じ版で試算し直しても同じ 409 が返る。進める口は読み込みと入力に戻るだけ
+  expect(within(dialog).getByRole('alert')).toHaveTextContent(VERSION_CONFLICT_MESSAGE);
+  expect(within(dialog).queryByRole('button', { name: '再試行' })).not.toBeInTheDocument();
   fireEvent.click(within(dialog).getByRole('button', { name: '入力に戻る' }));
 
   // 弾かれた理由を画面に残し、古い版のまま試算を繰り返させない
