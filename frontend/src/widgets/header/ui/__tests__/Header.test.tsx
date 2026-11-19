@@ -67,7 +67,7 @@ describe('Header 操作', () => {
 
   it('ログアウトが終わるまで、メニューを開き直しても押せない', async () => {
     let finish: () => void = () => {};
-    mockedLogout.mockReturnValue(new Promise<void>(resolve => (finish = resolve)));
+    mockedLogout.mockReturnValueOnce(new Promise<void>(resolve => (finish = resolve)));
     render(<Header />);
     openAccountMenu();
     fireEvent.click(await screen.findByRole('menuitem', { name: 'ログアウト' }));
