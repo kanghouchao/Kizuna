@@ -346,7 +346,7 @@ describe('完了後訂正のページ', () => {
     mockedOrderApi.correct.mockRejectedValue(
       new AxiosError('conflict', undefined, undefined, undefined, {
         status: 409,
-        data: {},
+        data: { details: { expected_version: '最新の内容を読み直してください' } },
         statusText: 'Conflict',
         headers: {},
         config: { headers: undefined as never },
@@ -380,6 +380,30 @@ describe('完了後訂正のページ', () => {
     expect(screen.getByLabelText('理由')).toHaveValue('');
     expect(await screen.findByRole('button', { name: '訂正する' })).toBeInTheDocument();
     expect(notify.error).not.toHaveBeenCalled();
+  });
+
+  it('理由の付かない 409 はサーバの文言を出し、入力を残して読み込みを待つこと', async () => {
+    const message = '他の操作と競合しました。最新の状態を取得してやり直してください';
+    mockedOrderApi.get.mockResolvedValue(completedOrder());
+    mockedOrderApi.correct.mockRejectedValueOnce({
+      response: { status: 409, data: { error: message } },
+    });
+    render(<OrderCorrectionPage />);
+    await waitFor(() => expect(screen.getByText(/採用済み: 60 分コース/)).toBeInTheDocument());
+
+    fireEvent.change(screen.getByLabelText('理由'), { target: { value: '金額の誤記' } });
+    fireEvent.click(screen.getByRole('button', { name: '訂正する' }));
+    await confirmPreview();
+
+    await waitFor(() => expect(notify.error).toHaveBeenCalledWith(message));
+    expect(notify.warning).not.toHaveBeenCalled();
+    const submit = await screen.findByRole('button', { name: '訂正する' });
+    expect(submit).toBeDisabled();
+    expect(submit.closest('form')).toContainElement(
+      screen.getByRole('button', { name: LOAD_LATEST_LABEL })
+    );
+    expect(mockedOrderApi.get).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('理由')).toHaveValue('金額の誤記');
   });
 
   it('理由の無い訂正は送らないこと', async () => {

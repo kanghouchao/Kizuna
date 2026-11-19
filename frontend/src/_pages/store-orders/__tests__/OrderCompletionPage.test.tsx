@@ -102,6 +102,7 @@ const conflict = {
     status: 409,
     data: {
       error: 'この受注は別の操作者が更新しました。最新の内容を読み直してからやり直してください',
+      details: { expected_version: '最新の内容を読み直してください' },
     },
   },
 };
@@ -710,6 +711,24 @@ describe('受注の完了画面', () => {
     await confirmPreview();
     await waitFor(() => expect(mockedComplete).toHaveBeenCalledTimes(2));
     expect(mockedComplete.mock.calls[1][1].expected_version).toBe(4);
+  });
+
+  it('理由の付かない 409 はサーバの文言を出し、入力を残して読み込みを待つ', async () => {
+    const message = '他の操作と競合しました。最新の状態を取得してやり直してください';
+    mockedComplete.mockRejectedValueOnce({ response: { status: 409, data: { error: message } } });
+    renderPage();
+
+    await completeWith('8000');
+
+    await waitFor(() => expect(notify.error).toHaveBeenCalledWith(message));
+    expect(notify.warning).not.toHaveBeenCalled();
+    const submit = await screen.findByRole('button', { name: '完了する' });
+    expect(submit).toBeDisabled();
+    expect(
+      within(submit.closest('form')!).getByRole('button', { name: LOAD_LATEST_LABEL })
+    ).toBeInTheDocument();
+    expect(mockedGet).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('明細1の金額')).toHaveValue(8000);
   });
 
   it('読み込んだ受注が終端なら、フォームを畳んで終端を名乗り、一覧へ帰す', async () => {

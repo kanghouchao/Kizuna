@@ -212,6 +212,11 @@ function CorrectionEditor() {
     setStaleFor(scope);
     notify.warning(STALE_MESSAGE);
   };
+  // 理由の付かない 409 は並行の負け。受注が変わったかは分からないので、サーバの文言を出して読み込みを待つ
+  const markUnexplainedConflict = (error: unknown) => {
+    setStaleFor(scope);
+    notify.error(getApiErrorMessage(error, STALE_MESSAGE));
+  };
   const loadLatest = async () => {
     const result = await reloadOrder(false);
     if (result.status === 'success' && result.isCurrent()) notify.success(LATEST_LOADED_MESSAGE);
@@ -243,14 +248,14 @@ function CorrectionEditor() {
       return;
     }
     if (!token) return;
-    let tokenConflict = false;
+    let conflict: unknown;
     const outcome = await writer.write(
       () => orderApi.correct(orderId, { ...request, confirmation_token: token }),
       {
         failure: (error, kind) => {
-          tokenConflict = orderConflictField(error) === 'confirmation_token';
+          if (kind === 'conflict') conflict = error;
           if (!operation.isCurrent()) return;
-          if (tokenConflict) {
+          if (orderConflictField(error) === 'confirmation_token') {
             notify.warning(
               '採用条件が変更されたため訂正できませんでした。入力を残したまま最新の状態を取得します'
             );
@@ -276,8 +281,10 @@ function CorrectionEditor() {
     );
     if (outcome !== 'conflict') return;
     // 採用条件の変化は入力を残したまま版を取り直す。それ以外の 409 は操作者の読み込みを待つ
-    if (!tokenConflict) {
-      markStale();
+    const conflictField = orderConflictField(conflict);
+    if (conflictField !== 'confirmation_token') {
+      if (conflictField === 'expected_version') markStale();
+      else markUnexplainedConflict(conflict);
       return;
     }
     const result = await reloadOrder(true);

@@ -16,7 +16,6 @@ export function orderConflictField(error: unknown): string | undefined {
   if (details?.customer_lock) return 'customer_lock';
   if (details?.use_points) return 'use_points';
   if (details?.confirmation_token) return 'confirmation_token';
-  if (details?.special_services) return 'special_services';
   if (details?.expected_version) return 'expected_version';
   return undefined;
 }
@@ -138,6 +137,11 @@ export function useOrderConfirmation(target?: string) {
       >
         {resource.isLoading ? (
           <p>試算中...</p>
+        ) : stale ? (
+          // 同じ版で試算し直しても同じ 409 が返る。進める口はフッターの 2 つだけにする
+          <p role="alert" className="text-sm text-destructive-strong">
+            {resource.data?.error}
+          </p>
         ) : failed ? (
           <RegionError
             message={resource.data?.error ?? '試算を取得できませんでした'}

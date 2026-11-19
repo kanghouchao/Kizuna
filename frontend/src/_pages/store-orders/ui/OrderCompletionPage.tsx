@@ -152,6 +152,11 @@ function Completion({ id }: { id: string }) {
     setStale(true);
     notify.warning(STALE_MESSAGE);
   };
+  // 理由の付かない 409 は並行の負け。受注が変わったかは分からないので、サーバの文言を出して読み込みを待つ
+  const markUnexplainedConflict = (error: unknown) => {
+    setStale(true);
+    notify.error(getApiErrorMessage(error, STALE_MESSAGE));
+  };
   const loadLatest = async () => {
     // 取り直した受注が終端なら、播き直さずに画面が終端を名乗る（案内は重ねない）
     const result = await reloadOrder(false);
@@ -188,12 +193,16 @@ function Completion({ id }: { id: string }) {
       return;
     }
     if (!token) return;
+    let conflict: unknown;
     let conflictField: string | undefined;
     const outcome = await writer.write(
       () => orderApi.complete(id, { ...request, confirmation_token: token }),
       {
         failure: (error, kind) => {
-          if (kind === 'conflict') conflictField = orderConflictField(error);
+          if (kind === 'conflict') {
+            conflict = error;
+            conflictField = orderConflictField(error);
+          }
           if (!operation.isCurrent()) return;
           if (conflictField === 'customer_lock') {
             notify.error(
@@ -227,9 +236,10 @@ function Completion({ id }: { id: string }) {
     if (outcome !== 'conflict') return;
     if (conflictField !== undefined && INPUT_KEEPING_CONFLICTS.includes(conflictField)) {
       await reloadKeepingInput();
-    } else {
-      // それ以外の 409 は受注が古い。操作者の読み込みを待つ
+    } else if (conflictField === 'expected_version') {
       markStale();
+    } else {
+      markUnexplainedConflict(conflict);
     }
   };
 
