@@ -26,7 +26,7 @@ export default function CastCreatePage() {
         <h1 className="text-2xl font-bold text-foreground">新規キャスト登録</h1>
         <p className="text-sm text-muted-foreground mt-1">新しいキャスト情報を入力してください。</p>
       </div>
-      <CastForm onSubmit={handleSubmit} isSubmitting={busy} />
+      <CastForm onSubmit={handleSubmit} busy={busy} />
     </div>
   );
 }

@@ -49,9 +49,11 @@ interface GrantFormProps<T extends GrantFormValues> {
   storeLabel?: string;
   /** キャンセルの戻り先（一覧）。 */
   listHref: string;
-  /** 書き込み中・競合中など、保存を受け付けない間は true。 */
+  /** 書き込みの hook の busy。保存を受け付けず、ボタンの文言を送信中に替える。 */
+  busy?: boolean;
+  /** 競合中など、送信中ではないが保存を受け付けない間は true。 */
   locked?: boolean;
-  /** 保存処理。失敗の通知は呼び出し側が行い、送信中の状態はこの関数の完了まで保たれる。 */
+  /** 保存処理。失敗の通知は呼び出し側が行う。 */
   onSubmit: (values: T) => Promise<void>;
 }
 
@@ -67,14 +69,12 @@ export function GrantForm<T extends GrantFormValues>({
   grantDescription,
   storeLabel,
   listHref,
+  busy = false,
   locked = false,
   onSubmit,
 }: GrantFormProps<T>) {
   const form = useForm<T>({ defaultValues: defaultValues as DefaultValues<T> });
-  const {
-    handleSubmit,
-    formState: { isSubmitting },
-  } = form;
+  const { handleSubmit } = form;
   // 授権の欄は T の共通部分だけを引く。T を具体化した control は本人の欄へ渡す
   const control = form.control as unknown as Control<GrantFormValues>;
   const resultId = useId();
@@ -264,14 +264,8 @@ export function GrantForm<T extends GrantFormValues>({
           <Button variant="outline" render={<Link href={listHref} />}>
             キャンセル
           </Button>
-          <Button type="submit" disabled={isSubmitting || locked}>
-            {editing
-              ? isSubmitting
-                ? '保存中...'
-                : '保存する'
-              : isSubmitting
-                ? '追加中...'
-                : '追加する'}
+          <Button type="submit" disabled={busy || locked}>
+            {editing ? (busy ? '保存中...' : '保存する') : busy ? '追加中...' : '追加する'}
           </Button>
         </div>
       </form>

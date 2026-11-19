@@ -65,7 +65,7 @@ export default function ServiceIdentityCreatePage() {
         }}
         unnamedSubject="新しいサービスID"
         loadRoles={serviceIdentityApi.grantableRoles}
-        locked={busy}
+        busy={busy}
         onSubmit={submit}
       />
     </div>

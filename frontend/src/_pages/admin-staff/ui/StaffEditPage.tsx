@@ -104,7 +104,8 @@ export default function StaffEditPage() {
         defaultValues={{ display_name: '', ...grantsOf(staff) }}
         editingName={staff.display_name ?? ''}
         unnamedSubject="この従業員"
-        locked={writer.busy || writer.conflict}
+        busy={writer.busy}
+        locked={writer.conflict}
         onSubmit={submit}
       />
     </div>

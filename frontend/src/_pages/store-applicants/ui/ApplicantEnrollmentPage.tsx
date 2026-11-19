@@ -75,7 +75,7 @@ export default function ApplicantEnrollmentPage() {
         </p>
         {/* 競合中は取り直すまで送らせない。古い version の再送は同じ 409 を繰り返す */}
         <fieldset disabled={writer.conflict} className="min-w-0">
-          <CastForm onSubmit={submit} isSubmitting={writer.busy} />
+          <CastForm onSubmit={submit} busy={writer.busy} />
         </fieldset>
         {/* 送信ボタンは長いフォームの末尾にある。案内は押した場所の近くに出し、見える位置まで送る */}
         {writer.conflict && (

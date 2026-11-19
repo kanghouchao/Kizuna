@@ -73,8 +73,8 @@ interface CastFormProps {
   existingCustomFields?: Record<string, string>;
   /** フォーム送信時のコールバック */
   onSubmit: (data: CastFormData) => void;
-  /** 送信中フラグ */
-  isSubmitting?: boolean;
+  /** 書き込みの hook の busy。 */
+  busy?: boolean;
 }
 
 const STATUS_OPTIONS = [
@@ -125,12 +125,7 @@ function NumericProfileField({
 }
 
 /** キャスト登録・編集フォームコンポーネント */
-export function CastForm({
-  initialData,
-  existingCustomFields,
-  onSubmit,
-  isSubmitting,
-}: CastFormProps) {
+export function CastForm({ initialData, existingCustomFields, onSubmit, busy }: CastFormProps) {
   const router = useRouter();
   const form = useForm<CastFormData>({
     defaultValues: {
@@ -340,8 +335,8 @@ export function CastForm({
           <Button type="button" variant="outline" onClick={() => router.back()}>
             キャンセル
           </Button>
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? '保存中...' : '保存する'}
+          <Button type="submit" disabled={busy}>
+            {busy ? '保存中...' : '保存する'}
           </Button>
         </div>
       </form>
