@@ -18,11 +18,16 @@ type OrderWriter = Pick<ReturnType<typeof useVersionedWrite>, 'busy' | 'conflict
 export function OrderServiceProgress({
   order,
   writer,
+  stale,
+  onStale,
   onOrderUpdated,
   onReload,
 }: {
   order: Order;
   writer: OrderWriter;
+  /** 画面の受注の版が食い違っている。操作者が最新を読み込むまで開始を塞ぐ */
+  stale: boolean;
+  onStale: () => void;
   onOrderUpdated: (order: Order) => void;
   /** 入力を残したまま受注を取り直す。取り直しは共有の書き込みを通し、競合を畳む */
   onReload: KeyedResource<Order>['reload'];
@@ -56,10 +61,9 @@ export function OrderServiceProgress({
       }
     );
     if (outcome !== 'conflict') return;
-    const result = await onReload();
-    if (versionConflict && result.status === 'success' && result.isCurrent()) {
-      setError('最新の受注を読み込みました。内容を確認してから開始を再試行してください。');
-    }
+    // 版の食い違いは画面の帯に任せ、未保存の編集を別の操作者の内容と黙って混ぜない
+    if (versionConflict) onStale();
+    else await onReload();
   };
   return (
     <section
@@ -100,7 +104,11 @@ export function OrderServiceProgress({
             <Button
               type="button"
               disabled={
-                busy || writer.conflict || order.requires_attention || order.version === undefined
+                busy ||
+                writer.conflict ||
+                stale ||
+                order.requires_attention ||
+                order.version === undefined
               }
               onClick={() => {
                 if (!reason.trim()) {

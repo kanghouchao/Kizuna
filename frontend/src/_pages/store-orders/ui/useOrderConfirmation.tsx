@@ -7,6 +7,7 @@ import { OrderPreview } from '@/entities/order';
 import { getApiErrorMessage, isConflict, useKeyedResource } from '@/shared/lib';
 import { Button, Dialog, DialogFrame, RegionError } from '@/shared/ui';
 import { OrderPreviewDetails } from './OrderPreviewDetails';
+import { LOAD_LATEST_LABEL } from './OrderStaleNotice';
 
 export function orderConflictField(error: unknown): string | undefined {
   if (!isConflict(error)) return undefined;
@@ -18,6 +19,16 @@ export function orderConflictField(error: unknown): string | undefined {
   if (details?.special_services) return 'special_services';
   if (details?.expected_version) return 'expected_version';
   return undefined;
+}
+
+/**
+ * 試算が版の食い違いで止まったことを、確認を待つ側へ伝える。reloadNow は操作者がその場で
+ * 取り直しを選んだか（選ばなければ、画面は入力を残したまま取り直しを促す）。
+ */
+export class StaleOrderError extends Error {
+  constructor(readonly reloadNow: boolean) {
+    super('受注の版が食い違っている');
+  }
 }
 
 export function useOrderConfirmation(target?: string) {
@@ -66,6 +77,12 @@ export function useOrderConfirmation(target?: string) {
     resolve.current = null;
     setOpen(false);
   };
+  const leaveStale = (reloadNow: boolean) => {
+    reject.current?.(new StaleOrderError(reloadNow));
+    resolve.current = null;
+    reject.current = null;
+    setOpen(false);
+  };
   const confirm = (load: () => Promise<OrderPreview>) =>
     new Promise<string | null>((done, fail) => {
       reject.current = fail;
@@ -76,13 +93,15 @@ export function useOrderConfirmation(target?: string) {
     });
   const preview = resource.data?.preview;
   const failed = !resource.isLoading && (resource.failure || resource.data?.error);
-  const reloadable = failed && orderConflictField(resource.data?.cause) === 'expected_version';
+  const stale = failed && orderConflictField(resource.data?.cause) === 'expected_version';
   const confirmable = !resource.isLoading && !failed && preview;
   const dialog = (
     <Dialog
       open={open && job?.scope === scope}
       onOpenChange={open => {
-        if (!open) close(null);
+        if (open) return;
+        if (stale) leaveStale(false);
+        else close(null);
       }}
     >
       <DialogFrame
@@ -91,20 +110,16 @@ export function useOrderConfirmation(target?: string) {
         description="保存する前に、料金・報酬・ポイントの採用内容を確認してください。"
         footer={
           <>
-            <Button type="button" variant="outline" onClick={() => close(null)}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => (stale ? leaveStale(false) : close(null))}
+            >
               入力に戻る
             </Button>
-            {reloadable && (
-              <Button
-                type="button"
-                onClick={() => {
-                  reject.current?.(resource.data?.cause);
-                  resolve.current = null;
-                  reject.current = null;
-                  setOpen(false);
-                }}
-              >
-                最新の受注を読み直す
+            {stale && (
+              <Button type="button" onClick={() => leaveStale(true)}>
+                {LOAD_LATEST_LABEL}
               </Button>
             )}
             {confirmable && (
