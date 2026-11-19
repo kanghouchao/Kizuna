@@ -24,6 +24,8 @@ const SUCCESS_WITHOUT_HOOK: Record<string, string> = {
     '行キーの操作（ADR 0037）。結果不明の照会・転送の中止・再送の鍵を自分で持つ',
 };
 
+const IS_SUBMITTING = /\bisSubmitting\b/;
+
 /** isSubmitting を読んでよいファイルと、その理由。 */
 const READS_IS_SUBMITTING: Record<string, string> = {
   '_pages/store-applicants/ui/ApplicantAttachmentsPanel.tsx':
@@ -65,7 +67,7 @@ describe('書き込みは共有の hook を通す', () => {
   });
 
   it('送信中を isSubmitting で見ない（hook の busy を使う）', () => {
-    const offenders = filesWith(/\bisSubmitting\b/).filter(file => !(file in READS_IS_SUBMITTING));
+    const offenders = filesWith(IS_SUBMITTING).filter(file => !(file in READS_IS_SUBMITTING));
     expect(offenders).toEqual([]);
   });
 
@@ -76,7 +78,7 @@ describe('書き込みは共有の hook を通す', () => {
       expect({ file, usesHook: WRITE_HOOK.test(source ?? '') }).toEqual({ file, usesHook: false });
     }
     for (const file of Object.keys(READS_IS_SUBMITTING)) {
-      expect({ file, reads: sources.get(file)?.includes('isSubmitting') }).toEqual({
+      expect({ file, reads: IS_SUBMITTING.test(sources.get(file) ?? '') }).toEqual({
         file,
         reads: true,
       });
