@@ -1,6 +1,7 @@
 'use client';
 
-import { orderConflictField, useOrderConfirmation } from './useOrderConfirmation';
+import { orderConflictField, StaleOrderError, useOrderConfirmation } from './useOrderConfirmation';
+import { INPUT_KEPT_MESSAGE, LATEST_LOADED_MESSAGE, OrderStaleNotice } from './OrderStaleNotice';
 
 import { OrderCourseField } from './OrderCourseField';
 import { OrderSpecialServicesField } from './OrderSpecialServicesField';
@@ -141,6 +142,9 @@ function CorrectionEditor() {
   // 残す取り直しの間はフォームを外さない。外すと、欄が自分で持つ選択中の表示名が元に戻る
   const [keepInputFor, setKeepInputFor] = useState<string | null>(null);
   const keepingInput = keepInputFor === scope;
+  // 版が食い違った受注。入力は操作者が読み込みを選ぶまで残し、その間は訂正を塞ぐ
+  const [staleFor, setStaleFor] = useState<string | null>(null);
+  const stale = staleFor === scope;
   // 取り直しを始める操作はここを通し、入力を残すか置き換えるかを決める。
   // 取得失敗の再試行は直前の決定を引き継ぐ（入力を残す取り直しの失敗で入力を失わない）
   const reloadOrder = (keep: boolean) => {
@@ -177,6 +181,7 @@ function CorrectionEditor() {
       keepingInput
     );
     setKeepInputFor(null);
+    if (!keepingInput) setStaleFor(null);
   });
   const seeded = current !== null && (keepingInput || (initialized && !isLoading));
   const completed = current?.status === 'COMPLETED' && !current.completion_invalidated;
@@ -197,6 +202,11 @@ function CorrectionEditor() {
     }
   };
 
+  const loadLatest = async () => {
+    const result = await reloadOrder(false);
+    if (result.status === 'success' && result.isCurrent()) notify.success(LATEST_LOADED_MESSAGE);
+  };
+
   const submit = async (values: OrderCorrectionFormValues) => {
     if (current === null || current.version === undefined) {
       return;
@@ -213,18 +223,13 @@ function CorrectionEditor() {
       course_revision_id: values.course_revision_id || undefined,
       fee_lines: toFeeLineInputs(values.fee_lines),
     };
-    const replaceWithLatest = async () => {
-      const result = await reloadOrder(false);
-      if (result.status === 'success' && result.isCurrent()) {
-        notify.warning('他の操作者がこの受注を訂正しました。入力を最新の内容に置き換えました');
-      }
-    };
     let token: string | null;
     try {
       token = await confirmation.confirm(() => orderApi.previewCorrection(orderId, request));
-    } catch {
-      // 試算ダイアログの「最新の受注を読み直す」だけがここへ来る（版の食い違い）
-      await replaceWithLatest();
+    } catch (error) {
+      // 試算が版の食い違いで止まったときだけここへ来る
+      if (error instanceof StaleOrderError && error.reloadNow) await loadLatest();
+      else setStaleFor(scope);
       return;
     }
     if (!token) return;
@@ -237,7 +242,7 @@ function CorrectionEditor() {
           if (!operation.isCurrent()) return;
           if (tokenConflict) {
             notify.warning(
-              '採用条件が変更されています。入力を保持しました。再試算して確認してください'
+              '採用条件が変更されたため訂正できませんでした。入力を残したまま最新の状態を取得します'
             );
           } else if (kind !== 'conflict') {
             notify.error(getApiErrorMessage(error, '受注の訂正に失敗しました'));
@@ -260,9 +265,13 @@ function CorrectionEditor() {
       }
     );
     if (outcome !== 'conflict') return;
-    // 採用条件の変化は入力を残したまま版を取り直す。それ以外の 409 は最新の内容に置き換える
-    if (tokenConflict) await reloadOrder(true);
-    else await replaceWithLatest();
+    // 採用条件の変化は入力を残したまま版を取り直す。それ以外の 409 は帯を出して読み込みを待つ
+    if (!tokenConflict) {
+      setStaleFor(scope);
+      return;
+    }
+    const result = await reloadOrder(true);
+    if (result.status === 'success' && result.isCurrent()) notify.success(INPUT_KEPT_MESSAGE);
   };
 
   return (
@@ -299,6 +308,7 @@ function CorrectionEditor() {
           </p>
         )}
         {outcome !== null && <CorrectionOutcome outcome={outcome} />}
+        {stale && <OrderStaleNotice busy={busy} onLoad={() => void loadLatest()} />}
 
         {/* 門は台帳を読みも書きもしない（ADR 0019）。全否定が要る誤完了のためにポイント側の操作面を
           指すだけで、機構は繋がない — 門はここが実行されたかを知らないまま */}
@@ -416,7 +426,7 @@ function CorrectionEditor() {
                 >
                   一覧へ戻る
                 </Button>
-                <Button type="submit" disabled={busy || writer.conflict}>
+                <Button type="submit" disabled={busy || writer.conflict || stale}>
                   {busy ? '訂正中...' : '訂正する'}
                 </Button>
               </div>

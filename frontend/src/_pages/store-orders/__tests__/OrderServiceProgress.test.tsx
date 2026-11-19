@@ -25,19 +25,30 @@ function Harness({
   order,
   onOrderUpdated,
   onReload = jest.fn(),
+  stale = false,
+  onStale = jest.fn(),
 }: {
   order: Order;
   onOrderUpdated: (order: Order) => void;
   onReload?: Reload;
+  stale?: boolean;
+  onStale?: () => void;
 }) {
   const writer = useVersionedWrite(onReload);
   return (
-    <OrderServiceProgress
-      order={order}
-      writer={writer}
-      onOrderUpdated={onOrderUpdated}
-      onReload={writer.reload}
-    />
+    <>
+      <button type="button" onClick={() => void writer.reload()}>
+        読み込む
+      </button>
+      <OrderServiceProgress
+        order={order}
+        writer={writer}
+        stale={stale}
+        onStale={onStale}
+        onOrderUpdated={onOrderUpdated}
+        onReload={writer.reload}
+      />
+    </>
   );
 }
 const order = {
@@ -83,7 +94,7 @@ test('開始中の履歴ページ変更でも更新応答を反映し、送信�
   expect(screen.getByRole('button', { name: 'サービスを開始' })).toBeEnabled();
 });
 
-test('開始の版競合では入力を残して取り直し、取り直した版で再試行できる', async () => {
+test('開始の版競合では取り直さずに画面へ伝え、最新を読み込むまで開始を塞ぐ', async () => {
   const conflict = {
     isAxiosError: true,
     response: { status: 409, data: { details: { expected_version: '競合' } } },
@@ -98,17 +109,21 @@ test('開始の版競合では入力を残して取り直し、取り直した�
     isCurrent: () => true,
   }));
   const onOrderUpdated = jest.fn();
-  const view = render(
-    <Harness order={order} onOrderUpdated={onOrderUpdated} onReload={onReload} />
-  );
+  const onStale = jest.fn();
+  const props = { onOrderUpdated, onReload, onStale };
+  const view = render(<Harness order={order} {...props} />);
   fireEvent.change(screen.getByLabelText('開始の理由'), { target: { value: '提供開始' } });
   fireEvent.click(screen.getByRole('button', { name: 'サービスを開始' }));
-  await screen.findByText(
-    '最新の受注を読み込みました。内容を確認してから開始を再試行してください。'
-  );
-  expect(onReload).toHaveBeenCalledTimes(1);
+  await waitFor(() => expect(onStale).toHaveBeenCalledTimes(1));
+  expect(onReload).not.toHaveBeenCalled();
   expect(onOrderUpdated).not.toHaveBeenCalled();
-  view.rerender(<Harness order={latest} onOrderUpdated={onOrderUpdated} onReload={onReload} />);
+  view.rerender(<Harness order={order} {...props} stale />);
+  expect(screen.getByRole('button', { name: 'サービスを開始' })).toBeDisabled();
+  // 画面が最新を読み込むと、共有の書き込みの競合が畳まれ、版が替わる
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: '読み込む' }));
+  });
+  view.rerender(<Harness order={latest} {...props} />);
   expect(screen.getByLabelText('開始の理由')).toHaveValue('提供開始');
   fireEvent.click(await screen.findByRole('button', { name: 'サービスを開始' }));
   await waitFor(() => expect(orderApi.start).toHaveBeenLastCalledWith('o1', 2, '提供開始'));
@@ -134,7 +149,4 @@ test('業務の競合ではサーバの文言を節に出し、取り直すま�
   expect(screen.getByRole('button', { name: 'サービスを開始' })).toBeDisabled();
   await act(async () => settle());
   expect(await screen.findByRole('button', { name: 'サービスを開始' })).toBeEnabled();
-  expect(
-    screen.queryByText('最新の受注を読み込みました。内容を確認してから開始を再試行してください。')
-  ).not.toBeInTheDocument();
 });

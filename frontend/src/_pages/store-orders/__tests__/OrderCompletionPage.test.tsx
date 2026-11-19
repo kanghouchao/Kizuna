@@ -2,6 +2,11 @@ import { confirmPreview, pointsPreview } from '../lib/orderTestSupport';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import OrderCompletionPage from '../ui/OrderCompletionPage';
+import {
+  INPUT_KEPT_MESSAGE,
+  LATEST_LOADED_MESSAGE,
+  LOAD_LATEST_LABEL,
+} from '../ui/OrderStaleNotice';
 import { Order, orderApi } from '@/entities/order';
 // 伝票 QR はアプリドメインの申領画面を指す。根 layout が渡す値をここで固定する
 jest.mock('@/shared/lib', () => ({
@@ -433,6 +438,8 @@ describe('受注の完了画面', () => {
     expect(await screen.findByLabelText('利用ポイント')).toHaveValue(200);
     expect(screen.getByLabelText('明細1の金額')).toHaveValue(8000);
     expect(notify.warning).not.toHaveBeenCalled();
+    // 取り直し終えたことと、入力が残っていることを伝える
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith(INPUT_KEPT_MESSAGE));
     fireEvent.click(await screen.findByRole('button', { name: '完了する' }));
     await confirmPreview();
     await waitFor(() => expect(mockedComplete).toHaveBeenCalledTimes(2));
@@ -455,7 +462,7 @@ describe('受注の完了画面', () => {
     expect(await within(dialog).findByText(message)).toBeInTheDocument();
     expect(mockedGet).toHaveBeenCalledTimes(1);
     expect(mockedComplete).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: '最新の受注を読み直す' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: LOAD_LATEST_LABEL })).not.toBeInTheDocument();
     mockedPreview.mockResolvedValue(
       pointsPreview({ member_linked: true, use_points: 200, usage_unit: 100, grant_points: 50 })
     );
@@ -644,8 +651,8 @@ describe('受注の完了画面', () => {
     expect(mockedComplete.mock.calls[0][1].expected_version).toBe(7);
   });
 
-  it('版の食い違いは入力置換を警告し、取り直した内容と版で播き直す', async () => {
-    // 取り直さないと画面は古い版を持ったままで、その場の再送は何度でも 409 になる（行き止まり）
+  it('版の食い違いは帯を出して入力を残し、読み込むと取り直した内容と版で播き直す', async () => {
+    // 読み込まないと画面は古い版を持ったままで、その場の再送は何度でも 409 になる（行き止まり）
     mockedGet
       .mockResolvedValueOnce({
         ...confirmedOrder,
@@ -680,12 +687,16 @@ describe('受注の完了画面', () => {
     fireEvent.click(screen.getByRole('button', { name: '完了する' }));
     await confirmPreview();
 
-    await waitFor(() =>
-      expect(notify.warning).toHaveBeenCalledWith(
-        '他の操作者が更新しました。入力を最新の内容に置き換えました'
-      )
-    );
+    const load = await screen.findByRole('button', { name: LOAD_LATEST_LABEL });
+    // 自動では取り直さない。入力は操作者が読み込みを選ぶまで画面に残り、完了は押せない
+    expect(mockedGet).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('明細1の名称')).toHaveValue('古い明細');
+    expect(await screen.findByRole('button', { name: '完了する' })).toBeDisabled();
     expect(notify.success).not.toHaveBeenCalled();
+
+    fireEvent.click(load);
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith(LATEST_LOADED_MESSAGE));
+    expect(screen.queryByRole('button', { name: LOAD_LATEST_LABEL })).not.toBeInTheDocument();
     await waitFor(() =>
       expect(screen.getByLabelText('明細1の名称')).toHaveValue('他の操作者が直した明細')
     );
@@ -695,7 +706,7 @@ describe('受注の完了画面', () => {
     expect(mockedComplete.mock.calls[1][1].expected_version).toBe(4);
   });
 
-  it('取り直した受注が終端なら、フォームを畳んで終端を名乗り、一覧へ帰す', async () => {
+  it('読み込んだ受注が終端なら、フォームを畳んで終端を名乗り、一覧へ帰す', async () => {
     // 終端の受注を播き直すと、一致する版で再送できて今度は 400 の行き止まりに変わる
     mockedGet
       .mockResolvedValueOnce({
@@ -717,12 +728,14 @@ describe('受注の完了画面', () => {
     expect(await screen.findByLabelText('明細1の名称')).toHaveValue('古い明細');
     fireEvent.click(screen.getByRole('button', { name: '完了する' }));
     await confirmPreview();
+    fireEvent.click(await screen.findByRole('button', { name: LOAD_LATEST_LABEL }));
 
     expect(
       await screen.findByText('この受注は完了または取消済みのため、完了できません。')
     ).toBeInTheDocument();
     expect(screen.queryByLabelText('明細1の名称')).not.toBeInTheDocument();
-    // 文言は領域の名乗りだけ。入力置換の警告まで重ねると、従うべき指示が 2 つ同時に出る
+    // 文言は領域の名乗りだけ。帯や読み込みの案内まで重ねると、従うべき指示が 2 つ同時に出る
+    expect(screen.queryByRole('button', { name: LOAD_LATEST_LABEL })).not.toBeInTheDocument();
     expect(notify.warning).not.toHaveBeenCalled();
     // 完了の成功ではない。成功の通知を出すと「オーダーを完了しました」が嘘になる
     expect(notify.success).not.toHaveBeenCalled();

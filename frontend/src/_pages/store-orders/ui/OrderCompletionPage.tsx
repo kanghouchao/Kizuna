@@ -42,7 +42,8 @@ import { reseedForm } from '../lib/reseedForm';
 import { OrderEditorSection } from './OrderEditorSection';
 import { OrderFeeLinesField } from './OrderFeeLinesField';
 import { ReceiptTokenDialog } from './ReceiptTokenDialog';
-import { orderConflictField, useOrderConfirmation } from './useOrderConfirmation';
+import { orderConflictField, StaleOrderError, useOrderConfirmation } from './useOrderConfirmation';
+import { INPUT_KEPT_MESSAGE, LATEST_LOADED_MESSAGE, OrderStaleNotice } from './OrderStaleNotice';
 
 interface OrderCompletionFormValues {
   /** 会計の内訳。合計はこの総和としてサーバが導出するので、画面に会計金額の欄は無い。 */
@@ -92,6 +93,8 @@ function Completion({ id }: { id: string }) {
   // 次の播種で操作者の入力を残すか。画面は対象ごとに作り直すので、真偽で足りる。播種で必ず消す。
   // 残す取り直しの間はフォームを外さない（外すと入力中の欄の状態を失う）
   const [keepingInput, setKeepingInput] = useState(false);
+  // 版が食い違った受注。入力は操作者が読み込みを選ぶまで残し、その間は完了を塞ぐ
+  const [stale, setStale] = useState(false);
   // 取り直しを始める操作はここを通し、入力を残すか置き換えるかを決める。
   // 取得失敗の再試行は直前の決定を引き継ぐ（入力を残す取り直しの失敗で入力を失わない）
   const reloadOrder = (keep: boolean) => {
@@ -105,6 +108,7 @@ function Completion({ id }: { id: string }) {
     (detail?.special_services ?? []).reduce((sum, item) => sum + item.price, 0);
   const initialized = useResourceInitialization(resource.success, detail => {
     setKeepingInput(false);
+    if (!keepingInput) setStale(false);
     if (isTerminal(detail)) return;
     reseedForm(
       form,
@@ -138,11 +142,17 @@ function Completion({ id }: { id: string }) {
   // 会員へ帰属しなかった完了でだけ返る伝票トークン。生値はこの応答にしか現れないので、メモリにだけ持つ
   const [receiptToken, setReceiptToken] = useState<string | null>(null);
 
-  const replaceWithLatest = async () => {
-    // 取り直した受注が終端なら、播き直さずに画面が終端を名乗る（警告は重ねない）
+  const loadLatest = async () => {
+    // 取り直した受注が終端なら、播き直さずに画面が終端を名乗る（案内は重ねない）
     const result = await reloadOrder(false);
     if (result.status === 'success' && result.isCurrent() && !isTerminal(result.data)) {
-      notify.warning('他の操作者が更新しました。入力を最新の内容に置き換えました');
+      notify.success(LATEST_LOADED_MESSAGE);
+    }
+  };
+  const reloadKeepingInput = async () => {
+    const result = await reloadOrder(true);
+    if (result.status === 'success' && result.isCurrent() && !isTerminal(result.data)) {
+      notify.success(INPUT_KEPT_MESSAGE);
     }
   };
 
@@ -161,9 +171,10 @@ function Completion({ id }: { id: string }) {
     let token: string | null;
     try {
       token = await confirmation.confirm(() => orderApi.completionPreview(id, request));
-    } catch {
-      // 試算ダイアログの「最新の受注を読み直す」だけがここへ来る（版の食い違い）
-      await replaceWithLatest();
+    } catch (error) {
+      // 試算が版の食い違いで止まったときだけここへ来る
+      if (error instanceof StaleOrderError && error.reloadNow) await loadLatest();
+      else setStale(true);
       return;
     }
     if (!token) return;
@@ -187,7 +198,7 @@ function Completion({ id }: { id: string }) {
             );
           } else if (conflictField === 'confirmation_token') {
             notify.warning(
-              '採用条件が変更されています。入力を保持しました。再試算して確認してください'
+              '採用条件が変更されたため完了できませんでした。入力を残したまま最新の状態を取得します'
             );
           } else if (kind !== 'conflict') {
             // 残高不足・単位違反・非会員の利用は、サーバが対処できる文言を返す。汎用文言に潰さない。
@@ -205,9 +216,10 @@ function Completion({ id }: { id: string }) {
     );
     if (outcome !== 'conflict') return;
     if (conflictField !== undefined && INPUT_KEEPING_CONFLICTS.includes(conflictField)) {
-      await reloadOrder(true);
+      await reloadKeepingInput();
     } else {
-      await replaceWithLatest();
+      // それ以外の 409 は受注が古い。帯を出して操作者の読み込みを待つ
+      setStale(true);
     }
   };
 
@@ -256,6 +268,11 @@ function Completion({ id }: { id: string }) {
             >
               {resource.isLoading && (
                 <p className="px-6 pt-4 text-sm text-muted-foreground">読み込み中...</p>
+              )}
+              {stale && (
+                <div className="px-6 pt-4">
+                  <OrderStaleNotice busy={busy} onLoad={() => void loadLatest()} />
+                </div>
               )}
               <OrderEditorSection
                 title="会計"
@@ -367,7 +384,7 @@ function Completion({ id }: { id: string }) {
                       戻る
                     </Button>
                   )}
-                  <Button type="submit" disabled={busy || writer.conflict}>
+                  <Button type="submit" disabled={busy || writer.conflict || stale}>
                     {busy ? '処理中...' : '完了する'}
                   </Button>
                 </div>

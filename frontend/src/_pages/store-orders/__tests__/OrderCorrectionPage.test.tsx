@@ -2,6 +2,7 @@ import { confirmPreview } from '../lib/orderTestSupport';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import OrderCorrectionPage from '../ui/OrderCorrectionPage';
+import { LATEST_LOADED_MESSAGE, LOAD_LATEST_LABEL } from '../ui/OrderStaleNotice';
 import { Order, orderApi } from '@/entities/order';
 import { AxiosError } from 'axios';
 import { useMe } from '@/entities/user';
@@ -319,8 +320,8 @@ describe('完了後訂正のページ', () => {
     expect(screen.getByText(/会員コード 不明/)).toBeInTheDocument();
   });
 
-  it('版の食い違いでは取り直して最新の内容でフォームを組み直すこと', async () => {
-    // 取り直さないと画面は古い版を持ったままで、その場の再送は何度でも 409 になる（死に筋）
+  it('409 では帯を出して入力を残し、読み込むと最新の内容でフォームを組み直すこと', async () => {
+    // 読み込まないと画面は古い版を持ったままで、その場の再送は何度でも 409 になる（死に筋）
     mockedOrderApi.get.mockResolvedValueOnce(completedOrder()).mockResolvedValue(
       completedOrder({
         version: 9,
@@ -358,9 +359,20 @@ describe('完了後訂正のページ', () => {
     fireEvent.click(screen.getByRole('button', { name: '訂正する' }));
     await confirmPreview();
 
-    await waitFor(() => expect(notify.warning).toHaveBeenCalled());
+    const load = await screen.findByRole('button', { name: LOAD_LATEST_LABEL });
+    // 自動では取り直さない。入力は操作者が読み込みを選ぶまで画面に残り、訂正は押せない
+    expect(mockedOrderApi.get).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('理由')).toHaveValue('金額の誤記');
+    expect(await screen.findByRole('button', { name: '訂正する' })).toBeDisabled();
+
+    fireEvent.click(load);
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith(LATEST_LOADED_MESSAGE));
     // 取り直した値で播き直る。入力は破棄され、頁は開いたまま
     await waitFor(() => expect(screen.getByText(/採用済み: 90 分コース/)).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: LOAD_LATEST_LABEL })).not.toBeInTheDocument()
+    );
+    expect(screen.getByLabelText('理由')).toHaveValue('');
     expect(await screen.findByRole('button', { name: '訂正する' })).toBeInTheDocument();
     expect(notify.error).not.toHaveBeenCalled();
   });
@@ -431,7 +443,7 @@ test('対象変更直後から旧フォームを隠し、新しい詳細で初�
   expect(await screen.findByText(/採用済み:.*90分/)).toBeInTheDocument();
 });
 
-test('競合再取得中は編集停止し、失敗したら入力置換を通知しない', async () => {
+test('最新の読み込み中は編集を止め、失敗したら帯を残して読み込みの完了を伝えない', async () => {
   let reject!: (error: unknown) => void;
   mockedOrderApi.get.mockResolvedValueOnce(completedOrder()).mockReturnValueOnce(
     new Promise((_, fail) => {
@@ -443,12 +455,13 @@ test('競合再取得中は編集停止し、失敗したら入力置換を通�
   fireEvent.change(await screen.findByLabelText('理由'), { target: { value: '変更理由' } });
   fireEvent.click(screen.getByRole('button', { name: '訂正する' }));
   await confirmPreview();
+  fireEvent.click(await screen.findByRole('button', { name: LOAD_LATEST_LABEL }));
   await waitFor(() => expect(mockedOrderApi.get).toHaveBeenCalledTimes(2));
   expect(screen.queryByLabelText('理由')).not.toBeInTheDocument();
-  expect(notify.warning).not.toHaveBeenCalled();
   await act(async () => reject(new Error('network')));
-  expect(screen.getByRole('alert')).toHaveTextContent('受注を取得できませんでした。');
-  expect(notify.warning).not.toHaveBeenCalled();
+  expect(screen.getByText('受注を取得できませんでした。')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: LOAD_LATEST_LABEL })).toBeInTheDocument();
+  expect(notify.success).not.toHaveBeenCalledWith(LATEST_LOADED_MESSAGE);
 });
 
 test('訂正後の帰属取得中に別対象へ移ると、古い通知と結果を出さない', async () => {

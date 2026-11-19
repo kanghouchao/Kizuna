@@ -2,7 +2,8 @@
 
 import { OrderCorrectionHistoryDialog } from '@/widgets/order-correction-history';
 
-import { orderConflictField, useOrderConfirmation } from './useOrderConfirmation';
+import { orderConflictField, StaleOrderError, useOrderConfirmation } from './useOrderConfirmation';
+import { INPUT_KEPT_MESSAGE, LATEST_LOADED_MESSAGE, OrderStaleNotice } from './OrderStaleNotice';
 
 import { OrderEditorSection } from './OrderEditorSection';
 import { OrderServiceProgress } from './OrderServiceProgress';
@@ -153,6 +154,9 @@ export default function OrderEditPage() {
   // 残す取り直しの間はフォームを外さない。外すと、欄が自分で持つ選択中の表示名が元に戻る
   const [keepInputFor, setKeepInputFor] = useState<string | null>(null);
   const keepingInput = keepInputFor === scope;
+  // 版が食い違った受注。入力は操作者が読み込みを選ぶまで残し、その間は保存も開始も塞ぐ
+  const [staleFor, setStaleFor] = useState<string | null>(null);
+  const stale = staleFor === scope;
   const form = useForm<OrderEditFormValues>({ defaultValues: EMPTY_VALUES });
   const { handleSubmit, control, formState } = form;
   // 播種の reset がその時点の値を基準にするので、ここに現れるのは操作者が触った欄だけになる。
@@ -192,12 +196,22 @@ export default function OrderEditPage() {
       keepingInput
     );
     setKeepInputFor(null);
+    if (!keepingInput) setStaleFor(null);
   });
   // 取り直しを始める操作はここを通し、入力を残すか置き換えるかを決める。
   // 取得失敗の再試行は直前の決定を引き継ぐ（入力を残す取り直しの失敗で入力を失わない）
   const reloadOrder = (keep: boolean) => {
     setKeepInputFor(keep ? scope : null);
     return writer.reload();
+  };
+  const loadLatest = async () => {
+    const result = await reloadOrder(false);
+    if (result.status === 'success' && result.isCurrent()) notify.success(LATEST_LOADED_MESSAGE);
+  };
+  const reloadKeepingInput = async () => {
+    const result = await reloadOrder(true);
+    if (result.status === 'success' && result.isCurrent()) notify.success(INPUT_KEPT_MESSAGE);
+    return result;
   };
   const seeded = current !== null && (keepingInput || (initialized && !isLoading));
   const startScope = resource.capture();
@@ -254,12 +268,10 @@ export default function OrderEditPage() {
     let token: string | null;
     try {
       token = await confirmation.confirm(() => orderApi.previewUpdate(orderId, request));
-    } catch {
-      // 試算ダイアログの「最新の受注を読み直す」だけがここへ来る（版の食い違い）
-      const result = await reloadOrder(false);
-      if (result.status === 'success' && result.isCurrent()) {
-        notify.warning('他の操作者が更新しました。入力を最新の内容に置き換えました');
-      }
+    } catch (error) {
+      // 試算が版の食い違いで止まったときだけここへ来る
+      if (error instanceof StaleOrderError && error.reloadNow) await loadLatest();
+      else setStaleFor(scope);
       return;
     }
     if (!token) return;
@@ -274,7 +286,7 @@ export default function OrderEditPage() {
           if (field === 'expected_version') return;
           if (field === 'confirmation_token') {
             notify.warning(
-              '採用条件が変更されています。入力を保持しました。再試算して確認してください'
+              '採用条件が変更されたため保存できませんでした。入力を残したまま最新の状態を取得します'
             );
             return;
           }
@@ -289,12 +301,9 @@ export default function OrderEditPage() {
       }
     );
     if (outcome !== 'conflict') return;
-    // 版の食い違いだけは入力を最新の内容に置き換える。業務の競合は入力を残したまま版を取り直す
-    const replace = orderConflictField(conflict) === 'expected_version';
-    const result = await reloadOrder(!replace);
-    if (replace && result.status === 'success' && result.isCurrent()) {
-      notify.warning('他の操作者が更新しました。入力を最新の内容に置き換えました');
-    }
+    // 版の食い違いは帯を出して操作者の読み込みを待つ。業務の競合は入力を残したまま版を取り直す
+    if (orderConflictField(conflict) === 'expected_version') setStaleFor(scope);
+    else await reloadKeepingInput();
   };
 
   return (
@@ -356,16 +365,19 @@ export default function OrderEditPage() {
             {current.completed_at && ` / 完了日時: ${formatDateTime(current.completed_at)}`}
           </p>
         )}
+        {stale && <OrderStaleNotice busy={busy} onLoad={() => void loadLatest()} />}
         {current && (
           <OrderServiceProgress
             key={`${storeId}:${orderId}`}
             order={current}
             writer={writer}
-            // 進行操作の応答と競合後の取り直しでは、未保存の編集内容を保持する
+            stale={stale}
+            onStale={() => setStaleFor(scope)}
+            // 進行操作の応答と業務の競合後の取り直しでは、未保存の編集内容を保持する
             onOrderUpdated={updated => {
               if (startScope.replace(updated)) setKeepInputFor(scope);
             }}
-            onReload={() => reloadOrder(true)}
+            onReload={reloadKeepingInput}
           />
         )}
         {isLoading && <p className="text-muted-foreground text-sm">読み込み中...</p>}
@@ -614,7 +626,7 @@ export default function OrderEditPage() {
                   >
                     キャンセル
                   </Button>
-                  <Button type="submit" disabled={busy || writer.conflict}>
+                  <Button type="submit" disabled={busy || writer.conflict || stale}>
                     {busy ? '保存中...' : '保存'}
                   </Button>
                 </div>
