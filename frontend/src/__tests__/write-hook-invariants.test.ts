@@ -4,13 +4,17 @@ import { join, relative, sep } from 'path';
 /**
  * 利用者が起こす書き込みは共有の hook（useWrite / useVersionedWrite / useOperation）を通す。手書きの書き込みは
  * 「成功の案内を自分で出す」「送信中を isSubmitting で見る」のどちらかの形を取るので、その二つを見張る。
- * hook を使うファイルに手書きの書き込みが混ざる形と、案内も送信中の表示も持たない書き込みは見えない。
+ * 名前の出現だけで判定する。hook を使うファイルに混ざった手書き、注釈に hook の名前があるだけのファイル、
+ * 案内も送信中の表示も持たない書き込みは見えない。
  */
 const SRC = join(__dirname, '..');
 const LAYERS = ['_pages', 'widgets', 'features'];
 
 /** useDeleteAction は useVersionedWrite の上に、use〜Operation は useOperation の上に建つ画面ごとの包み。 */
 const WRITE_HOOK = /\buse(Write|VersionedWrite|DeleteAction|\w*Operation)\b/;
+
+/** 呼び出しに限らない。関数として渡す形（.then(notify.success) など）も拾う。 */
+const SUCCESS_NOTICE = /\bnotify\.success\b/;
 
 /** 書き込みの hook を通さずに成功の案内を出してよいファイルと、その理由。 */
 const SUCCESS_WITHOUT_HOOK: Record<string, string> = {
@@ -54,7 +58,7 @@ const filesWith = (pattern: RegExp) =>
 
 describe('書き込みは共有の hook を通す', () => {
   it('成功の案内を出すファイルは、書き込みの hook を使う', () => {
-    const offenders = filesWith(/\bnotify\.success\(/).filter(
+    const offenders = filesWith(SUCCESS_NOTICE).filter(
       file => !WRITE_HOOK.test(sources.get(file)!) && !(file in SUCCESS_WITHOUT_HOOK)
     );
     expect(offenders).toEqual([]);
@@ -68,8 +72,8 @@ describe('書き込みは共有の hook を通す', () => {
   it('例外の一覧に載るファイルは実在し、今もその例外を要する', () => {
     for (const file of Object.keys(SUCCESS_WITHOUT_HOOK)) {
       const source = sources.get(file);
-      expect({ file, calls: source?.includes('notify.success(') }).toEqual({ file, calls: true });
-      expect({ file, usesHook: WRITE_HOOK.test(source!) }).toEqual({ file, usesHook: false });
+      expect({ file, calls: SUCCESS_NOTICE.test(source ?? '') }).toEqual({ file, calls: true });
+      expect({ file, usesHook: WRITE_HOOK.test(source ?? '') }).toEqual({ file, usesHook: false });
     }
     for (const file of Object.keys(READS_IS_SUBMITTING)) {
       expect({ file, reads: sources.get(file)?.includes('isSubmitting') }).toEqual({

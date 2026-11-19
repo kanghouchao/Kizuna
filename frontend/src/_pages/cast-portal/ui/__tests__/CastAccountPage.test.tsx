@@ -49,7 +49,7 @@ describe('CastAccountPage', () => {
   it('ログアウトは、終わるまで続けて押しても 1 回だけ送る', async () => {
     mockedMe.mockResolvedValue({ display_name: '田中一郎' });
     let finish: () => void = () => {};
-    mockLogout.mockReturnValue(new Promise<void>(resolve => (finish = resolve)));
+    mockLogout.mockReturnValueOnce(new Promise<void>(resolve => (finish = resolve)));
 
     render(<CastAccountPage />);
     await screen.findByText('田中一郎');

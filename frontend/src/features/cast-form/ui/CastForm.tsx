@@ -71,7 +71,6 @@ interface CastFormProps {
   initialData?: Partial<CastFormData>;
   /** 編集時の既存カスタムフィールド値（活きた定義の分のみ動的欄の初期値に使う。孤児値は描画しない） */
   existingCustomFields?: Record<string, string>;
-  /** フォーム送信時のコールバック */
   onSubmit: (data: CastFormData) => void;
   /** 書き込みの hook の busy。 */
   busy?: boolean;
@@ -124,7 +123,6 @@ function NumericProfileField({
   );
 }
 
-/** キャスト登録・編集フォームコンポーネント */
 export function CastForm({ initialData, existingCustomFields, onSubmit, busy }: CastFormProps) {
   const router = useRouter();
   const form = useForm<CastFormData>({

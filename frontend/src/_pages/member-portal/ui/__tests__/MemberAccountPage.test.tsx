@@ -37,7 +37,7 @@ describe('MemberAccountPage', () => {
 
   it('ログアウトは、終わるまで続けて押しても 1 回だけ送る', async () => {
     let finish: () => void = () => {};
-    mockLogout.mockReturnValue(new Promise<void>(resolve => (finish = resolve)));
+    mockLogout.mockReturnValueOnce(new Promise<void>(resolve => (finish = resolve)));
     render(<MemberAccountPage />);
 
     const button = screen.getByRole('button', { name: 'ログアウト' });
