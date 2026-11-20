@@ -713,7 +713,8 @@ describe('受注の完了画面', () => {
     expect(mockedComplete.mock.calls[1][1].expected_version).toBe(4);
   });
 
-  it('理由の付かない 409 はサーバの文言を出し、入力を残して読み込みを待つ', async () => {
+  it('理由の付かない 409 はサーバの文言を出し、入力を残したまま版を取り直す', async () => {
+    // 版の照合を通った後の 409。受注は変わっていないので、入力を捨てさせない
     const message = '他の操作と競合しました。最新の状態を取得してやり直してください';
     mockedComplete.mockRejectedValueOnce({ response: { status: 409, data: { error: message } } });
     renderPage();
@@ -722,13 +723,11 @@ describe('受注の完了画面', () => {
 
     await waitFor(() => expect(notify.error).toHaveBeenCalledWith(message));
     expect(notify.warning).not.toHaveBeenCalled();
-    const submit = await screen.findByRole('button', { name: '完了する' });
-    expect(submit).toBeDisabled();
-    expect(
-      within(submit.closest('form')!).getByRole('button', { name: LOAD_LATEST_LABEL })
-    ).toBeInTheDocument();
-    expect(mockedGet).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith(INPUT_KEPT_MESSAGE));
+    expect(mockedGet).toHaveBeenCalledTimes(2);
     expect(screen.getByLabelText('明細1の金額')).toHaveValue(8000);
+    expect(screen.queryByRole('button', { name: LOAD_LATEST_LABEL })).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '完了する' })).toBeEnabled();
   });
 
   it('読み込んだ受注が終端なら、フォームを畳んで終端を名乗り、一覧へ帰す', async () => {

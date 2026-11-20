@@ -2,7 +2,12 @@ import { confirmPreview } from '../lib/orderTestSupport';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import OrderCorrectionPage from '../ui/OrderCorrectionPage';
-import { LATEST_LOADED_MESSAGE, LOAD_LATEST_LABEL, STALE_MESSAGE } from '../ui/OrderStaleNotice';
+import {
+  INPUT_KEPT_MESSAGE,
+  LATEST_LOADED_MESSAGE,
+  LOAD_LATEST_LABEL,
+  STALE_MESSAGE,
+} from '../ui/OrderStaleNotice';
 import { Order, orderApi } from '@/entities/order';
 import { AxiosError } from 'axios';
 import { useMe } from '@/entities/user';
@@ -382,7 +387,8 @@ describe('完了後訂正のページ', () => {
     expect(notify.error).not.toHaveBeenCalled();
   });
 
-  it('理由の付かない 409 はサーバの文言を出し、入力を残して読み込みを待つこと', async () => {
+  it('理由の付かない 409 はサーバの文言を出し、入力を残したまま版を取り直すこと', async () => {
+    // 版の照合を通った後の 409。受注は変わっていないので、入力を捨てさせない
     const message = '他の操作と競合しました。最新の状態を取得してやり直してください';
     mockedOrderApi.get.mockResolvedValue(completedOrder());
     mockedOrderApi.correct.mockRejectedValueOnce({
@@ -397,13 +403,11 @@ describe('完了後訂正のページ', () => {
 
     await waitFor(() => expect(notify.error).toHaveBeenCalledWith(message));
     expect(notify.warning).not.toHaveBeenCalled();
-    const submit = await screen.findByRole('button', { name: '訂正する' });
-    expect(submit).toBeDisabled();
-    expect(submit.closest('form')).toContainElement(
-      screen.getByRole('button', { name: LOAD_LATEST_LABEL })
-    );
-    expect(mockedOrderApi.get).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(notify.success).toHaveBeenCalledWith(INPUT_KEPT_MESSAGE));
+    expect(mockedOrderApi.get).toHaveBeenCalledTimes(2);
     expect(screen.getByLabelText('理由')).toHaveValue('金額の誤記');
+    expect(screen.queryByRole('button', { name: LOAD_LATEST_LABEL })).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: '訂正する' })).toBeEnabled();
   });
 
   it('理由の無い訂正は送らないこと', async () => {
@@ -479,7 +483,12 @@ test('最新の読み込み中は編集を止め、失敗したら再試行を�
       reject = fail;
     })
   );
-  mockedOrderApi.correct.mockRejectedValueOnce({ response: { status: 409 } });
+  mockedOrderApi.correct.mockRejectedValueOnce({
+    response: {
+      status: 409,
+      data: { details: { expected_version: '最新の内容を読み直してください' } },
+    },
+  });
   render(<OrderCorrectionPage />);
   fireEvent.change(await screen.findByLabelText('理由'), { target: { value: '変更理由' } });
   fireEvent.click(screen.getByRole('button', { name: '訂正する' }));
