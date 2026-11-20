@@ -9,6 +9,10 @@ import { Button, Dialog, DialogFrame, RegionError } from '@/shared/ui';
 import { OrderPreviewDetails } from './OrderPreviewDetails';
 import { LOAD_LATEST_LABEL } from './OrderStaleNotice';
 
+/**
+ * 409 の理由。サーバは受注行を押さえてから版を照合するので、受注が変わっていれば必ず
+ * expected_version が返る。それ以外の 409 では受注は変わっておらず、画面は入力を残して版を取り直す。
+ */
 export function orderConflictField(error: unknown): string | undefined {
   if (!isConflict(error)) return undefined;
   const details = (error as { response?: { data?: { details?: Record<string, unknown> } } })

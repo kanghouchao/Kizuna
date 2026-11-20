@@ -59,9 +59,6 @@ interface OrderCompletionFormValues {
 
 const isTerminal = (order: Order) => order.status === 'COMPLETED' || order.status === 'CANCELLED';
 
-/** 入力を残したまま版だけを取り直す 409。どれも操作者の入力を見直せば再送できる業務の競合 */
-const INPUT_KEEPING_CONFLICTS = ['customer_lock', 'use_points', 'confirmation_token'];
-
 export default function OrderCompletionPage() {
   const id = useParams().id as string;
   const storeId = useStoreContext().currentStoreId;
@@ -152,11 +149,6 @@ function Completion({ id }: { id: string }) {
     setStale(true);
     notify.warning(STALE_MESSAGE);
   };
-  // 理由の付かない 409 は並行の負け。受注が変わったかは分からないので、サーバの文言を出して読み込みを待つ
-  const markUnexplainedConflict = (error: unknown) => {
-    setStale(true);
-    notify.error(getApiErrorMessage(error, STALE_MESSAGE));
-  };
   const loadLatest = async () => {
     // 取り直した受注が終端なら、播き直さずに画面が終端を名乗る（案内は重ねない）
     const result = await reloadOrder(false);
@@ -193,16 +185,12 @@ function Completion({ id }: { id: string }) {
       return;
     }
     if (!token) return;
-    let conflict: unknown;
     let conflictField: string | undefined;
     const outcome = await writer.write(
       () => orderApi.complete(id, { ...request, confirmation_token: token }),
       {
         failure: (error, kind) => {
-          if (kind === 'conflict') {
-            conflict = error;
-            conflictField = orderConflictField(error);
-          }
+          if (kind === 'conflict') conflictField = orderConflictField(error);
           if (!operation.isCurrent()) return;
           if (conflictField === 'customer_lock') {
             notify.error(
@@ -219,7 +207,7 @@ function Completion({ id }: { id: string }) {
             notify.warning(
               '採用条件が変更されたため完了できませんでした。入力を残したまま最新の状態を取得します'
             );
-          } else if (kind !== 'conflict') {
+          } else if (conflictField !== 'expected_version') {
             // 残高不足・単位違反・非会員の利用は、サーバが対処できる文言を返す。汎用文言に潰さない。
             notify.error(getApiErrorMessage(error, 'オーダーの完了に失敗しました'));
           }
@@ -234,13 +222,9 @@ function Completion({ id }: { id: string }) {
       }
     );
     if (outcome !== 'conflict') return;
-    if (conflictField !== undefined && INPUT_KEEPING_CONFLICTS.includes(conflictField)) {
-      await reloadKeepingInput();
-    } else if (conflictField === 'expected_version') {
-      markStale();
-    } else {
-      markUnexplainedConflict(conflict);
-    }
+    // 版の食い違いは操作者の読み込みを待つ。それ以外の 409 は入力を残したまま版を取り直す
+    if (conflictField === 'expected_version') markStale();
+    else await reloadKeepingInput();
   };
 
   const fallback = { href: backHref, label: 'オーダー一覧へ' };
