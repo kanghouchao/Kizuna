@@ -71,10 +71,11 @@ Two questions decide the boundaries:
 
 - The version travels as `If-Match: "5"`. Read responses keep the version in the body.
 - Required on every `PUT` / `PATCH` / `DELETE`, and on an action `POST` on an existing resource (`POST /orders/{id}/completion`). Creation, including adding under a parent, has no version to match.
-- Three kinds of write stay outside it:
+- Four kinds of write stay outside it:
   - A resend carrying an operation key: a receipt hit answers before the version is compared.
   - An anonymous one-time token (invitation acceptance, email verification): the caller never read the target.
   - A replacement operation, where the latest call wins by voiding the previous one. These are exactly `POST /casts/{id}/invitation`, `POST /orders/{id}/receipt-token`, and `POST /staff/{id}/password-reset`. Adding one is the repository owner's decision.
+  - `PUT /me/password`: the current password in the body is its precondition.
 
 Already-done counts as success only for a request without content. A transition carrying a reason or an amount is rejected when repeated, because someone else may have completed it with different content.
 
