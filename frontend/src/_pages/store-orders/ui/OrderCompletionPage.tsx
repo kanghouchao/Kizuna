@@ -35,6 +35,7 @@ import {
   KeyValueList,
   KeyValueRow,
   RegionError,
+  VersionConflictNotice,
 } from '@/shared/ui';
 import { customerHeadingText } from '../lib/customerLabel';
 import { orderListHref } from '../lib/orderListHref';
@@ -43,12 +44,7 @@ import { OrderEditorSection } from './OrderEditorSection';
 import { OrderFeeLinesField } from './OrderFeeLinesField';
 import { ReceiptTokenDialog } from './ReceiptTokenDialog';
 import { orderConflictField, StaleOrderError, useOrderConfirmation } from './useOrderConfirmation';
-import {
-  INPUT_KEPT_MESSAGE,
-  LATEST_LOADED_MESSAGE,
-  OrderStaleNotice,
-  STALE_MESSAGE,
-} from './OrderStaleNotice';
+import { INPUT_KEPT_MESSAGE, LATEST_LOADED_MESSAGE, STALE_MESSAGE } from './orderStaleMessages';
 
 interface OrderCompletionFormValues {
   /** 会計の内訳。合計はこの総和としてサーバが導出するので、画面に会計金額の欄は無い。 */
@@ -370,7 +366,7 @@ function Completion({ id }: { id: string }) {
               </OrderEditorSection>
               {stale && (
                 <div className="px-6 pt-6">
-                  <OrderStaleNotice busy={busy} onLoad={() => void loadLatest()} />
+                  <VersionConflictNotice busy={busy} onLoad={() => void loadLatest()} />
                 </div>
               )}
               <div className="flex items-center justify-between gap-6 rounded-b-xl bg-card p-6">

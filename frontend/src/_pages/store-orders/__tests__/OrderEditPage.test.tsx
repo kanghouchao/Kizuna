@@ -1,15 +1,11 @@
 import { useMe } from '@/entities/user';
+import { LOAD_LATEST_LABEL } from '@/shared/ui';
 import type { PermissionCode } from '@/entities/user';
 import { confirmPreview } from '../lib/orderTestSupport';
 import { startTransition } from 'react';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import OrderEditPage from '../ui/OrderEditPage';
-import {
-  INPUT_KEPT_MESSAGE,
-  LATEST_LOADED_MESSAGE,
-  LOAD_LATEST_LABEL,
-  STALE_MESSAGE,
-} from '../ui/OrderStaleNotice';
+import { INPUT_KEPT_MESSAGE, LATEST_LOADED_MESSAGE, STALE_MESSAGE } from '../ui/orderStaleMessages';
 import { Order, orderApi } from '@/entities/order';
 
 import { mediumApi } from '@/entities/medium';

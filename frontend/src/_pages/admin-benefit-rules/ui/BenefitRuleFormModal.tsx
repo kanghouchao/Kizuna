@@ -33,6 +33,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  VersionConflictNotice,
 } from '@/shared/ui';
 import { BenefitRuleStorePicker } from './BenefitRuleStorePicker';
 
@@ -113,15 +114,15 @@ export function BenefitRuleFormModal({
   const form = useForm<BenefitRuleFormValues>({ defaultValues: EMPTY_FORM });
   const { control, handleSubmit, reset, setValue } = form;
   const writer = useVersionedWrite(reloadEditingRule);
-  const busy = writer.busy || writer.conflict;
+  const { busy } = writer;
 
   const type = useWatch({ control, name: 'type' });
   const storeScopeType = useWatch({ control, name: 'store_scope_type' });
   const storeIds = useWatch({ control, name: 'store_ids' });
   const repeatPolicy = useWatch({ control, name: 'repeat_policy' });
 
-  // 届いた詳細をフォームへ移し終えたか。移した相手を持つのは、取り直しで届く別の詳細も
-  // 同じ経路で載せ直すため
+  // 届いた詳細をフォームへ移し終えたか。移した相手を持つのは、利用者が読み込み直して届く
+  // 別の詳細も同じ経路で載せ直すため
   const [seededRule, setSeededRule] = useState<BenefitRuleResponse | null>(null);
 
   useEffect(() => {
@@ -196,8 +197,11 @@ export function BenefitRuleFormModal({
       {
         success: editingId !== null ? '特典規則を更新しました' : '特典規則を作成しました',
         failure: (error, kind) => {
-          if (kind === 'conflict') {
-            notify.warning('他の管理者が更新しました。最新の内容を確認してください');
+          // 新規作成の 409 は版の食い違いではない（名前の重複等）ので、サーバの理由をそのまま出す
+          if (kind === 'conflict' && editingId !== null) {
+            notify.warning(
+              '他の管理者が更新したため保存できませんでした。入力中の内容は画面に残しています'
+            );
           } else {
             notify.error(getApiErrorMessage(error, '特典規則の保存に失敗しました'));
           }
@@ -212,8 +216,8 @@ export function BenefitRuleFormModal({
         },
       }
     );
-    // 詳細を取り直さないと古い version を抱えたままになり、再試行が同じ 409 を繰り返す
-    if (outcome === 'conflict') await writer.reload();
+    // 新規作成には読み込み直す対象が無いので、競合をその場で畳んで入力のまま送り直せるようにする
+    if (outcome === 'conflict' && editingId === null) await writer.reload();
   };
 
   return (
@@ -224,7 +228,7 @@ export function BenefitRuleFormModal({
       }}
       onOpenChange={next => {
         // 送信中は閉じさせない。閉じると unmount で busy が消え、開き直した複製から
-        // 二重送信できてしまう
+        // 二重送信できてしまう。競合中は送信していないので閉じられる
         if (!next && !busy) onClose();
       }}
     >
@@ -243,7 +247,7 @@ export function BenefitRuleFormModal({
                 <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
                   キャンセル
                 </Button>
-                <Button type="submit" disabled={busy}>
+                <Button type="submit" disabled={busy || writer.conflict}>
                   {busy ? '保存中...' : '保存する'}
                 </Button>
               </>
@@ -481,6 +485,9 @@ export function BenefitRuleFormModal({
                     </FormItem>
                   )}
                 />
+              )}
+              {writer.conflict && editingId !== null && (
+                <VersionConflictNotice busy={busy} onLoad={() => void writer.reload()} />
               )}
             </>
           )}

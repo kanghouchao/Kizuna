@@ -14,13 +14,16 @@ import {
   type ApplicantDetail,
 } from '@/entities/applicant';
 import { storePath, useResource, useVersionedWrite } from '@/shared/lib';
-import { Badge, Button, ConfirmDialog, RegionError } from '@/shared/ui';
+import { Badge, Button, ConfirmDialog, RegionError, VersionConflictNotice } from '@/shared/ui';
 import { ApplicantAttachmentsPanel } from './ApplicantAttachmentsPanel';
 import { ApplicantDecisionForm } from './ApplicantDecisionForm';
 import { ApplicantIntakeForm } from './ApplicantIntakeForm';
 import { ApplicantInterviewForm } from './ApplicantInterviewForm';
 import { ApplicantHistoryPanel } from './ApplicantHistoryPanel';
 import { ApplicantTransitionForm } from './ApplicantTransitionForm';
+
+type Entry = 'intake' | 'interview' | 'transition' | 'decision';
+
 export default function ApplicantDetailPage() {
   const { id } = useParams<{ id: string }>();
   const storeId = useCurrentStoreId();
@@ -73,9 +76,21 @@ export default function ApplicantDetailPage() {
     resource.setData(value);
     setMode(null);
   };
-  const save = async (operation: () => Promise<ApplicantDetail>, success: string) => {
+  // 競合の案内を、止まった操作のそばに出すための目印。送る前に、押されたフォームを覚える
+  const [stoppedAt, setStoppedAt] = useState<Entry>('intake');
+  const save = async (entry: Entry, operation: () => Promise<ApplicantDetail>, success: string) => {
+    setStoppedAt(entry);
     await writer.write(operation, { success, failure: '保存に失敗しました', onSuccess: changed });
   };
+  // 案内のボタンは入力の破棄を自分で名乗るので、未保存の確認を重ねない
+  const loadLatest = () => {
+    clearDirty();
+    setMode(null);
+    void writer.reload();
+  };
+  const noticeAt = (entry: Entry) =>
+    writer.conflict &&
+    stoppedAt === entry && <VersionConflictNotice busy={saving} onLoad={loadLatest} />;
   const header = (
     <div className="flex items-center justify-between gap-3">
       <h1 className="text-2xl font-bold">応募者詳細</h1>
@@ -120,14 +135,6 @@ export default function ApplicantDetailPage() {
   return (
     <div className="space-y-6">
       {header}
-      {writer.conflict && (
-        <div role="alert" className="space-y-3 rounded-lg border p-4">
-          <p>応募者情報が更新されています。最新の内容を読み込んでから、改めて操作してください。</p>
-          <Button variant="outline" onClick={() => move('reload')}>
-            最新の内容を読み込む
-          </Button>
-        </div>
-      )}
       <section className="rounded-xl border bg-card p-6 space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -195,10 +202,15 @@ export default function ApplicantDetailPage() {
           onDirtyChange={setFormDirty}
           busy={locked}
           onSave={data =>
-            save(() => applicantApi.update(id, applicant.version, data), '受付情報を保存しました')
+            save(
+              'intake',
+              () => applicantApi.update(id, applicant.version, data),
+              '受付情報を保存しました'
+            )
           }
         />
       )}
+      {noticeAt('intake')}
       <section className="rounded-xl border bg-card p-6 space-y-4">
         <div className="flex justify-between items-center">
           <h2 className="text-lg font-semibold">面接記録</h2>
@@ -223,6 +235,7 @@ export default function ApplicantDetailPage() {
             busy={locked}
             onSave={data =>
               save(
+                'interview',
                 () => applicantApi.interview(id, applicant.version, data),
                 '面接記録を保存しました'
               )
@@ -248,6 +261,7 @@ export default function ApplicantDetailPage() {
         ) : (
           <p>面接記録は未登録です。</p>
         )}
+        {noticeAt('interview')}
       </section>
       {editable && mode === null && (
         <section className="rounded-xl border bg-card p-6 space-y-4">
@@ -259,11 +273,13 @@ export default function ApplicantDetailPage() {
             onDirtyChange={setFormDirty}
             onSave={(status, reason) =>
               save(
+                'transition',
                 () => applicantApi.transition(id, applicant.version, status, reason),
                 '選考状態を変更しました'
               )
             }
           />
+          {noticeAt('transition')}
         </section>
       )}
       {canDecide && open && mode === null && (
@@ -277,11 +293,13 @@ export default function ApplicantDetailPage() {
             onDirtyChange={setDecisionDirty}
             onSave={(status, reason) =>
               save(
+                'decision',
                 () => applicantApi.decide(id, applicant.version, status, reason),
                 '採否を確定しました'
               )
             }
           />
+          {noticeAt('decision')}
         </section>
       )}
       {applicant.status === 'HIRED' && (

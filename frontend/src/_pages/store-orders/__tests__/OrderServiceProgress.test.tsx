@@ -1,9 +1,9 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { LOAD_LATEST_LABEL } from '@/shared/ui';
 import { Order, orderApi } from '@/entities/order';
 import { useVersionedWrite } from '@/shared/lib';
 import type { KeyedResource } from '@/shared/lib';
 import { OrderServiceProgress } from '../ui/OrderServiceProgress';
-import { LOAD_LATEST_LABEL } from '../ui/OrderStaleNotice';
 jest.mock('@/entities/user', () => ({
   ...jest.requireActual('@/entities/user'),
   useCurrentStoreId: () => '1',

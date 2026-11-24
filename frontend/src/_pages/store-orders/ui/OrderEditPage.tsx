@@ -3,12 +3,7 @@
 import { OrderCorrectionHistoryDialog } from '@/widgets/order-correction-history';
 
 import { orderConflictField, StaleOrderError, useOrderConfirmation } from './useOrderConfirmation';
-import {
-  INPUT_KEPT_MESSAGE,
-  LATEST_LOADED_MESSAGE,
-  OrderStaleNotice,
-  STALE_MESSAGE,
-} from './OrderStaleNotice';
+import { INPUT_KEPT_MESSAGE, LATEST_LOADED_MESSAGE, STALE_MESSAGE } from './orderStaleMessages';
 
 import { OrderEditorSection } from './OrderEditorSection';
 import { OrderServiceProgress } from './OrderServiceProgress';
@@ -70,6 +65,7 @@ import {
   Input,
   RegionError,
   Textarea,
+  VersionConflictNotice,
 } from '@/shared/ui';
 
 interface OrderEditFormValues extends AcquisitionValues {
@@ -624,7 +620,7 @@ export default function OrderEditPage() {
               </OrderEditorSection>
 
               <div className="space-y-4 rounded-b-xl border-t bg-card p-6">
-                {stale && <OrderStaleNotice busy={busy} onLoad={() => void loadLatest()} />}
+                {stale && <VersionConflictNotice busy={busy} onLoad={() => void loadLatest()} />}
                 <div className="flex items-center justify-between gap-6">
                   <p className="text-sm text-muted-foreground">
                     変更内容は保存前の確認画面で確認できます。

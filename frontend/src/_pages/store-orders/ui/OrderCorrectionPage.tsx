@@ -1,12 +1,7 @@
 'use client';
 
 import { orderConflictField, StaleOrderError, useOrderConfirmation } from './useOrderConfirmation';
-import {
-  INPUT_KEPT_MESSAGE,
-  LATEST_LOADED_MESSAGE,
-  OrderStaleNotice,
-  STALE_MESSAGE,
-} from './OrderStaleNotice';
+import { INPUT_KEPT_MESSAGE, LATEST_LOADED_MESSAGE, STALE_MESSAGE } from './orderStaleMessages';
 
 import { OrderCourseField } from './OrderCourseField';
 import { OrderSpecialServicesField } from './OrderSpecialServicesField';
@@ -50,6 +45,7 @@ import {
   Input,
   RegionError,
   Textarea,
+  VersionConflictNotice,
 } from '@/shared/ui';
 import { DeniedPage } from '@/widgets/admin-shell';
 
@@ -426,7 +422,7 @@ function CorrectionEditor() {
                 </p>
               </section>
 
-              {stale && <OrderStaleNotice busy={busy} onLoad={() => void loadLatest()} />}
+              {stale && <VersionConflictNotice busy={busy} onLoad={() => void loadLatest()} />}
               <div className="flex justify-end gap-4">
                 <Button
                   type="button"

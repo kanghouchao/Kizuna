@@ -20,6 +20,7 @@ import {
   ConfirmDialog,
   Form,
   RegionError,
+  VersionConflictNotice,
 } from '@/shared/ui';
 import { PageHeader } from '@/widgets/page-header';
 import { ArticleAccess } from './ArticleAccess';
@@ -42,6 +43,8 @@ function ArticleEdit() {
   const detail = useResource(() => articleApi.get(id), [id]);
   const writer = useVersionedWrite(detail.reload);
   const [deleting, setDeleting] = useState(false);
+  // 競合の案内を、止まった操作のそばに出すための目印。送る前に、押された操作を覚える
+  const [stoppedAt, setStoppedAt] = useState<'article' | 'publication' | 'delete'>('article');
 
   if (detail.isLoading) return <p className="text-muted-foreground">読み込み中...</p>;
   if (detail.failure !== null || !detail.data)
@@ -62,10 +65,21 @@ function ArticleEdit() {
   const article = detail.data;
   // 本文と公開設定は別々に保存するが版は一つなので、どちらの書き込みも表示中の版を送り、
   // 応答で差し替えて次の書き込みに最新の版を渡す。
-  const save = async (send: () => Promise<Article>, success: string, failure: string) => {
+  const save = async (
+    entry: 'article' | 'publication',
+    send: () => Promise<Article>,
+    success: string,
+    failure: string
+  ) => {
+    setStoppedAt(entry);
     await writer.write(send, { success, failure, onSuccess: detail.setData });
   };
   const locked = writer.busy || writer.conflict;
+  const noticeAt = (entry: typeof stoppedAt) =>
+    writer.conflict &&
+    stoppedAt === entry && (
+      <VersionConflictNotice busy={writer.busy} onLoad={() => void writer.reload()} />
+    );
   return (
     <div className="space-y-6">
       <PageHeader
@@ -76,33 +90,28 @@ function ArticleEdit() {
           </Button>
         }
       />
-      {writer.conflict && (
-        <div role="alert" className="space-y-3 rounded-lg border p-4">
-          <p>記事が更新されています。最新の内容を読み込んでから、改めて操作してください。</p>
-          <Button variant="outline" onClick={() => void writer.reload()}>
-            最新の内容を読み込む
-          </Button>
-        </div>
-      )}
+      {noticeAt('delete')}
       <Card>
         <CardHeader>
           <CardTitle role="heading" aria-level={2}>
             記事
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <ArticleForm
             initial={article}
             busy={locked}
             submitLabel="記事を保存"
             onSubmit={(input: ArticleInput) =>
               save(
+                'article',
                 () => articleApi.update(id, { ...input, version: article.version }),
                 '記事を保存しました',
                 '記事を保存できませんでした'
               )
             }
           />
+          {noticeAt('article')}
         </CardContent>
       </Card>
       <Card>
@@ -123,6 +132,7 @@ function ArticleEdit() {
             busy={locked}
             onSubmit={values =>
               save(
+                'publication',
                 () =>
                   articleApi.updatePublication(id, {
                     ...fromPublicationFormValues(values),
@@ -133,6 +143,7 @@ function ArticleEdit() {
               )
             }
           />
+          {noticeAt('publication')}
         </CardContent>
       </Card>
       <ConfirmDialog
@@ -140,13 +151,14 @@ function ArticleEdit() {
         title="記事を削除"
         description={`「${article.title}」を削除します。元に戻すことはできません。`}
         onClose={() => setDeleting(false)}
-        onConfirm={() =>
+        onConfirm={() => {
+          setStoppedAt('delete');
           void writer.write(() => articleApi.remove(id, article.version), {
             success: '記事を削除しました',
             failure: '記事を削除できませんでした',
             onSuccess: () => router.push(storePath(storeId, '/articles')),
-          })
-        }
+          });
+        }}
       />
     </div>
   );

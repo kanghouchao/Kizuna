@@ -30,12 +30,14 @@ interface RoleFormProps {
   initial?: RoleFormValues & { system: boolean };
   /** 保存処理。失敗の通知は呼び出し側が行う。 */
   onSubmit: (values: RoleFormValues) => unknown;
-  /** 書き込み中は true。保存を受け付けない。 */
+  /** 書き込み中は true。保存を受け付けず、ボタンの文言を送信中に替える。 */
   busy: boolean;
+  /** 競合中など、送信中ではないが保存を受け付けない間は true。 */
+  locked?: boolean;
 }
 
 /** ロールの作成・編集に共通のフォーム（名称 + 「木 → 区分見出し」の下に並べた権限選択）。 */
-export function RoleForm({ initial, onSubmit, busy }: RoleFormProps) {
+export function RoleForm({ initial, onSubmit, busy, locked = false }: RoleFormProps) {
   const form = useForm<RoleFormValues>({
     defaultValues: { name: initial?.name ?? '', permissions: initial?.permissions ?? [] },
   });
@@ -165,7 +167,7 @@ export function RoleForm({ initial, onSubmit, busy }: RoleFormProps) {
           <Button variant="outline" render={<Link href="/admin/roles" />}>
             キャンセル
           </Button>
-          <Button type="submit" disabled={busy}>
+          <Button type="submit" disabled={busy || locked}>
             {busy ? '保存中...' : '保存する'}
           </Button>
         </div>

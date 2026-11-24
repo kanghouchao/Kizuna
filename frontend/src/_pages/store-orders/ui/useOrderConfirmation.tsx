@@ -5,9 +5,8 @@ import { useParams } from 'next/navigation';
 import { useStoreContext } from '@/entities/user';
 import { OrderPreview } from '@/entities/order';
 import { getApiErrorMessage, isConflict, useKeyedResource } from '@/shared/lib';
-import { Button, Dialog, DialogFrame, RegionError } from '@/shared/ui';
+import { Button, Dialog, DialogFrame, RegionError, LOAD_LATEST_LABEL } from '@/shared/ui';
 import { OrderPreviewDetails } from './OrderPreviewDetails';
-import { LOAD_LATEST_LABEL } from './OrderStaleNotice';
 
 /**
  * 409 の理由。サーバは受注行を押さえてから版を照合するので、受注が変わっていれば必ず

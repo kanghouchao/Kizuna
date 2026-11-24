@@ -1,13 +1,9 @@
 import { confirmPreview } from '../lib/orderTestSupport';
+import { LOAD_LATEST_LABEL } from '@/shared/ui';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import OrderCorrectionPage from '../ui/OrderCorrectionPage';
-import {
-  INPUT_KEPT_MESSAGE,
-  LATEST_LOADED_MESSAGE,
-  LOAD_LATEST_LABEL,
-  STALE_MESSAGE,
-} from '../ui/OrderStaleNotice';
+import { INPUT_KEPT_MESSAGE, LATEST_LOADED_MESSAGE, STALE_MESSAGE } from '../ui/orderStaleMessages';
 import { Order, orderApi } from '@/entities/order';
 import { AxiosError } from 'axios';
 import { useMe } from '@/entities/user';

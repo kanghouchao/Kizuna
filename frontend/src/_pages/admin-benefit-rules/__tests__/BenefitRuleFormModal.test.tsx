@@ -115,19 +115,10 @@ describe('特典規則フォームの更新の競合', () => {
     version,
   });
 
-  it('409 は警告を出して一覧も取り直させ、詳細の取り直しの間は欄を出さず、最新の版で保存し直せる', async () => {
-    jest.clearAllMocks();
-    let finish: (value: ReturnType<typeof detail>) => void = () => {};
-    mockedApi.get
-      .mockResolvedValueOnce(detail(3, '来店ボーナス'))
-      .mockImplementationOnce(() => new Promise(resolve => (finish = resolve)));
-    mockedApi.update
-      .mockRejectedValueOnce({ response: { status: 409 } })
-      .mockResolvedValueOnce(detail(5, '別の管理者の変更'));
-    const onSaved = jest.fn();
+  const renderEditModal = (onSaved = jest.fn(), onClose = jest.fn()) =>
     render(
       <BenefitRuleFormModal
-        onClose={jest.fn()}
+        onClose={onClose}
         editingId={7}
         onSaved={onSaved}
         stores={[]}
@@ -136,18 +127,104 @@ describe('特典規則フォームの更新の競合', () => {
         onReloadStores={jest.fn()}
       />
     );
-    fireEvent.click(await screen.findByRole('button', { name: '保存する' }));
+  const LOAD = '入力を破棄して最新の内容を読み込む';
 
-    expect(await screen.findByText('読み込み中...')).toBeInTheDocument();
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('409 は入力を残して案内を出し、詳細を自動で取り直さない。保存は押せないまま残り、閉じることはできる', async () => {
+    mockedApi.get.mockResolvedValue(detail(3, '来店ボーナス'));
+    mockedApi.update.mockRejectedValueOnce({ response: { status: 409 } });
+    const onSaved = jest.fn();
+    const onClose = jest.fn();
+    renderEditModal(onSaved, onClose);
+    fireEvent.change(await screen.findByRole('textbox', { name: '規則名' }), {
+      target: { value: '自分の変更' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    const banner = await screen.findByRole('alert');
+    expect(banner).toHaveTextContent('他の操作で更新されたため、操作を止めています');
     expect(notify.warning).toHaveBeenCalledWith(
-      '他の管理者が更新しました。最新の内容を確認してください'
+      '他の管理者が更新したため保存できませんでした。入力中の内容は画面に残しています'
     );
     expect(onSaved).toHaveBeenCalledTimes(1);
+    expect(mockedApi.get).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('textbox', { name: '規則名' })).toHaveValue('自分の変更');
+    // 送信中ではないので文言は「保存する」のまま。読み込みのボタンと入れ替わらない
+    expect(screen.getByRole('button', { name: '保存する' })).toBeDisabled();
+    // 保存は操作帯にあるので、案内は本文の末尾（最後の欄の後ろ）に出る
+    expect(
+      screen.getByRole('spinbutton', { name: '付与ポイント' }).compareDocumentPosition(banner) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+  });
+
+  it('読み込みを押すと取り直しの間は欄を出さず、最新の内容に置き換えて最新の版で保存し直せる', async () => {
+    let finish: (value: ReturnType<typeof detail>) => void = () => {};
+    mockedApi.get
+      .mockResolvedValueOnce(detail(3, '来店ボーナス'))
+      .mockImplementationOnce(() => new Promise(resolve => (finish = resolve)));
+    mockedApi.update
+      .mockRejectedValueOnce({ response: { status: 409 } })
+      .mockResolvedValueOnce(detail(5, '別の管理者の変更'));
+    renderEditModal();
+    fireEvent.change(await screen.findByRole('textbox', { name: '規則名' }), {
+      target: { value: '自分の変更' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+    fireEvent.click(await screen.findByRole('button', { name: LOAD }));
+
+    expect(await screen.findByText('読み込み中...')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '保存する' })).not.toBeInTheDocument();
 
     await act(async () => finish(detail(4, '別の管理者の変更')));
-    fireEvent.click(await screen.findByRole('button', { name: '保存する' }));
+    expect(await screen.findByRole('textbox', { name: '規則名' })).toHaveValue('別の管理者の変更');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
     await waitFor(() => expect(mockedApi.update).toHaveBeenCalledTimes(2));
     expect(mockedApi.update.mock.calls[1][1]).toEqual(expect.objectContaining({ version: 4 }));
+  });
+
+  // 409 は名前の重複などでも返り、そのとき取り直した版は変わらない
+  it('取り直した版が同じでも、読み込みを押せば入力は置き換わる', async () => {
+    mockedApi.get.mockImplementation(async () => detail(3, '来店ボーナス'));
+    mockedApi.update.mockRejectedValueOnce({ response: { status: 409 } });
+    renderEditModal();
+    fireEvent.change(await screen.findByRole('textbox', { name: '規則名' }), {
+      target: { value: '自分の変更' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+    fireEvent.click(await screen.findByRole('button', { name: LOAD }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: '規則名' })).toHaveValue('来店ボーナス')
+    );
+    expect(screen.getByRole('button', { name: '保存する' })).toBeEnabled();
+  });
+
+  // 新規作成には取り直す対象が無い。案内を出すと、何も置き換えない読み込みを押させることになる
+  it('新規作成の 409 は案内を出さず、入力を残したまま保存し直せる', async () => {
+    mockedApi.create.mockRejectedValueOnce({
+      response: { status: 409, data: { error: '同じ名前の規則があります' } },
+    });
+    renderCreateModal();
+    fireEvent.change(screen.getByRole('textbox', { name: '規則名' }), {
+      target: { value: '重複した名前' },
+    });
+    fireEvent.change(screen.getByRole('spinbutton', { name: '付与ポイント' }), {
+      target: { value: '10' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+
+    await waitFor(() => expect(notify.error).toHaveBeenCalledWith('同じ名前の規則があります'));
+    expect(notify.warning).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByRole('button', { name: '保存する' })).toBeEnabled());
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: '規則名' })).toHaveValue('重複した名前');
   });
 });

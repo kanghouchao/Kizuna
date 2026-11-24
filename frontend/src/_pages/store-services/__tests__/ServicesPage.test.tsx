@@ -121,9 +121,15 @@ it('更新競合では再取得した条件を再確認してから保存する'
   fireEvent.click(await screen.findByRole('button', { name: '編集' }));
   fireEvent.change(await screen.findByLabelText('名称'), { target: { value: '自分の変更' } });
   fireEvent.click(screen.getByRole('button', { name: '保存する' }));
-  const reload = await screen.findByRole('button', { name: '最新の内容を再取得' });
+  const reload = await screen.findByRole('button', {
+    name: '入力を破棄して最新の内容を読み込む',
+  });
   expect(screen.getByRole('button', { name: '保存する' })).toBeDisabled();
   expect(screen.getByLabelText('名称')).toHaveValue('自分の変更');
+  // 保存は操作帯にあるので、案内は本文の末尾（操作帯の直前）に出る
+  expect(
+    screen.getByLabelText('名称').compareDocumentPosition(reload) & Node.DOCUMENT_POSITION_FOLLOWING
+  ).toBeTruthy();
   api.get.mockResolvedValue({ ...item, name: '別担当の変更', version: 2 });
   fireEvent.click(reload);
   await waitFor(() => expect(screen.getByLabelText('名称')).toHaveValue('別担当の変更'));

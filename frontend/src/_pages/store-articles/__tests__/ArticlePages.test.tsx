@@ -232,22 +232,42 @@ describe('編集', () => {
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/store/1/articles'));
   });
 
-  test('409 は競合を表示し、最新の内容を読み込み直してから操作させる', async () => {
+  test('記事の保存の 409 は入力を残し、押した保存のボタンのそばにだけ案内を出して、読み込むと置き換える', async () => {
     api.update.mockRejectedValue({ response: { status: 409, data: { error: '競合しました' } } });
     render(<ArticleEditPage />);
     fireEvent.change(await screen.findByLabelText('表題'), { target: { value: '改題' } });
     fireEvent.click(screen.getByRole('button', { name: '記事を保存' }));
+    const banner = await screen.findByRole('alert');
+    expect(banner).toHaveTextContent('他の操作で更新されたため、操作を止めています');
+    expect(screen.getByLabelText('表題')).toHaveValue('改題');
+    const save = screen.getByRole('button', { name: '記事を保存' });
+    expect(save).toBeDisabled();
+    expect(save.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // 公開設定の保存より手前。押していない操作のそばには出さない
     expect(
-      await screen.findByText(
-        '記事が更新されています。最新の内容を読み込んでから、改めて操作してください。'
-      )
-    ).toBeVisible();
-    expect(screen.getByRole('button', { name: '記事を保存' })).toBeDisabled();
+      banner.compareDocumentPosition(screen.getByRole('button', { name: '公開設定を保存' })) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: '公開設定を保存' })).toBeDisabled();
     expect(notify.error).toHaveBeenCalledWith('競合しました');
+    expect(api.get).toHaveBeenCalledTimes(1);
     api.get.mockResolvedValue({ ...article, title: '他の人の表題', version: 9 });
-    fireEvent.click(screen.getByRole('button', { name: '最新の内容を読み込む' }));
+    fireEvent.click(
+      within(banner).getByRole('button', { name: '入力を破棄して最新の内容を読み込む' })
+    );
     expect(await screen.findByDisplayValue('他の人の表題')).toBeVisible();
     expect(screen.getByRole('button', { name: '記事を保存' })).toBeEnabled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  test('公開設定の保存の 409 は、公開設定を保存のボタンのそばに案内を出す', async () => {
+    api.updatePublication.mockRejectedValue({ response: { status: 409 } });
+    render(<ArticleEditPage />);
+    fireEvent.click(await screen.findByRole('button', { name: '公開設定を保存' }));
+    const banner = await screen.findByRole('alert');
+    const save = screen.getByRole('button', { name: '公開設定を保存' });
+    expect(save).toBeDisabled();
+    expect(save.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   test('削除の 409 も競合として扱い、画面に留まる', async () => {
@@ -258,11 +278,14 @@ describe('編集', () => {
       within(await screen.findByRole('alertdialog')).getByRole('button', { name: '削除する' })
     );
     await waitFor(() => expect(api.remove).toHaveBeenCalledWith('7', 3));
+    const banner = await screen.findByRole('alert');
+    expect(banner).toHaveTextContent('他の操作で更新されたため、操作を止めています');
+    // 削除のボタンは見出しにあるので、案内はその直後（記事の欄より手前）に出る
     expect(
-      await screen.findByText(
-        '記事が更新されています。最新の内容を読み込んでから、改めて操作してください。'
-      )
-    ).toBeVisible();
+      banner.compareDocumentPosition(screen.getByLabelText('表題')) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: '記事を削除' })).toBeDisabled();
     expect(mockPush).not.toHaveBeenCalled();
   });
 

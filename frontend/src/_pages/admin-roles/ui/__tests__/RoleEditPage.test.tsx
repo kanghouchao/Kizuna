@@ -108,45 +108,62 @@ describe('ロール編集ページ', () => {
     expect(await screen.findByLabelText('ロール名')).toHaveValue('受付担当');
   });
 
-  it('409 は警告を出して取り直し、新しい version で保存し直せる', async () => {
-    mockedRoleApi.update.mockRejectedValueOnce({ response: { status: 409 } });
-    mockedRoleApi.get.mockResolvedValueOnce(role()).mockResolvedValueOnce(role({ version: 4 }));
-    render(<RoleEditPage />);
-    await screen.findByRole('checkbox', { name: '受注の管理' });
+  describe('版の競合', () => {
+    const LOAD = '入力を破棄して最新の内容を読み込む';
+    const conflict = async () => {
+      mockedRoleApi.update.mockRejectedValueOnce({ response: { status: 409 } });
+      render(<RoleEditPage />);
+      fireEvent.change(await screen.findByLabelText('ロール名'), {
+        target: { value: '自分の変更' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+      return screen.findByRole('alert');
+    };
 
-    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+    it('409 は入力を残して保存のボタンのそばに案内を出し、自動では取り直さない', async () => {
+      const banner = await conflict();
 
-    await waitFor(() =>
+      expect(banner).toHaveTextContent('他の操作で更新されたため、操作を止めています');
       expect(mockedNotify.warning).toHaveBeenCalledWith(
-        '他の管理者が更新しました。最新の内容を確認してください'
-      )
-    );
-    await waitFor(() => expect(mockedRoleApi.get).toHaveBeenCalledTimes(2));
-    expect(mockPush).not.toHaveBeenCalled();
+        '他の管理者が更新したため保存できませんでした。入力中の内容は画面に残しています'
+      );
+      expect(mockedRoleApi.get).toHaveBeenCalledTimes(1);
+      expect(screen.getByLabelText('ロール名')).toHaveValue('自分の変更');
+      // 送信中ではないので文言は「保存する」のまま。読み込みのボタンと入れ替わらない
+      const save = screen.getByRole('button', { name: '保存する' });
+      expect(save).toBeDisabled();
+      expect(save.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(mockPush).not.toHaveBeenCalled();
+    });
 
-    await waitFor(() => expect(screen.getByRole('button', { name: '保存する' })).toBeEnabled());
-    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
-    await waitFor(() => expect(mockedRoleApi.update).toHaveBeenCalledTimes(2));
-    expect(mockedRoleApi.update.mock.calls[1][1]).toEqual(expect.objectContaining({ version: 4 }));
-  });
+    it('読み込みを押すと取り直しの間は欄を出さず、最新の内容に置き換えて最新の版で保存し直せる', async () => {
+      let finish: (value: RoleResponse) => void = () => {};
+      const banner = await conflict();
+      mockedRoleApi.get.mockImplementationOnce(() => new Promise(resolve => (finish = resolve)));
+      fireEvent.click(within(banner).getByRole('button', { name: LOAD }));
 
-  it('409 の取り直し中は読み込み中を出し、古い欄を残さない', async () => {
-    let finish: (value: RoleResponse) => void = () => {};
-    mockedRoleApi.update.mockRejectedValueOnce({ response: { status: 409 } });
-    mockedRoleApi.get
-      .mockResolvedValueOnce(role())
-      .mockImplementationOnce(() => new Promise(resolve => (finish = resolve)));
-    render(<RoleEditPage />);
-    await screen.findByRole('checkbox', { name: '受注の管理' });
+      expect(await screen.findByText('読み込み中...')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: '保存する' })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+      await act(async () => finish(role({ name: '別の管理者の変更', version: 4 })));
+      expect(await screen.findByLabelText('ロール名')).toHaveValue('別の管理者の変更');
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: '保存する' }));
+      await waitFor(() => expect(mockedRoleApi.update).toHaveBeenCalledTimes(2));
+      expect(mockedRoleApi.update.mock.calls[1][1]).toEqual(
+        expect.objectContaining({ version: 4 })
+      );
+    });
 
-    expect(await screen.findByText('読み込み中...')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: '保存する' })).not.toBeInTheDocument();
-    expect(mockedRoleApi.update).toHaveBeenCalledTimes(1);
+    // 409 は名前の重複などでも返り、そのとき取り直した版は変わらない
+    it('取り直した版が同じでも、読み込みを押せば入力は置き換わる', async () => {
+      const banner = await conflict();
+      fireEvent.click(within(banner).getByRole('button', { name: LOAD }));
 
-    await act(async () => finish(role({ name: '別の管理者の変更', version: 4 })));
-    expect(await screen.findByLabelText('ロール名')).toHaveValue('別の管理者の変更');
+      await waitFor(() => expect(mockedRoleApi.get).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(screen.getByLabelText('ロール名')).toHaveValue('受付担当'));
+      expect(screen.getByRole('button', { name: '保存する' })).toBeEnabled();
+    });
   });
 
   it('保存の 404 は取り直して、見つからない表示に替える', async () => {

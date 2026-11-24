@@ -146,6 +146,8 @@ test('競合では自動再送せず更新された版を再確認する', async
   fireEvent.click(await screen.findByRole('button', { name: '未提供を確認して無効化' }));
   await screen.findByText(/別の操作者が更新しました/);
   await screen.findByText(/8,000 円 → 0 円/);
+  // 理由は取り直す受注から作っていないので、取り直しても残る
+  expect(screen.getByLabelText('理由')).toHaveValue('未提供');
   expect(orderApi.invalidateCompletion).toHaveBeenCalledTimes(1);
   expect(screen.queryByRole('button', { name: '未提供を確認して無効化' })).not.toBeInTheDocument();
 });
