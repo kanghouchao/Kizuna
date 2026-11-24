@@ -6,7 +6,7 @@ Each module under `com.kizuna` follows the DDD four layers — `domain/` / `appl
 
 ### Layer / module rules
 
-- **Aggregate = JPA entity** (rich model): no public setters on the fields an aggregate declares. The modules still carrying `@Setter` in `domain/` (store / menu / settings / storeprofile) adopt this incrementally; **do not add new public setters in new code** (the base-class setters inherited from `BaseEntity` — id / timestamps — and `StoreScopedEntity` are a known exception, slated for gradual removal). Construction uses `@Builder` (consumed by MapStruct); partial updates use a domain-owned `XxxPatch` record + `apply()`; state transitions are behavior methods (e.g. `Order.complete()/cancel()`, with invalid transitions raising a domain exception → 400). `DomainLayerTests` fails the build for a public `setXxx` declared on an `@Entity` in `domain/`, except on `Store`, `Menu`, `SystemConfig`, and `StoreProfile`; that a change goes through `XxxPatch` or a behavior method instead of a setter under another name rests on review.
+- **Aggregate = JPA entity** (rich model): no public setters on the fields an aggregate declares. The modules still carrying `@Setter` in `domain/` (store / menu / settings / storeprofile) adopt this incrementally; **do not add new public setters in new code** (the base-class setters inherited from `BaseEntity` — id / timestamps — and `StoreScopedEntity` are a known exception, slated for gradual removal). Construction uses `@Builder` (consumed by MapStruct); partial updates use a domain-owned `XxxPatch` record + `apply()`; state transitions are behavior methods (e.g. `Order.complete()/cancel()`, with invalid transitions raising a domain exception whose status follows [Status codes](#status-codes)). `DomainLayerTests` fails the build for a public `setXxx` declared on an `@Entity` in `domain/`, except on `Store`, `Menu`, `SystemConfig`, and `StoreProfile`; that a change goes through `XxxPatch` or a behavior method instead of a setter under another name rests on review.
 - **Cross-aggregate references are by ID only** (`Order.customerId`, etc.). DB foreign keys are kept. Object assembly happens in the application layer; lists and details use projections (e.g. `OrderView` + JPQL join — reference entity names by FQCN to avoid HQL reserved-word collisions). No test tells an aggregate's own child from another aggregate inside one module, so this rests on review.
 - **Synchronous references between modules** go only through packages exposed via `@NamedInterface` (document transitional exceptions in package-info.java). Events use `@ApplicationModuleListener` + the event publication registry (`event_publication` table, spring-modulith-starter-jdbc).
 - **Dependencies point inward: `api` → `application` → `domain`.** An application service takes its own command records and returns application records, projections, or domain types; it never references `api/dto`, and DTO ↔ command/record conversion lives in `api/` (controller or MapStruct). ArchUnit enforces two edges: `ApplicationApiDtoBoundaryTests` fails the build for an `application` class that references `api.dto`, and `DomainLayerTests` for a `domain` class that references `application`, `api`, or `infrastructure` (one listed exception: `ServiceRevisionRepository` returns application projections). Where a piece of logic belongs — a business rule in a controller or an application service instead of the aggregate — rests on review.
@@ -46,10 +46,41 @@ This section is the normative source for all HTTP endpoint additions and changes
 - `GET` is side-effect-free; `POST` creates resources or performs actions; `PUT` replaces one resource at its own URI, never at a collection root; `PATCH` partially updates; `DELETE` deletes.
 - A read accepting a secret token uses `POST` with a body, such as invitation `/view`. Never move the token to a path or query, where logs/history/Referer can expose it.
 - Creation returns **201** with the resource id; no `Location` header is required. Deletion returns **204** without a body. Actions return **200** with a result, **201** if creating a resource, or **204** when the consumer only removes/refetches data.
-- Authentication failure is **401**, permission denial **403**, invalid input/transition **400**, absent or scope-invisible resource **404**, and conflicts **409** through the existing exception mapping. Do not independently change a family's denial semantics to hide enumeration.
+- Authentication failure is **401**, permission denial **403**, and absent or scope-invisible resource **404**; [Status codes](#status-codes) decides among 400, 409, 412, 428, and 423. Do not independently change a family's denial semantics to hide enumeration.
 - `CommonExceptionHandler` owns `{ "error": "…", "details": { "field_name": "…" } }`; `details` is optional. Messages must be authored user-facing copy. Never forward framework/DB exception text, SQL, constraint names, or stack traces. Unhandled errors use a fixed 500 message. Use the established `ServiceException`, `ConflictException`, and `NotFoundException` families where applicable. Bearer authentication failures are handled by `JwtAuthenticationEntryPoint`; login failures also use the exception handler.
 - JSON field names and validation detail paths are snake_case. User-defined Map keys are data and must not be renamed by that strategy.
 - New body DTOs use `XxxRequest` / `XxxResponse`. Lists use separate Summary DTOs; details carry the heavier fields. Secret values and unnecessary sensitive PII must be absent from the list DTO **type**, not hidden by mapper ignores, nulls, or serialization rules.
+
+### Status codes
+
+| Case | Status |
+|---|---|
+| The request is wrong whatever the stored data is (missing required field, format, fields contradicting each other) | **400**; `details` names the fields |
+| The resource the request URL addresses changed after the caller read it, a lost optimistic lock included | **412** |
+| A request that needs `If-Match` arrives without it | **428** |
+| The resource is already in the requested state and the request carries nothing but that state (suspend, resume) | **200** or **204** |
+| The request is correct but incompatible with stored data (duplicate value, conditions changed after a preview, a changed version of a prerequisite object) | **409**; `details` names the field when it is known |
+| A lock wait was cut off | **423** with `Retry-After: 1`; the screen keeps the input and never resends by itself |
+
+Two questions decide the boundaries:
+
+- **400 or 409**: is the request wrong whatever the stored data is? Yes → 400. It would pass against different data → 409.
+- **412 or 409**: does the mismatched version belong to the resource the request URL addresses? Yes → sent in `If-Match`, 412. No → sent in the body, 409. A request carrying two versions gets one answer per version.
+
+`If-Match`:
+
+- The version travels as `If-Match: "5"`. Read responses keep the version in the body.
+- Required on every `PUT` / `PATCH` / `DELETE`, and on an action `POST` on an existing resource (`POST /orders/{id}/completion`). Creation, including adding under a parent, has no version to match.
+- Three kinds of write stay outside it:
+  - A resend carrying an operation key: a receipt hit answers before the version is compared.
+  - An anonymous one-time token (invitation acceptance, email verification): the caller never read the target.
+  - A replacement operation, where the latest call wins by voiding the previous one. These are exactly `POST /casts/{id}/invitation`, `POST /orders/{id}/receipt-token`, and `POST /staff/{id}/password-reset`. Adding one is the repository owner's decision.
+
+Already-done counts as success only for a request without content. A transition carrying a reason or an amount is rejected when repeated, because someone else may have completed it with different content.
+
+423 is borrowed. RFC 4918 defines it for a lock a user took explicitly; here it means another transaction is briefly holding a row this request needs, and no standard code says that. 503 is not used because 5xx is counted as an outage and would share a code with an unreachable database or Redis.
+
+`details` carries field errors only, keyed by request field name. Screens never branch on its keys, and the response has no top-level `code`.
 
 ### Pagination
 
