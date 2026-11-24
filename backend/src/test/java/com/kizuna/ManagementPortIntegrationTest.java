@@ -1,6 +1,7 @@
 package com.kizuna;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
@@ -69,22 +70,20 @@ class ManagementPortIntegrationTest {
   void managementPortExposesRequestHistogram() throws Exception {
     get(serverPort, "/orders/1/surcharge-revisions");
 
-    String bucket = null;
-    for (int attempt = 0; attempt < 20 && bucket == null; attempt++) {
-      HttpResponse<String> scrape = get(managementPort, "/actuator/prometheus");
-      assertThat(scrape.statusCode()).isEqualTo(200);
-      bucket =
-          scrape
-              .body()
-              .lines()
-              .filter(line -> line.startsWith("http_server_requests_seconds_bucket{"))
-              .filter(line -> line.contains("uri=\"" + TEMPLATED_ROUTE + "\""))
-              .filter(line -> line.contains("le=\"1.0\""))
-              .findFirst()
-              .orElse(null);
-      if (bucket == null) Thread.sleep(100);
-    }
-    assertThat(bucket).as("雛形の uri と le=\"1.0\" を持つ bucket の行").isNotNull();
+    await()
+        .atMost(Duration.ofSeconds(5))
+        .untilAsserted(
+            () -> {
+              HttpResponse<String> scrape = get(managementPort, "/actuator/prometheus");
+              assertThat(scrape.statusCode()).isEqualTo(200);
+              assertThat(scrape.body().lines())
+                  .as("雛形の uri と le=\"1.0\" を持つ bucket の行")
+                  .anyMatch(
+                      line ->
+                          line.startsWith("http_server_requests_seconds_bucket{")
+                              && line.contains("uri=\"" + TEMPLATED_ROUTE + "\"")
+                              && line.contains("le=\"1.0\""));
+            });
   }
 
   private HttpResponse<String> get(int port, String path) throws Exception {

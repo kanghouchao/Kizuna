@@ -176,9 +176,7 @@ services:
       - prometheus-data:/var/prometheus
     networks:
       - network
-    depends_on:
-      backend:
-        condition: service_healthy
+    # backend を待たない。対象は起動後も DNS で引き直すので、一部のレプリカが unhealthy でも応答できるものから集める
     healthcheck:
       test: ["CMD", "promtool", "check", "healthy", "--url=http://localhost:9090"]
       interval: 30s

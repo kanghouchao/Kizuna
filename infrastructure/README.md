@@ -115,7 +115,7 @@ release の `.env` に `APP_PRIVATE_ATTACHMENTS_ENABLED=true` と二つの資格
 
 ## 指標の収集（release のみ）
 
-backend は応答時間などの指標を管理ポート 8090 の `/actuator/prometheus` に出す。gateway はこのポートへ転送しないので、インターネットからも frontend からも届かない。release では `metrics`（Prometheus）が compose ネットワークの中から全レプリカを 15 秒ごとに集め、`prometheus-data` ボリュームに既定の 15 日分を保持する。development と E2E には置かない。
+backend は応答時間などの指標を管理ポート 8090 の `/actuator/prometheus` に出す。gateway は公開の入口からも内部の入口（frontend のサーバ側が使う 8081）からもこのポートへ転送しないので、インターネットからは届かない。一方、同じ compose ネットワークにいるコンテナ（frontend を含む）は `backend:8090` へ直接つなげる。管理ポートに認証は無く、守っているのはネットワークの境界だけである。release では `metrics`（Prometheus）が compose ネットワークの中から全レプリカを 15 秒ごとに集め、`prometheus-data` ボリュームに既定の 15 日分を保持する。development と E2E には置かない。
 
 Prometheus の画面はホストにも gateway にも公開していない。見るときは、サーバ上でコンテナのアドレスを調べ、SSH の転送を張って手元のブラウザで `http://localhost:9090` を開く。
 
