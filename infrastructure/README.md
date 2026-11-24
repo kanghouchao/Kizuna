@@ -13,7 +13,7 @@ docker compose -p kizuna up -d --wait
 
 `.env` を書き換えたあと上を環境ディレクトリで実行すると、増減したサービスと gateway が作り直される。
 
-- gateway（Traefik）はレプリカごとにヘルスチェックし（backend は `/actuator/health/readiness`、frontend は `/health`、5 秒間隔）、
+- gateway（Traefik）はレプリカごとにヘルスチェックし（backend は本体ポートの `/readyz`、frontend は `/health`、5 秒間隔）、
   落ちた・準備のできていないレプリカへは送らない。停止の直後にまだ外れていないレプリカへの接続失敗は、別のレプリカへ送り直す
   （GET などの冪等な要求だけ。POST は送り直さないので、その瞬間の POST は 502 になりうる）。
 - 振り分けの状況は Traefik の API で見る（development はホストの 8080）。
@@ -112,6 +112,32 @@ release の `.env` に `APP_PRIVATE_ATTACHMENTS_ENABLED=true` と二つの資格
 
 4. **画面での追加・閲覧**：応募者詳細の「非公開の添付画像」で画像を一つ追加し、一覧に出ること、ダウンロードして開けることを確かめる。画面に添付を削除する操作は無く、添付の実体は保持期間を過ぎた応募者の匿名化で削除される。
 5. **保持期間の設定**：システム設定（分類 RECRUITMENT）で `applicant_retention_rejected_months`（不採用）・`applicant_retention_withdrawn_months`（辞退）・`applicant_retention_hired_months`（採用）の三つを設定する。未設定のままだと匿名化は何もせず、添付は無期限に残る。応募者詳細の「情報保持方針」に三つの期間が表示されることを確かめる。保持期間を過ぎた応募者を実際に匿名化するには、続けて[定期処理の有効化](#定期処理の有効化)で応募者の匿名化を有効にする。
+
+## 指標の収集（release のみ）
+
+backend は応答時間などの指標を管理ポート 8090 の `/actuator/prometheus` に出す。gateway はこのポートへ転送しないので、インターネットからも frontend からも届かない。release では `metrics`（Prometheus）が compose ネットワークの中から全レプリカを 15 秒ごとに集め、`prometheus-data` ボリュームに既定の 15 日分を保持する。development と E2E には置かない。
+
+Prometheus の画面はホストにも gateway にも公開していない。見るときは、サーバ上でコンテナのアドレスを調べ、SSH の転送を張って手元のブラウザで `http://localhost:9090` を開く。
+
+```bash
+docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$(docker compose -p kizuna ps -q metrics)"
+```
+
+```bash
+ssh -L 9090:<上で得たアドレス>:9090 <サーバ>
+```
+
+1 秒以内に応答した要求の割合（経路ごと、直近 1 日）:
+
+```promql
+sum by (uri) (increase(http_server_requests_seconds_bucket{le="1.0"}[1d])) / sum by (uri) (increase(http_server_requests_seconds_count[1d]))
+```
+
+経路ごとの 95 パーセンタイル（直近 1 時間）:
+
+```promql
+histogram_quantile(0.95, sum by (uri, le) (rate(http_server_requests_seconds_bucket[1h])))
+```
 
 ## 定期処理の有効化
 

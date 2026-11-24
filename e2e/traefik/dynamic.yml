@@ -54,9 +54,10 @@ http:
   services:
     backend:
       loadBalancer:
-        # readiness は停止の始まりと DB・Redis の不通で 503 になり、そのレプリカを外す
+        # readiness は停止の始まりと DB・Redis の不通で 503 になり、そのレプリカを外す。
+        # 管理ポートではなく、要求を受ける本体ポート（8080）の /readyz を見る
         healthCheck:
-          path: /actuator/health/readiness
+          path: /readyz
           interval: 5s
           timeout: 3s
         servers:

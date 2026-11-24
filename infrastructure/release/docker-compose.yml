@@ -87,7 +87,7 @@ services:
         condition: service_healthy
         required: false
     healthcheck:
-      # 実行イメージにシェルも curl も無いので、イメージ同梱の HealthCheck クラスで actuator を叩く
+      # 実行イメージにシェルも curl も無いので、イメージ同梱の HealthCheck クラスで本体ポートの /readyz を叩く
       test: ["CMD", "java", "-Xms8m", "-Xmx32m", "-XX:TieredStopAtLevel=1", "-cp", "/app/healthcheck", "HealthCheck"]
       # 複数台が同時に起動すると Liquibase のロック待ち（10 秒ごとの再試行）が重なる。start_period 中の失敗は数えないだけなので、
       # 起動の速いときの待ち時間は増えない
@@ -167,6 +167,25 @@ services:
       retries: 5
     restart: on-failure:3
 
+  # 指標の収集（Prometheus）。backend の管理ポートを compose ネットワークの中から集める。
+  # ホストへも gateway へも出さないので、画面は SSH の転送越しに見る（手順は infrastructure/README.md）
+  metrics:
+    image: dhi.io/prometheus:3-debian13
+    volumes:
+      - "./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro"
+      - prometheus-data:/var/prometheus
+    networks:
+      - network
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "promtool", "check", "healthy", "--url=http://localhost:9090"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    restart: on-failure:3
+
   # Traefik: The reverse proxy
   gateway:
     image: dhi.io/traefik:3-alpine3.23
@@ -217,4 +236,6 @@ volumes:
   private-seaweedfs-data:
     driver: local
   acme-data:
+    driver: local
+  prometheus-data:
     driver: local
