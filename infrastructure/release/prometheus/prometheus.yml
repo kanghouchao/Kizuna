@@ -1,0 +1,13 @@
+# backend の管理ポート（8090）から指標を集める。gateway はこのポートへ転送しないので、同じ compose ネットワークの中からだけ届く。
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: backend
+    metrics_path: /actuator/prometheus
+    # サービス名を引くと Docker の DNS が全レプリカの A レコードを返すので、レプリカ数を二重に書かずに全部を集められる
+    dns_sd_configs:
+      - names:
+          - backend
+        type: A
+        port: 8090

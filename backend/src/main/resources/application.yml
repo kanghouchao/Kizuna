@@ -90,10 +90,16 @@ spring:
       thread-name-prefix: task-kizuna-
 
 management:
+  # actuator は gateway が転送しない別ポートに置く（8080 に出すと /api/actuator/... として公開される）。
+  # 9090 は Prometheus 自身の既定なので避ける。
+  server:
+    port: 8090
   endpoint:
     health:
       probes:
         enabled: true
+        # 管理ポートが応答しても本体の接続口が受け付けるとは限らないため、/readyz と /livez を 8080 側にも出す。
+        add-additional-paths: true
       group:
         liveness:
           include: livenessState
@@ -110,7 +116,16 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include:
+          - health
+          - prometheus
+  metrics:
+    distribution:
+      # 応答時間の分布をヒストグラムで出し、1 秒の境界を明示して「1 秒を超えた要求の割合」を集計できるようにする。
+      percentiles-histogram:
+        "[http.server.requests]": true
+      slo:
+        "[http.server.requests]": 1s
 app:
   domain: localhost
   scheme: http

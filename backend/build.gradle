@@ -51,6 +51,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-mail'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    // Prometheus 形式の出力と /actuator/prometheus の自動構成は actuator が既に持つ spring-boot-micrometer-metrics にあり、
+    // このレジストリが classpath に載ったときだけ有効になる。
+    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
     implementation 'org.springframework.boot:spring-boot-starter-security'
     // Bearer トークン検証をフレームワーク保守の標準部品（resource-server）に委ねるため。
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'

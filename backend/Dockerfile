@@ -53,6 +53,7 @@ COPY --from=build /app/build/libs/kizuna-*.jar app.jar
 COPY --from=build /app/healthcheck healthcheck
 # log4j2 の既定出力先 ./logs を非 root（65532）で書けるようにする
 COPY --from=build --chown=65532:65532 /app/logs logs
-EXPOSE 8080
+# 8090 は actuator（指標とヘルス）の管理ポート。gateway はどの経路でも転送しない
+EXPOSE 8080 8090
 
 ENTRYPOINT ["java", "-jar", "app.jar"]

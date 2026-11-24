@@ -135,7 +135,7 @@ services:
       mailpit:
         condition: service_healthy
     healthcheck:
-      # 実行イメージにシェルも curl も無いので、イメージ同梱の HealthCheck クラスで actuator を叩く
+      # 実行イメージにシェルも curl も無いので、イメージ同梱の HealthCheck クラスで本体ポートの /readyz を叩く
       test: ["CMD", "java", "-Xms8m", "-Xmx32m", "-XX:TieredStopAtLevel=1", "-cp", "/app/healthcheck", "HealthCheck"]
       # 空の DB へ Liquibase を全量適用してから起動するため、CI の共有 runner では 15 秒では足りない。
       # start_period 中の失敗は数えないだけなので、起動の速い手元では待ち時間は増えない。
