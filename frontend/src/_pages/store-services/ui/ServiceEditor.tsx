@@ -9,7 +9,7 @@ import {
   useVersionedWrite,
 } from '@/shared/lib';
 import { notify } from '@/shared/notify';
-import { Button, Dialog, DialogFrame, RegionError } from '@/shared/ui';
+import { Button, Dialog, DialogFrame, RegionError, VersionConflictNotice } from '@/shared/ui';
 import { ServiceForm } from './ServiceForm';
 
 export function ServiceEditor({
@@ -49,11 +49,12 @@ export function ServiceEditor({
       const body = { name, duration_minutes, charge_type, price, remuneration };
       return serviceApi.update(id, { ...body, expected_version: current.version });
     };
-    await writer.write(send, {
+    const outcome = await writer.write(send, {
       success: 'サービスを保存しました',
-      // 競合・消失・権限なしは画面の表示で伝えるので、案内はそれ以外の失敗にだけ出す
+      // 競合・消失・権限なしは画面の表示で伝えるので、案内はそれ以外の失敗にだけ出す。
+      // 新規作成の競合は画面に案内を出さないので、ここで伝える
       failure: (error, kind) => {
-        if (kind === 'failed')
+        if (kind === 'failed' || (kind === 'conflict' && !id))
           notify.error(getApiErrorMessage(error, 'サービスの保存に失敗しました'));
       },
       onSuccess: () => {
@@ -66,6 +67,8 @@ export function ServiceEditor({
         else if (kind === 'failed' && id && isBadRequest(error)) return writer.reload();
       },
     });
+    // 新規作成には読み込み直す対象が無いので、競合をその場で畳んで入力のまま送り直せるようにする
+    if (outcome === 'conflict' && !id) await writer.reload();
   };
   const { busy, conflict } = writer;
   const unavailable = missing || resource.failure === 'notFound' || resource.data?.deleted;
@@ -111,20 +114,15 @@ export function ServiceEditor({
           <p>読み込み中...</p>
         ) : (
           <>
-            {conflict && (
-              <div role="alert" className="space-y-3">
-                <p>設定が変更されています。最新の内容を再取得し、確認してから保存してください。</p>
-                <Button variant="outline" onClick={() => void writer.reload()}>
-                  最新の内容を再取得
-                </Button>
-              </div>
-            )}
             <ServiceForm
               key={resource.data?.version ?? 'new'}
               initial={resource.data ?? undefined}
               onSave={save}
               disabled={busy || conflict}
             />
+            {conflict && id && (
+              <VersionConflictNotice busy={busy} onLoad={() => void writer.reload()} />
+            )}
           </>
         )}
       </DialogFrame>

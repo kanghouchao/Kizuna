@@ -127,22 +127,25 @@ describe('従業員の権限編集ページ', () => {
     });
   });
 
-  it('409 は入力を残して案内を出し、読み込み直すと最新の授権と version で描き直す', async () => {
+  it('409 は入力を残して保存のボタンのそばに案内を出し、読み込むと最新の授権と version で描き直す', async () => {
     mockedStaffApi.update.mockRejectedValueOnce({ response: { status: 409, data: {} } });
     render(<StaffEditPage />);
     fireEvent.click(await screen.findByRole('checkbox', { name: '経理' }));
     fireEvent.click(screen.getByRole('button', { name: '保存する' }));
 
-    const banner = await screen.findByText(/他の担当者が更新しました/);
+    const banner = await screen.findByRole('alert');
+    expect(banner).toHaveTextContent('他の操作で更新されたため、操作を止めています');
     expect(screen.getByRole('checkbox', { name: '経理' })).toBeChecked();
-    expect(screen.getByRole('button', { name: '保存する' })).toBeDisabled();
+    const save = screen.getByRole('button', { name: '保存する' });
+    expect(save).toBeDisabled();
+    // 案内は保存のボタンの後ろ（押した場所のそば）に出る
+    expect(save.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(mockedStaffApi.get).toHaveBeenCalledTimes(1);
     expect(mockPush).not.toHaveBeenCalled();
 
     mockedStaffApi.get.mockResolvedValue(staff({ roles: [{ id: 11, name: '経理' }], version: 9 }));
     fireEvent.click(
-      within(banner.closest('[role="alert"]') as HTMLElement).getByRole('button', {
-        name: '最新の内容を読み込む',
-      })
+      within(banner).getByRole('button', { name: '入力を破棄して最新の内容を読み込む' })
     );
 
     await waitFor(() => expect(screen.getByRole('checkbox', { name: '店長' })).not.toBeChecked());

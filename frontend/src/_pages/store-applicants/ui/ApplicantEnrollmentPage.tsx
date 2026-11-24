@@ -6,7 +6,7 @@ import type { CastCreateRequest } from '@/entities/cast';
 import { CastForm, type CastFormData, toCastCreateRequest } from '@/features/cast-form';
 import { useCurrentStoreId } from '@/entities/user';
 import { storePath, useResource, useVersionedWrite } from '@/shared/lib';
-import { Button, RegionError } from '@/shared/ui';
+import { Button, RegionError, VersionConflictNotice } from '@/shared/ui';
 // 在籍登録とキャスト直接登録の本文は同じ項目を持つ（entities 同士は参照できないので、両方を使うここで型を突き合わせる）。
 type SameKeys<A, B> = [keyof A] extends [keyof B]
   ? [keyof B] extends [keyof A]
@@ -77,20 +77,8 @@ export default function ApplicantEnrollmentPage() {
         <fieldset disabled={writer.conflict} className="min-w-0">
           <CastForm onSubmit={submit} busy={writer.busy} />
         </fieldset>
-        {/* 送信ボタンは長いフォームの末尾にある。案内は押した場所の近くに出し、見える位置まで送る */}
         {writer.conflict && (
-          <div
-            role="alert"
-            ref={element => element?.scrollIntoView({ block: 'nearest' })}
-            className="space-y-3 rounded-lg border p-4"
-          >
-            <p>
-              応募者情報が更新されています。最新の内容を読み込んでから、改めて操作してください。
-            </p>
-            <Button variant="outline" onClick={() => void writer.reload()}>
-              最新の内容を読み込む
-            </Button>
-          </div>
+          <VersionConflictNotice busy={writer.busy} onLoad={() => void writer.reload()} />
         )}
       </>
     );

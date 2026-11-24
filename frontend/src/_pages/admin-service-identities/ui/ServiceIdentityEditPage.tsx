@@ -9,7 +9,7 @@ import {
   type GrantFormValues,
 } from '@/features/staff-management';
 import { useResource, useVersionedWrite } from '@/shared/lib';
-import { Button, RegionError, Skeleton } from '@/shared/ui';
+import { RegionError, Skeleton, VersionConflictNotice } from '@/shared/ui';
 import { PageHeader } from '@/widgets/page-header';
 import { LIST_HREF, SERVICE_IDENTITY_GRANT_FORM } from './serviceIdentityForm';
 
@@ -71,18 +71,8 @@ export default function ServiceIdentityEditPage() {
   return (
     <div className="space-y-6">
       <PageHeader title={`${identity.display_name ?? ''} の権限を編集`} />
-      {writer.conflict && (
-        <div role="alert" className="space-y-3 rounded-lg border p-4">
-          <p>他の担当者が更新しました。最新の内容を読み込んでから、改めて保存してください。</p>
-          <Button variant="outline" onClick={() => void writer.reload()}>
-            最新の内容を読み込む
-          </Button>
-        </div>
-      )}
-      {/* version が変わったら欄を取得した最新の値で描き直す */}
       <GrantForm
         {...SERVICE_IDENTITY_GRANT_FORM}
-        key={identity.version}
         defaultValues={{ display_name: '', ...grantsOf(identity) }}
         editingName={identity.display_name ?? ''}
         unnamedSubject="このサービスID"
@@ -91,6 +81,9 @@ export default function ServiceIdentityEditPage() {
         locked={writer.conflict}
         onSubmit={submit}
       />
+      {writer.conflict && (
+        <VersionConflictNotice busy={writer.busy} onLoad={() => void writer.reload()} />
+      )}
     </div>
   );
 }

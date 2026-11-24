@@ -94,13 +94,15 @@ test('競合の拒否は入力を残して通知し、取り直すまで送ら�
     expect(notify.error).toHaveBeenCalledWith('この応募者は既に在籍登録されています')
   );
   expect(push).not.toHaveBeenCalled();
-  expect(await screen.findByRole('alert')).toHaveTextContent('応募者情報が更新されています');
+  expect(await screen.findByRole('alert')).toHaveTextContent(
+    '他の操作で更新されたため、操作を止めています'
+  );
   expect(screen.getByLabelText('源氏名 *')).toHaveValue('あおい');
   expect(screen.getByRole('button', { name: '保存する' })).toBeDisabled();
   expect(applicantApi.enroll).toHaveBeenCalledTimes(1);
 
   (applicantApi.get as jest.Mock).mockResolvedValue({ ...hired, enrollment_id: 'e1' });
-  fireEvent.click(screen.getByRole('button', { name: '最新の内容を読み込む' }));
+  fireEvent.click(screen.getByRole('button', { name: '入力を破棄して最新の内容を読み込む' }));
   expect(await screen.findByRole('link', { name: '在籍を開く' })).toBeVisible();
 });
 test('登録済み・採用前の応募者にはフォームを出さない', async () => {

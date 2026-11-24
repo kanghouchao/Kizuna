@@ -9,8 +9,7 @@ import {
   useKeyedResource,
   useVersionedWrite,
 } from '@/shared/lib';
-import { Button, Input, Label, Pager, RegionError } from '@/shared/ui';
-import { OrderStaleNotice } from './OrderStaleNotice';
+import { Button, Input, Label, Pager, RegionError, VersionConflictNotice } from '@/shared/ui';
 import { orderConflictField } from './useOrderConfirmation';
 
 /** 編集画面と同じ受注の版を送るので、書き込みは編集画面のものを共有する。409 はどちらの送信も塞ぐ。 */
@@ -125,7 +124,7 @@ export function OrderServiceProgress({
             >
               サービスを開始
             </Button>
-            {stale && <OrderStaleNotice busy={busy} onLoad={onLoadLatest} />}
+            {stale && <VersionConflictNotice busy={busy} onLoad={onLoadLatest} />}
           </div>
         )}
         {error && <p role="alert">{error}</p>}

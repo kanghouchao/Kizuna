@@ -4,7 +4,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { roleApi } from '@/entities/user';
 import { getApiErrorMessage, useResource, useVersionedWrite } from '@/shared/lib';
 import { notify } from '@/shared/notify';
-import { Card, CardContent, RegionError } from '@/shared/ui';
+import { Card, CardContent, RegionError, VersionConflictNotice } from '@/shared/ui';
 import { RoleForm, RoleFormValues } from './RoleForm';
 
 export default function RoleEditPage() {
@@ -23,7 +23,7 @@ export default function RoleEditPage() {
 
   const submit = async (values: RoleFormValues) => {
     if (id === null || role === null) return;
-    const outcome = await writer.write(
+    await writer.write(
       () =>
         roleApi.update(id, {
           name: values.name,
@@ -35,7 +35,9 @@ export default function RoleEditPage() {
         success: 'ロールを更新しました',
         failure: (error, kind) => {
           if (kind === 'conflict') {
-            notify.warning('他の管理者が更新しました。最新の内容を確認してください');
+            notify.warning(
+              '他の管理者が更新したため保存できませんでした。入力中の内容は画面に残しています'
+            );
           } else {
             notify.error(getApiErrorMessage(error, 'ロールの保存に失敗しました'));
           }
@@ -43,8 +45,6 @@ export default function RoleEditPage() {
         onSuccess: () => router.push('/admin/roles'),
       }
     );
-    // 古い version を抱えたままだと再試行が同じ 409 を繰り返すため、取り直して欄を最新で描き直す
-    if (outcome === 'conflict') await writer.reload();
   };
 
   if (loadFailure !== null) {
@@ -75,18 +75,24 @@ export default function RoleEditPage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-foreground">{role.name} を編集</h1>
       <Card>
-        <CardContent>
-          {/* version が変わったら欄を取得した最新の値で描き直す */}
+        <CardContent className="space-y-4">
           <RoleForm
-            key={role.version}
             initial={{
               name: role.name ?? '',
               permissions: role.permissions ?? [],
               system: role.system,
             }}
             onSubmit={submit}
-            busy={writer.busy || writer.conflict}
+            busy={writer.busy}
+            locked={writer.conflict}
           />
+          {writer.conflict && (
+            <VersionConflictNotice
+              className="max-w-2xl"
+              busy={writer.busy}
+              onLoad={() => void writer.reload()}
+            />
+          )}
         </CardContent>
       </Card>
     </div>

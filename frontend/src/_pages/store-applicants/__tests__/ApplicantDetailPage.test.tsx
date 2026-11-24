@@ -138,23 +138,24 @@ test('409 は入力を残したまま送信を止め、読み直した版で送�
   fireEvent.click(await screen.findByRole('button', { name: '受付情報を編集' }));
   fireEvent.change(screen.getByLabelText('氏名'), { target: { value: '競合した応募者' } });
   fireEvent.click(screen.getByRole('button', { name: '受付情報を保存' }));
-  expect(
-    await screen.findByText(
-      '応募者情報が更新されています。最新の内容を読み込んでから、改めて操作してください。'
-    )
-  ).toBeVisible();
+  const banner = await screen.findByRole('alert');
+  expect(banner).toHaveTextContent('他の操作で更新されたため、操作を止めています');
   expect(screen.getByLabelText('氏名')).toHaveValue('競合した応募者');
-  expect(screen.getByRole('button', { name: '受付情報を保存' })).toBeDisabled();
+  const save = screen.getByRole('button', { name: '受付情報を保存' });
+  expect(save).toBeDisabled();
+  // 案内は保存のボタンの後ろ（押した場所のそば）に出る
+  expect(save.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(applicantApi.get).toHaveBeenCalledTimes(1);
 
   (applicantApi.get as jest.Mock).mockResolvedValue({
     ...detail,
     name: '他の人の変更',
     version: 1,
   });
-  fireEvent.click(screen.getByRole('button', { name: '最新の内容を読み込む' }));
-  fireEvent.click(await screen.findByRole('button', { name: '破棄して続ける' }));
+  fireEvent.click(screen.getByRole('button', { name: '入力を破棄して最新の内容を読み込む' }));
   expect(await screen.findByRole('heading', { name: '他の人の変更' })).toBeVisible();
-  expect(screen.queryByText(/最新の内容を読み込んでから/)).not.toBeInTheDocument();
+  expect(screen.queryByText('未保存の入力を破棄しますか？')).not.toBeInTheDocument();
+  expect(screen.queryByText(/操作を止めています/)).not.toBeInTheDocument();
 
   (applicantApi.update as jest.Mock).mockResolvedValue({ ...detail, version: 2 });
   fireEvent.click(screen.getByRole('button', { name: '受付情報を編集' }));
@@ -171,6 +172,25 @@ test('状態変更の未保存理由も編集切替前に確認する', async ()
   expect(await screen.findByText('未保存の入力を破棄しますか？')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'キャンセル' }));
   expect(screen.getByLabelText('変更理由')).toHaveValue('保存前の理由');
+});
+test('選考状態の変更の 409 は理由を残し、押した変更のボタンのそばに案内を出して、読み込むと理由を捨てる', async () => {
+  (applicantApi.transition as jest.Mock).mockRejectedValueOnce({ response: { status: 409 } });
+  render(<ApplicantDetailPage />);
+  fireEvent.click(await screen.findByLabelText('変更先'));
+  fireEvent.click(await screen.findByRole('option', { name: '選考中' }));
+  fireEvent.change(screen.getByLabelText('変更理由'), { target: { value: '選考理由' } });
+  fireEvent.click(screen.getByRole('button', { name: '選考状態を変更' }));
+
+  const banner = await screen.findByRole('alert');
+  expect(screen.getByLabelText('変更理由')).toHaveValue('選考理由');
+  const save = screen.getByRole('button', { name: '選考状態を変更' });
+  expect(save).toBeDisabled();
+  // 受付情報の位置（面接記録より手前）ではなく、押したボタンの後ろに出る
+  expect(save.compareDocumentPosition(banner) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+  fireEvent.click(screen.getByRole('button', { name: '入力を破棄して最新の内容を読み込む' }));
+  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  expect(await screen.findByLabelText('変更理由')).toHaveValue('');
 });
 test('状態変更の応答待ちに別の編集を開けず失敗時も理由を保持する', async () => {
   let reject: (error: Error) => void = () => {};

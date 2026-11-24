@@ -1,13 +1,9 @@
 import { confirmPreview, pointsPreview } from '../lib/orderTestSupport';
+import { LOAD_LATEST_LABEL } from '@/shared/ui';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { notify } from '@/shared/notify';
 import OrderCompletionPage from '../ui/OrderCompletionPage';
-import {
-  INPUT_KEPT_MESSAGE,
-  LATEST_LOADED_MESSAGE,
-  LOAD_LATEST_LABEL,
-  STALE_MESSAGE,
-} from '../ui/OrderStaleNotice';
+import { INPUT_KEPT_MESSAGE, LATEST_LOADED_MESSAGE, STALE_MESSAGE } from '../ui/orderStaleMessages';
 import { Order, orderApi } from '@/entities/order';
 // 伝票 QR はアプリドメインの申領画面を指す。根 layout が渡す値をここで固定する
 jest.mock('@/shared/lib', () => ({
