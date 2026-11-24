@@ -173,7 +173,7 @@ test('判定が競合したら最新の状態を取るまで送らない', async
   fireEvent.click(within(dialog).getByRole('button', { name: '判定を記録する' }));
   const conflict = await within(dialog).findByText(/通知の状態が変わりました/);
   expect(conflict).toBeVisible();
-  fireEvent.click(within(dialog).getByRole('button', { name: '判定を記録する' }));
+  expect(within(dialog).getByRole('button', { name: '判定を記録する' })).toBeDisabled();
   expect(api.resolve).toHaveBeenCalledTimes(1);
   fireEvent.click(
     within(dialog).getByRole('button', { name: '最新の状態を取得して判定をやり直す' })

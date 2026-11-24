@@ -261,7 +261,7 @@ function Resolution({
             </FormItem>
           )}
         />
-        <Button type="submit" disabled={write.busy}>
+        <Button type="submit" disabled={write.busy || write.conflict}>
           判定を記録する
         </Button>
       </form>

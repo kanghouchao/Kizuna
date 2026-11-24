@@ -366,7 +366,11 @@ function Completion({ id }: { id: string }) {
               </OrderEditorSection>
               {stale && (
                 <div className="px-6 pt-6">
-                  <VersionConflictNotice busy={busy} onLoad={() => void loadLatest()} />
+                  <VersionConflictNotice
+                    reveal={false}
+                    busy={busy}
+                    onLoad={() => void loadLatest()}
+                  />
                 </div>
               )}
               <div className="flex items-center justify-between gap-6 rounded-b-xl bg-card p-6">
