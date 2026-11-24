@@ -27,4 +27,11 @@ describe('VersionConflictNotice', () => {
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
     expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
   });
+
+  it('reveal を切ると、出ても視点を動かさない', () => {
+    const scrollIntoView = jest.spyOn(Element.prototype, 'scrollIntoView').mockClear();
+    render(<VersionConflictNotice reveal={false} busy={false} onLoad={jest.fn()} />);
+
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
 });

@@ -620,7 +620,13 @@ export default function OrderEditPage() {
               </OrderEditorSection>
 
               <div className="space-y-4 rounded-b-xl border-t bg-card p-6">
-                {stale && <VersionConflictNotice busy={busy} onLoad={() => void loadLatest()} />}
+                {stale && (
+                  <VersionConflictNotice
+                    reveal={false}
+                    busy={busy}
+                    onLoad={() => void loadLatest()}
+                  />
+                )}
                 <div className="flex items-center justify-between gap-6">
                   <p className="text-sm text-muted-foreground">
                     変更内容は保存前の確認画面で確認できます。

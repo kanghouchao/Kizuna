@@ -124,7 +124,7 @@ export function OrderServiceProgress({
             >
               サービスを開始
             </Button>
-            {stale && <VersionConflictNotice busy={busy} onLoad={onLoadLatest} />}
+            {stale && <VersionConflictNotice reveal={false} busy={busy} onLoad={onLoadLatest} />}
           </div>
         )}
         {error && <p role="alert">{error}</p>}

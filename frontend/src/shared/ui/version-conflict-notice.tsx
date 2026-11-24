@@ -12,7 +12,8 @@ interface VersionConflictNoticeProps {
   busy: boolean;
   /** 押すと最新の内容を読み込む。入力はここで初めて置き換わる。 */
   onLoad: () => void;
-  /** 外側の配置。 */
+  /** 同じ競合で案内が複数出る画面は false。後から描かれた案内が、押した場所から視点を奪う。 */
+  reveal?: boolean;
   className?: string;
 }
 
@@ -21,10 +22,17 @@ interface VersionConflictNoticeProps {
  * 画面に残す。押した場所は長いフォームやダイアログの末尾にあるので、出たときに一度だけ見える位置へ
  * 送る（描き直しのたびに送ると、入力中の利用者を引き戻す）。
  */
-export function VersionConflictNotice({ busy, onLoad, className }: VersionConflictNoticeProps) {
+export function VersionConflictNotice({
+  busy,
+  onLoad,
+  reveal = true,
+  className,
+}: VersionConflictNoticeProps) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    ref.current?.scrollIntoView({ block: 'nearest' });
+    if (reveal) ref.current?.scrollIntoView({ block: 'nearest' });
+    // 出たときの一度だけ送る
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return (
     <div

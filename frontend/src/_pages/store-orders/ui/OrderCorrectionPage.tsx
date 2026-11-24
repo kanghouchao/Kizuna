@@ -422,7 +422,13 @@ function CorrectionEditor() {
                 </p>
               </section>
 
-              {stale && <VersionConflictNotice busy={busy} onLoad={() => void loadLatest()} />}
+              {stale && (
+                <VersionConflictNotice
+                  reveal={false}
+                  busy={busy}
+                  onLoad={() => void loadLatest()}
+                />
+              )}
               <div className="flex justify-end gap-4">
                 <Button
                   type="button"
