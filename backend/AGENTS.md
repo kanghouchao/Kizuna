@@ -77,6 +77,8 @@ Two questions decide the boundaries:
   - A replacement operation, where the latest call wins by voiding the previous one. These are exactly `POST /casts/{id}/invitation`, `POST /orders/{id}/receipt-token`, and `POST /staff/{id}/password-reset`. Adding one is the repository owner's decision.
   - `PUT /me/password`: the current password in the body is its precondition.
 
+A row updated in passing — one the request URL does not address — is guarded by a row lock or an update that does not depend on the old value, never by `@Version`. A lost optimistic lock then comes only from the addressed resource, which is what makes a blanket 412 correct.
+
 Already-done counts as success only for a request without content. A transition carrying a reason or an amount is rejected when repeated, because someone else may have completed it with different content.
 
 423 is borrowed. RFC 4918 defines it for a lock a user took explicitly; here it means another transaction is briefly holding a row this request needs, and no standard code says that. 503 is not used because 5xx is counted as an outage and would share a code with an unreachable database or Redis.
