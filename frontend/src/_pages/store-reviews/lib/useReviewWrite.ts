@@ -1,14 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { startTransition, useState } from 'react';
 import { useStoreContext } from '@/entities/user';
 import { Review, ReviewCommand, ReviewWriteResponse, reviewApi } from '@/entities/content/review';
-import {
-  getApiErrorMessage,
-  isConflict,
-  isNotFound,
-  memoryOperationStore,
-  useOperation,
-} from '@/shared/lib';
-import { notify } from '@/shared/notify';
+import { isConflict, isNotFound, memoryOperationStore, useOperation } from '@/shared/lib';
 import { accessError } from '../ui/reviewErrors';
 
 /**
@@ -26,37 +19,23 @@ export function useReviewWrite(onDone: (review: Review) => void) {
   const [denied, setDenied] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [missing, setMissing] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const lock = useRef(false);
-  const active = useRef(true);
-  useEffect(() => {
-    active.current = true;
-    return () => {
-      active.current = false;
-    };
-  }, []);
-  const run = async (
-    command: ReviewCommand,
-    send: () => Promise<{ value: ReviewWriteResponse } | null>
-  ) => {
-    if (lock.current) return;
-    lock.current = true;
-    setBusy(true);
-    try {
-      const result = await send();
-      if (!result || !active.current) return;
+  const options = (command: ReviewCommand) => ({
+    success: '口コミの操作を記録しました',
+    failure: '口コミの操作結果が確認できません',
+    onSuccess: (result: ReviewWriteResponse) => {
       setDenied(null);
       setConflict(false);
       setMissing(false);
-      notify.success('口コミの操作を記録しました');
-      onDone(result.value.review);
-    } catch (error) {
-      if (!active.current) return;
+      onDone(result.review);
+    },
+    // 照会を返すので、照会が終わるまで busy が残る。照会の後の更新は transition の外なので包み直す
+    onFailure: async (error: unknown) => {
       if (isConflict(error)) setConflict(true);
       let deniedReason = accessError(error);
+      let reviewMissing = false;
       if (isNotFound(error)) {
         // 受付の 404 は関連受注の不在。訂正は元の口コミと関連受注のどちらが無いかを照会で分ける
-        let reviewMissing = command.kind !== 'CREATE';
+        reviewMissing = command.kind !== 'CREATE';
         if (command.kind === 'CORRECT') {
           try {
             await reviewApi.get(command.id);
@@ -65,28 +44,30 @@ export function useReviewWrite(onDone: (review: Review) => void) {
             reviewMissing = isNotFound(lookupError);
             deniedReason = accessError(lookupError);
           }
-          if (!active.current) return;
         }
-        if (reviewMissing) setMissing(true);
       }
-      if (deniedReason !== null) setDenied(deniedReason);
-      notify.error(getApiErrorMessage(error, '口コミの操作結果が確認できません'));
-    } finally {
-      lock.current = false;
-      if (active.current) setBusy(false);
-    }
-  };
+      startTransition(() => {
+        if (reviewMissing) setMissing(true);
+        if (deniedReason !== null) setDenied(deniedReason);
+      });
+    },
+  });
   return {
     pending,
     uncertain: pending?.phase === 'unknown',
     /** 送信中か、結果不明の操作が残っている間は新しい操作を送らない。 */
-    blocked: busy || pending !== null,
-    busy,
+    blocked: operation.busy || pending !== null,
+    busy: operation.busy,
     denied,
     conflict,
     missing,
-    submit: (command: ReviewCommand) => run(command, () => operation.start(command)),
-    replay: () => (pending ? run(pending.payload, operation.replay) : Promise.resolve()),
+    submit: async (command: ReviewCommand) => {
+      await operation.start(command, options(command));
+    },
+    replay: async () => {
+      // 失敗の後の照会に送った内容が要るので、送る前に取っておく
+      if (pending) await operation.replay(options(pending.payload));
+    },
     clearConflict: () => setConflict(false),
   };
 }

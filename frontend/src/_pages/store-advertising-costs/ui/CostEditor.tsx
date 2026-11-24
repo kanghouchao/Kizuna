@@ -42,7 +42,7 @@ export function CostEditor({
   cost?: Cost;
   remove?: boolean;
   disabled: boolean;
-  onSubmit: (m: Mutation) => Promise<void>;
+  onSubmit: (m: Mutation) => void;
 }) {
   const storeId = useCurrentStoreId();
   const [confirmation, setConfirmation] = useState<Mutation | null>(null);
@@ -71,7 +71,7 @@ export function CostEditor({
     n === null ||
     (Number.isInteger(n) && n >= 0 && n <= 2147483647) ||
     '0〜2,147,483,647の整数で入力してください';
-  const submit = form.handleSubmit(async v => {
+  const submit = form.handleSubmit(v => {
     const reason = v.reason.trim();
     if (remove && cost) {
       setConfirmation({ kind: 'delete', id: cost.id, version: cost.version, reason });
@@ -85,7 +85,7 @@ export function CostEditor({
       inquiry_count: v.inquiry_count,
       amount: v.amount!,
     };
-    await onSubmit(
+    onSubmit(
       cost
         ? { kind: 'replace', id: cost.id, version: cost.version, values, reason }
         : { kind: 'create', values }
@@ -268,7 +268,7 @@ export function CostEditor({
         <Button
           type="submit"
           form={formId}
-          disabled={disabled || form.formState.isSubmitting || options.isLoading}
+          disabled={disabled || options.isLoading}
           variant={remove ? 'destructive' : 'default'}
         >
           {remove ? '削除内容を確認' : '保存する'}
@@ -280,7 +280,7 @@ export function CostEditor({
         description="変更前の内容と入力した理由は履歴に残ります。"
         onClose={() => setConfirmation(null)}
         onConfirm={() => {
-          if (confirmation && !disabled) void onSubmit(confirmation);
+          if (confirmation && !disabled) onSubmit(confirmation);
         }}
       />
     </Form>

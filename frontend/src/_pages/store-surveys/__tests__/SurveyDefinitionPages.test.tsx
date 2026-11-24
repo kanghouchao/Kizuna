@@ -122,7 +122,9 @@ describe('作成', () => {
     await screen.findByText(/結果が確認できません。同じ要求/);
     expect(screen.getByLabelText('題名')).toHaveValue('新しい問票');
     expect(screen.getByRole('button', { name: '下書きを保存' })).toBeDisabled();
-    fireEvent.click(screen.getByRole('button', { name: '同じ要求で結果を確認' }));
+    const replay = screen.getByRole('button', { name: '同じ要求で結果を確認' });
+    await waitFor(() => expect(replay).toBeEnabled());
+    fireEvent.click(replay);
     await waitFor(() => expect(api.write).toHaveBeenCalledTimes(2));
     expect(api.write.mock.calls[1][0]).toEqual(api.write.mock.calls[0][0]);
     expect(api.write.mock.calls[1][1]).toBe(api.write.mock.calls[0][1]);

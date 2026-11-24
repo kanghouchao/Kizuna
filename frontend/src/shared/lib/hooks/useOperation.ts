@@ -3,9 +3,11 @@
 import { useSyncExternalStore } from 'react';
 // 桶（@/shared/api）経由だと client.ts が @/shared/lib を読み、初期化の循環になる
 import { getSessionUserId } from '@/shared/api/session';
-import { ClientDataError } from '../apiError';
+import { notify } from '@/shared/notify';
+import { ClientDataError, getApiErrorMessage } from '../apiError';
 import { hasMemoryOperations, type OperationStore, type SavedOperation } from '../operation-store';
 import { createUuid } from '../uuid';
+import { useWrite, type WriteOptions } from './useWrite';
 
 export interface PendingOperation<P> extends SavedOperation<P> {
   phase: 'submitting' | 'unknown';
@@ -120,7 +122,8 @@ async function execute<P, R>(
 /**
  * 応答を失いうる書き込みを一つの操作として扱う。キーは操作を起こしたときに一度だけ採番し、結果不明の操作は
  * 同じ本人・同じ店舗の作用域で、保持した内容のまま再送するまで忘れない（GLOSSARY「操作の受領」）。
- * start / replay は送らなかったとき null、成功したとき { value } を返し、失敗は例外のまま投げる。
+ * 案内と反映は useWrite と同じ。送らなかった呼び出し（送信中・結果不明・保持なし・本人か店舗が未確定）は
+ * refused で、案内も反映もしない。
  */
 export function useOperation<P, R>(
   name: string,
@@ -136,13 +139,47 @@ export function useOperation<P, R>(
     () => (slot ? read(slot, store) : NONE),
     () => NONE
   );
+  const base = useWrite();
+
+  const run = async (
+    created: { payload: P } | undefined,
+    { success, failure, onSuccess, onFailure }: WriteOptions<R>
+  ): Promise<'success' | 'failed' | 'refused'> => {
+    // execute が送らなかったことは失敗として受けて黙らせる。成功として受けると成功の案内が出る
+    let refused = false;
+    const outcome = await base.write(
+      async () => {
+        const done = await execute(name, storeId, slot, store, send, created);
+        if (done) return done.value;
+        refused = true;
+        throw new Error('refused');
+      },
+      {
+        success,
+        failure: error => {
+          if (refused) return;
+          if (typeof failure === 'function') failure(error);
+          else notify.error(getApiErrorMessage(error, failure));
+        },
+        onSuccess,
+        onFailure: onFailure && (error => (refused ? undefined : onFailure(error))),
+      }
+    );
+    return refused ? 'refused' : outcome;
+  };
+
   return {
     /** 本人と店舗が確定している。確定するまで操作は起こせない。 */
     ready: slot !== null,
     pending: snapshot.pending as PendingOperation<P> | null,
     unreadable: snapshot.unreadable,
-    start: (payload: P) => execute(name, storeId, slot, store, send, { payload }),
-    replay: () => execute(name, storeId, slot, store, send),
+    /**
+     * 反映が終わるまで、または同じ操作を別の箇所が送っている間は true。
+     * 結果不明の間（pending が残る間）は含まないので、新しい操作の入口は pending と併せて塞ぐ。
+     */
+    busy: base.busy || snapshot.pending?.phase === 'submitting',
+    start: (payload: P, options: WriteOptions<R>) => run({ payload }, options),
+    replay: (options: WriteOptions<R>) => run(undefined, options),
   };
 }
 

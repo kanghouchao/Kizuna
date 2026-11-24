@@ -169,7 +169,9 @@ test('受付の結果が不明なら新しい送信を止め、同じ要求の�
   expect(await screen.findByText(/結果が確認できません/)).toBeVisible();
   expect(screen.getByRole('button', { name: '受付を記録' })).toBeDisabled();
   expect(mockReplace).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: '同じ要求で結果を確認' }));
+  const replay = screen.getByRole('button', { name: '同じ要求で結果を確認' });
+  await waitFor(() => expect(replay).toBeEnabled());
+  fireEvent.click(replay);
   await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/store/1/reviews/12'));
   expect(api.write.mock.calls[1][1]).toBe(api.write.mock.calls[0][1]);
 });
@@ -220,6 +222,21 @@ test('訂正の404で元口コミが残っていれば、関連受注の不在�
   expect(screen.getByLabelText('口コミ本文')).toHaveValue('失ってはいけない入力本文');
   expect(screen.getByLabelText('判断・変更の理由')).toHaveValue('保持する訂正理由');
   expect(screen.queryByText('口コミが見つかりません')).not.toBeInTheDocument();
+});
+test('訂正の404の後、元口コミの照会が終わるまで入力を止めたままにする', async () => {
+  permission('REVIEW_VIEW', 'REVIEW_MANAGE', 'ORDER_MANAGE');
+  let settle: (value: typeof row) => void = () => {};
+  api.get
+    .mockResolvedValueOnce(row)
+    .mockReturnValueOnce(new Promise<typeof row>(resolve => (settle = resolve)));
+  api.write.mockRejectedValueOnce({ response: { status: 404 } });
+  render(<ReviewEditPage />);
+  await fillReceipt('CORRECT');
+  await submitReceipt('CORRECT');
+  await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
+  expect(screen.getByLabelText('口コミ本文')).toBeDisabled();
+  await act(async () => settle(row));
+  await waitFor(() => expect(screen.getByLabelText('口コミ本文')).toBeEnabled());
 });
 test('訂正の404で元口コミの照会も404なら入力を閉じ、失効を表示する', async () => {
   permission('REVIEW_VIEW', 'REVIEW_MANAGE', 'ORDER_MANAGE');

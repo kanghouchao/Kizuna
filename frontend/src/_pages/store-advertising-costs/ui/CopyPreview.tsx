@@ -23,7 +23,7 @@ export function CopyPreview({
 }: {
   month: string;
   disabled: boolean;
-  onSubmit: (m: Mutation) => Promise<void>;
+  onSubmit: (m: Mutation) => void;
 }) {
   const source = previousMonth(month);
   const [page, setPage] = useState(0);
@@ -103,8 +103,8 @@ export function CopyPreview({
                 <form
                   id={formId}
                   noValidate
-                  onSubmit={form.handleSubmit(async v => {
-                    await onSubmit({
+                  onSubmit={form.handleSubmit(v => {
+                    onSubmit({
                       kind: 'copy',
                       source_version: data.source.version,
                       target_version: data.target.version,
@@ -132,11 +132,7 @@ export function CopyPreview({
                   />
                 </form>
                 <DialogFrameActions>
-                  <Button
-                    type="submit"
-                    form={formId}
-                    disabled={disabled || form.formState.isSubmitting}
-                  >
+                  <Button type="submit" form={formId} disabled={disabled}>
                     金額を確認してコピー
                   </Button>
                 </DialogFrameActions>

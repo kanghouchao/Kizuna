@@ -4,7 +4,7 @@ import { useEffect, useRef, useTransition } from 'react';
 import { notify } from '@/shared/notify';
 import { getApiErrorMessage } from '../apiError';
 
-interface WriteOptions<R> {
+export interface WriteOptions<R> {
   /** 省くと成功の案内を出さない */
   success?: string;
   /** サーバが理由を返さなかったときの文言。関数を渡すとエラーを受け取り、案内を任される。 */

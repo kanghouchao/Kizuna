@@ -321,7 +321,7 @@ RegionError の `message` と、`onRetry` または `fallback: {href,label}` の
 - すべての規則に文言を付ける（`required: '…'`、validate は説明文字列を返す）。制御 component の field.ref は focusable trigger まで渡す。FormControl の aria-invalid / aria-describedby を保持する。
 - required/type/min は操作・読み上げのヒントとして残す。制御 component にも required を渡す。「N 個から一つ以上」は各 checkbox を required にせず、group の label・説明と error を関連付ける。不要になった minLength は除く。
 - 認証画面では auth.css に適合する field error を使い、aria-invalid / aria-describedby を自分で接続する。既存 auth-alert--error の記録値は 4.42 であり、field error への流用を認めない。
-- validation 未完了を理由に submit を disabled にしない。押してエラーと先頭不備へのフォーカスを示す。二重送信は `useWrite` / `useVersionedWrite` の `busy` で抑止する（遷移または取り直しが終わるまで押せないまま残る）。react-hook-form の isSubmitting は送信の関数が返った時点で戻るので、抑止に使わない。
+- validation 未完了を理由に submit を disabled にしない。押してエラーと先頭不備へのフォーカスを示す。二重送信は `useWrite` / `useVersionedWrite` / `useOperation` の `busy` で抑止する（遷移または取り直しが終わるまで押せないまま残る）。react-hook-form の isSubmitting は送信の関数が返った時点で戻るので、抑止に使わない。
 - 値変換は onChange 境界。数値 Input は `e.target.valueAsNumber` を使い、空欄を Number('') で 0 にしない。Select の数値／boolean と Checkbox の値も API 型へ戻す。
 - 未選択 Select は `__none__` 等の sentinel を境界で空文字に戻す。defaultValues を全項目に与える。trigger の表示名には items を渡す。Base UI の未選択 null と API の空値を混同しない。
 - 見た目変更では送信 payload、空欄の意味、確認操作を維持する。free text を Select に変える等の契約変更を混ぜない。
