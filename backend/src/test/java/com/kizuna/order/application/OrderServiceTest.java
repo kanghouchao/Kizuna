@@ -50,6 +50,7 @@ import com.kizuna.order.domain.OrderReceiptTokenRepository;
 import com.kizuna.order.domain.OrderReceiptTokenStatus;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderStatus;
+import com.kizuna.order.domain.OrderVersionConflictException;
 import com.kizuna.order.domain.OrderView;
 import com.kizuna.order.domain.ReceptionRoute;
 import com.kizuna.order.infrastructure.OrderSearchQuery;
@@ -152,6 +153,13 @@ class OrderServiceTest {
         .when(orderRepository.findByIdAndStoreIdForUpdate(nullable(String.class), eq(STORE_ID)))
         .thenAnswer(inv -> orderRepository.findByIdAndStoreId(inv.getArgument(0), STORE_ID));
     Mockito.lenient()
+        .when(orderRepository.findLockTargets(nullable(String.class), eq(STORE_ID)))
+        .thenAnswer(
+            inv ->
+                orderRepository
+                    .findByIdAndStoreId(inv.getArgument(0), STORE_ID)
+                    .map(OrderServiceTest::lockTargets));
+    Mockito.lenient()
         .when(
             orderApplicationRepository.findByIdAndStoreIdForUpdate(
                 nullable(String.class), eq(STORE_ID)))
@@ -179,6 +187,18 @@ class OrderServiceTest {
         "customerProvisioningService",
         new CustomerProvisioningService(
             customerRepository, customerMemberLinkRepository, customerReferenceResolver));
+  }
+
+  /** 受注をロックせずに読んだ参照先。押さえるまでに変わらなければ、押さえた受注と同じ値になる。 */
+  private static OrderRepository.LockTargets lockTargets(Order order) {
+    String customerId = order.getCustomerId();
+    String castId = order.getCastId();
+    Long version = order.getVersion();
+    var targets = mock(OrderRepository.LockTargets.class);
+    lenient().when(targets.getVersion()).thenReturn(version);
+    lenient().when(targets.getCustomerId()).thenReturn(customerId);
+    lenient().when(targets.getCastId()).thenReturn(castId);
+    return targets;
   }
 
   @Captor ArgumentCaptor<Map<String, String>> beforeAudit;
@@ -2052,7 +2072,7 @@ class OrderServiceTest {
     // 台帳へは何も積まない（付与予定額の算定で規則は読むが、書き込みは起きない）
     verifyNoInteractions(materializer);
     // 顧客が未設定なら押さえる行も引く紐づけも無い
-    verify(customerRepository, never()).findByIdAndStoreIdForUpdateNoWait(any(), any());
+    verify(customerRepository, never()).findByIdAndStoreIdForUpdate(any(), any());
     verify(customerMemberLinkRepository, never())
         .findByStoreIdAndCustomerIdAndStatus(any(), any(), any());
   }
@@ -2365,9 +2385,9 @@ class OrderServiceTest {
   }
 
   @Test
-  void completeResolvesTheMemberUnderTheCustomerRowLock() {
-    // 完了は顧客行を押さえてから紐づけを解決する。押さえずに解決すると並行する紐づけの解除・変更とは
-    // 何も競合せずに双方が commit でき、受注は取り消せないまま利用と付与だけがずれた会員に残る
+  void completeLocksTheCustomerRowBeforeTheOrderRowAndThenResolvesTheMember() {
+    // 顧客 → 受注の順に押さえる（ADR 0016）。紐づけはその後の新しい問い合わせで引くので、
+    // 並行する紐づけの解除・変更が commit した後ならその結果が必ず見える
     Order order = confirmedOrderWithCustomer();
     when(orderRepository.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
     stubActiveLink(MEMBER_ID);
@@ -2376,27 +2396,123 @@ class OrderServiceTest {
 
     service.complete(STORE_ID, "o1", completion(12000, 300), ACTOR_ID);
 
-    InOrder inOrder = inOrder(customerRepository, customerMemberLinkRepository);
-    inOrder.verify(customerRepository).findByIdAndStoreIdForUpdateNoWait("cust-1", STORE_ID);
-    // 紐づけ自体はロック取得後の新しい問い合わせで引く。置換の commit 後ならその新しい行が必ず見える
+    InOrder inOrder = inOrder(customerRepository, orderRepository, customerMemberLinkRepository);
+    inOrder.verify(customerRepository).findByIdAndStoreIdForUpdate("cust-1", STORE_ID);
+    inOrder.verify(orderRepository).findByIdAndStoreIdForUpdate("o1", STORE_ID);
     inOrder
         .verify(customerMemberLinkRepository, Mockito.atLeastOnce())
         .findByStoreIdAndCustomerIdAndStatus(STORE_ID, "cust-1", LinkStatus.ACTIVE);
   }
 
   @Test
-  void completionPreviewResolvesTheMemberUnderTheCustomerRowLock() {
-    // 事前計算は台帳へ積まない読み口。行を押さえると、画面を開いただけの照会が並行する紐づけ解除を
-    // コミットまで待たせる
+  void completionPreviewLocksTheCustomerRowBeforeTheOrderRow() {
     Order order = confirmedOrderWithCustomer();
     when(orderRepository.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
     stubActiveLink(MEMBER_ID);
 
     service.completionPreview(STORE_ID, "o1", completion(12000, 0), ACTOR_ID);
 
-    verify(customerMemberLinkRepository)
-        .findByStoreIdAndCustomerIdAndStatus(STORE_ID, "cust-1", LinkStatus.ACTIVE);
-    verify(customerRepository).findByIdAndStoreIdForUpdateNoWait(any(), any());
+    InOrder inOrder = inOrder(customerRepository, orderRepository);
+    inOrder.verify(customerRepository).findByIdAndStoreIdForUpdate("cust-1", STORE_ID);
+    inOrder.verify(orderRepository).findByIdAndStoreIdForUpdate("o1", STORE_ID);
+  }
+
+  @Test
+  void completeAnswersACustomerRepointedWhileWaitingAsAVersionMismatch() {
+    // 顧客行を待つ間に統合が確定すると、押さえた受注は読んだ時と違う顧客を指す。押さえた顧客行は
+    // もうこの受注のものではないので、そのまま進めず版の食い違いとして返す
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
+    var stale = mock(OrderRepository.LockTargets.class);
+    when(stale.getVersion()).thenReturn(CURRENT_VERSION);
+    when(stale.getCustomerId()).thenReturn("cust-merged");
+    Mockito.doReturn(Optional.of(stale)).when(orderRepository).findLockTargets("o1", STORE_ID);
+
+    assertThatThrownBy(() -> service.complete(STORE_ID, "o1", completion(12000, 0), ACTOR_ID))
+        .isInstanceOf(OrderVersionConflictException.class);
+    assertThat(order.getStatus()).isEqualTo(OrderStatus.CONFIRMED);
+    verifyNoInteractions(materializer);
+  }
+
+  @Test
+  void completeDoesNotWaitOnTheOrderRowWhileHoldingATombstone() {
+    // 墓標を握ったまま受注行を待つと、その墓標の統合先を書き換える次の統合と待ちが環になる
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
+    when(customerRepository.isMerged(STORE_ID, "cust-1")).thenReturn(true);
+
+    assertThatThrownBy(() -> service.complete(STORE_ID, "o1", completion(12000, 0), ACTOR_ID))
+        .isInstanceOf(OrderVersionConflictException.class);
+    verify(orderRepository, never()).findByIdAndStoreIdForUpdate(any(), any());
+  }
+
+  @Test
+  void updateLocksTheNomineeThenBothCustomersInIdOrderThenTheOrder() {
+    // 在籍 → 顧客 → 受注（ADR 0016）。顧客 2 行は統合と同じ ID の昇順で押さえる
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
+    when(nominatableCast.findForUpdate(STORE_ID, "g2")).thenReturn(Optional.of(nominatable("g2")));
+    when(customerRepository.findByIdAndStoreIdForUpdate(anyString(), eq(STORE_ID)))
+        .thenReturn(Optional.of(Customer.builder().build()));
+    stubWriteBackResponse();
+
+    OrderUpdateRequest req = new OrderUpdateRequest();
+    req.setExpectedVersion(CURRENT_VERSION);
+    req.setCastId("g2");
+    req.setCustomerSelection(
+        new CustomerSelectionRequest(CustomerSelectionRequest.Mode.EXISTING, "cust-0", null));
+
+    service.update(STORE_ID, "o1", mapper.toCommand(req), ACTOR_ID, true);
+
+    InOrder inOrder = inOrder(nominatableCast, customerRepository, orderRepository);
+    inOrder.verify(nominatableCast).findForUpdate(STORE_ID, "g2");
+    inOrder.verify(customerRepository).findByIdAndStoreIdForUpdate("cust-0", STORE_ID);
+    inOrder.verify(customerRepository).findByIdAndStoreIdForUpdate("cust-1", STORE_ID);
+    inOrder.verify(orderRepository).findByIdAndStoreIdForUpdate("o1", STORE_ID);
+    assertThat(order.getCustomerId()).isEqualTo("cust-0");
+    verify(customerRepository, never()).findByIdAndStoreIdForUpdateNoWait(any(), any());
+  }
+
+  @Test
+  void updateAnswersAStaleVersionBeforeTakingAnyLock() {
+    // 古い画面からの要求は、統合を待たせず、統合済みの顧客を名指していても版の食い違いとして返す
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
+
+    OrderUpdateRequest req = new OrderUpdateRequest();
+    req.setExpectedVersion(CURRENT_VERSION - 1);
+    req.setCastId("g2");
+    req.setCustomerSelection(
+        new CustomerSelectionRequest(CustomerSelectionRequest.Mode.EXISTING, "cust-0", null));
+
+    assertThatThrownBy(() -> service.update(STORE_ID, "o1", mapper.toCommand(req), ACTOR_ID, true))
+        .isInstanceOf(OrderVersionConflictException.class);
+    verifyNoInteractions(nominatableCast, customerRepository);
+    verify(orderRepository, never()).findByIdAndStoreIdForUpdate(any(), any());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void updateRejectsAReselectedCustomerThatIsMissingOrATombstone(boolean tombstone) {
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
+    if (tombstone) {
+      when(customerRepository.findByIdAndStoreIdForUpdate("cust-0", STORE_ID))
+          .thenReturn(Optional.of(Customer.builder().build()));
+      when(customerRepository.isMerged(STORE_ID, "cust-0")).thenReturn(true);
+    }
+
+    OrderUpdateRequest req = new OrderUpdateRequest();
+    req.setExpectedVersion(CURRENT_VERSION);
+    req.setCastId("cast-1");
+    req.setCustomerSelection(
+        new CustomerSelectionRequest(CustomerSelectionRequest.Mode.EXISTING, "cust-0", null));
+
+    assertThatThrownBy(() -> service.update(STORE_ID, "o1", mapper.toCommand(req), ACTOR_ID, true))
+        .isInstanceOf(NotFoundException.class)
+        .hasMessageContaining("顧客が見つかりません");
+    assertThat(order.getCustomerId()).isEqualTo("cust-1");
+    verify(orderRepository, never()).findByIdAndStoreIdForUpdate(any(), any());
   }
 
   @Test
