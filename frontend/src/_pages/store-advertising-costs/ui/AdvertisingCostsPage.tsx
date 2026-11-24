@@ -3,9 +3,8 @@ import { MePending, hasPermission, useCurrentStoreId, useMe } from '@/entities/u
 import { useEffect, useRef, useState } from 'react';
 import { advertisingApi, validMonth, type Cost, type Mutation } from '../api/advertising';
 import Link from 'next/link';
-import { getApiErrorMessage, storePath, useListPage, useResource } from '@/shared/lib';
+import { isNotFound, storePath, useListPage, useResource } from '@/shared/lib';
 import { fromSpringPage, getSessionUserId } from '@/shared/api';
-import { notify } from '@/shared/notify';
 import {
   Button,
   Input,
@@ -157,13 +156,6 @@ function MonthPage({
     [history, setHistory] = useState(false),
     [revision, setRevision] = useState(0),
     [editorKey, setEditorKey] = useState(0);
-  const live = useRef(true);
-  useEffect(() => {
-    live.current = true;
-    return () => {
-      live.current = false;
-    };
-  }, []);
   const list = useListPage<Cost, void>(
     async page => fromSpringPage(await advertisingApi.list(month, page)),
     undefined
@@ -184,34 +176,26 @@ function MonthPage({
     setEditorKey(v => v + 1);
     setOpen(true);
   }
-  async function execute(mutation: Mutation) {
+  function execute(mutation: Mutation) {
     if (pending || storageError) return;
-    try {
-      const done = await operation.start(mutation);
-      if (done && live.current) {
-        setOpen(false);
-        notify.success('広告費を保存しました。');
-      }
-    } catch (e) {
-      if (live.current) {
-        if ((e as { response?: { status?: number } }).response?.status === 404) setMissing(true);
-        notify.error(message(e));
-      }
-    }
+    void operation.start(mutation, {
+      success: '広告費を保存しました。',
+      failure: FAILURE,
+      onSuccess: () => setOpen(false),
+      onFailure: error => {
+        if (isNotFound(error)) setMissing(true);
+      },
+    });
   }
-  async function replay() {
+  function replay() {
     if (pending?.phase !== 'unknown') return;
-    try {
-      const done = await operation.replay();
-      if (done && live.current) {
-        setOpen(false);
-        notify.success('操作結果を確認しました。');
-      }
-    } catch (e) {
-      if (live.current) notify.error(message(e));
-    }
+    void operation.replay({
+      success: '操作結果を確認しました。',
+      failure: FAILURE,
+      onSuccess: () => setOpen(false),
+    });
   }
-  const blocked = !!pending || storageError;
+  const blocked = !!pending || storageError || operation.busy;
   return (
     <div className="space-y-6">
       {storageError && (
@@ -237,7 +221,7 @@ function MonthPage({
                   : '登録'}
           </p>
           {pending.phase === 'unknown' && (
-            <Button disabled={!manage} onClick={() => void replay()}>
+            <Button disabled={!manage || operation.busy} onClick={replay}>
               同じ要求で結果を確認
             </Button>
           )}
@@ -351,6 +335,4 @@ function MonthPage({
     </div>
   );
 }
-function message(e: unknown) {
-  return getApiErrorMessage(e, '保存できませんでした。通信状態と対象店舗を確認してください。');
-}
+const FAILURE = '保存できませんでした。通信状態と対象店舗を確認してください。';

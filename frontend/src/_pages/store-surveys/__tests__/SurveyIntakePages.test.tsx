@@ -166,7 +166,9 @@ describe('回答の受付画面', () => {
     await screen.findByText(/結果が確認できません/);
     expect(screen.getByRole('button', { name: '回答を記録' })).toBeDisabled();
     api.write.mockResolvedValueOnce(written('RECEIVED', { answer }));
-    fireEvent.click(screen.getByRole('button', { name: '同じ要求で結果を確認' }));
+    const replay = screen.getByRole('button', { name: '同じ要求で結果を確認' });
+    await waitFor(() => expect(replay).toBeEnabled());
+    fireEvent.click(replay);
     await waitFor(() => expect(api.write).toHaveBeenCalledTimes(2));
     expect(api.write.mock.calls[1][0]).toEqual(api.write.mock.calls[0][0]);
     await waitFor(() => expect(mockReplace).toHaveBeenCalledWith('/store/1/surveys/responses/30'));

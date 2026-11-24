@@ -7,8 +7,6 @@ import {
   type EditValues,
   type Operation,
 } from '../model/operation';
-import { getApiErrorMessage } from '@/shared/lib';
-import { notify } from '@/shared/notify';
 import {
   Button,
   Checkbox,
@@ -47,7 +45,8 @@ export function RemunerationEditor({
   const [pending, setPending] = useState<EditValues | null>(null);
   const operation = useRemunerationOperation(storeId);
   const outstanding = operation.pending;
-  const sending = outstanding?.phase === 'submitting';
+  // 応答の後も閉じるまで送信中として扱い、応答と反映の間に閉じさせない
+  const sending = operation.busy;
   const locked = outstanding !== null;
   const correcting = !!target.item;
   const form = useForm<EditValues>({
@@ -63,13 +62,20 @@ export function RemunerationEditor({
     },
   });
   const stopped = useWatch({ control: form.control, name: 'stopped' });
-  const save = async (values?: EditValues) => {
-    if (sending) return;
-    try {
-      // 結果不明の操作は保持した元の内容で再送する。フォームの値は送らない。
-      const result = outstanding
-        ? await operation.replay()
-        : await operation.start({
+  const save = (values?: EditValues) => {
+    const options = {
+      success: target.cancel ? '記録を取り消しました' : '記録を保存しました',
+      failure: '保存結果を確認できませんでした。元の内容で結果を確認してください。',
+      onSuccess: () => {
+        onSaved();
+        onClose();
+      },
+    };
+    // 結果不明の操作は保持した元の内容で再送する。フォームの値は送らない。
+    return outstanding
+      ? operation.replay(options)
+      : operation.start(
+          {
             personId,
             personName,
             target: {
@@ -77,19 +83,9 @@ export function RemunerationEditor({
               ...(target.item ? { item: { ...target.item } } : {}),
             } as EditTarget,
             values: { ...values! },
-          });
-      if (!result) return;
-      notify.success(target.cancel ? '記録を取り消しました' : '記録を保存しました');
-      onSaved();
-      onClose();
-    } catch (error) {
-      notify.error(
-        getApiErrorMessage(
-          error,
-          '保存結果を確認できませんでした。元の内容で結果を確認してください。'
-        )
-      );
-    }
+          },
+          options
+        );
   };
   const submit = form.handleSubmit(async values => {
     if (locked) return;
@@ -128,7 +124,7 @@ export function RemunerationEditor({
                     {sending ? '送信中...' : '元の内容で結果を確認'}
                   </Button>
                 ) : (
-                  <Button type="submit" disabled={form.formState.isSubmitting}>
+                  <Button type="submit" disabled={sending}>
                     {target.cancel ? '取消内容を確認' : '保存する'}
                   </Button>
                 )}

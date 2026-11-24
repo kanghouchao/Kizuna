@@ -30,14 +30,6 @@ const IS_SUBMITTING = /\bisSubmitting\b/;
 const READS_IS_SUBMITTING: Record<string, string> = {
   '_pages/store-applicants/ui/ApplicantAttachmentsPanel.tsx':
     '行キーの操作（ADR 0037）。isSubmitting が結果不明の照会を始める時機も決める',
-  '_pages/notification-deliveries/ui/NotificationDeliveriesPage.tsx':
-    'useOperation の pending は応答で消える。ダイアログが閉じるまでの間を塞ぐ',
-  '_pages/store-advertising-costs/ui/CostEditor.tsx':
-    'useOperation の pending は応答で消える。ダイアログが閉じるまでの間を塞ぐ',
-  '_pages/store-advertising-costs/ui/CopyPreview.tsx':
-    'useOperation の pending は応答で消える。ダイアログが閉じるまでの間を塞ぐ',
-  'widgets/remuneration-statement/ui/RemunerationEditor.tsx':
-    'useOperation の pending は応答で消える。ダイアログが閉じるまでの間を塞ぐ',
 };
 
 function mainFiles(dir: string): string[] {

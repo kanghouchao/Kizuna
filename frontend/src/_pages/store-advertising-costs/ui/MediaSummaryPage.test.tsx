@@ -139,7 +139,10 @@ it('費用記録の画面で同じ月の操作が終わると集計を読み直�
   render(<MediaSummaryPage store="1" month="2026-09" canExport={false} />);
   await waitFor(() => expect(advertisingApi.media).toHaveBeenCalledTimes(1));
   await act(async () => {
-    await operation.result.current.start({ kind: 'delete', id: 'c', version: 1, reason: '誤記' });
+    await operation.result.current.start(
+      { kind: 'delete', id: 'c', version: 1, reason: '誤記' },
+      { failure: '保存できませんでした' }
+    );
   });
   await waitFor(() =>
     expect(jest.mocked(advertisingApi.media).mock.calls.length).toBeGreaterThan(1)

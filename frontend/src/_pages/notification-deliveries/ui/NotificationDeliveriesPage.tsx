@@ -439,12 +439,26 @@ function Detail({
 }
 
 type Draft = Omit<DeliveryInput, 'channel' | 'purpose'>;
-function Create({ onCreated }: { onCreated: (row: Delivery) => void }) {
+/**
+ * onRecorded は作成が成立したら画面を離れていても呼ぶ（ダイアログより長く残る一覧の取り直し）。
+ * onCreated はダイアログが開いている間だけ呼ぶ。
+ */
+function Create({
+  onRecorded,
+  onCreated,
+}: {
+  onRecorded: () => void;
+  onCreated: (row: Delivery) => void;
+}) {
   const formId = useId();
   const operation = useOperation('notification-deliveries', {
     storeId: useStoreContext().currentStoreId,
     store: memoryOperationStore,
-    send: notificationApi.create,
+    send: async (payload: DeliveryInput, key, config) => {
+      const row = await notificationApi.create(payload, key, config);
+      onRecorded();
+      return row;
+    },
   });
   const pending = operation.pending;
   const uncertain = pending?.phase === 'unknown';
@@ -453,28 +467,23 @@ function Create({ onCreated }: { onCreated: (row: Delivery) => void }) {
       ? { ...pending.payload, scheduled_at: localInputTime(pending.payload.scheduled_at) }
       : { source_type: 'ORDER', source_id: '', subject: '', body: '', scheduled_at: '' },
   });
-  const active = useActive();
-  const save = async (values?: Draft) => {
-    try {
-      const done = values
-        ? await operation.start({
+  const options = {
+    success: '通知の下書きを作成しました',
+    failure: '作成結果を確認できませんでした。同じ要求で確認してください',
+    onSuccess: onCreated,
+  };
+  const save = (values?: Draft) =>
+    values
+      ? operation.start(
+          {
             ...values,
             scheduled_at: new Date(values.scheduled_at).toISOString(),
             channel: 'EMAIL',
             purpose: 'BUSINESS',
-          })
-        : await operation.replay();
-      if (done && active.current) {
-        onCreated(done.value);
-        notify.success('通知の下書きを作成しました');
-      }
-    } catch (error) {
-      if (active.current)
-        notify.error(
-          getApiErrorMessage(error, '作成結果を確認できませんでした。同じ要求で確認してください')
-        );
-    }
-  };
+          },
+          options
+        )
+      : operation.replay(options);
   return (
     <Form {...form}>
       <form
@@ -493,7 +502,7 @@ function Create({ onCreated }: { onCreated: (row: Delivery) => void }) {
         <p className="text-sm text-muted-foreground">
           受注・ゲスト申請のIDを指定します。宛先は保存済みの許可から送信直前に解決します。
         </p>
-        <fieldset disabled={pending !== null || form.formState.isSubmitting} className="space-y-4">
+        <fieldset disabled={pending !== null || operation.busy} className="space-y-4">
           <FormField
             control={form.control}
             name="source_type"
@@ -605,11 +614,7 @@ function Create({ onCreated }: { onCreated: (row: Delivery) => void }) {
         )}
       </form>
       <DialogFrameActions>
-        <Button
-          type="submit"
-          form={formId}
-          disabled={pending?.phase === 'submitting' || form.formState.isSubmitting}
-        >
+        <Button type="submit" form={formId} disabled={operation.busy}>
           {uncertain ? '同じ要求で結果を確認' : '下書きを作成'}
         </Button>
       </DialogFrameActions>
@@ -628,6 +633,11 @@ function Workspace({
 }) {
   const api = group ? memberNotificationApi : notificationApi;
   const list = useListPage(page => api.list(page));
+  // 作成の応答はダイアログを閉じた後にも届く。その時点で表示しているページを取り直す
+  const reloadList = useRef(list.reload);
+  useEffect(() => {
+    reloadList.current = list.reload;
+  });
   const [selected, setSelected] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -698,11 +708,11 @@ function Workspace({
           description="下書きの作成では送信されません。内容は作成後に変更できません。"
         >
           <Create
+            onRecorded={() => void reloadList.current()}
             onCreated={row => {
               setCreating(false);
               setSelected(row.id);
               setOpen(true);
-              void list.reload();
             }}
           />
         </DialogFrame>

@@ -295,7 +295,9 @@ test('確定した入力エラーは内容を修正して再提出できる', as
   const dialog = await fillDraft();
   fireEvent.click(within(dialog).getByRole('button', { name: '下書きを作成' }));
   await waitFor(() => expect(notify.error).toHaveBeenCalled());
-  expect(within(dialog).getByLabelText('受注・ゲスト申請ID')).not.toBeDisabled();
+  await waitFor(() =>
+    expect(within(dialog).getByLabelText('受注・ゲスト申請ID')).not.toBeDisabled()
+  );
 });
 
 test('作成結果が不明なダイアログを閉じても同じ要求を再確認できる', async () => {
@@ -317,6 +319,22 @@ test('作成結果が不明なダイアログを閉じても同じ要求を再�
   expect(api.create.mock.calls[0][2]).toEqual({ headers: { 'X-Store-ID': '1' } });
 });
 
+test('作成の応答の前にダイアログを閉じても、応答の後に一覧を取り直し、詳細は開かないこと', async () => {
+  let respond: (value: Delivery) => void = () => {};
+  api.create.mockReturnValueOnce(new Promise<Delivery>(resolve => (respond = resolve)));
+  render(<StoreNotificationDeliveriesPage />);
+  const dialog = await fillDraft();
+  fireEvent.click(within(dialog).getByRole('button', { name: '下書きを作成' }));
+  await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
+  fireEvent.keyDown(dialog, { key: 'Escape', code: 'Escape' });
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  const listed = api.list.mock.calls.length;
+  await act(async () => respond(row));
+  await waitFor(() => expect(api.list.mock.calls.length).toBeGreaterThan(listed));
+  expect(notify.success).toHaveBeenCalledWith('通知の下書きを作成しました');
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+});
+
 test.each([400, 404, 409])(
   '結果不明の再確認が業務拒否 %s を受けたら不明を解き、入力を直して送り直せる',
   async status => {
@@ -326,8 +344,12 @@ test.each([400, 404, 409])(
     render(<StoreNotificationDeliveriesPage />);
     const dialog = await fillDraft();
     fireEvent.click(within(dialog).getByRole('button', { name: '下書きを作成' }));
-    fireEvent.click(await within(dialog).findByRole('button', { name: '同じ要求で結果を確認' }));
-    expect(await within(dialog).findByRole('button', { name: '下書きを作成' })).toBeEnabled();
+    const replay = await within(dialog).findByRole('button', { name: '同じ要求で結果を確認' });
+    await waitFor(() => expect(replay).toBeEnabled());
+    fireEvent.click(replay);
+    await waitFor(() =>
+      expect(within(dialog).getByRole('button', { name: '下書きを作成' })).toBeEnabled()
+    );
     expect(within(dialog).getByLabelText('件名')).toBeEnabled();
     expect(within(dialog).queryByText(/作成結果が確認できません/)).not.toBeInTheDocument();
   }
