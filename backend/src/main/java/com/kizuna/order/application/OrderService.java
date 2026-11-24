@@ -21,6 +21,7 @@ import com.kizuna.order.domain.OrderQuote;
 import com.kizuna.order.domain.OrderReceiptToken;
 import com.kizuna.order.domain.OrderReceiptTokenRepository;
 import com.kizuna.order.domain.OrderRepository;
+import com.kizuna.order.domain.OrderVersionConflictException;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.settings.application.BusinessDateService;
@@ -36,6 +37,7 @@ import java.time.LocalDate;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.security.access.AccessDeniedException;
@@ -202,10 +204,19 @@ public class OrderService {
       long actorId,
       boolean canManageCustomers) {
     specialServices.lock(storeId);
-    Order order =
-        orderRepository
-            .findByIdAndStoreIdForUpdate(id, storeId)
-            .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
+    // 空文字は「送っていない」と同じに扱う。編集画面の未選択がそのまま乗ってくる形なので、存在しない
+    // キャストとして扱って 404 を返すより、指名なしの要求として同じ判定に載せる方が呼び手に意味が通る。
+    String castId =
+        (command.castId() == null || command.castId().isBlank()) ? null : command.castId();
+    var locked =
+        lockOrder(
+            storeId,
+            id,
+            command.expectedVersion(),
+            castId,
+            command.customerSelection(),
+            "注文が見つかりません: " + id);
+    Order order = locked.order();
 
     order.requireVersion(command.expectedVersion());
 
@@ -214,16 +225,13 @@ public class OrderService {
 
     var before = OrderAuditSnapshot.of(order);
 
-    // 空文字は「送っていない」と同じに扱う。編集画面の未選択がそのまま乗ってくる形なので、存在しない
-    // キャストとして扱って 404 を返すより、指名なしの要求として同じ判定に載せる方が呼び手に意味が通る。
-    String castId =
-        (command.castId() == null || command.castId().isBlank()) ? null : command.castId();
     Long receptionistId = command.receptionistId();
 
     validateUpdateAssignments(
         storeId,
         order,
         castId,
+        locked.nominatable(),
         receptionistId,
         calculation.wasPreviewed(
             storeId, "UPDATE", id, actorId, command, command.confirmationToken()));
@@ -238,7 +246,7 @@ public class OrderService {
     validateEditableCustomer(order, command.customerSelection());
     if (command.customerSelection() != null)
       order.linkCustomer(
-          selectCustomer(storeId, command.customerSelection(), true, canManageCustomers));
+          reselectCustomer(storeId, command.customerSelection(), true, canManageCustomers));
     var previousContact = order.getContactSnapshot();
     if (command.contactSnapshot() != null)
       order.replaceContact(snapshot(command.contactSnapshot()));
@@ -261,7 +269,6 @@ public class OrderService {
                 calculation.wasPreviewed(
                     storeId, "UPDATE", id, actorId, command, command.confirmationToken())),
             true);
-    lockCustomerWithoutWaiting(storeId, order);
     calculation.verify(
         command.confirmationToken(),
         storeId,
@@ -469,9 +476,7 @@ public class OrderService {
       Long storeId, String id, OrderCompletionCommand command, long actorId) {
     specialServices.lock(storeId);
     Order order =
-        orderRepository
-            .findByIdAndStoreIdForUpdate(id, storeId)
-            .orElseThrow(() -> new NotFoundException("注文が見つかりません: " + id));
+        lockOrder(storeId, id, command.expectedVersion(), null, null, "注文が見つかりません: " + id).order();
 
     // 検証は台帳を触るより先に済ませる。撥ねる要求が仕訳を積んだ後だと、拒否の健全さがトランザクションの
     // 巻き戻しだけに掛かる（同一トランザクション内の後続の読みには積んだ仕訳が見えてしまう）。
@@ -487,7 +492,6 @@ public class OrderService {
     int chargeAmount = calculated.grantBasisAmount();
 
     int usePoints = command.usedPoints();
-    lockCustomerWithoutWaiting(storeId, order);
     CustomerMemberLink link = activeLink(storeId, order.getCustomerId()).orElse(null);
     Long memberId = link == null ? null : link.getMemberId();
     boolean previewed =
@@ -666,7 +670,12 @@ public class OrderService {
   }
 
   private void validateUpdateAssignments(
-      Long storeId, Order order, String castId, Long receptionistId, boolean confirmedInput) {
+      Long storeId,
+      Order order,
+      String castId,
+      boolean nominatable,
+      Long receptionistId,
+      boolean confirmedInput) {
     // 指名・受付担当の検証は書き換えより先に済ませる。撥ねる要求が集約を触った後だと、拒否の健全さが
     // トランザクションの巻き戻しだけに掛かる（同一トランザクション内の後続の読みには変わった値が見えてしまう）。
     //
@@ -684,15 +693,7 @@ public class OrderService {
       throw new ServiceException("受付担当を外すことはできません。受付担当を指定してください");
     }
     if (castId != null) {
-      // 縛るのは新しく立てる指名と差し替えだけで、据え置き（同じ指名の再送）は素通しする。この経路は指名済みの
-      // 受注に cast_id の再送を必須にしているため、無条件に在籍中を要求すると、指名者が在籍停止になった未完了の
-      // 受注が備考・人数の修正も完了への遷移もできなくなる。据え置かれた指名は成立した時点で検証済みで、
-      // cast_id には FK も掛かっているので、素通しが存在しないキャストを通すことにはならない。
-      if (!castId.equals(order.getCastId())) {
-        nominatableCast
-            .findForUpdate(storeId, castId)
-            .orElseThrow(() -> eligibilityFailure(confirmedInput, NOT_NOMINATABLE_MESSAGE));
-      }
+      if (!nominatable) throw eligibilityFailure(confirmedInput, NOT_NOMINATABLE_MESSAGE);
     } else if (order.getCastId() != null) {
       throw new ServiceException("指名を外すことはできません。キャストを指定してください");
     }
@@ -707,15 +708,21 @@ public class OrderService {
       boolean canManageCustomers) {
     specialServices.lock(storeId);
     calculation.requirePreviewInput(command.confirmationToken());
-    var order =
-        orderRepository
-            .findByIdAndStoreIdForUpdate(id, storeId)
-            .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
-    order.requireVersion(command.expectedVersion());
-    order.requireEditable();
     String castId =
         command.castId() == null || command.castId().isBlank() ? null : command.castId();
-    validateUpdateAssignments(storeId, order, castId, command.receptionistId(), false);
+    var locked =
+        lockOrder(
+            storeId,
+            id,
+            command.expectedVersion(),
+            castId,
+            command.customerSelection(),
+            "受注が見つかりません");
+    var order = locked.order();
+    order.requireVersion(command.expectedVersion());
+    order.requireEditable();
+    validateUpdateAssignments(
+        storeId, order, castId, locked.nominatable(), command.receptionistId(), false);
     validateEditableCustomer(order, command.customerSelection());
     businessContactPermissions.validate(
         command.contactSnapshot() == null
@@ -736,7 +743,7 @@ public class OrderService {
             false);
     String customerId =
         command.customerSelection() != null
-            ? selectCustomer(storeId, command.customerSelection(), false, canManageCustomers)
+            ? reselectCustomer(storeId, command.customerSelection(), false, canManageCustomers)
             : order.getCustomerId();
     return calculation.preview(
         storeId,
@@ -753,13 +760,9 @@ public class OrderService {
       Long storeId, String id, OrderCompletionCommand command, long actorId) {
     specialServices.lock(storeId);
     calculation.requirePreviewInput(command.confirmationToken());
-    var order =
-        orderRepository
-            .findByIdAndStoreIdForUpdate(id, storeId)
-            .orElseThrow(() -> new NotFoundException("受注が見つかりません"));
+    var order = lockOrder(storeId, id, command.expectedVersion(), null, null, "受注が見つかりません").order();
     order.requireCompletable(command.expectedVersion());
     specialServices.requireProgress(storeId, order);
-    lockCustomerWithoutWaiting(storeId, order);
     var calculated =
         calculation.calculate(storeId, order, order.getCourse(), command.feeLines(), false);
     int usePoints = command.usedPoints();
@@ -805,7 +808,8 @@ public class OrderService {
             : null;
       }
       case EXISTING -> {
-        // 受注を保持する編集と顧客統合のロック順序が逆になるため、顧客の取得では待たない。
+        // 作成は再提供の元受注を先に押さえている。その先で顧客行を待つと、顧客から受注へ進む統合と
+        // 環になるので待たずに取る（ADR 0016）。
         try {
           var customer =
               customerRepository
@@ -820,15 +824,68 @@ public class OrderService {
     };
   }
 
-  /** 受注行を保持したまま顧客行を待つと、顧客から受注へ進む統合と循環するため、競合時は巻き戻す。 */
-  private void lockCustomerWithoutWaiting(Long storeId, Order order) {
-    if (order.getCustomerId() == null) return;
-    try {
-      customerRepository.findByIdAndStoreIdForUpdateNoWait(order.getCustomerId(), storeId);
-    } catch (CannotAcquireLockException ex) {
-      throw new ConflictException(
-          "顧客情報が変更中です。しばらく待ってから再試算してください", Map.of("customer_lock", "入力を保持したまま、しばらく待ってから再試算してください"));
+  /** 編集で選び直した顧客。既存の顧客は {@link #lockOrder} が受注より先に押さえ、生きている行だと確かめている。 */
+  private String reselectCustomer(
+      Long storeId, CustomerSelection selection, boolean create, boolean canManageCustomers) {
+    return selection.mode() == CustomerSelection.Mode.EXISTING
+        ? selection.customerId()
+        : selectCustomer(storeId, selection, create, canManageCustomers);
+  }
+
+  private record LockedOrder(Order order, boolean nominatable) {}
+
+  /**
+   * 既存の受注を、差し替える指名の在籍 → 顧客 → 受注の順に押さえる（順序とその理由は ADR 0016）。
+   *
+   * <p>押さえる先は受注をロックせずに読んで決める。読んだ版が要求と違えば何も押さえずに返し、押さえ終えた受注が
+   * 読んだ時と違う行を指していれば版の食い違いとして返す。統合済みの顧客を握ったまま次の行は待たない。
+   */
+  private LockedOrder lockOrder(
+      Long storeId,
+      String id,
+      Long expectedVersion,
+      String castId,
+      CustomerSelection selection,
+      String notFound) {
+    var targets =
+        orderRepository
+            .findLockTargets(id, storeId)
+            .orElseThrow(() -> new NotFoundException(notFound));
+    if (!Objects.equals(targets.getVersion(), expectedVersion)) {
+      throw new OrderVersionConflictException();
     }
+    if (selection != null) selection.validate();
+    // 縛るのは新しく立てる指名と差し替えだけで、据え置き（同じ指名の再送）は在籍を問わない。指名者が
+    // 在籍停止になった未完了の受注も、備考・人数の修正と完了への遷移はできなければならない。
+    boolean nominatable =
+        castId == null
+            || castId.equals(targets.getCastId())
+            || nominatableCast.findForUpdate(storeId, castId).isPresent();
+    String current = targets.getCustomerId();
+    String selected =
+        selection != null && selection.mode() == CustomerSelection.Mode.EXISTING
+            ? selection.customerId()
+            : null;
+    for (String customerId :
+        Stream.of(current, selected).filter(Objects::nonNull).distinct().sorted().toList()) {
+      boolean found =
+          customerRepository.findByIdAndStoreIdForUpdate(customerId, storeId).isPresent();
+      boolean merged = customerRepository.isMerged(storeId, customerId);
+      if (customerId.equals(current)) {
+        if (merged) throw new OrderVersionConflictException();
+      } else if (!found || merged) {
+        throw new NotFoundException("顧客が見つかりません");
+      }
+    }
+    Order order =
+        orderRepository
+            .findByIdAndStoreIdForUpdate(id, storeId)
+            .orElseThrow(() -> new NotFoundException(notFound));
+    if (!Objects.equals(order.getCustomerId(), current)
+        || !Objects.equals(order.getCastId(), targets.getCastId())) {
+      throw new OrderVersionConflictException();
+    }
+    return new LockedOrder(order, nominatable);
   }
 
   private OrderPoints completionPoints(
@@ -856,8 +913,8 @@ public class OrderService {
 
   /**
    * 会員は顧客の ACTIVE 関連だけから解決し、申請者の記録へは代替しない。削除済み会員の ID 欠落は未紐づけとして扱う。
-   * この問い合わせ自体はロックを取らない。通常更新・完了・完了試算は呼出前に顧客行を NOWAIT で押さえ、 取得競合は customer_lock の 409
-   * で返す。他の試算は顧客行のロックをこの問い合わせの前提としない。
+   * この問い合わせ自体はロックを取らない。通常更新・完了・完了試算は受注より先に顧客行を押さえてから呼ぶ（{@link #lockOrder}）。
+   * 他の試算は顧客行のロックをこの問い合わせの前提としない。
    */
   private Optional<CustomerMemberLink> activeLink(Long storeId, String customerId) {
     if (customerId == null) {

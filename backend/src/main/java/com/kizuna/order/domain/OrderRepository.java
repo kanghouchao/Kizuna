@@ -184,6 +184,23 @@ public interface OrderRepository extends StoreScopedRepository<Order> {
   Optional<Order> findByIdAndStoreIdForUpdate(
       @Param("id") String id, @Param("storeId") Long storeId);
 
+  interface LockTargets {
+    Long getVersion();
+
+    String getCustomerId();
+
+    String getCastId();
+  }
+
+  /**
+   * 受注より先に押さえる行（在籍・顧客）を、受注をロックせず実体も読み込まずに引く。実体を先に読み込むと、後の {@link #findByIdAndStoreIdForUpdate}
+   * は永続化文脈にある古い状態を返す。
+   */
+  @Query(
+      "select o.version as version, o.customerId as customerId, o.castId as castId"
+          + " from com.kizuna.order.domain.Order o where o.id = :id and o.storeId = :storeId")
+  Optional<LockTargets> findLockTargets(@Param("id") String id, @Param("storeId") Long storeId);
+
   // 店舗集合の横断一覧。店舗（store）表示名の join は張らない。
   String GROUP_WIDE_VIEW_SELECT =
       """
