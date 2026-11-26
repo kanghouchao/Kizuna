@@ -2490,6 +2490,7 @@ class OrderServiceTest {
     inOrder.verify(customerRepository).findByIdAndStoreIdForUpdate("cust-1", STORE_ID);
     inOrder.verify(orderRepository).findByIdAndStoreIdForUpdate("o1", STORE_ID);
     assertThat(order.getCustomerId()).isEqualTo("cust-0");
+    verify(customerRepository, never()).findByIdAndStoreIdForUpdateNoWait(any(), any());
   }
 
   @Test

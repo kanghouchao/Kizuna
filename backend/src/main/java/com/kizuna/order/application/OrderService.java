@@ -915,7 +915,7 @@ public class OrderService {
 
   /**
    * 会員は顧客の ACTIVE 関連だけから解決し、申請者の記録へは代替しない。削除済み会員の ID 欠落は未紐づけとして扱う。
-   * この問い合わせ自体はロックを取らない。既存の顧客は呼び手が先に押さえている（{@link #lockSelectedCustomer}・{@link #lockOrder}）。
+   * この問い合わせ自体はロックを取らない。店舗が選んだ既存の顧客は、呼び手が先に押さえている（{@link #lockSelectedCustomer}・{@link #lockOrder}）。
    */
   private Optional<CustomerMemberLink> activeLink(Long storeId, String customerId) {
     if (customerId == null) {

@@ -104,7 +104,7 @@ class OrderCustomerLockOrderIntegrationTest {
   private long actorId;
   private String courseId;
   private String revisionId;
-  private final LocalDate businessDate = LocalDate.now();
+  private static final LocalDate BUSINESS_DATE = LocalDate.now();
 
   enum NewOrderPath {
     CREATE,
@@ -361,6 +361,17 @@ class OrderCustomerLockOrderIntegrationTest {
   }
 
   @ParameterizedTest
+  @EnumSource(NewOrderPath.class)
+  void newOrderRejectsACustomerThatIsAlreadyMerged(NewOrderPath path) {
+    String surviving = customer();
+    String merged = customer();
+    jdbc.update("update t_customers set merged_into_id = ? where id = ?", surviving, merged);
+    var run = newOrder(path, merged, enrollment(), invalidatedOrder(null), guestApplication());
+
+    assertThatThrownBy(run::call).isInstanceOf(NotFoundException.class).hasMessage("顧客が見つかりません");
+  }
+
+  @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void createWaitingBehindAMergeFollowsTheMergeOutcome(boolean selectsSurviving) throws Exception {
     String surviving = customer();
@@ -467,7 +478,7 @@ class OrderCustomerLockOrderIntegrationTest {
             null,
             courseId,
             null,
-            businessDate,
+            BUSINESS_DATE,
             null,
             null,
             selection,
@@ -492,7 +503,7 @@ class OrderCustomerLockOrderIntegrationTest {
             courseId,
             null,
             null,
-            businessDate,
+            BUSINESS_DATE,
             null,
             null,
             cast,
@@ -646,7 +657,7 @@ class OrderCustomerLockOrderIntegrationTest {
             + " values (?,?,'PENDING',?,'検証ゲスト')",
         id,
         storeId,
-        businessDate);
+        BUSINESS_DATE);
     return id;
   }
 
@@ -780,7 +791,7 @@ class OrderCustomerLockOrderIntegrationTest {
                   new ReceiptTokenGenerator.GeneratedToken(
                       UUID.randomUUID().toString(), UUID.randomUUID().toString()));
       var businessDates = mock(BusinessDateService.class);
-      when(businessDates.currentBusinessDate()).thenReturn(LocalDate.now());
+      when(businessDates.currentBusinessDate()).thenReturn(BUSINESS_DATE);
       var shifts = mock(ConfirmedShiftLookupService.class);
       when(shifts.hasConfirmedShift(any(), any(), any())).thenReturn(true);
       var receptionists = mock(ReceptionistEligibilityService.class);
