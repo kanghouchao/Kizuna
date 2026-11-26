@@ -234,6 +234,18 @@ describe('useListPage', () => {
     expect(result.current.rows).toEqual(['fresh']);
   });
 
+  it('一覧が外れた後の再取得は取得しない', async () => {
+    const fetcher = jest.fn(async (page: number) => pageOf(page));
+    const { result, unmount } = renderHook(() => useListPage(fetcher));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    const reload = result.current.reload;
+
+    unmount();
+    await reload();
+
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
   it('失敗後の再取得は 1 ページ目から取り直す', async () => {
     // 失敗したページから再開すると、21〜40 行目だけが返る欠番だらけの一覧になる
     let succeed = true;

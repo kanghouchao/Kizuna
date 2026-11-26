@@ -335,6 +335,20 @@ test('作成の応答の前にダイアログを閉じても、応答の後に�
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
 
+test('作成の応答の前に画面ごと離れたら、応答の後に案内だけ出し、一覧は取り直さないこと', async () => {
+  let respond: (value: Delivery) => void = () => {};
+  api.create.mockReturnValueOnce(new Promise<Delivery>(resolve => (respond = resolve)));
+  const { unmount } = render(<StoreNotificationDeliveriesPage />);
+  const dialog = await fillDraft();
+  fireEvent.click(within(dialog).getByRole('button', { name: '下書きを作成' }));
+  await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
+  const listed = api.list.mock.calls.length;
+  unmount();
+  await act(async () => respond(row));
+  await waitFor(() => expect(notify.success).toHaveBeenCalledWith('通知の下書きを作成しました'));
+  expect(api.list.mock.calls.length).toBe(listed);
+});
+
 test('作成の応答がページ送りの取得中に届いても、送った先のページを表示すること', async () => {
   const second = {
     rows: [{ ...row, id: '102', source_id: '456' }],
