@@ -14,7 +14,6 @@ import com.kizuna.customer.domain.CustomerContactHistory;
 import com.kizuna.customer.domain.CustomerContactHistoryRepository;
 import com.kizuna.customer.domain.CustomerContactRepository;
 import com.kizuna.customer.domain.CustomerRepository;
-import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import java.util.ArrayList;
@@ -26,7 +25,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.CannotAcquireLockException;
 
 @ExtendWith(MockitoExtension.class)
 class GuestContactImportsTest {
@@ -39,7 +37,7 @@ class GuestContactImportsTest {
   private static final String VALUE = "guest@example.com";
 
   private void customer() {
-    when(customers.findByIdAndStoreIdForUpdateNoWait("customer", STORE_ID))
+    when(customers.findByIdAndStoreIdForUpdate("customer", STORE_ID))
         .thenReturn(Optional.of(Customer.builder().name("顧客").build()));
   }
 
@@ -103,16 +101,17 @@ class GuestContactImportsTest {
   }
 
   @Test
-  @DisplayName("顧客の不存在と更新競合を判別する")
-  void rejectsMissingOrContendedCustomer() {
+  @DisplayName("存在しない顧客も統合済みの顧客も見つからないものとして返す")
+  void rejectsMissingOrMergedCustomer() {
     assertThatThrownBy(
             () -> imports.preview(STORE_ID, "absent", null, ContactType.EMAIL, VALUE, true))
         .isInstanceOf(NotFoundException.class);
-    when(customers.findByIdAndStoreIdForUpdateNoWait("busy", STORE_ID))
-        .thenThrow(new CannotAcquireLockException("test"));
+    // 待った後に押さえた実体は古い状態を返しうるので、墓標かどうかは別問い合わせの答えで決める
+    customer();
+    when(customers.isMerged(STORE_ID, "customer")).thenReturn(true);
     assertThatThrownBy(
-            () -> imports.preview(STORE_ID, "busy", null, ContactType.EMAIL, VALUE, true))
-        .isInstanceOf(ConflictException.class);
+            () -> imports.preview(STORE_ID, "customer", null, ContactType.EMAIL, VALUE, true))
+        .isInstanceOf(NotFoundException.class);
   }
 
   @Test

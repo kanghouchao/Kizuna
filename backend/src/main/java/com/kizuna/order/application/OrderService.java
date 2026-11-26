@@ -25,7 +25,6 @@ import com.kizuna.order.domain.OrderVersionConflictException;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.settings.application.BusinessDateService;
-import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.DbConstraint;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
@@ -39,7 +38,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -87,7 +85,6 @@ public class OrderService {
   public OrderDetail create(
       Long storeId, OrderCreateCommand command, long actorId, boolean canManageCustomers) {
     specialServices.lock(storeId);
-    validateReplacement(storeId, command.replacementForOrderId());
     // Web 申請の経路（MEMBER_WEB / GUEST_WEB）は申請の確定だけが書く値。台帳を触るより先に撥ねる —
     // 広告費と効果集計の根拠になる記録が代理入力で偽装されると、後から申請と手入力を切り分ける手立てが無い。
     if (command.receptionRoute() != null && !command.receptionRoute().isStoreSelectable()) {
@@ -124,6 +121,8 @@ public class OrderService {
                     calculation.wasPreviewed(
                         storeId, "CREATE", "", actorId, command, command.confirmationToken()),
                     NOT_NOMINATABLE_MESSAGE));
+    lockSelectedCustomer(storeId, command.customerSelection(), canManageCustomers);
+    validateReplacement(storeId, command.replacementForOrderId());
     var course = calculation.current(storeId, command.courseId(), true);
     var calculated =
         calculation.calculate(
@@ -141,8 +140,7 @@ public class OrderService {
             true);
     order.adoptServices(course, calculated.specialServices(), calculated.editableFeeLines());
 
-    order.linkCustomer(
-        selectCustomer(storeId, command.customerSelection(), true, canManageCustomers));
+    order.linkCustomer(resolveCustomer(storeId, command.customerSelection(), true));
     order.replaceContact(snapshot(command.contactSnapshot()));
     calculation.verify(
         command.confirmationToken(),
@@ -246,7 +244,8 @@ public class OrderService {
     validateEditableCustomer(order, command.customerSelection());
     if (command.customerSelection() != null)
       order.linkCustomer(
-          reselectCustomer(storeId, command.customerSelection(), true, canManageCustomers));
+          resolveCustomer(
+              storeId, requireSelectable(command.customerSelection(), canManageCustomers), true));
     var previousContact = order.getContactSnapshot();
     if (command.contactSnapshot() != null)
       order.replaceContact(snapshot(command.contactSnapshot()));
@@ -406,8 +405,7 @@ public class OrderService {
       eligibleReceptionistId(storeId, actorId).ifPresent(order::assignReceptionist);
     }
     if (application.isGuest()) {
-      order.linkCustomer(
-          selectCustomer(storeId, command.customerSelection(), true, canManageCustomers));
+      order.linkCustomer(resolveCustomer(storeId, command.customerSelection(), true));
     } else if (application.getRequesterMemberId() != null) {
       // 申請者の会員 ID が欠落した申請（会員行の削除後）は整える先が無いため、顧客未設定のまま成立させる
       // （無帰属受注は正規の状態）。
@@ -466,7 +464,7 @@ public class OrderService {
     if (!application.isGuest() && command.customerSelection() != null)
       throw new ServiceException("会員の申請では顧客を選べません。顧客は会員の紐づけから決まります");
     if (application.isGuest())
-      selectCustomer(storeId, command.customerSelection(), false, canManageCustomers);
+      lockSelectedCustomer(storeId, command.customerSelection(), canManageCustomers);
     if (command.contactSnapshot() != null) snapshot(command.contactSnapshot());
   }
 
@@ -575,13 +573,14 @@ public class OrderService {
   public OrderPreview previewCreate(
       Long storeId, OrderCreateCommand command, long actorId, boolean canManageCustomers) {
     specialServices.lock(storeId);
-    validateReplacement(storeId, command.replacementForOrderId());
     calculation.requirePreviewInput(command.confirmationToken());
     if (command.receptionRoute() != null && !command.receptionRoute().isStoreSelectable())
       throw new ServiceException("受付経路に Web 申請は指定できません");
     nominatableCast
         .findForUpdate(storeId, command.castId())
         .orElseThrow(() -> new ServiceException(NOT_NOMINATABLE_MESSAGE));
+    lockSelectedCustomer(storeId, command.customerSelection(), canManageCustomers);
+    validateReplacement(storeId, command.replacementForOrderId());
     resolveReceptionist(storeId, command.receptionistId(), actorId);
     businessContactPermissions.validate(
         snapshot(command.contactSnapshot()), command.businessContactPermissions());
@@ -595,8 +594,7 @@ public class OrderService {
             specialServices.select(
                 storeId, null, command.castId(), command.specialServiceIds(), false),
             false);
-    String customerId =
-        selectCustomer(storeId, command.customerSelection(), false, canManageCustomers);
+    String customerId = resolveCustomer(storeId, command.customerSelection(), false);
     return calculation.preview(
         storeId,
         "CREATE",
@@ -621,7 +619,6 @@ public class OrderService {
             .findByIdAndStoreIdForUpdate(id, storeId)
             .orElseThrow(() -> new NotFoundException("予約申請が見つかりません"));
     application.ensureDecidable(businessDateService.currentBusinessDate());
-    validateCustomerChoice(storeId, application, command, canManageCustomers);
     if (command.castId() != null) {
       nominatableCast
           .findForUpdate(storeId, command.castId())
@@ -630,6 +627,7 @@ public class OrderService {
           storeId, command.castId(), command.businessDate()))
         throw new ServiceException("確定シフトがありません");
     }
+    validateCustomerChoice(storeId, application, command, canManageCustomers);
     if (command.receptionistId() != null) validateReceptionist(storeId, command.receptionistId());
     snapshot(command.contactSnapshot());
     var course = calculation.current(storeId, command.courseId(), false);
@@ -654,7 +652,7 @@ public class OrderService {
     } else {
       String customerId =
           application.isGuest()
-              ? selectCustomer(storeId, command.customerSelection(), false, canManageCustomers)
+              ? resolveCustomer(storeId, command.customerSelection(), false)
               : null;
       points = completionPoints(storeId, customerId, calculated, 0);
     }
@@ -743,7 +741,8 @@ public class OrderService {
             false);
     String customerId =
         command.customerSelection() != null
-            ? reselectCustomer(storeId, command.customerSelection(), false, canManageCustomers)
+            ? resolveCustomer(
+                storeId, requireSelectable(command.customerSelection(), canManageCustomers), false)
             : order.getCustomerId();
     return calculation.preview(
         storeId,
@@ -794,42 +793,42 @@ public class OrderService {
       throw new ServiceException("会員申請の顧客は変更できません");
   }
 
-  private String selectCustomer(
-      Long storeId, CustomerSelection selection, boolean create, boolean canManageCustomers) {
+  private CustomerSelection requireSelectable(
+      CustomerSelection selection, boolean canManageCustomers) {
     if (selection == null) throw new ServiceException("顧客の選択方法を指定してください");
     selection.validate();
-    return switch (selection.mode()) {
-      case NONE -> null;
-      case NEW -> {
-        if (!canManageCustomers) throw new AccessDeniedException("顧客の新規登録には顧客管理権限が必要です");
-        yield create
-            ? customerProvisioningService.createCustomer(
-                storeId, new NewCustomerInput(selection.newCustomer().name()))
-            : null;
-      }
-      case EXISTING -> {
-        // 作成は再提供の元受注を先に押さえている。その先で顧客行を待つと、顧客から受注へ進む統合と
-        // 環になるので待たずに取る（ADR 0016）。
-        try {
-          var customer =
-              customerRepository
-                  .findByIdAndStoreIdForUpdateNoWait(selection.customerId(), storeId)
-                  .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
-          if (customer.getMergedIntoId() != null) throw new NotFoundException("顧客が見つかりません");
-          yield customer.getId();
-        } catch (CannotAcquireLockException ex) {
-          throw new ConflictException("顧客情報が変更中です。入力を保持して再試算してください");
-        }
-      }
-    };
+    if (selection.mode() == CustomerSelection.Mode.NEW && !canManageCustomers)
+      throw new AccessDeniedException("顧客の新規登録には顧客管理権限が必要です");
+    return selection;
   }
 
-  /** 編集で選び直した顧客。既存の顧客は {@link #lockOrder} が受注より先に押さえ、生きている行だと確かめている。 */
-  private String reselectCustomer(
-      Long storeId, CustomerSelection selection, boolean create, boolean canManageCustomers) {
-    return selection.mode() == CustomerSelection.Mode.EXISTING
-        ? selection.customerId()
-        : selectCustomer(storeId, selection, create, canManageCustomers);
+  /**
+   * 作成・確定で選んだ既存の顧客を、指名の在籍の後・再提供の元受注の前に待って押さえる（ADR 0016）。
+   *
+   * <p>統合済みの顧客はここで撥ね、握ったまま次の行を待たせない。判定は {@code isMerged} の別問い合わせで行う。
+   */
+  private void lockSelectedCustomer(
+      Long storeId, CustomerSelection selection, boolean canManageCustomers) {
+    if (requireSelectable(selection, canManageCustomers).mode() != CustomerSelection.Mode.EXISTING)
+      return;
+    customerRepository
+        .findByIdAndStoreIdForUpdate(selection.customerId(), storeId)
+        .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
+    if (customerRepository.isMerged(storeId, selection.customerId()))
+      throw new NotFoundException("顧客が見つかりません");
+  }
+
+  /** 受注に着ける顧客の ID。既存の顧客は先に押さえて確かめてある（{@link #lockSelectedCustomer}・{@link #lockOrder}）。 */
+  private String resolveCustomer(Long storeId, CustomerSelection selection, boolean create) {
+    return switch (selection.mode()) {
+      case NONE -> null;
+      case NEW ->
+          create
+              ? customerProvisioningService.createCustomer(
+                  storeId, new NewCustomerInput(selection.newCustomer().name()))
+              : null;
+      case EXISTING -> selection.customerId();
+    };
   }
 
   private record LockedOrder(Order order, boolean nominatable) {}
@@ -916,8 +915,7 @@ public class OrderService {
 
   /**
    * 会員は顧客の ACTIVE 関連だけから解決し、申請者の記録へは代替しない。削除済み会員の ID 欠落は未紐づけとして扱う。
-   * この問い合わせ自体はロックを取らない。通常更新・完了とそれぞれの試算は受注より先に顧客行を押さえてから呼ぶ（{@link #lockOrder}）。
-   * 他の試算は顧客行のロックをこの問い合わせの前提としない。
+   * この問い合わせ自体はロックを取らない。既存の顧客は呼び手が先に押さえている（{@link #lockSelectedCustomer}・{@link #lockOrder}）。
    */
   private Optional<CustomerMemberLink> activeLink(Long storeId, String customerId) {
     if (customerId == null) {

@@ -2,11 +2,14 @@ package com.kizuna.order.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.kizuna.audit.recording.AuditActor;
+import com.kizuna.cast.domain.CastEnrollmentRepository;
+import com.kizuna.cast.domain.CastProfileRepository;
 import com.kizuna.customer.application.CustomerCommands.MergeExecution;
 import com.kizuna.customer.application.CustomerCommands.MergeSelection;
 import com.kizuna.customer.application.CustomerContactService;
@@ -16,24 +19,36 @@ import com.kizuna.customer.application.MergePreparation;
 import com.kizuna.customer.domain.CustomerMemberLinkRepository;
 import com.kizuna.customer.domain.CustomerRepository;
 import com.kizuna.member.application.MemberLookupService;
+import com.kizuna.order.domain.OrderApplicationRepository;
 import com.kizuna.order.domain.OrderFeeLineKind;
 import com.kizuna.order.domain.OrderRepository;
 import com.kizuna.order.domain.OrderVersionConflictException;
 import com.kizuna.order.infrastructure.ReceiptTokenGenerator;
 import com.kizuna.point.application.PointLedgerService;
 import com.kizuna.service.application.OrderServiceCatalog;
+import com.kizuna.service.application.OrderServiceTerms;
+import com.kizuna.settings.application.BusinessDateService;
 import com.kizuna.shared.config.AppProperties;
+import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.persistence.EnabledIfIntegration;
 import com.kizuna.shared.persistence.IntegrationTestDatabase;
+import com.kizuna.shared.persistence.Timestamps;
+import com.kizuna.shift.application.ConfirmedShiftLookupService;
 import com.kizuna.store.StoreShortNames;
+import com.kizuna.store.domain.StoreRepository;
 import com.kizuna.user.application.ActorIdentityService;
 import com.kizuna.user.application.BusinessAudit;
+import com.kizuna.user.application.ReceptionistEligibilityService;
 import com.kizuna.user.domain.UserRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
+import java.sql.SQLException;
+import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -50,6 +65,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -57,6 +73,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.orm.jpa.JpaTransactionManager;
@@ -70,7 +87,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * 既存の受注を扱う経路が顧客行を受注行より先に押さえ、顧客統合と待ちが環にならないことを実 PostgreSQL で確かめる。
+ * 受注の作成・編集・完了と申請の確定が、指名の在籍 → 顧客 → 受注の順に行を押さえ、顧客統合と待ちが環にならないことを実 PostgreSQL で確かめる。
  *
  * <p>店舗単位のロックは模擬に置き換えている。実物は同じ店舗の受注操作を先に直列化してしまい、顧客行での待ちが観測できない。
  */
@@ -87,6 +104,14 @@ class OrderCustomerLockOrderIntegrationTest {
   private long actorId;
   private String courseId;
   private String revisionId;
+  private final LocalDate businessDate = LocalDate.now();
+
+  enum NewOrderPath {
+    CREATE,
+    CREATE_PREVIEW,
+    CONFIRMATION,
+    CONFIRMATION_PREVIEW
+  }
 
   enum ExistingOrderPath {
     UPDATE,
@@ -127,6 +152,10 @@ class OrderCustomerLockOrderIntegrationTest {
         storeId,
         courseId,
         actorId);
+    when(context.getBean(OrderServiceCatalog.class).current(any(), any(), any()))
+        .thenReturn(
+            new OrderServiceTerms(
+                courseId, revisionId, 1, "検証コース", 60, 100, 0, Timestamps.now(), false));
   }
 
   @AfterAll
@@ -136,7 +165,7 @@ class OrderCustomerLockOrderIntegrationTest {
 
   @BeforeEach
   void startExecutor() {
-    executor = Executors.newFixedThreadPool(3);
+    executor = Executors.newFixedThreadPool(4);
   }
 
   @AfterEach
@@ -297,6 +326,212 @@ class OrderCustomerLockOrderIntegrationTest {
     assertThat(status(order)).isEqualTo("COMPLETED");
   }
 
+  @ParameterizedTest
+  @EnumSource(NewOrderPath.class)
+  void newOrderWaitsOnTheCustomerRowHoldingTheEnrollmentButNotTheSourceOrder(NewOrderPath path)
+      throws Exception {
+    String customer = customer();
+    String cast = enrollment();
+    String source = invalidatedOrder(null);
+    String application = guestApplication();
+    var release = new CountDownLatch(1);
+    Future<?> holder =
+        hold("select id from t_customers where id = ? for update", customer, release);
+
+    Future<?> run = executor.submit(newOrder(path, customer, cast, source, application));
+
+    assertThat(awaitBlockedStatements(1)).singleElement().asString().contains("t_customers");
+    assertThat(sqlStateOfLockingWithoutWaiting("t_cast_enrollments", cast)).isEqualTo("55P03");
+    assertThat(sqlStateOfLockingWithoutWaiting("t_orders", source)).isNull();
+    release.countDown();
+    holder.get(10, TimeUnit.SECONDS);
+    run.get(10, TimeUnit.SECONDS);
+    switch (path) {
+      case CREATE -> assertThat(replacementsFor(source)).containsExactly(customer);
+      case CONFIRMATION ->
+          assertThat(
+                  jdbc.queryForObject(
+                      "select o.customer_id from t_order_applications a"
+                          + " join t_orders o on o.id = a.order_id where a.id = ?",
+                      String.class,
+                      application))
+              .isEqualTo(customer);
+      case CREATE_PREVIEW, CONFIRMATION_PREVIEW -> assertThat(replacementsFor(source)).isEmpty();
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void createWaitingBehindAMergeFollowsTheMergeOutcome(boolean selectsSurviving) throws Exception {
+    String surviving = customer();
+    String merged = customer();
+    String cast = enrollment();
+    // 元受注が統合する顧客に着いていないと、統合が押さえる受注と作成が押さえる受注が重ならない。
+    String source = invalidatedOrder(merged);
+    var execution = mergeExecution(surviving, merged);
+    var release = new CountDownLatch(1);
+    // 統合を元受注の行で止め、両方の顧客行を握ったままにする。作成は選んだ顧客行を待つ。
+    Future<?> holder = hold("select id from t_orders where id = ? for update", source, release);
+    Future<?> merge = executor.submit(() -> merges.merge(storeId, surviving, execution, actorId));
+    awaitBlockedStatements(1);
+
+    Future<?> create =
+        executor.submit(
+            newOrder(
+                NewOrderPath.CREATE, selectsSurviving ? surviving : merged, cast, source, null));
+
+    assertThat(awaitBlockedStatements(2))
+        .anySatisfy(sql -> assertThat(sql).contains("t_customers"));
+    release.countDown();
+    holder.get(10, TimeUnit.SECONDS);
+    merge.get(10, TimeUnit.SECONDS);
+    if (selectsSurviving) {
+      create.get(10, TimeUnit.SECONDS);
+      assertThat(replacementsFor(source)).containsExactly(surviving);
+    } else {
+      assertThatThrownBy(() -> create.get(10, TimeUnit.SECONDS))
+          .isInstanceOf(ExecutionException.class)
+          .hasCauseInstanceOf(NotFoundException.class);
+      assertThat(replacementsFor(source)).isEmpty();
+    }
+  }
+
+  @Test
+  void mergeWaitingBehindACreateRunsAfterItWithoutADeadlock() throws Exception {
+    String surviving = customer();
+    String merged = customer();
+    String cast = enrollment();
+    String source = invalidatedOrder(merged);
+    var execution = mergeExecution(surviving, merged);
+    var release = new CountDownLatch(1);
+    // 作成を元受注の行で止め、選んだ顧客行を握ったままにする。統合はその顧客行を待つ。
+    Future<?> holder = hold("select id from t_orders where id = ? for update", source, release);
+    Future<?> create =
+        executor.submit(newOrder(NewOrderPath.CREATE, surviving, cast, source, null));
+    awaitBlockedStatements(1);
+    assertThat(sqlStateOfLockingWithoutWaiting("t_customers", surviving)).isEqualTo("55P03");
+
+    Future<?> merge = executor.submit(() -> merges.merge(storeId, surviving, execution, actorId));
+
+    assertThat(awaitBlockedStatements(2))
+        .anySatisfy(sql -> assertThat(sql).contains("t_customers"));
+    release.countDown();
+    holder.get(10, TimeUnit.SECONDS);
+    create.get(10, TimeUnit.SECONDS);
+    // 作成が存続側に受注を足したので、統合は確認した内容との食い違いとして拒まれる（デッドロックではない）。
+    assertThatThrownBy(() -> merge.get(10, TimeUnit.SECONDS))
+        .isInstanceOf(ExecutionException.class)
+        .hasRootCauseMessage("関連情報が変更されました。入力を保持して再度プレビューを確認してください");
+    assertThat(replacementsFor(source)).containsExactly(surviving);
+  }
+
+  @Test
+  void createRejectsACustomerMergedWhileItWaitedWithoutWaitingOnTheSourceOrder() throws Exception {
+    String surviving = customer();
+    String merged = customer();
+    String cast = enrollment();
+    String pinned = order(merged);
+    String source = invalidatedOrder(null);
+    var execution = mergeExecution(surviving, merged);
+    var releaseSource = new CountDownLatch(1);
+    var releaseMerge = new CountDownLatch(1);
+    // 元受注は終わりまで外から握る。作成が墓標を握ったまま元受注を待てば、この試験は時間切れになる。
+    Future<?> sourceHolder =
+        hold("select id from t_orders where id = ? for update", source, releaseSource);
+    Future<?> mergeHolder =
+        hold("select id from t_orders where id = ? for update", pinned, releaseMerge);
+    Future<?> merge = executor.submit(() -> merges.merge(storeId, surviving, execution, actorId));
+    awaitBlockedStatements(1);
+    Future<?> create = executor.submit(newOrder(NewOrderPath.CREATE, merged, cast, source, null));
+    assertThat(awaitBlockedStatements(2))
+        .anySatisfy(sql -> assertThat(sql).contains("t_customers"));
+
+    releaseMerge.countDown();
+    mergeHolder.get(10, TimeUnit.SECONDS);
+    merge.get(10, TimeUnit.SECONDS);
+
+    assertThatThrownBy(() -> create.get(10, TimeUnit.SECONDS))
+        .isInstanceOf(ExecutionException.class)
+        .hasCauseInstanceOf(NotFoundException.class);
+    releaseSource.countDown();
+    sourceHolder.get(10, TimeUnit.SECONDS);
+  }
+
+  private Callable<Object> newOrder(
+      NewOrderPath path, String customer, String cast, String source, String application) {
+    var selection = new CustomerSelection(CustomerSelection.Mode.EXISTING, customer, null);
+    var create =
+        new OrderCreateCommand(
+            source,
+            null,
+            null,
+            courseId,
+            null,
+            businessDate,
+            null,
+            null,
+            selection,
+            null,
+            null,
+            null,
+            null,
+            cast,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
+    var confirmation =
+        new OrderApplicationConfirmationCommand(
+            List.of(),
+            null,
+            null,
+            courseId,
+            null,
+            null,
+            businessDate,
+            null,
+            null,
+            cast,
+            null,
+            null,
+            null,
+            null,
+            selection,
+            null);
+    return switch (path) {
+      case CREATE -> () -> orders.create(storeId, create, actorId, true);
+      case CREATE_PREVIEW -> () -> orders.previewCreate(storeId, create, actorId, true);
+      case CONFIRMATION ->
+          () -> orders.confirmApplication(storeId, application, confirmation, actorId, true);
+      case CONFIRMATION_PREVIEW ->
+          () -> orders.previewConfirmation(storeId, application, confirmation, actorId, true);
+    };
+  }
+
+  /** その行を待たずに押さえてみて、取れれば null、取れなければ SQLSTATE を返す。押さえた行は直後に放す。 */
+  private String sqlStateOfLockingWithoutWaiting(String table, String id) {
+    try {
+      jdbc.queryForObject(
+          "select id from " + table + " where id = ? for update nowait", String.class, id);
+      return null;
+    } catch (DataAccessException ex) {
+      if (ex.getRootCause() instanceof SQLException sql) return sql.getSQLState();
+      throw ex;
+    }
+  }
+
+  /** その受注を元受注にして作られた受注の顧客。 */
+  private List<String> replacementsFor(String source) {
+    return jdbc.queryForList(
+        "select customer_id from t_orders where replacement_for_order_id = ?",
+        String.class,
+        source);
+  }
+
   private Object run(ExistingOrderPath path, String order) {
     var completion =
         new OrderCompletionCommand(
@@ -386,13 +621,48 @@ class OrderCustomerLockOrderIntegrationTest {
     return id;
   }
 
+  private String invalidatedOrder(String customer) {
+    String id = order(customer);
+    jdbc.update(
+        "update t_orders set status = 'COMPLETED', completed_at = current_timestamp, total_fee = 0,"
+            + " completion_invalidated = true where id = ?",
+        id);
+    return id;
+  }
+
+  private String enrollment() {
+    String id = UUID.randomUUID().toString();
+    jdbc.update(
+        "insert into t_cast_enrollments(id,store_id,started_on) values (?,?,current_date)",
+        id,
+        storeId);
+    return id;
+  }
+
+  private String guestApplication() {
+    String id = UUID.randomUUID().toString();
+    jdbc.update(
+        "insert into t_order_applications(id,store_id,status,business_date,contact_name)"
+            + " values (?,?,'PENDING',?,'検証ゲスト')",
+        id,
+        storeId,
+        businessDate);
+    return id;
+  }
+
   private String status(String order) {
     return jdbc.queryForObject("select status from t_orders where id = ?", String.class, order);
   }
 
   @Configuration
   @EnableTransactionManagement
-  @EnableJpaRepositories(basePackageClasses = {OrderRepository.class, CustomerRepository.class})
+  @EnableJpaRepositories(
+      basePackageClasses = {
+        OrderRepository.class,
+        CustomerRepository.class,
+        CastEnrollmentRepository.class,
+        StoreRepository.class
+      })
   @Import({CustomerMergeService.class, MergePreparation.class, MergeConfirmation.class})
   static class Config {
     @Bean
@@ -479,42 +749,63 @@ class OrderCustomerLockOrderIntegrationTest {
     }
 
     @Bean
+    OrderServiceCatalog orderServiceCatalog() {
+      return mock(OrderServiceCatalog.class);
+    }
+
+    @Bean
     MemberLookupService memberLookupService() {
       return mock(MemberLookupService.class);
     }
 
-    /** 受注・顧客の行に触れる協力者だけを実物にし、金額の試算は模擬のカタログで通す。 */
+    /** 受注・顧客・在籍・申請の行に触れる協力者だけを実物にし、金額の試算は模擬のカタログで通す。 */
     @Bean
     OrderService orderService(
         OrderRepository orderRepository,
+        OrderApplicationRepository applications,
         CustomerRepository customerRepository,
+        CastEnrollmentRepository enrollments,
+        CastProfileRepository profiles,
+        StoreRepository stores,
         CustomerMemberLinkRepository links,
         PointLedgerService ledger,
+        OrderServiceCatalog catalog,
         BusinessAudit audit)
         throws ReflectiveOperationException {
       var specialServices = mock(OrderSpecialServices.class);
-      var catalog = mock(OrderServiceCatalog.class);
       var generator = mock(ReceiptTokenGenerator.class);
       when(generator.generate())
           .thenAnswer(
               call ->
                   new ReceiptTokenGenerator.GeneratedToken(
                       UUID.randomUUID().toString(), UUID.randomUUID().toString()));
-      Map<Class<?>, Object> real =
-          Map.of(
-              OrderRepository.class, orderRepository,
-              CustomerRepository.class, customerRepository,
-              CustomerMemberLinkRepository.class, links,
-              PointLedgerService.class, ledger,
-              BusinessAudit.class, audit,
-              ReceiptTokenGenerator.class, generator,
-              OrderSpecialServices.class, specialServices,
-              OrderCalculation.class,
-                  new OrderCalculation(
-                      catalog,
-                      mock(OrderConfirmation.class),
-                      new OrderFeeLineSelection(catalog),
-                      specialServices));
+      var businessDates = mock(BusinessDateService.class);
+      when(businessDates.currentBusinessDate()).thenReturn(LocalDate.now());
+      var shifts = mock(ConfirmedShiftLookupService.class);
+      when(shifts.hasConfirmedShift(any(), any(), any())).thenReturn(true);
+      var receptionists = mock(ReceptionistEligibilityService.class);
+      when(receptionists.isEligible(any(), any())).thenReturn(true);
+      Map<Class<?>, Object> real = new HashMap<>();
+      real.put(OrderRepository.class, orderRepository);
+      real.put(OrderApplicationRepository.class, applications);
+      real.put(CustomerRepository.class, customerRepository);
+      real.put(CustomerMemberLinkRepository.class, links);
+      real.put(
+          NominatableCastLookup.class, new NominatableCastLookup(enrollments, stores, profiles));
+      real.put(PointLedgerService.class, ledger);
+      real.put(BusinessAudit.class, audit);
+      real.put(ReceiptTokenGenerator.class, generator);
+      real.put(OrderSpecialServices.class, specialServices);
+      real.put(BusinessDateService.class, businessDates);
+      real.put(ConfirmedShiftLookupService.class, shifts);
+      real.put(ReceptionistEligibilityService.class, receptionists);
+      real.put(
+          OrderCalculation.class,
+          new OrderCalculation(
+              catalog,
+              mock(OrderConfirmation.class),
+              new OrderFeeLineSelection(catalog),
+              specialServices));
       var constructor = OrderService.class.getConstructors()[0];
       var types = constructor.getParameterTypes();
       var arguments = new Object[types.length];
