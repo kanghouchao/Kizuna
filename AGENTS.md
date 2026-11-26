@@ -29,7 +29,7 @@ GitHub Issues via `gh`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-The five default triage labels, applied on top of the kind label. See `docs/agents/triage-labels.md`.
+The five default triage labels — `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix` — applied on top of the kind label. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
