@@ -17,13 +17,19 @@ Kizuna operates multiple stores within one group (CMS / CRM / HRM). Before reaso
 
 ## Agent skills
 
+`docs/agents/` is local-only configuration and is not committed; where it is absent, the rules in this section still apply.
+
 ### Issue tracker
 
-GitHub Issues via `gh`, scheduled on Project #5. See `docs/agents/issue-tracker.md`.
+GitHub Issues via `gh`. See `docs/agents/issue-tracker.md`.
+
+- **Schedule**: GitHub Project #5 (`gh project view 5 --owner kanghouchao`) is the source of truth for ordering and status; never infer the queue from issue lists alone.
+- **Kind label**: every new issue carries exactly one of `spec` (design spec) or `implementation` (implementation, including fixes).
+- **Research output**: investigation and research findings go into a comment on the relevant issue, not into a file in the repo.
 
 ### Triage labels
 
-The five default triage labels, applied alongside `spec` / `implementation`. See `docs/agents/triage-labels.md`.
+The five default triage labels, applied on top of the kind label. See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
