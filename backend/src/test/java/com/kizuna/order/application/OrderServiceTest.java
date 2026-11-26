@@ -2516,6 +2516,25 @@ class OrderServiceTest {
   }
 
   @Test
+  void updateRejectsAReselectionOfTheCurrentCustomerWhenItIsNotInThisStore() {
+    Order order = confirmedOrderWithCustomer();
+    when(orderRepository.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
+    when(customerRepository.findByIdAndStoreIdForUpdate("cust-1", STORE_ID))
+        .thenReturn(Optional.empty());
+
+    OrderUpdateRequest req = new OrderUpdateRequest();
+    req.setExpectedVersion(CURRENT_VERSION);
+    req.setCastId("cast-1");
+    req.setCustomerSelection(
+        new CustomerSelectionRequest(CustomerSelectionRequest.Mode.EXISTING, "cust-1", null));
+
+    assertThatThrownBy(() -> service.update(STORE_ID, "o1", mapper.toCommand(req), ACTOR_ID, true))
+        .isInstanceOf(NotFoundException.class)
+        .hasMessageContaining("顧客が見つかりません");
+    verify(orderRepository, never()).findByIdAndStoreIdForUpdate(any(), any());
+  }
+
+  @Test
   void completeRejectsAPointUsageTheLedgerCannotCoverBeforeTouchingIt() {
     Order order = confirmedOrderWithCustomer();
     when(orderRepository.findByIdAndStoreId("o1", STORE_ID)).thenReturn(Optional.of(order));
