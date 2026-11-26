@@ -206,6 +206,34 @@ describe('useListPage', () => {
     expect(result.current.isLoading).toBe(false);
   });
 
+  it('ページ送りの取得中の再取得は、送った先のページを取り直す', async () => {
+    // 表示中のページを取り直すと、後から出した要求が勝ってページ送りが取り消される
+    let answer!: (value: PageResult<string>) => void;
+    const fetcher = jest
+      .fn<Promise<PageResult<string>>, [number]>()
+      .mockResolvedValueOnce(pageOf(0))
+      .mockImplementationOnce(() => new Promise(resolve => (answer = resolve)))
+      .mockImplementation(async page => pageOf(page, ['fresh']));
+    const { result } = renderHook(() => useListPage(fetcher));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    let turning!: Promise<void>;
+    act(() => {
+      turning = result.current.onPageChange(1);
+    });
+    await act(async () => {
+      await result.current.reload();
+    });
+    await act(async () => {
+      answer(pageOf(1, ['stale']));
+      await turning;
+    });
+
+    expect(fetcher).toHaveBeenLastCalledWith(1, undefined);
+    expect(result.current.page).toBe(1);
+    expect(result.current.rows).toEqual(['fresh']);
+  });
+
   it('失敗後の再取得は 1 ページ目から取り直す', async () => {
     // 失敗したページから再開すると、21〜40 行目だけが返る欠番だらけの一覧になる
     let succeed = true;

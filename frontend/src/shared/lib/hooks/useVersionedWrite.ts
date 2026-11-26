@@ -1,9 +1,8 @@
 'use client';
 
 import { startTransition, useRef, useState } from 'react';
-import { notify } from '@/shared/notify';
-import { getApiErrorMessage, isConflict, isForbidden, isNotFound } from '../apiError';
-import { useWrite } from './useWrite';
+import { isConflict, isForbidden, isNotFound } from '../apiError';
+import { announceFailure, useWrite } from './useWrite';
 
 /** 失敗の種類。画面は状態コードを自分で見分けず、これで案内と表示を選ぶ。 */
 export type WriteFailure = 'conflict' | 'notFound' | 'forbidden' | 'failed';
@@ -55,8 +54,10 @@ export function useVersionedWrite<T = void>(reloadTarget: () => T | Promise<T>) 
       success,
       failure: error => {
         failedAs = failureKind(error);
-        if (typeof failure === 'function') failure(error, failedAs);
-        else notify.error(getApiErrorMessage(error, failure));
+        announceFailure(
+          typeof failure === 'function' ? cause => failure(cause, failedAs) : failure,
+          error
+        );
       },
       onSuccess,
       onFailure: async error => {

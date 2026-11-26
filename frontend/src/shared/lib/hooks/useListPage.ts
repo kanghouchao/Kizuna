@@ -42,22 +42,30 @@ export function useListPage<T, C, M = undefined>(
   const requestIdRef = useRef(0);
   // 適用済みの検索条件。ページ送りと再取得はこれをそのまま使う
   const criteriaRef = useRef(initialCriteria as C);
+  // 最後に要求したページ。取得中の再取得が表示中のページへ戻ると、ページ送りが取り消される
+  const requestedPageRef = useRef(0);
   const [pageResult, setPageResult] = useState<PageResult<T, M>>(EMPTY_PAGE);
   const [isLoading, setIsLoading] = useState(true);
   const [failure, setFailure] = useState<{ error: unknown } | null>(null);
 
   const load = useCallback(async (page: number) => {
     const requestId = ++requestIdRef.current;
+    requestedPageRef.current = page;
     setIsLoading(true);
     // 再取得中は失敗表示を畳む。残したままだと、押した再試行が効いているのか分からない。
     setFailure(null);
     try {
       const result = await fetcherRef.current(page, criteriaRef.current);
-      if (requestId === requestIdRef.current) setPageResult(result);
+      if (requestId === requestIdRef.current) {
+        // サーバが返したページに合わせる。範囲外の要求は別のページで返りうる
+        requestedPageRef.current = result.page;
+        setPageResult(result);
+      }
     } catch (error) {
       // 行も現在ページも起点へ戻す。位置を残すと再試行が 21〜40 行目だけの欠番一覧を返す。
       // 適用済みの検索条件は利用者の指定なので保つ（戻すのは位置だけ）。
       if (requestId === requestIdRef.current) {
+        requestedPageRef.current = 0;
         setPageResult(EMPTY_PAGE);
         setFailure({ error });
       }
@@ -89,9 +97,9 @@ export function useListPage<T, C, M = undefined>(
     [load]
   );
   const onPageChange = useCallback((page: number) => load(page), [load]);
-  // 削除・発行など一覧を書き換える操作の後始末。現在のページをそのまま取り直す。
-  // 失敗時は現在ページが 0 に戻っているので、同じ関数がそのまま失敗の再試行にもなる。
-  const reload = useCallback(() => load(pageResult.page), [load, pageResult.page]);
+  // 削除・発行など一覧を書き換える操作の後始末。最後に要求したページを取り直す。
+  // 失敗時は要求ページが 0 に戻っているので、同じ関数がそのまま失敗の再試行にもなる。
+  const reload = useCallback(() => load(requestedPageRef.current), [load]);
 
   return {
     ...pageResult,
