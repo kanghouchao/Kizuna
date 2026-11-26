@@ -9,12 +9,10 @@ import com.kizuna.customer.domain.CustomerContactHistory;
 import com.kizuna.customer.domain.CustomerContactHistoryRepository;
 import com.kizuna.customer.domain.CustomerContactRepository;
 import com.kizuna.customer.domain.CustomerRepository;
-import com.kizuna.shared.exception.ConflictException;
 import com.kizuna.shared.exception.NotFoundException;
 import com.kizuna.shared.exception.ServiceException;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.dao.CannotAcquireLockException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -99,15 +97,11 @@ public class GuestContactImports {
     return contact;
   }
 
+  /** 判定は押さえた実体からではなく別問い合わせで行う（{@code CustomerRepository#isMerged} の契約）。 */
   private void lock(Long storeId, String id) {
-    try {
-      var customer =
-          customers
-              .findByIdAndStoreIdForUpdateNoWait(id, storeId)
-              .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
-      if (customer.getMergedIntoId() != null) throw new ConflictException("顧客が統合されました。選択し直してください");
-    } catch (CannotAcquireLockException ex) {
-      throw new ConflictException("顧客情報が変更中です。入力を保持して再試算してください");
-    }
+    customers
+        .findByIdAndStoreIdForUpdate(id, storeId)
+        .orElseThrow(() -> new NotFoundException("顧客が見つかりません"));
+    if (customers.isMerged(storeId, id)) throw new NotFoundException("顧客が見つかりません");
   }
 }

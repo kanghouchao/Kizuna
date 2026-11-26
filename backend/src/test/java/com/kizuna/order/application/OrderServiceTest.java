@@ -268,7 +268,7 @@ class OrderServiceTest {
 
     Customer selected = Customer.builder().build();
     selected.setId("c1");
-    when(customerRepository.findByIdAndStoreIdForUpdateNoWait("c1", STORE_ID))
+    when(customerRepository.findByIdAndStoreIdForUpdate("c1", STORE_ID))
         .thenReturn(Optional.of(selected));
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
     when(userRepository.findById(1L)).thenReturn(Optional.of(authorizedReceptionist()));
@@ -306,13 +306,33 @@ class OrderServiceTest {
     req.setReceptionistId(1L);
 
     when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
-    when(customerRepository.findByIdAndStoreIdForUpdateNoWait("missing", STORE_ID))
+    when(customerRepository.findByIdAndStoreIdForUpdate("missing", STORE_ID))
         .thenThrow(new NotFoundException("顧客が見つかりません"));
 
     assertThatThrownBy(() -> service.create(STORE_ID, mapper.toCommand(req), ACTOR_ID, true))
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining("顧客が見つかりません");
     verify(orderRepository, never()).save(any(Order.class));
+  }
+
+  @Test
+  void createRejectsACustomerMergedWhileItWaitedBeforeTakingTheSourceOrder() {
+    // 待った後に押さえた実体は古い状態を返しうるので、墓標かどうかは別問い合わせの答えで決める
+    OrderCreateRequest req = new OrderCreateRequest();
+    req.setCustomerSelection(
+        new CustomerSelectionRequest(CustomerSelectionRequest.Mode.EXISTING, "c1", null));
+    req.setCastId("g1");
+    req.setReplacementForOrderId("source");
+
+    when(nominatableCast.findForUpdate(STORE_ID, "g1")).thenReturn(Optional.of(nominatable("g1")));
+    when(customerRepository.findByIdAndStoreIdForUpdate("c1", STORE_ID))
+        .thenReturn(Optional.of(Customer.builder().build()));
+    when(customerRepository.isMerged(STORE_ID, "c1")).thenReturn(true);
+
+    assertThatThrownBy(() -> service.create(STORE_ID, mapper.toCommand(req), ACTOR_ID, true))
+        .isInstanceOf(NotFoundException.class)
+        .hasMessageContaining("顧客が見つかりません");
+    verify(orderRepository, never()).findByIdAndStoreIdForUpdate(any(), any());
   }
 
   @Test
@@ -1309,7 +1329,7 @@ class OrderServiceTest {
         .thenReturn(Optional.of(application));
     Customer selected = Customer.builder().build();
     selected.setId("cust-既存");
-    when(customerRepository.findByIdAndStoreIdForUpdateNoWait("cust-既存", STORE_ID))
+    when(customerRepository.findByIdAndStoreIdForUpdate("cust-既存", STORE_ID))
         .thenReturn(Optional.of(selected));
     stubConfirmActor();
     stubOrderCreation();
@@ -2470,7 +2490,6 @@ class OrderServiceTest {
     inOrder.verify(customerRepository).findByIdAndStoreIdForUpdate("cust-1", STORE_ID);
     inOrder.verify(orderRepository).findByIdAndStoreIdForUpdate("o1", STORE_ID);
     assertThat(order.getCustomerId()).isEqualTo("cust-0");
-    verify(customerRepository, never()).findByIdAndStoreIdForUpdateNoWait(any(), any());
   }
 
   @Test
