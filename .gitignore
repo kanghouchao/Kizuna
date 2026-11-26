@@ -11,5 +11,9 @@ Thumbs.db
 # Claude Code の個人ローカル設定と worktree（.claude/ は入庫しない）
 .claude/
 
+# エージェントスキルの個人ローカル設定と、それを新しい worktree へ写す一覧
+/docs/agents/
+/.worktreeinclude
+
 # モジュール構造テストが生成するドキュメント
 /backend/docs/modulith/
