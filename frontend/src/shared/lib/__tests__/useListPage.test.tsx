@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { useEffect, useState } from 'react';
+import { act, render, renderHook, waitFor } from '@testing-library/react';
 import { useListPage } from '@/shared/lib';
 import { PageResult } from '@/shared/api';
 
@@ -244,6 +244,24 @@ describe('useListPage', () => {
     await reload();
 
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it('子の初回の effect から呼ばれた再取得も取得する', async () => {
+    // 子の effect は一覧を持つ親の effect より先に走る。外れた後だけを止め、始まる前は止めない
+    const fetcher = jest.fn(async (page: number) => pageOf(page));
+    function Child({ onMount }: { onMount: () => Promise<void> }) {
+      useEffect(() => {
+        void onMount();
+      }, [onMount]);
+      return null;
+    }
+    function Parent() {
+      const list = useListPage(fetcher);
+      return <Child onMount={list.reload} />;
+    }
+    render(<Parent />);
+
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
   });
 
   it('失敗後の再取得は 1 ページ目から取り直す', async () => {
