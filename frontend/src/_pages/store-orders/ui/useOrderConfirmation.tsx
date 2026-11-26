@@ -9,14 +9,13 @@ import { Button, Dialog, DialogFrame, RegionError, LOAD_LATEST_LABEL } from '@/s
 import { OrderPreviewDetails } from './OrderPreviewDetails';
 
 /**
- * 409 の理由。サーバは受注行を押さえてから版を照合するので、受注が変わっていれば必ず
- * expected_version が返る。それ以外の 409 では受注は変わっておらず、画面は入力を残して版を取り直す。
+ * 409 の理由。受注が変わっていれば、サーバは必ず expected_version を返す。それ以外の 409 では
+ * 受注は変わっておらず、画面は入力を残して版を取り直す。
  */
 export function orderConflictField(error: unknown): string | undefined {
   if (!isConflict(error)) return undefined;
   const details = (error as { response?: { data?: { details?: Record<string, unknown> } } })
     .response?.data?.details;
-  if (details?.customer_lock) return 'customer_lock';
   if (details?.use_points) return 'use_points';
   if (details?.confirmation_token) return 'confirmation_token';
   if (details?.expected_version) return 'expected_version';

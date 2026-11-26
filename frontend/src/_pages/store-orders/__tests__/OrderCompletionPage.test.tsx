@@ -419,12 +419,12 @@ describe('受注の完了画面', () => {
     expect(screen.queryByLabelText('伝票QR')).not.toBeInTheDocument();
   });
 
-  it('顧客ロックの競合は入力とサーバの案内を保持し、再送できる', async () => {
-    const message = '顧客情報が変更中です。しばらく待ってから再試算してください';
+  it('理由を名指さない 409 は入力とサーバの案内を保持し、再送できる', async () => {
+    const message = '受注の状態が変わりました。内容を確認してください';
     mockedComplete.mockRejectedValueOnce({
       response: {
         status: 409,
-        data: { error: message, details: { customer_lock: '入力を保持して再試算してください' } },
+        data: { error: message },
       },
     });
     renderPage();
@@ -444,15 +444,15 @@ describe('受注の完了画面', () => {
     expect(mockedComplete.mock.calls[1][1]).toEqual(mockedComplete.mock.calls[0][1]);
   });
 
-  it('試算中の顧客ロック競合は受注を読み直さず同じ入力で再試行できる', async () => {
+  it('試算中の理由を名指さない 409 は受注を読み直さず同じ入力で再試行できる', async () => {
     renderPage();
     fireEvent.change(await screen.findByLabelText('利用ポイント'), { target: { value: '200' } });
     fireEvent.change(screen.getByLabelText('明細1の金額'), { target: { value: '8000' } });
-    const message = '顧客情報が変更中です。しばらく待ってから再試算してください';
+    const message = '受注の状態が変わりました。内容を確認してください';
     mockedPreview.mockRejectedValue({
       response: {
         status: 409,
-        data: { error: message, details: { customer_lock: '入力を保持して再試算してください' } },
+        data: { error: message },
       },
     });
     fireEvent.click(screen.getByRole('button', { name: '完了する' }));
@@ -511,7 +511,7 @@ describe('受注の完了画面', () => {
     mockedComplete.mockRejectedValueOnce({
       response: {
         status: 409,
-        data: { error: '顧客情報が変更中です', details: { customer_lock: '再試算してください' } },
+        data: { error: '受注の状態が変わりました' },
       },
     });
     renderPage();
@@ -550,7 +550,7 @@ describe('受注の完了画面', () => {
     } as typeof confirmedOrder;
     mockedGet.mockResolvedValueOnce(withLine).mockResolvedValueOnce({ ...withLine, version: 4 });
     mockedComplete.mockRejectedValueOnce({
-      response: { status: 409, data: { details: { customer_lock: '再試算してください' } } },
+      response: { status: 409, data: {} },
     });
     renderPage();
     expect(await screen.findByLabelText('明細1の名称')).toHaveValue('延長');
