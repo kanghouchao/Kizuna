@@ -44,11 +44,14 @@ export function useListPage<T, C, M = undefined>(
   const criteriaRef = useRef(initialCriteria as C);
   // 最後に要求したページ。取得中の再取得が表示中のページへ戻ると、ページ送りが取り消される
   const requestedPageRef = useRef(0);
+  // 一覧が外れた後は取得しない。より長く生きる書き込みが、応答の後に取り直しを呼びうる
+  const mountedRef = useRef(false);
   const [pageResult, setPageResult] = useState<PageResult<T, M>>(EMPTY_PAGE);
   const [isLoading, setIsLoading] = useState(true);
   const [failure, setFailure] = useState<{ error: unknown } | null>(null);
 
   const load = useCallback(async (page: number) => {
+    if (!mountedRef.current) return;
     const requestId = ++requestIdRef.current;
     requestedPageRef.current = page;
     setIsLoading(true);
@@ -75,8 +78,10 @@ export function useListPage<T, C, M = undefined>(
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     void load(0);
     return () => {
+      mountedRef.current = false;
       // requestIdRef はリクエストカウンタであり DOM ref ではない
       // eslint-disable-next-line react-hooks/exhaustive-deps
       requestIdRef.current++;
