@@ -247,7 +247,7 @@ describe('useListPage', () => {
   });
 
   it('子の初回の effect から呼ばれた再取得も取得する', async () => {
-    // 子の effect は一覧を持つ親の effect より先に走る。外れた後だけを止め、始まる前は止めない
+    // 子の effect は一覧を持つ親の effect より先に走る
     const fetcher = jest.fn(async (page: number) => pageOf(page));
     function Child({ onMount }: { onMount: () => Promise<void> }) {
       useEffect(() => {
