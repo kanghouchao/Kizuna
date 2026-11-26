@@ -188,14 +188,7 @@ function Completion({ id }: { id: string }) {
         failure: (error, kind) => {
           if (kind === 'conflict') conflictField = orderConflictField(error);
           if (!operation.isCurrent()) return;
-          if (conflictField === 'customer_lock') {
-            notify.error(
-              getApiErrorMessage(
-                error,
-                '顧客情報が変更中です。しばらく待ってから再試算してください'
-              )
-            );
-          } else if (conflictField === 'use_points') {
+          if (conflictField === 'use_points') {
             notify.error(
               `${getApiErrorMessage(error, 'ポイントの利用条件が変更されています')}。利用点数を見直してください`
             );
