@@ -254,7 +254,8 @@ UPDATE は待たないことを確かめた）。
 | --- | --- | --- |
 | `CustomerMergeService#merge` / `#preview` | 顧客 2 行（ID 昇順）→ 両顧客の受注すべて → 会員 | 順路 |
 | `OrderService#update` / `#previewUpdate` | 店舗 → 在籍（指名を差し替えるとき）→ 今の顧客と選び直した顧客（ID 昇順）→ 受注 → サービス項目 | 順路 |
-| `OrderService#complete` / `#completionPreview` | 店舗 → 顧客 → 受注 → サービス項目 → 会員 → 加算ロット | 順路 |
+| `OrderService#complete` | 店舗 → 顧客 → 受注 → サービス項目 → 会員 → 加算ロット | 順路 |
+| `OrderService#completionPreview` | 店舗 → 顧客 → 受注 → サービス項目（会員と加算ロットは押さえずに読む。試算の間も残高は動きうる） | 順路 |
 | `OrderService#create` / `#previewCreate` | 店舗 → 再提供の元受注 → 在籍 → サービス項目 → 顧客（**待たない**） | 逆順・待たないので環にならない |
 | `OrderService#confirmApplication`（ゲスト） | 店舗 → 申請 → 在籍 → 顧客（**待たない**）→ サービス項目 | 受注行を持たない |
 | `OrderService#confirmApplication`（会員） | 店舗 → 申請 → 在籍 → サービス項目 → 顧客（`CustomerReferenceResolver`、待つ） | 受注行を持たない |
@@ -274,7 +275,8 @@ UPDATE は待たないことを確かめた）。
 - **受注の INSERT / `customer_id` の UPDATE → 顧客行**。衝突する相手は墓標への書き込みと顧客の DELETE だけで、
   編集は自分が押さえた顧客にしか書かない。作成・確定は自分が待たずに押さえた顧客か、挿入したばかりの顧客に書く。
 - **受注の INSERT / `cast_id` の UPDATE → 在籍行**、**受注・申請・連絡先・関連・台帳の INSERT → 店舗行**。
-  衝突する相手は在籍・店舗の DELETE だけである（店舗削除との窓は上の窓①と同じ形）。
+  衝突する相手は在籍・店舗の DELETE と、店舗の略称（一意キー）の変更である（店舗削除との窓は上の窓①と同じ形）。
+  略称の変更は店舗行だけを持ち、顧客行も受注行も待たない。
 - **伝票トークン・帰属・台帳の INSERT → 受注行**、**関連・帰属・台帳の INSERT → 会員行**。受注行に FOR UPDATE の
   強さを載せる経路は店舗削除の連鎖だけで、会員行に FOR UPDATE を取る経路は会員 → 加算ロットの順で揃っている。
 

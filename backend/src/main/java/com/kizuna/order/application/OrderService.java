@@ -871,9 +871,12 @@ public class OrderService {
       boolean found =
           customerRepository.findByIdAndStoreIdForUpdate(customerId, storeId).isPresent();
       boolean merged = customerRepository.isMerged(storeId, customerId);
-      if (customerId.equals(current)) {
-        if (merged) throw new OrderVersionConflictException();
-      } else if (!found || merged) {
+      // 選んだ顧客は、受注が今指している行と同じでも、この店舗の行でなければ通さない。
+      if (customerId.equals(selected) && !found) {
+        throw new NotFoundException("顧客が見つかりません");
+      }
+      if (merged) {
+        if (customerId.equals(current)) throw new OrderVersionConflictException();
         throw new NotFoundException("顧客が見つかりません");
       }
     }
@@ -913,7 +916,7 @@ public class OrderService {
 
   /**
    * 会員は顧客の ACTIVE 関連だけから解決し、申請者の記録へは代替しない。削除済み会員の ID 欠落は未紐づけとして扱う。
-   * この問い合わせ自体はロックを取らない。通常更新・完了・完了試算は受注より先に顧客行を押さえてから呼ぶ（{@link #lockOrder}）。
+   * この問い合わせ自体はロックを取らない。通常更新・完了とそれぞれの試算は受注より先に顧客行を押さえてから呼ぶ（{@link #lockOrder}）。
    * 他の試算は顧客行のロックをこの問い合わせの前提としない。
    */
   private Optional<CustomerMemberLink> activeLink(Long storeId, String customerId) {
