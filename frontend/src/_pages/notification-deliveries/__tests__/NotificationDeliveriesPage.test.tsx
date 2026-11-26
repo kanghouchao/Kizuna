@@ -335,6 +335,37 @@ test('作成の応答の前にダイアログを閉じても、応答の後に�
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
 
+test('作成の応答がページ送りの取得中に届いても、送った先のページを表示すること', async () => {
+  const second = {
+    rows: [{ ...row, id: '102', source_id: '456' }],
+    page: 1,
+    pageCount: 2,
+    total: 51,
+  };
+  let respond: (value: Delivery) => void = () => {};
+  let turn: (value: typeof second) => void = () => {};
+  api.list
+    .mockResolvedValueOnce({ rows: [row], page: 0, pageCount: 2, total: 51 })
+    .mockReturnValueOnce(new Promise(resolve => (turn = resolve)))
+    .mockImplementation(async (page: number) =>
+      page === 1 ? second : { rows: [row], page: 0, pageCount: 2, total: 51 }
+    );
+  api.create.mockReturnValueOnce(new Promise<Delivery>(resolve => (respond = resolve)));
+  render(<StoreNotificationDeliveriesPage />);
+  const dialog = await fillDraft();
+  fireEvent.click(within(dialog).getByRole('button', { name: '下書きを作成' }));
+  await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
+  fireEvent.keyDown(dialog, { key: 'Escape', code: 'Escape' });
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  fireEvent.click(screen.getAllByRole('button', { name: '次へ' })[0]);
+  await waitFor(() => expect(api.list).toHaveBeenCalledTimes(2));
+  await act(async () => respond(row));
+  await waitFor(() => expect(api.list).toHaveBeenCalledTimes(3));
+  await act(async () => turn(second));
+  expect(api.list).toHaveBeenLastCalledWith(1);
+  expect(await screen.findByText(/456/)).toBeInTheDocument();
+});
+
 test.each([400, 404, 409])(
   '結果不明の再確認が業務拒否 %s を受けたら不明を解き、入力を直して送り直せる',
   async status => {

@@ -633,11 +633,6 @@ function Workspace({
 }) {
   const api = group ? memberNotificationApi : notificationApi;
   const list = useListPage(page => api.list(page));
-  // 作成の応答はダイアログを閉じた後にも届く。その時点で表示しているページを取り直す
-  const reloadList = useRef(list.reload);
-  useEffect(() => {
-    reloadList.current = list.reload;
-  });
   const [selected, setSelected] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -708,7 +703,7 @@ function Workspace({
           description="下書きの作成では送信されません。内容は作成後に変更できません。"
         >
           <Create
-            onRecorded={() => void reloadList.current()}
+            onRecorded={() => void list.reload()}
             onCreated={row => {
               setCreating(false);
               setSelected(row.id);

@@ -15,6 +15,12 @@ export interface WriteOptions<R> {
   onFailure?: (error: unknown) => unknown;
 }
 
+/** 失敗の案内。文言ならサーバが返した理由を優先してエラーの案内を出し、関数なら案内を任せる。 */
+export function announceFailure(failure: string | ((error: unknown) => unknown), error: unknown) {
+  if (typeof failure === 'function') failure(error);
+  else notify.error(getApiErrorMessage(error, failure));
+}
+
 /**
  * 書き込みのライフサイクル。busy は応答で戻さず、反映（onSuccess / onFailure）が始めた遷移の反映、
  * または返した promise の完了まで残す。応答の時点で戻すと、画面が外れるまでの間に同じ要求をもう一度送れる。
@@ -59,8 +65,7 @@ export function useWrite() {
     try {
       result = await send();
     } catch (error) {
-      if (typeof failure === 'function') failure(error);
-      else notify.error(getApiErrorMessage(error, failure));
+      announceFailure(failure, error);
       await reflect(onFailure && (() => onFailure(error)));
       return 'failed';
     }

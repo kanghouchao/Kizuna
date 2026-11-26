@@ -3,11 +3,10 @@
 import { useSyncExternalStore } from 'react';
 // 桶（@/shared/api）経由だと client.ts が @/shared/lib を読み、初期化の循環になる
 import { getSessionUserId } from '@/shared/api/session';
-import { notify } from '@/shared/notify';
-import { ClientDataError, getApiErrorMessage } from '../apiError';
+import { ClientDataError } from '../apiError';
 import { hasMemoryOperations, type OperationStore, type SavedOperation } from '../operation-store';
 import { createUuid } from '../uuid';
-import { useWrite, type WriteOptions } from './useWrite';
+import { announceFailure, useWrite, type WriteOptions } from './useWrite';
 
 export interface PendingOperation<P> extends SavedOperation<P> {
   phase: 'submitting' | 'unknown';
@@ -157,9 +156,7 @@ export function useOperation<P, R>(
       {
         success,
         failure: error => {
-          if (refused) return;
-          if (typeof failure === 'function') failure(error);
-          else notify.error(getApiErrorMessage(error, failure));
+          if (!refused) announceFailure(failure, error);
         },
         onSuccess,
         onFailure: onFailure && (error => (refused ? undefined : onFailure(error))),
