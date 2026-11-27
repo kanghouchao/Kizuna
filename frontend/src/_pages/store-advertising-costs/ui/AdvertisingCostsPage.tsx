@@ -176,15 +176,16 @@ function MonthPage({
     setEditorKey(v => v + 1);
     setOpen(true);
   }
+  function showMissing(error: unknown) {
+    if (isNotFound(error)) setMissing(true);
+  }
   function execute(mutation: Mutation) {
     if (pending || storageError) return;
     void operation.start(mutation, {
       success: '広告費を保存しました。',
       failure: FAILURE,
       onSuccess: () => setOpen(false),
-      onFailure: error => {
-        if (isNotFound(error)) setMissing(true);
-      },
+      onFailure: showMissing,
     });
   }
   function replay() {
@@ -193,9 +194,35 @@ function MonthPage({
       success: '操作結果を確認しました。',
       failure: FAILURE,
       onSuccess: () => setOpen(false),
+      onFailure: showMissing,
     });
   }
   const blocked = !!pending || storageError || operation.busy;
+  // 開いたダイアログはページを覆うので、案内と再確認はダイアログの中に出す。閉じている間と再読込の後はページに出す。
+  const notice = pending && (
+    <section role="status" className="rounded-lg border p-4 space-y-3">
+      <p>
+        {pending.phase === 'submitting'
+          ? '送信中です。画面を閉じてもサーバの処理は取り消されません。'
+          : '操作結果をまだ確認できません。同じ内容で結果を確認してから、次の操作を行ってください。'}
+      </p>
+      <p>
+        対象：{month} ／{' '}
+        {pending.payload.kind === 'copy'
+          ? '前月コピー'
+          : pending.payload.kind === 'delete'
+            ? '削除'
+            : pending.payload.kind === 'replace'
+              ? '変更'
+              : '登録'}
+      </p>
+      {pending.phase === 'unknown' && (
+        <Button disabled={!manage || operation.busy} onClick={replay}>
+          同じ要求で結果を確認
+        </Button>
+      )}
+    </section>
+  );
   return (
     <div className="space-y-6">
       {storageError && (
@@ -203,30 +230,7 @@ function MonthPage({
           保存した操作を読み取れません。ブラウザの保存設定を確認してください。安全のため新しい変更を停止しています。
         </p>
       )}
-      {pending && (
-        <section role="status" className="rounded-lg border p-4 space-y-3">
-          <p>
-            {pending.phase === 'submitting'
-              ? '送信中です。画面を閉じてもサーバの処理は取り消されません。'
-              : '操作結果をまだ確認できません。同じ内容で結果を確認してから、次の操作を行ってください。'}
-          </p>
-          <p>
-            対象：{month} ／{' '}
-            {pending.payload.kind === 'copy'
-              ? '前月コピー'
-              : pending.payload.kind === 'delete'
-                ? '削除'
-                : pending.payload.kind === 'replace'
-                  ? '変更'
-                  : '登録'}
-          </p>
-          {pending.phase === 'unknown' && (
-            <Button disabled={!manage || operation.busy} onClick={replay}>
-              同じ要求で結果を確認
-            </Button>
-          )}
-        </section>
-      )}
+      {!open && notice}
       <ListPage
         title="広告費管理"
         description={`${month} の登録済み費用。問い合わせ人数は手入力の記録です。月次ロックは行いません。`}
@@ -315,6 +319,7 @@ function MonthPage({
             </Button>
           }
         >
+          {notice}
           {missing ? (
             <p role="alert">広告費が見つかりません。一覧を更新しました。閉じて確認してください。</p>
           ) : target?.kind === 'copy' ? (
