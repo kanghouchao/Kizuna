@@ -91,17 +91,23 @@ async function submitEdit() {
   return dialog;
 }
 const replayButtons = () => screen.queryAllByRole('button', { name: REPLAY, hidden: true });
+// 再確認は、失敗の反映が終わるまで押せない
+async function pressReplay(dialog: HTMLElement) {
+  const replay = await within(dialog).findByRole('button', { name: REPLAY });
+  await waitFor(() => expect(replay).toBeEnabled());
+  fireEvent.click(replay);
+}
 
 test('結果不明になったら、開いたままのダイアログの中で同じ要求を再確認できること', async () => {
   api.mutate.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(undefined as never);
   const dialog = await submitEdit();
-  const replay = await within(dialog).findByRole('button', { name: REPLAY });
+  await within(dialog).findByRole('button', { name: REPLAY });
   const notice = within(dialog).getByRole('status');
   expect(notice).toHaveTextContent('操作結果をまだ確認できません');
   // 送信の操作は本文の末尾にあるので、先頭に出た案内を見える位置へ送る
   expect(jest.mocked(Element.prototype.scrollIntoView).mock.instances).toContain(notice);
   expect(replayButtons()).toHaveLength(1);
-  fireEvent.click(replay);
+  await pressReplay(dialog);
   await waitFor(() => expect(notify.success).toHaveBeenCalledWith('操作結果を確認しました。'));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   const [[, sent, key], [, resent, resentKey]] = api.mutate.mock.calls;
@@ -115,7 +121,7 @@ test('結果不明のままダイアログを閉じたら、ページで同じ�
   await within(dialog).findByRole('button', { name: REPLAY });
   fireEvent.click(within(dialog).getByRole('button', { name: '閉じる' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  expect(screen.getByRole('button', { name: REPLAY })).toBeEnabled();
+  await waitFor(() => expect(screen.getByRole('button', { name: REPLAY })).toBeEnabled());
   expect(screen.getByRole('button', { name: '編集' })).toBeDisabled();
 });
 
@@ -132,7 +138,7 @@ test('業務拒否ではダイアログと入力を残し、再確認を出さ�
 test('再確認が業務拒否されたら、入力を残したまま編集に戻れること', async () => {
   api.mutate.mockRejectedValueOnce(new Error('network')).mockRejectedValueOnce(httpError(422));
   const dialog = await submitEdit();
-  fireEvent.click(await within(dialog).findByRole('button', { name: REPLAY }));
+  await pressReplay(dialog);
   await waitFor(() => expect(within(dialog).getByLabelText('理由')).toBeEnabled());
   expect(dialog).toBeInTheDocument();
   expect(within(dialog).getByLabelText('理由')).toHaveValue('月額改定');
@@ -145,8 +151,7 @@ test.each([
 ])('%sで対象が無ければ、ダイアログを見つからない案内に置き換えること', async (_, failures) => {
   failures.forEach(failure => api.mutate.mockRejectedValueOnce(failure));
   const dialog = await submitEdit();
-  if (failures.length > 1)
-    fireEvent.click(await within(dialog).findByRole('button', { name: REPLAY }));
+  if (failures.length > 1) await pressReplay(dialog);
   expect(await within(dialog).findByRole('alert')).toHaveTextContent('広告費が見つかりません');
   expect(replayButtons()).toHaveLength(0);
 });
