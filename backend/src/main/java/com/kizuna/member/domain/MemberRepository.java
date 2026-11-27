@@ -59,7 +59,7 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
    * {@link #findByIdForUpdate} と同じ行ロックを、会員へ外部キーを張る書き込みより<b>前に</b>取り、同じ会員への並行する取引をここで直列化する。
    * 退会済みかの判定・特典の一回性・昇格は、先行の確定を読んでから進む必要がある。
    *
-   * <p>載るのは FOR NO KEY UPDATE で、挿入の外部キー検査が会員行へ置く KEY SHARE を待たない。書いた後に求めても死錠はせず、失うのは直列化である。
+   * <p>載るのは FOR NO KEY UPDATE で、挿入の外部キー検査が会員行へ置く KEY SHARE を待たない。書いた後に取ると、先行の確定を読まずに判定が進む。
    *
    * <p>投影で返すのは {@link #findIdentityByMemberCode} と同じ理由 — 実体を先に載せると後段の {@link #findByIdForUpdate}
    * がロックの昇格になる。
