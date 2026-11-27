@@ -56,7 +56,7 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
   List<User> findByUserTypeAndEnabledTrue(UserType userType);
 
   /**
-   * email でユーザーを取得し、行に悲観排他ロック（SELECT ... FOR UPDATE）を掛ける。
+   * email でユーザーを取得し、行に悲観排他ロック（SELECT ... FOR NO KEY UPDATE）を掛ける。
    *
    * <p>並行する既存受諾が同一ユーザーの授権店舗集合を read-modify-write する際、ロック取得後に最新状態を読み直させることで 「後着の save
    * が先着の追加を上書きする」取りこぼし（lost update）を防ぐ。ロックを持たない {@link #findByEmail}
@@ -67,7 +67,7 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
   Optional<User> findByEmailForUpdate(@Param("email") String email);
 
   /**
-   * id でユーザーを取得し、行に悲観排他ロック（SELECT ... FOR UPDATE）を掛ける。
+   * id でユーザーを取得し、行に悲観排他ロック（SELECT ... FOR NO KEY UPDATE）を掛ける。
    *
    * <p>店長の任命・解任はロール集合と授権店舗集合の read-modify-write だが、要求は版を運ばない（画面に編集フォームが無い）。
    * 版の照合で撥ねると利用者に再試行の手立てが無いため、直列化して待たせる。
@@ -77,7 +77,7 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
   Optional<User> findByIdForUpdate(@Param("id") Long id);
 
   /**
-   * 指定ロールのいずれかを保持する有効な利用者の行を、id 昇順で押さえる（{@code SELECT ... FOR UPDATE}）。
+   * 指定ロールのいずれかを保持する有効な利用者の行を、id 昇順で押さえる（{@code SELECT ... FOR NO KEY UPDATE}）。
    *
    * <p><b>返る集合を数えてはいけない</b>。READ COMMITTED では待たされている間に確定した変更のうち、取り直されるのは押さえた行自身の 列だけで、保持判定が読む
    * t_user_roles は元のスナップショットのまま — 降格済みの相手が保持者に見え続ける（実測済み）。数えるのは {@link #findEnabledRoleHolderIds}

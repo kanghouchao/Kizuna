@@ -15,8 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 会員退会に伴う関連の解除。全店舗の ACTIVE 関連を同じ理由で解除し、顧客行は残す（GLOSSARY「会員退会」）。
  *
- * <p>顧客行のロックは取らない。退会は会員行を先に押さえており、関連の成立は会員行へ KEY SHARE を置く挿入なので、ここで顧客行の FOR UPDATE
- * まで求めると紐づけとの間で死錠する。並行する解除との競合は行の版が 409 にする。
+ * <p>顧客行のロックは取らない。紐づけは顧客行 → 会員行の順に押さえるので、会員行を握っている退会が顧客行まで求めると紐づけとの間で死錠する。 並行する解除との競合は行の版が 409 にする。
  */
 @Service
 @RequiredArgsConstructor

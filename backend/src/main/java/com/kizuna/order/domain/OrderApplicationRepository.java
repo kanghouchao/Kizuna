@@ -26,7 +26,7 @@ public interface OrderApplicationRepository extends StoreScopedRepository<OrderA
   /**
    * 店舗を跨ぐ照会。境界は申請者の会員 id — 会員退会が全店舗の PENDING 申請を取り下げる入口。
    *
-   * <p>待たずに押さえる（{@code FOR UPDATE NOWAIT}）。退会は会員行を先に握っており、確定処理は申請行 → 関連の挿入（会員行へ KEY
+   * <p>待たずに押さえる（{@code NOWAIT}）。退会は退会消去の時点から会員行を FOR UPDATE で握っており、確定処理は申請行 → 関連の挿入（会員行へ KEY
    * SHARE）の順なので、申請行を待つと互いに待ち合って死錠する。取れなければ呼出側が競合として撥ね、利用者がやり直す。
    */
   @Lock(LockModeType.PESSIMISTIC_WRITE)

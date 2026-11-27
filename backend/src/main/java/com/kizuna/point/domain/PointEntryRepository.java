@@ -27,7 +27,7 @@ public interface PointEntryRepository extends JpaRepository<PointEntry, Long> {
   List<PointEntry> findCredits(@Param("memberId") Long memberId);
 
   /**
-   * 会員の加算ロットを悲観排他ロック（SELECT ... FOR UPDATE）付きで取得する。
+   * 会員の加算ロットを悲観排他ロック（SELECT ... FOR NO KEY UPDATE）付きで取得する。
    *
    * <p>「残高は 0 未満にならない」は行を跨いだ合計の不変量で、DB 制約では守れない。同一会員の消費を直列化することで、 並行する 2
    * つの消費が同じ残りを二重に引き当てるのを防ぐ。読むだけの経路は {@link #findCredits} を使う。

@@ -14,8 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 会員退会に伴う予約申請の整理。会員名義の PENDING をすべて WITHDRAWN にし、CONFIRMED 以降には触れない。
  *
- * <p>申請行は待たずに押さえる。確定処理が押さえている申請があれば、退会は競合（409）として丸ごと巻き戻し、利用者がやり直す —
- * 退会側は会員行を先に握っているので、申請行を待つと確定処理の関連挿入（会員行への KEY SHARE）と死錠する。
+ * <p>申請行は待たずに押さえる。確定処理が押さえている申請があれば、退会は競合（409）として丸ごと巻き戻し、利用者がやり直す。待てない理由は {@link
+ * OrderApplicationRepository#lockPendingByRequesterMemberIdWithoutWaiting} に記す。
  */
 @Service
 @RequiredArgsConstructor
