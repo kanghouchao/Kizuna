@@ -106,7 +106,6 @@ class GuestContactImportsTest {
     assertThatThrownBy(
             () -> imports.preview(STORE_ID, "absent", null, ContactType.EMAIL, VALUE, true))
         .isInstanceOf(NotFoundException.class);
-    // 待った後に押さえた実体は古い状態を返しうるので、墓標かどうかは別問い合わせの答えで決める
     customer();
     when(customers.isMerged(STORE_ID, "customer")).thenReturn(true);
     assertThatThrownBy(
