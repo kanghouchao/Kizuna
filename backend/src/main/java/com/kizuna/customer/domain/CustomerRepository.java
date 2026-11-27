@@ -17,7 +17,7 @@ public interface CustomerRepository
     extends StoreScopedRepository<Customer>, JpaSpecificationExecutor<Customer> {
 
   /**
-   * 顧客を悲観排他ロック（SELECT ... FOR UPDATE）付きで取得する。エンティティ名は HQL の予約語衝突を避けるため FQCN で参照する。
+   * 顧客を悲観排他ロック（SELECT ... FOR NO KEY UPDATE）付きで取得する。エンティティ名は HQL の予約語衝突を避けるため FQCN で参照する。
    *
    * <p>顧客の紐づけを読み書きする経路の直列化点。紐づけ・変更・解除（{@code CustomerMemberLinkService#link}／{@code
    * CustomerMemberLinkService#unlink}）と、台帳への記帳（受注完了・手動調整）は、いずれも先にこの行を押さえてから紐づけを解決する。
@@ -47,8 +47,8 @@ public interface CustomerRepository
       @Param("id") String id, @Param("storeId") Long storeId);
 
   /**
-   * {@link #findByIdAndStoreIdForUpdate} と同じロックを、待たずに取れるときだけ取る（{@code FOR UPDATE NOWAIT}）。取れなければ
-   * {@code CannotAcquireLockException}。
+   * {@link #findByIdAndStoreIdForUpdate} と同じロックを、待たずに取れるときだけ取る（{@code NOWAIT}）。取れなければ {@code
+   * CannotAcquireLockException}。
    *
    * <p>行を押さえたまま次の行を待つ経路で使う。統合は存続行と被統合行を押さえた後で、被統合行を指す墓標を圧平（＝墓標の行を押さえる）するため、
    * 「墓標を押さえたまま統合先を待つ」形は統合と待ちが環になる。待たない取得なら環は生まれず、取れなかった競合は案内の読める応答に写せる。
