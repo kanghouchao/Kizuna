@@ -42,7 +42,8 @@ public class MemberWithdrawal {
    * 本人による退会。対象は検証済みトークンの利用者 ID で固定する（電子メールは退会で後継へ移りうる）。会員行を先に押さえて
    * 二重退会（409）と並行する帰属の物化を直列化し、利用者を停止して退会済みにする。
    *
-   * <p>会員行のロックは台帳への書き込みより前に取る — 仕訳の外部キー検査は会員行へ KEY SHARE を置くため、後から FOR UPDATE を求めると死錠する。
+   * <p>ここで載るのは FOR NO KEY UPDATE で、仕訳や関連の挿入が会員行へ置く KEY SHARE は止めない。それらを止める FOR UPDATE は、続く退会消去が
+   * {@code MemberRepository#lockIdForBalanceConfirmation} で載せる。
    */
   public WithdrawnMember withdrawSelf(long userId, String reason) {
     User user =

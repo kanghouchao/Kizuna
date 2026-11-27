@@ -41,8 +41,10 @@ INSERT や外部キー列を変える UPDATE は、外部キー検査を通じ�
 5. 明示的な `@Lock(PESSIMISTIC_WRITE)` の読み口が PostgreSQL へ送るのは `FOR UPDATE` ではなく
    **`FOR NO KEY UPDATE`** である（待っている文を `pg_stat_activity` で読むと `... for no key update of o1_0` と
    出る）。握られた行は別の取引の FOR KEY SHARE を通し、FOR SHARE と FOR NO KEY UPDATE を弾く。素の `FOR UPDATE` で握った行は
-   FOR KEY SHARE も弾く（`RoleRowLockPremiseIntegrationTest` が両方を固定する）。行に FOR UPDATE を載せる読み口は、
-   native で `for update` と書いたものだけである。
+   FOR KEY SHARE も弾く（`RoleRowLockPremiseIntegrationTest` が両方を固定する）。逆向きも同じで、別の取引が
+   FOR KEY SHARE を握る行でも明示ロックの読み口は待たず、待つのは native の `for update` だけである
+   （`MemberRowLockStrengthIntegrationTest`）。行に FOR UPDATE を載せる読み口は、native で `for update` と
+   書いたものだけである。
 
 事実 3 と 5 から効く帰結がある。本 ADR が扱う 5 表で**主キーを書き換える経路は無い**ので、これらの表の行に
 FOR UPDATE を載せるのは DELETE だけである（UPDATE 文も明示ロックの読み口も FOR NO KEY UPDATE で済む）。

@@ -28,13 +28,20 @@ public final class RowLockProbe {
   /** 別のトランザクションでその行を {@code for update} で押さえ、解放の合図まで握り続ける。押さえ終えてから戻る。 */
   public Future<?> hold(ExecutorService executor, String table, Object id, CountDownLatch release)
       throws InterruptedException {
+    return hold(executor, table, id, "for update", release);
+  }
+
+  /** {@link #hold(ExecutorService, String, Object, CountDownLatch)} を、指定の強さの行ロックで行う。 */
+  public Future<?> hold(
+      ExecutorService executor, String table, Object id, String strength, CountDownLatch release)
+      throws InterruptedException {
     var locked = new CountDownLatch(1);
     Future<?> holder =
         executor.submit(
             () ->
                 transaction.executeWithoutResult(
                     status -> {
-                      jdbc.queryForList("select 1 from " + table + " where id = ? for update", id);
+                      jdbc.queryForList("select 1 from " + table + " where id = ? " + strength, id);
                       locked.countDown();
                       await(release);
                     }));
