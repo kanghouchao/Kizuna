@@ -49,12 +49,13 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** 権限集合の置き換えが走っている間、ロール行が書き込みロックで押さえられていることを実 PostgreSQL で確かめる。 */
+/** 権限集合の置き換えが走っている間ロール行が押さえられていることと、明示ロックの読み口が載せる強さを、実 PostgreSQL で確かめる。 */
 @EnabledIfIntegration
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class RoleRowLockPremiseIntegrationTest {
   private AnnotationConfigApplicationContext context;
   private RoleRepository roles;
+  private UserRepository users;
   private CredentialOperations credentials;
   private RoleManageHolderGuard guard;
   private TransactionTemplate transaction;
@@ -65,6 +66,7 @@ class RoleRowLockPremiseIntegrationTest {
   void connect() {
     context = new AnnotationConfigApplicationContext(Config.class);
     roles = context.getBean(RoleRepository.class);
+    users = context.getBean(UserRepository.class);
     credentials = context.getBean(CredentialOperations.class);
     guard = AopTestUtils.getTargetObject(context.getBean(RoleManageHolderGuard.class));
     transaction = new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
@@ -128,18 +130,56 @@ class RoleRowLockPremiseIntegrationTest {
         });
   }
 
+  // 明示ロックの読み口が載せる強さを、握られた行への探りで見分ける。FOR KEY SHARE（子表の INSERT の外部キー検査が
+  // 要求する強さ）が通るなら FOR UPDATE ではなく、FOR SHARE が弾かれるなら FOR SHARE でもない。
+  @Test
+  void pessimisticWriteReadLeavesTheRowOpenToKeyShare() {
+    String email = "lock-strength-" + UUID.randomUUID() + "@example.test";
+    long user = createUser(email);
+    transaction.executeWithoutResult(
+        status -> {
+          users.findByEmailForUpdate(email).orElseThrow();
+          assertThat(probe("t_users", user, "for key share")).isNull();
+          assertThat(probe("t_users", user, "for share")).isEqualTo("55P03");
+        });
+  }
+
+  @Test
+  void nativeForUpdateShutsOutKeyShare() {
+    long user = createUser("lock-strength-" + UUID.randomUUID() + "@example.test");
+    transaction.executeWithoutResult(
+        status -> {
+          jdbc.queryForObject("select id from t_users where id = ? for update", Long.class, user);
+          assertThat(probe("t_users", user, "for key share")).isEqualTo("55P03");
+        });
+  }
+
   /** ロール行の FOR UPDATE NOWAIT を試み、取れれば null、取れなければ SQLState を返す。 */
   private String probe(long role) {
+    return probe("t_roles", role, "for update");
+  }
+
+  /** 自動コミットの別接続で、指定の強さの行ロックを待たずに試みる。取れれば null、取れなければ SQLState を返す。 */
+  private String probe(String table, long id, String strength) {
     try (var connection = dataSource.getConnection();
         var statement =
-            connection.prepareStatement("select id from t_roles where id = ? for update nowait")) {
+            connection.prepareStatement(
+                "select id from " + table + " where id = ? " + strength + " nowait")) {
       connection.setAutoCommit(true);
-      statement.setLong(1, role);
+      statement.setLong(1, id);
       statement.executeQuery().close();
       return null;
     } catch (SQLException ex) {
       return ex.getSQLState();
     }
+  }
+
+  private long createUser(String email) {
+    return jdbc.queryForObject(
+        "insert into t_users(email,display_name,user_type) values (?,'検証担当','STAFF')"
+            + " returning id",
+        Long.class,
+        email);
   }
 
   private RoleCommand.Update command(long role, PermissionCode permission) {
