@@ -317,7 +317,6 @@ class OrderServiceTest {
 
   @Test
   void createRejectsACustomerMergedWhileItWaitedBeforeTakingTheSourceOrder() {
-    // 待った後に押さえた実体は古い状態を返しうるので、墓標かどうかは別問い合わせの答えで決める
     OrderCreateRequest req = new OrderCreateRequest();
     req.setCustomerSelection(
         new CustomerSelectionRequest(CustomerSelectionRequest.Mode.EXISTING, "c1", null));
