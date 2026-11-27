@@ -8,3 +8,4 @@ Severity and scope for any reviewer, human or bot. The conventions themselves li
 - **Evidence**: a claim about behavior cites the `file:line` that produces it; never infer behavior from names.
 - **Human review**: a diff that meets a criterion in [CONTRIBUTING.md](CONTRIBUTING.md) "人手レビューが必要な PR" while the PR body leaves that item unchecked is Important.
 - **Scope**: report what this diff introduces. Pre-existing problems go in a separate, non-blocking list. Do not repeat a finding already answered in the thread.
+- **Posting**: post a PR review with the GitHub `add_review_to_pr` tool, as one GitHub review: the overall comment in the review body, and each finding as a `file_comments` entry on the line it cites, so every finding opens its own review thread. Do not post findings as plain PR comments or fold them into the body; the body holds the summary and the pre-existing list.
