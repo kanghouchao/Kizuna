@@ -40,7 +40,7 @@ const cost: Cost = {
   version: 2,
   updated_at: '2026-11-01T00:00:00Z',
 };
-const status = (code: number) =>
+const httpError = (code: number) =>
   Object.assign(new Error('rejected'), { response: { status: code } });
 // 未確認の操作は本人ごとにタブへ残るので、テストごとに別の本人で始める
 let userId = 100;
@@ -96,12 +96,16 @@ test('結果不明になったら、開いたままのダイアログの中で�
   api.mutate.mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(undefined as never);
   const dialog = await submitEdit();
   const replay = await within(dialog).findByRole('button', { name: REPLAY });
-  expect(within(dialog).getByRole('status')).toHaveTextContent('操作結果をまだ確認できません');
+  const notice = within(dialog).getByRole('status');
+  expect(notice).toHaveTextContent('操作結果をまだ確認できません');
+  // 送信の操作は本文の末尾にあるので、先頭に出た案内を見える位置へ送る
+  expect(jest.mocked(Element.prototype.scrollIntoView).mock.instances).toContain(notice);
   expect(replayButtons()).toHaveLength(1);
   fireEvent.click(replay);
   await waitFor(() => expect(notify.success).toHaveBeenCalledWith('操作結果を確認しました。'));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  expect(api.mutate.mock.calls[1].slice(1, 3)).toEqual(api.mutate.mock.calls[0].slice(1, 3));
+  const [[, sent, key], [, resent, resentKey]] = api.mutate.mock.calls;
+  expect([resent, resentKey]).toEqual([sent, key]);
   expect(replayButtons()).toHaveLength(0);
 });
 
@@ -116,26 +120,28 @@ test('結果不明のままダイアログを閉じたら、ページで同じ�
 });
 
 test('業務拒否ではダイアログと入力を残し、再確認を出さないこと', async () => {
-  api.mutate.mockRejectedValueOnce(status(422));
+  api.mutate.mockRejectedValueOnce(httpError(422));
   const dialog = await submitEdit();
   await waitFor(() => expect(notify.error).toHaveBeenCalled());
   await waitFor(() => expect(within(dialog).getByLabelText('理由')).toBeEnabled());
+  expect(dialog).toBeInTheDocument();
   expect(within(dialog).getByLabelText('理由')).toHaveValue('月額改定');
   expect(replayButtons()).toHaveLength(0);
 });
 
 test('再確認が業務拒否されたら、入力を残したまま編集に戻れること', async () => {
-  api.mutate.mockRejectedValueOnce(new Error('network')).mockRejectedValueOnce(status(422));
+  api.mutate.mockRejectedValueOnce(new Error('network')).mockRejectedValueOnce(httpError(422));
   const dialog = await submitEdit();
   fireEvent.click(await within(dialog).findByRole('button', { name: REPLAY }));
   await waitFor(() => expect(within(dialog).getByLabelText('理由')).toBeEnabled());
+  expect(dialog).toBeInTheDocument();
   expect(within(dialog).getByLabelText('理由')).toHaveValue('月額改定');
   expect(replayButtons()).toHaveLength(0);
 });
 
 test.each([
-  ['最初の送信', [status(404)]],
-  ['再確認', [new Error('network'), status(404)]],
+  ['最初の送信', [httpError(404)]],
+  ['再確認', [new Error('network'), httpError(404)]],
 ])('%sで対象が無ければ、ダイアログを見つからない案内に置き換えること', async (_, failures) => {
   failures.forEach(failure => api.mutate.mockRejectedValueOnce(failure));
   const dialog = await submitEdit();

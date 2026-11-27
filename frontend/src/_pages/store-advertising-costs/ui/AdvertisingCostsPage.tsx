@@ -176,31 +176,31 @@ function MonthPage({
     setEditorKey(v => v + 1);
     setOpen(true);
   }
-  function showMissing(error: unknown) {
-    if (isNotFound(error)) setMissing(true);
-  }
+  const outcome = {
+    failure: FAILURE,
+    onSuccess: () => setOpen(false),
+    onFailure: (error: unknown) => {
+      if (isNotFound(error)) setMissing(true);
+    },
+  };
   function execute(mutation: Mutation) {
     if (pending || storageError) return;
-    void operation.start(mutation, {
-      success: '広告費を保存しました。',
-      failure: FAILURE,
-      onSuccess: () => setOpen(false),
-      onFailure: showMissing,
-    });
+    void operation.start(mutation, { success: '広告費を保存しました。', ...outcome });
   }
   function replay() {
     if (pending?.phase !== 'unknown') return;
-    void operation.replay({
-      success: '操作結果を確認しました。',
-      failure: FAILURE,
-      onSuccess: () => setOpen(false),
-      onFailure: showMissing,
-    });
+    void operation.replay({ success: '操作結果を確認しました。', ...outcome });
   }
+  const unknown = pending?.phase === 'unknown';
+  const noticeRef = useRef<HTMLElement>(null);
+  // 送信の操作はダイアログ本文の末尾にあるので、結果不明になったときに一度だけ案内を見える位置へ送る。
+  useEffect(() => {
+    if (unknown) noticeRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [unknown]);
   const blocked = !!pending || storageError || operation.busy;
   // 開いたダイアログはページを覆うので、案内と再確認はダイアログの中に出す。閉じている間と再読込の後はページに出す。
   const notice = pending && (
-    <section role="status" className="rounded-lg border p-4 space-y-3">
+    <section ref={noticeRef} role="status" className="rounded-lg border p-4 space-y-3">
       <p>
         {pending.phase === 'submitting'
           ? '送信中です。画面を閉じてもサーバの処理は取り消されません。'
@@ -216,7 +216,7 @@ function MonthPage({
               ? '変更'
               : '登録'}
       </p>
-      {pending.phase === 'unknown' && (
+      {unknown && (
         <Button disabled={!manage || operation.busy} onClick={replay}>
           同じ要求で結果を確認
         </Button>
@@ -319,7 +319,7 @@ function MonthPage({
             </Button>
           }
         >
-          {notice}
+          {open && notice}
           {missing ? (
             <p role="alert">広告費が見つかりません。一覧を更新しました。閉じて確認してください。</p>
           ) : target?.kind === 'copy' ? (
